@@ -36,7 +36,7 @@ const Sim = (() => {
     G = {
       qLen: opts.qLen || 180, q: 1, clock: opts.qLen || 180, score: [0, 0], human: opts.human || [true, false],
       off: 0, los: 35, by: MID_Y, down: 1, togo: 10, phase: 'kickset', phT: 0, players: [], ball: { x: 60, y: MID_Y, z: 0, st: 'held', air: null },
-      carrier: -1, events: [], evSeq: 0, banner: null, picks: [null, null], play: null, ctl: [3, 10], tgt: [5, 12], meter: null,
+      carrier: -1, events: [], evSeq: 0, banner: null, picks: [null, null], pend: [false, false], prePos: null, play: null, ctl: [3, 10], tgt: [5, 12], meter: null,
       openKick: 1, aiPickT: [0, 0], runoff: 0, next: null, reveal: null, lastPlay: [null, null], stats: { plays: 0, passes: 0, runs: 0, punts: 0, fgs: 0, kickoffs: 0, tds: 0 },
       resultInfo: null, over: false,
     };
@@ -50,7 +50,7 @@ const Sim = (() => {
     const rt = opp(kt), kd = teamDir(kt);
     G.off = kt; G.los = ownGoalX(kt) + kd * fromYd; G.by = MID_Y; G.carrier = -1;
     G.play = { kind: 'kickoff', t: 0, kickTeam: kt, recvTeam: rt, kicked: false, o: null, d: null };
-    G.phase = 'kickset'; G.phT = 0; G.picks = [null, null]; G.meter = null; G.reveal = null;
+    G.phase = 'kickset'; G.phT = 0; G.picks = [null, null]; G.pend = [false, false]; G.prePos = null; G.meter = null; G.reveal = null;
     const lanes = [4, 12, 20, 33.3, 41.3, 49.3];
     for (let k = 0; k < 7; k++) {
       const p = P(idx(kt, k)); reset(p);
@@ -72,7 +72,7 @@ const Sim = (() => {
 
   /* ---------------- scrimmage: play selection ---------------- */
   function setupScrimmage() {
-    G.phase = 'select'; G.phT = 0; G.picks = [null, null]; G.carrier = -1; G.meter = null; G.reveal = null;
+    G.phase = 'select'; G.phT = 0; G.picks = [null, null]; G.pend = [false, false]; G.prePos = null; G.carrier = -1; G.meter = null; G.reveal = null;
     G.aiPickT = [rand(0.5, 1.2), rand(0.6, 1.4)];
     G.play = null;
     placeFormation(PLAY_BY_ID.short, DEFENSE[0], true);
@@ -84,11 +84,16 @@ const Sim = (() => {
     if (G.phase !== 'select' || G.picks[team]) return false;
     const list = playsFor(team);
     if (!list.some(p => p.id === id)) return false;
-    G.picks[team] = id; emit('lock');
+    G.picks[team] = id; if (!G.pend[team]) emit('lock'); G.pend[team] = true;
     if (G.picks[0] && G.picks[1]) beginPresnap();
     return true;
   }
 
+  /** online guest locked in WITHOUT revealing the play (its id is only sent once the host has locked too) */
+  function lockBlind(team) {
+    if (G.phase !== 'select' || G.picks[team] || G.pend[team]) return false;
+    G.pend[team] = true; emit('lock'); return true;
+  }
   function placeFormation(o, d, preview) {
     const off = G.off, def = opp(off), dd = D();
     const fo = Object.assign({}, BASE_OFF, o.form || {});
@@ -105,6 +110,7 @@ const Sim = (() => {
   function beginPresnap() {
     const off = G.off, def = opp(off);
     const o = PLAY_BY_ID[G.picks[off]], d = PLAY_BY_ID[G.picks[def]];
+    G.prePos = G.players.map(p => [+p.x.toFixed(2), +p.y.toFixed(2), p.face]); // what each side sees of the OTHER side until the snap
     G.play = { kind: o.kind, o, d, t: 0, thrown: false, pitched: false, handed: false, kicked: false, completed: false, passTo: -1, losAtSnap: G.los, kickFromX: 0, airKind: null };
     placeFormation(o, d, false);
     G.phase = 'presnap'; G.phT = 0;
@@ -113,14 +119,15 @@ const Sim = (() => {
     G.ctl[off] = idx(off, OI.QB); G.ctl[def] = idx(def, DI.MLB);
     G.tgt[off] = idx(off, OI[o.primary || 'WR1']);
     if ((o.kind === 'punt' || o.kind === 'fg') && G.human[off]) G.meter = { v: 0, dir: 1, locked: false, acc: 0.4 };
-    if (o.kind === 'punt') G.ctl[def] = idx(def, DI.S);
     G.stats.plays++;
     if (o.kind === 'pass') G.stats.passes++; else if (o.kind === 'run') G.stats.runs++; else if (o.kind === 'punt') G.stats.punts++; else G.stats.fgs++;
   }
 
   function startLive() {
     const pl = G.play, off = G.off, def = opp(off);
-    G.phase = 'live'; G.phT = 0; pl.t = 0;
+    G.phase = 'live'; G.phT = 0; pl.t = 0; G.prePos = null;
+    if (pl.kind === 'punt') G.ctl[def] = idx(def, DI.S);
+    if (G.reveal) { G.reveal.t = 0.6; G.reveal.snapped = true; } // both calls are shown only now, after the snap
     for (let k = 0; k < 7; k++) { // routes & assignments
       const p = P(idx(off, k)); const pts = (pl.o.routes && pl.o.routes[p.role]) || [];
       p.route = pts.map(([f, l]) => W(f, l)); p.ri = 0;
@@ -256,7 +263,7 @@ const Sim = (() => {
     if (!G) return;
     G.phT += dt;
     if (G.banner) { G.banner.t += dt; if (G.banner.t > G.banner.dur) G.banner = null; }
-    if (G.reveal) { G.reveal.t += dt; if (G.reveal.t > 2.6) G.reveal = null; }
+    if (G.reveal) { G.reveal.t += dt; if (G.reveal.t > 2.6 && G.phase !== 'presnap') G.reveal = null; }
     if (G.meter && !G.meter.locked && !G.meter.done) { const m = G.meter; m.v += m.dir * dt * 1.5; if (m.v > 1) { m.v = 2 - m.v; m.dir = -1; } if (m.v < 0) { m.v = -m.v; m.dir = 1; } }
     switch (G.phase) {
       case 'select':
@@ -578,26 +585,40 @@ const Sim = (() => {
   }
 
   /* ---------------- snapshot (what renderers / the guest see) ---------------- */
-  function snapshot(revealPicks) {
-    const pl = G.play;
+  /**
+   * snapshot(viewer): what ONE screen may see. viewer = 0 (BLUE) / 1 (GOLD) / -1 (everything, local same-screen).
+   * Until the ball is snapped the opponent's call is stripped out: no play name, no play kind, no kick meter,
+   * no pass target, and the opponent's players stay in the neutral pre-call lineup (their real formation would
+   * give the call away). The host builds snapshot(1) for the network, so GOLD's browser never receives BLUE's call.
+   */
+  function snapshot(viewer = -1) {
+    const pl = G.play, pre = G.phase === 'select' || G.phase === 'presnap', hideOpp = viewer >= 0 && pre;
+    const mine = t => viewer < 0 || t === viewer;
+    const pos = G.players.map((p, i) => (hideOpp && G.prePos && !mine(i < 7 ? 0 : 1)) ? G.prePos[i] : [p.x, p.y, p.face]);
+    const rv = G.reveal ? {
+      off: !hideOpp || mine(G.off) ? G.reveal.off : null, def: !hideOpp || mine(opp(G.off)) ? G.reveal.def : null,
+      t: +G.reveal.t.toFixed(2), snapped: !!G.reveal.snapped,
+    } : null;
     return {
       ph: G.phase, phT: +G.phT.toFixed(2), q: G.q, clk: +G.clock.toFixed(1), sc: G.score.slice(), off: G.off, dn: G.down, tg: togoText(), los: +G.los.toFixed(2), fd: G.fdX != null ? +G.fdX.toFixed(2) : null,
-      pl: G.players.map(p => [+p.x.toFixed(2), +p.y.toFixed(2), p.face, p.frame, p.moving ? 1 : 0, p.st === 'down' || p.st === 'stun' || p.st === 'kneel' ? 1 : p.st === 'dive' ? 2 : 0]),
+      pl: G.players.map((p, i) => [+(+pos[i][0]).toFixed(2), +(+pos[i][1]).toFixed(2), pos[i][2], p.frame, p.moving && !(hideOpp && G.prePos && !mine(i < 7 ? 0 : 1)) ? 1 : 0, p.st === 'down' || p.st === 'stun' || p.st === 'kneel' ? 1 : p.st === 'dive' ? 2 : 0]),
       roles: G.players.map(p => p.role),
       b: [+G.ball.x.toFixed(2), +G.ball.y.toFixed(2), +G.ball.z.toFixed(2), G.ball.st === 'air' ? 1 : G.ball.st === 'dead' ? 2 : 0, G.carrier],
       bt: G.ball.st === 'air' ? [+G.ball.air.tx.toFixed(2), +G.ball.air.ty.toFixed(2), G.ball.air.kind] : null,
-      ctl: G.ctl.slice(), tgt: G.tgt.slice(), hum: G.human.slice(),
-      kind: pl ? pl.kind : null, thrown: pl ? !!pl.thrown : false,
-      lk: [!!G.picks[0], !!G.picks[1]],
+      // free-running speed of each controlled player (0 = not under free stick control): lets the guest predict its own player
+      cs: G.ctl.map(i => { const p = G.players[i]; return G.phase === 'live' && p.st === 'ok' ? +Math.min(p.spd * 1.03, p.spd * (G.carrier === p.i ? 0.97 : 1) * (p.juke > 0 ? 1.25 : 1)).toFixed(2) : 0; }),
+      ctl: G.ctl.slice(), tgt: G.tgt.map((v, t) => mine(t) ? v : -1), hum: G.human.slice(),
+      kind: pl && (!hideOpp || mine(G.off)) ? pl.kind : null, thrown: pl ? !!pl.thrown : false,
+      lk: [!!(G.picks[0] || G.pend[0]), !!(G.picks[1] || G.pend[1])],
       bn: G.banner ? { txt: G.banner.txt, sub: G.banner.sub, t: +G.banner.t.toFixed(2), dur: G.banner.dur, c: G.banner.color } : null,
-      rv: G.reveal ? { off: G.reveal.off, def: G.reveal.def, t: +G.reveal.t.toFixed(2) } : null,
-      mt: G.meter ? [+G.meter.v.toFixed(3), G.meter.locked ? 1 : 0, G.meter.done ? 1 : 0] : null,
+      rv,
+      mt: G.meter && mine(G.off) ? [+G.meter.v.toFixed(3), G.meter.locked ? 1 : 0, G.meter.done ? 1 : 0] : null,
       ev: G.events.slice(-12), over: G.over,
     };
   }
 
   return {
-    newGame, update, pick, snapshot, playsFor,
+    newGame, update, pick, lockBlind, snapshot, playsFor,
     get G() { return G; },
     // test helpers
     _setupScrimmage: setupScrimmage, _setupKickoff: setupKickoff, _endPlay: endPlay,

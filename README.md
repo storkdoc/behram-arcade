@@ -109,19 +109,16 @@ Game #2 is a top-down, 7-on-7 football game in the style of the Atari 800 XL. Bo
 
 **Modes:**
 
-* vs Computer
-* local 2-player (hot-seat, with a "look away" screen while each side picks)
-* online Host / Join using a 5-letter room code
+* **Play vs Computer.** The CPU's play call stays hidden until the snap.
+* **Two-Player Game (Online).** Player 1 starts it and is told to call their buddy and have them bike over, with the Atari cassette-loading homage screen. Player 2, on their own device anywhere, taps **Join Two-Player Game in Progress** and it finds the waiting game without a code (a backup 5-letter room code is shown too).
 
-Online play is peer-to-peer over WebRTC through the PeerJS cloud signalling server and Google STUN. The host runs the game and the guest only sends its inputs. Hosting first shows an Atari cassette-loading homage screen ("Call your buddy and tell them to hop on their bike and head over…") while the room code is reserved. Skip it with Esc or by tapping SKIP.
+Each screen only ever shows its own playbook. The other side shows only "OPPONENT IS CHOOSING… / LOCKED IN", and both calls are revealed at the snap. Matchmaking uses 20 well-known PeerJS ids ("slots") on the free PeerJS cloud server, so there's no server of our own, and play is peer-to-peer over WebRTC with Google STUN. The host runs the game and streams about 60 state updates a second over an unordered channel. The guest predicts its own player so it responds instantly, and a `LINK xxMS` readout shows the round trip. Hot-seat is hidden behind `?local=1`.
 
 **Controls:**
 
 | Input | Move | Action | Cycle | Pause |
 | --- | --- | --- | --- | --- |
 | Keyboard | Arrows / WASD | Space | Shift | Esc / P |
-| Hot-seat | P1: WASD | P1: F | P1: G | Esc / P |
-| | P2: arrows | P2: Enter | P2: Right Shift | |
 | Gamepad | D-pad / left stick | A | B | |
 | Touch | Floating joystick | **A** button | **B** button | **II** button |
 
@@ -129,4 +126,4 @@ Online play is peer-to-peer over WebRTC through the PeerJS cloud signalling serv
 * **Cycle:** pass target, switch defender or kneel.
 * **Touch:** tap menus and plays, landscape with a rotate hint, and online play works from phones.
 
-The full guide (controls, room codes, the playbook and hosting) is in [`games/atari-football/README.md`](games/atari-football/README.md).
+The full guide (controls, two-player matchmaking and secrecy, the playbook and hosting) is in [`games/atari-football/README.md`](games/atari-football/README.md).

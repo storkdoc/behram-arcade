@@ -41,11 +41,13 @@ const UI = (() => {
   }
 
   /* ====================== TITLE ====================== */
+  // same-screen 2-player is NOT a two-player mode here; it only exists behind ?local=1 (testing / couch use)
+  const LOCAL = /[?&]local=1\b/.test(location.search);
   const MENU = [
     { id: 'cpu', label: 'PLAY VS COMPUTER' },
-    { id: 'host', label: 'HOST GAME (ONLINE)' },
-    { id: 'join', label: 'JOIN GAME (ONLINE)' },
-    { id: 'hot', label: 'LOCAL 2-PLAYER' },
+    { id: 'host', label: 'TWO-PLAYER GAME (ONLINE)' },
+    { id: 'join', label: 'JOIN TWO-PLAYER GAME IN PROGRESS' },
+    ...(LOCAL ? [{ id: 'hot', label: 'SAME-SCREEN 2-PLAYER' }] : []),
     { id: 'howto', label: 'HOW TO PLAY' },
     { id: 'qlen', label: () => 'QUARTERS: ' + (App.qLen / 60) + ' MIN' },
     { id: 'music', label: () => 'MUSIC: ' + (Audio8.musicOn ? 'ON' : 'OFF') + '   SOUND: ' + (Audio8.sfxOn ? 'ON' : 'OFF') },
@@ -54,7 +56,7 @@ const UI = (() => {
     Audio8.play('select');
     if (id === 'cpu') App.startGame('cpu');
     else if (id === 'host') { App.homageNext = 'hostLobby'; Net.host(); App.go('homage'); }
-    else if (id === 'join') App.go('join');
+    else if (id === 'join') { Net.joinAny(); App.go('connecting'); }
     else if (id === 'hot') { App.homageNext = 'hot'; App.go('homage'); }
     else if (id === 'howto') App.go('howto');
     else if (id === 'qlen') { App.qLen = App.qLen === 120 ? 180 : App.qLen === 180 ? 300 : 120; localStorage.setItem('atarifb.qlen', App.qLen); }
@@ -81,10 +83,10 @@ const UI = (() => {
       Field.player.call({ sx: v => v, sy: v => v }, ctx, rx + 20 - u * 10, fy + 20, { team: 1, face: -1, frame: Math.floor(t * 8) & 1, moving: true });
       if (u > 0.15 && u < 0.8) { const v = (u - 0.15) / 0.65, bx = lerp(qx + 4, 120 + 0.8 * 260, v), lift = Math.sin(v * Math.PI) * 18; Px.sprite(ctx, BALL_SPR, Math.round(bx), Math.round(fy + 12 - lift), { B: PAL.ball, L: PAL.lace }); }
       title(ctx, t, 18);
-      const x = VW / 2 - 100, y0 = 143, h = 17;
+      const x = VW / 2 - 120, y0 = 143, h = MENU.length > 6 ? 15 : 17;
       MENU.forEach((m, i) => {
         const label = typeof m.label === 'function' ? m.label() : m.label;
-        button(ctx, label, x, y0 + i * (h + 2), 200, h, i === this.sel, () => { this.sel = i; menuAct(m.id); }, i >= 5 ? '#8890b8' : '#ffffff');
+        button(ctx, label, x, y0 + i * (h + 2), 240, h, i === this.sel, () => { this.sel = i; menuAct(m.id); }, m.id === 'qlen' || m.id === 'music' ? '#8890b8' : '#ffffff');
       });
       FONT.draw(ctx, 'BEHRAM ARCADE  `  ATARI 800 XL STYLE  `  2026', VW / 2, VH - 9, '#5060a0', 1, 'c');
       FONT.draw(ctx, App.touch ? 'TAP TO CHOOSE' : 'ARROWS + SPACE / ENTER', VW / 2, 131, '#8890b8', 1, 'c');
@@ -95,11 +97,12 @@ const UI = (() => {
   const Howto = {
     page: 0, t: 0,
     pages() {
-      const keys = 'VS COMPUTER / ONLINE:\n  MOVE: ARROWS OR WASD\n  ACTION: SPACE / ENTER / F\n  CYCLE: SHIFT / G / X\n  PAUSE: ESC OR P\nLOCAL 2-PLAYER:\n  BLUE: WASD + F (ACTION) + G (CYCLE)\n  GOLD: ARROWS + ENTER (ACTION) + RIGHT SHIFT (CYCLE)\nGAMEPAD: STICK/D-PAD, A = ACTION, B/X = CYCLE\nTOUCH: STICK ON THE LEFT, ACTION + CYCLE BUTTONS ON THE RIGHT, TAP MENUS.';
+      const keys = 'KEYBOARD:\n  MOVE: ARROWS OR WASD\n  ACTION: SPACE / ENTER / F\n  CYCLE: SHIFT / G / X\n  PAUSE: ESC OR P\nGAMEPAD: STICK/D-PAD, A = ACTION, B/X = CYCLE\nTOUCH (PHONES + TABLETS): STICK ON THE LEFT, A = ACTION, B = CYCLE ON THE RIGHT, II = PAUSE. TAP MENUS AND PLAYS (TAP A PLAY TWICE TO LOCK IT IN).';
       return [
         ['THE GAME', 'TOP-DOWN 7-ON-7 FOOTBALL. EACH SIDE SECRETLY PICKS A PLAY FROM THE PLAYBOOK, THEN THE PLAY RUNS LIVE.\nYOU CONTROL THE FLASHING PLAYER. EVERYONE ELSE RUNS THEIR ROUTES AND ASSIGNMENTS.\n4 DOWNS TO GAIN 10 YARDS. TOUCHDOWN = 7 (EXTRA POINT IS AUTOMATIC). FIELD GOAL = 3. SAFETY = 2.\nPUNT OR KICK A FIELD GOAL WHEN YOU ARE STUCK ON 4TH DOWN. 4 QUARTERS.'],
         ['ON OFFENSE', 'YOU START AS THE QB.\nPASS PLAYS: CYCLE PICKS YOUR RECEIVER (BRACKETS), ACTION THROWS. THEN YOU STEER THE RECEIVER - PRESS ACTION AS THE BALL ARRIVES FOR A SURE CATCH.\nRUNS: THE HANDOFF IS AUTOMATIC, THEN YOU STEER THE RUNNER. ACTION = JUKE (HARDER TO TACKLE).\nSWEEP: PRESS ACTION TO PITCH.\nKICKS: PRESS ACTION WHEN THE METER IS IN THE GREEN.\nRETURNS: CYCLE IN YOUR END ZONE = KNEEL FOR A TOUCHBACK.'],
         ['ON DEFENSE', 'YOU START AS THE LINEBACKER.\nCHASE THE BALL CARRIER AND RUN INTO HIM TO TACKLE.\nACTION = DIVING TACKLE (BEST CHANCE, BUT MISS AND YOU ARE ON THE GROUND). ACTION NEAR A PASS = SWAT / INTERCEPT.\nCYCLE = SWITCH TO THE DEFENDER NEAREST THE BALL.\nSTUCK IN A BLOCK? MASH ACTION TO BREAK FREE.'],
+        ['TWO-PLAYER', 'HEAD TO HEAD, EACH ON YOUR OWN DEVICE - ACROSS TOWN IS FINE.\n1. YOU PICK TWO-PLAYER GAME. CALL YOUR BUDDY AND TELL THEM TO HOP ON THEIR BIKE... (OR JUST OPEN THE SITE).\n2. YOUR BUDDY OPENS THE BEHRAM ARCADE, PICKS ATARI FOOTBALL AND TAPS JOIN TWO-PLAYER GAME IN PROGRESS. NO CODE NEEDED - THE GAME FINDS YOU. (A BACKUP ROOM CODE IS ON YOUR SCREEN JUST IN CASE.)\n3. YOU ARE BLUE, YOUR BUDDY IS GOLD.\nSECRET PLAY CALLS: YOU ONLY EVER SEE YOUR OWN PLAYBOOK. YOUR BUDDY SEES "OPPONENT IS CHOOSING" OR "OPPONENT LOCKED IN" - NEVER WHICH PLAY. THE CALLS ARE REVEALED AT THE SNAP.'],
         ['CONTROLS', keys],
         ['OFFENSE PLAYBOOK', OFFENSE.map(p => p.name + ' - ' + p.desc).join('\n')],
         ['DEFENSE PLAYBOOK', DEFENSE.map(p => p.name + ' - ' + p.desc).join('\n')],
@@ -192,8 +195,8 @@ const UI = (() => {
       if (this.connT >= 0 && this.t - this.connT > 1.6) App.startGame('host');
     },
     draw(ctx) {
-      Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 20, 16, VW - 40, VH - 32);
-      FONT.shadow(ctx, 'HOST GAME', VW / 2, 28, '#ffe048', 2, 'c');
+      Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 20, 12, VW - 40, VH - 24);
+      FONT.shadow(ctx, 'TWO-PLAYER GAME', VW / 2, 24, '#ffe048', 2, 'c');
       const s = Net.st;
       if (s.status === 'error') {
         para(ctx, s.error, 50, 90, VW - 100, '#ff8080', 'c');
@@ -201,21 +204,31 @@ const UI = (() => {
         button(ctx, 'MENU', VW / 2 + 10, 200, 100, 24, false, () => { Net.leave(); App.go('title'); });
         return;
       }
-      FONT.draw(ctx, 'TELL YOUR BUDDY THIS ROOM CODE:', VW / 2, 62, '#ffffff', 1, 'c');
-      const code = s.status === 'opening' ? '.....' : s.code;
-      Px.rect(ctx, VW / 2 - 130, 78, 260, 50, '#000'); Px.frame(ctx, VW / 2 - 130, 78, 260, 50, '#ffe048');
-      FONT.shadow(ctx, code.split('').join(' '), VW / 2, 90, '#ffe048', 4, 'c');
-      let msg = s.status === 'opening' ? 'RESERVING A CODE ON THE MATCHMAKING SERVER...' : s.status === 'waiting' ? 'WAITING FOR YOUR BUDDY TO JOIN' + '...'.slice(0, (this.t * 2 | 0) % 4) : s.status === 'connected' ? 'BUDDY CONNECTED! KICKOFF COMING UP...' : s.status;
-      FONT.draw(ctx, msg, VW / 2, 146, s.status === 'connected' ? '#60ff60' : '#ffffff', 1, 'c');
-      para(ctx, 'THEY PICK JOIN GAME AND TYPE THE CODE. YOU ARE BLUE, THEY ARE GOLD. WORKS ON PHONES, TABLETS AND COMPUTERS.', 50, 168, VW - 100, '#8890b8', 'c');
-      button(ctx, 'CANCEL', VW / 2 - 50, 228, 100, 22, false, () => { Net.leave(); App.go('title'); });
+      const dots = '...'.slice(0, (this.t * 2 | 0) % 4);
+      if (s.status === 'connected') FONT.shadow(ctx, 'YOUR BUDDY IS HERE!', VW / 2, 56, '#60ff60', 2, 'c');
+      else if (s.status === 'opening') FONT.shadow(ctx, 'SETTING UP THE GAME' + dots, VW / 2, 56, '#ffffff', 2, 'c');
+      else FONT.shadow(ctx, 'WAITING FOR YOUR BUDDY' + dots, VW / 2, 56, '#ffffff', 2, 'c');
+      if (s.status === 'connected') { FONT.draw(ctx, 'KICKOFF COMING UP... YOU ARE BLUE, YOUR BUDDY IS GOLD.', VW / 2, 92, '#ffffff', 1, 'c'); }
+      else {
+        FONT.draw(ctx, 'TELL THEM TO:', VW / 2, 82, '#8890b8', 1, 'c');
+        const steps = ['1. OPEN THE BEHRAM ARCADE', '2. PICK ATARI FOOTBALL', '3. TAP  JOIN TWO-PLAYER GAME IN PROGRESS'];
+        steps.forEach((l, i) => FONT.draw(ctx, l, VW / 2 - 118, 96 + i * 14, i === 2 ? '#ffe048' : '#ffffff', 1, 'l'));
+        FONT.draw(ctx, 'NO CODE NEEDED - THE GAME FINDS YOU.', VW / 2, 144, '#60ff60', 1, 'c');
+      }
+      // the backup room code, small
+      const code = s.code || '.....';
+      Px.frame(ctx, VW / 2 - 90, 164, 180, 34, '#5060a0');
+      FONT.draw(ctx, 'BACKUP ROOM CODE', VW / 2, 168, '#8890b8', 1, 'c');
+      FONT.draw(ctx, code.split('').join(' '), VW / 2, 180, '#ffe048', 2, 'c');
+      para(ctx, "ONLY IF JOINING DOESN'T FIND YOU: THEY TAP JOIN, THEN ENTER CODE INSTEAD.", 50, 206, VW - 100, '#5060a0', 'c');
+      button(ctx, 'CANCEL', VW / 2 - 50, 240, 100, 22, false, () => { Net.leave(); App.go('title'); });
     },
   };
 
   /* ====================== JOIN (room code entry) ====================== */
   const Join = {
     code: '', t: 0,
-    enter() { this.code = ''; this.t = 0; Audio8.music(0.5); },
+    enter() { this.code = ''; this.t = 0; Audio8.music(0.5); Net.leave(); },
     add(ch) { ch = ch.toUpperCase(); if (this.code.length < 5 && Net.ALPH.includes(ch)) { this.code += ch; Audio8.play('select'); } },
     del() { this.code = this.code.slice(0, -1); Audio8.play('back'); },
     go() { if (this.code.length === 5) { Audio8.play('lock'); Net.join(this.code); App.go('connecting'); } else Audio8.play('error'); },
@@ -233,8 +246,8 @@ const UI = (() => {
     },
     draw(ctx) {
       Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 10, 6, VW - 20, VH - 12);
-      FONT.shadow(ctx, 'JOIN GAME', VW / 2, 14, '#ffe048', 2, 'c');
-      FONT.draw(ctx, 'ENTER THE 5-LETTER ROOM CODE FROM YOUR BUDDY', VW / 2, 34, '#ffffff', 1, 'c');
+      FONT.shadow(ctx, 'ENTER ROOM CODE', VW / 2, 14, '#ffe048', 2, 'c');
+      FONT.draw(ctx, "THE BACKUP CODE ON YOUR BUDDY'S SCREEN", VW / 2, 34, '#ffffff', 1, 'c');
       for (let i = 0; i < 5; i++) {
         const x = VW / 2 - 85 + i * 35, y = 48;
         Px.rect(ctx, x, y, 30, 34, '#000'); Px.frame(ctx, x, y, 30, 34, i === this.code.length ? '#ffffff' : '#5060a0');
@@ -251,37 +264,51 @@ const UI = (() => {
       if (App.touch) button(ctx, 'PHONE KEYBOARD', gx + 88, 154, 132, 26, false, () => { const b = document.getElementById('codeInput'); if (b) { b.value = ''; b.focus(); } });
       button(ctx, 'JOIN!', gx + 12 * (kw + 2) - 2 - 100, 154, 100, 26, this.code.length === 5, () => this.go(), '#60ff60');
       para(ctx, 'NO SPACES, NO I OR O. YOU WILL PLAY GOLD. NEEDS INTERNET (PEER-TO-PEER, NO ACCOUNT).', 40, 192, VW - 80, '#8890b8', 'c');
-      button(ctx, 'BACK', VW / 2 - 50, 236, 100, 22, false, () => App.go('title'));
+      button(ctx, 'SEARCH AGAIN', VW / 2 - 130, 236, 120, 22, false, () => { Net.joinAny(); App.go('connecting'); });
+      button(ctx, 'BACK', VW / 2 + 10, 236, 100, 22, false, () => App.go('title'));
     },
   };
   const Connecting = {
-    t: 0, enter() { this.t = 0; },
-    update(dt, inp, typed) { this.t += dt; if (typed.some(e => e.code === 'Escape')) { Net.leave(); App.go('join'); } },
-    draw(ctx) {
-      Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 20, 40, VW - 40, VH - 80);
+    t: 0, sel: 0, enter() { this.t = 0; this.sel = 0; },
+    retry() { this.t = 0; if (Net.st.via === 'code') Net.join(Join.code); else Net.joinAny(); },
+    update(dt, inp, typed) {
+      this.t += dt;
+      if (typed.some(e => e.code === 'Escape')) { Net.leave(); App.go('title'); return; }
       const s = Net.st;
-      if (s.status === 'error') {
-        FONT.shadow(ctx, 'NO CONNECTION', VW / 2, 60, '#ff8080', 2, 'c');
-        para(ctx, s.error, 50, 96, VW - 100, '#ffffff', 'c');
-        button(ctx, 'TRY AGAIN', VW / 2 - 110, 190, 100, 24, true, () => { Net.join(Join.code); this.t = 0; });
-        button(ctx, 'BACK', VW / 2 + 10, 190, 100, 24, false, () => { Net.leave(); App.go('join'); });
+      if (s.status === 'nogame' || s.status === 'error') {
+        if (inp.mx || inp.my) { this.sel = (this.sel + (inp.mx || inp.my) + 3) % 3; Audio8.play('select'); }
+        if (inp.aP) [() => this.retry(), () => App.go('join'), () => { Net.leave(); App.go('title'); }][this.sel]();
+      }
+    },
+    draw(ctx) {
+      Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 20, 30, VW - 40, VH - 60);
+      const s = Net.st;
+      if (s.status === 'nogame' || s.status === 'error') {
+        const none = s.status === 'nogame' && !s.error;
+        FONT.shadow(ctx, none ? 'NO GAME WAITING' : 'NO CONNECTION', VW / 2, 50, '#ff8080', 2, 'c');
+        para(ctx, none ? 'ASK YOUR BUDDY TO START A TWO-PLAYER GAME FIRST, THEN TRY AGAIN.' : s.error, 50, 86, VW - 100, '#ffffff', 'c');
+        if (none) FONT.draw(ctx, '(THEY PICK TWO-PLAYER GAME ON THEIR OWN DEVICE.)', VW / 2, 118, '#8890b8', 1, 'c');
+        const L = ['RETRY', 'ENTER CODE INSTEAD', 'BACK'], W = [90, 160, 90], X = [VW / 2 - 180, VW / 2 - 80, VW / 2 + 90];
+        L.forEach((l, i) => button(ctx, l, X[i], 200, W[i], 24, this.sel === i, [() => this.retry(), () => App.go('join'), () => { Net.leave(); App.go('title'); }][i]));
         return;
       }
-      FONT.shadow(ctx, 'CONNECTING', VW / 2, 70, '#ffe048', 2, 'c');
-      FONT.draw(ctx, 'ROOM ' + s.code + '   ' + (s.status === 'connected' ? 'CONNECTED! WAITING FOR KICKOFF...' : 'DIALING YOUR BUDDY' + '...'.slice(0, (this.t * 2 | 0) % 4)), VW / 2, 110, '#ffffff', 1, 'c');
-      for (let i = 0; i < 12; i++) Px.rect(ctx, VW / 2 - 72 + i * 12, 140, 8, 8, (Math.floor(this.t * 8) % 12) === i ? '#ffe048' : '#3048b0');
-      button(ctx, 'CANCEL', VW / 2 - 50, 190, 100, 24, false, () => { Net.leave(); App.go('join'); });
+      const found = s.status === 'connected';
+      FONT.shadow(ctx, found ? 'FOUND YOUR BUDDY!' : s.via === 'code' ? 'CONNECTING' : 'LOOKING FOR A GAME', VW / 2, 60, found ? '#60ff60' : '#ffe048', 2, 'c');
+      FONT.draw(ctx, found ? 'ROOM ' + s.code + ' - YOU ARE GOLD. WAITING FOR KICKOFF...' : s.via === 'code' ? 'DIALING ROOM ' + s.code + '...'.slice(0, (this.t * 2 | 0) % 4) : 'IN PROGRESS' + '...'.slice(0, (this.t * 2 | 0) % 4), VW / 2, 100, '#ffffff', 1, 'c');
+      for (let i = 0; i < 12; i++) Px.rect(ctx, VW / 2 - 72 + i * 12, 130, 8, 8, (Math.floor(this.t * 8) % 12) === i ? '#ffe048' : '#3048b0');
+      if (!found) para(ctx, 'YOUR BUDDY NEEDS TO HAVE PICKED TWO-PLAYER GAME ON THEIR DEVICE.', 50, 156, VW - 100, '#8890b8', 'c');
+      button(ctx, 'CANCEL', VW / 2 - 50, 200, 100, 24, false, () => { Net.leave(); App.go('title'); });
     },
   };
   const ErrorScreen = {
     msg: '', role: null, enter(o) { this.msg = (o && o.msg) || 'SOMETHING WENT WRONG.'; this.role = (o && o.role) || Net.st.role; Audio8.play('error'); },
-    update(dt, inp, typed) { if (typed.some(e => e.code === 'Escape')) App.go('title'); else if (inp.aP) { if (this.role === 'host') { Net.host(); App.go('hostLobby'); } else if (this.role === 'guest') App.go('join'); else App.go('title'); } },
+    update(dt, inp, typed) { if (typed.some(e => e.code === 'Escape')) App.go('title'); else if (inp.aP) { if (this.role === 'host') { Net.host(); App.go('hostLobby'); } else if (this.role === 'guest') { Net.joinAny(); App.go('connecting'); } else App.go('title'); } },
     draw(ctx) {
       Px.rect(ctx, 0, 0, VW, VH, '#000'); panel(ctx, 30, 60, VW - 60, VH - 120, '#ff8080');
       FONT.shadow(ctx, 'GAME OVER, MAN', VW / 2, 76, '#ff8080', 2, 'c');
       para(ctx, this.msg, 60, 110, VW - 120, '#ffffff', 'c');
       if (this.role === 'host' || this.role === 'guest') { // straight back to a lobby
-        button(ctx, this.role === 'host' ? 'NEW ROOM' : 'JOIN AGAIN', VW / 2 - 150, 190, 140, 24, true, () => { if (this.role === 'host') { Net.host(); App.go('hostLobby'); } else App.go('join'); });
+        button(ctx, this.role === 'host' ? 'NEW GAME' : 'JOIN AGAIN', VW / 2 - 150, 190, 140, 24, true, () => { if (this.role === 'host') { Net.host(); App.go('hostLobby'); } else { Net.joinAny(); App.go('connecting'); } });
         button(ctx, 'BACK TO MENU', VW / 2 + 10, 190, 140, 24, false, () => App.go('title'));
       } else button(ctx, 'BACK TO MENU', VW / 2 - 70, 190, 140, 24, true, () => App.go('title'));
     },
@@ -323,7 +350,8 @@ const UI = (() => {
         const me = App.view.local[0] ? 0 : 1, them = 1 - me;
         panel(ctx, 90, 110, VW - 180, 70);
         FONT.shadow(ctx, 'LOCKED IN!', VW / 2, 122, '#60ff60', 2, 'c');
-        FONT.draw(ctx, 'WAITING FOR ' + TEAMS[them].name + ' TO CALL A PLAY' + '...'.slice(0, (performance.now() / 400 | 0) % 4), VW / 2, 146, '#ffffff', 1, 'c');
+        const oppL = S.lk[them];
+        FONT.draw(ctx, oppL ? (App.mode === 'cpu' ? 'COMPUTER' : 'OPPONENT') + ' LOCKED IN - HERE WE GO!' : (App.mode === 'cpu' ? 'COMPUTER' : 'OPPONENT') + ' IS CHOOSING' + '...'.slice(0, (performance.now() / 400 | 0) % 4), VW / 2, 146, '#ffffff', 1, 'c');
         FONT.draw(ctx, 'YOUR CALL: ' + (PLAY_BY_ID[App.lastPick[me]] || { name: '?' }).name, VW / 2, 160, '#8890b8', 1, 'c');
         return;
       }
@@ -341,7 +369,7 @@ const UI = (() => {
       // header
       FONT.draw(ctx, who + T.name + (isOff ? ' OFFENSE' : ' DEFENSE') + ': CALL A PLAY', 8, HUD_H + 6, T.main, 1);
       const oppLocked = S.lk[1 - t];
-      if (App.mode !== 'hot') FONT.draw(ctx, O.name + ': ' + (oppLocked ? 'LOCKED IN' : 'THINKING...'), VW - 8, HUD_H + 6, oppLocked ? '#60ff60' : '#8890b8', 1, 'r');
+      if (App.mode !== 'hot') FONT.draw(ctx, (App.mode === 'cpu' ? 'COMPUTER' : 'OPPONENT') + (oppLocked ? ' LOCKED IN' : ' IS CHOOSING' + '...'.slice(0, (performance.now() / 400 | 0) % 4)), VW - 8, HUD_H + 6, oppLocked ? '#60ff60' : '#8890b8', 1, 'r');
       // list
       const rowH = list.length > 8 ? 18 : 24, y0 = HUD_H + 20;
       list.forEach((p, i) => {

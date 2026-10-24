@@ -72,6 +72,12 @@ const Render = (() => {
 
   function reveal(ctx, S) {
     const offN = S.rv.off, defN = S.rv.def, t = S.rv.t; if (t > 2.4) return;
+    if (!offN || !defN) { // before the snap a screen only ever knows its OWN call
+      const mine = offN || defN; if (!mine) return;
+      const s = 'YOUR CALL: ' + mine, w = FONT.width(s) + 12, x = Math.round(VW / 2 - w / 2), y = HUD_H + 4;
+      Px.rect(ctx, x, y, w, 13, '#000000'); Px.frame(ctx, x, y, w, 13, '#ffffff');
+      FONT.draw(ctx, s, x + 6, y + 3, TEAMS[offN ? S.off : 1 - S.off].main); return;
+    }
     const s = offN + '  VS  ' + defN, w = FONT.width(s) + 12;
     const x = Math.round(VW / 2 - w / 2), y = HUD_H + 4;
     Px.rect(ctx, x, y, w, 13, '#000000'); Px.frame(ctx, x, y, w, 13, '#ffffff');
