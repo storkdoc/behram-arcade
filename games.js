@@ -14,6 +14,7 @@ window.ARCADE_GAMES = [
     genre: 'SHOOTER',
     year: '1981 STYLE',
     controls: '← → move · SPACE fire (hold) · ENTER superzapper · P pause · M sound/music',
+    touch: 'drag or circle the spinner · hold FIRE · ZAP · ◀ ▶ arrow mode · ‖ pause',
     accent: '#ff47e6'
   },
 ];

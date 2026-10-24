@@ -11,6 +11,8 @@ const ctx = canvas.getContext('2d', { alpha: false });
 const bx1 = document.createElement('canvas').getContext('2d');
 const FILTER_OK = new URLSearchParams(location.search).has('nofilter') ? false : (() => { try { bx1.filter = 'blur(2px)'; const ok = bx1.filter === 'blur(2px)'; bx1.filter = 'none'; return ok; } catch (e) { return false; } })();
 let W = 0, H = 0, DPR = 1, U = 1;
+let SA = { l: 0, r: 0, t: 0, b: 0 };   // safe-area insets (notch / home indicator) in canvas px; 0 on desktop
+let viewBoxHook = null;                 // touch layout: returns the screen box the tube must fit in (between the thumb controls)
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -170,7 +172,7 @@ let view = { F: 100, cx: 0, cy: 0, camY: 0 };
 let web = WEBS[0], pal = PALETTES[0];
 
 function computeView(w, box) {
-  const [ax0, ay0, ax1, ay1] = box || [W * 0.035, H * 0.115, W * 0.965, H * 0.965];
+  const [ax0, ay0, ax1, ay1] = box || (viewBoxHook && viewBoxHook()) || [SA.l + W * 0.035, SA.t + H * 0.115, W - SA.r - W * 0.035, H - SA.b - H * 0.035];
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (const p of w.pts) for (const zw of [-0.18, LL]) {
     const s = 1 / (DD + zw), x = p[0] * s, y = (p[1] - w.camY) * s;
@@ -247,6 +249,13 @@ const Sound = {
     const hf = ac.createBiquadFilter(); hf.type = 'lowpass'; hf.frequency.value = 1100;
     this.humGain = ac.createGain(); this.humGain.gain.value = 0;
     hum.connect(hf); hf.connect(this.humGain); this.humGain.connect(this.out); hum.start();
+  },
+  // iOS / Android only start Web Audio inside a user gesture (touchend / pointerup / click / keydown):
+  // resume the context there and play one silent sample so later sounds are allowed
+  unlock() {
+    this.init(); const ac = this.ac; if (!ac) return;
+    if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} }
+    if (!this.unlocked) { try { const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); this.unlocked = true; } catch (e) {} }
   },
   toggle() {
     this.muted = !this.muted; store.set('muted', this.muted);
@@ -411,6 +420,7 @@ const Music = {
 
 /* ============================== input ============================== */
 const keys = {};
+const touch = { on: false, fire: false, pend: 0 };   // touch controls: FIRE held, queued spinner sub-steps
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace']);
 addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code) || (state === 'initials' && /^Key[A-Z]$/.test(e.code))) e.preventDefault();
@@ -423,6 +433,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (inGa
 document.addEventListener('visibilitychange', () => { if (document.hidden && inGame()) paused = true; });
 addEventListener('mousemove', () => { document.body.classList.add('showcursor'); clearTimeout(window.__ct); window.__ct = setTimeout(() => document.body.classList.remove('showcursor'), 1500); });
 addEventListener('pointerdown', () => Sound.init());
+for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, () => Sound.unlock(), true);
 const pad = { prev: {} };
 function pollPad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : []; const g = gps && [...gps].find(x => x);
@@ -441,6 +452,7 @@ if (!Array.isArray(hiscores)) hiscores = [['VTX', 50000, 20], ['ACE', 40000, 17]
 let bestLevel = store.get('bestLevel', 1);
 const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0, heat: 0, overheat: false };
 let enemies = [], pool = [], eshots = [], pshots = [], fx = [], msgs = [], spikes = [];
+let shotsFired = 0;
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
 let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
 let zoom = null, warp = null, death = null, eid = 0;
@@ -629,19 +641,26 @@ function verticalDir(sign) {
   }
   return best;
 }
+// three claw positions per lane: sub -1 (edge), 0 (center), +1 (edge); crossing a rail lands on the next lane's near edge
+function clawStep(dd) {
+  const ns = player.sub + dd;
+  if (ns >= -1 && ns <= 1) { player.sub = ns; return; }
+  const nl = player.lane + dd;
+  if (!web.closed && (nl < 0 || nl >= web.n)) return;
+  player.lane = web.closed ? wrapLane(nl) : nl; player.sub = -dd;
+}
 function handleMove(dt) {
+  // touch spinner: sub-steps queued in proportion to drag distance, applied at most one per 1/120 s tick
+  // (~2.5 turns/s); a flick can't bank more than 6 steps, so the claw stops when the finger stops
+  if (touch.pend) {
+    touch.pend = clamp(touch.pend, -6, 6);
+    if (Math.abs(touch.pend) >= 1) { const s = sgn(touch.pend); clawStep(s); touch.pend -= s; }
+  }
   let d = 0;
   // arrow sense reversed (v2): Left moves toward higher lane index, Right toward lower
   if (keys.ArrowLeft && !keys.ArrowRight) d = 1; else if (keys.ArrowRight && !keys.ArrowLeft) d = -1;
   else if (keys.ArrowUp) d = -verticalDir(-1) * 2; else if (keys.ArrowDown) d = -verticalDir(1) * 2;
-  // three claw positions per lane: sub -1 (edge), 0 (center), +1 (edge); crossing a rail lands on the next lane's near edge
-  const step = dd => {
-    const ns = player.sub + dd;
-    if (ns >= -1 && ns <= 1) { player.sub = ns; return; }
-    const nl = player.lane + dd;
-    if (!web.closed && (nl < 0 || nl >= web.n)) return;
-    player.lane = web.closed ? wrapLane(nl) : nl; player.sub = -dd;
-  };
+  const step = clawStep;
   const sd = sgn(d);
   if (!sd) { move.dir = 0; return; }
   if (d !== move.dir) { step(sd); move.dir = d; move.hold = 0; move.rep = 0.14; return; }
@@ -660,14 +679,14 @@ function updateVis(dt) {
 }
 function handleFire(dt) {
   player.fireCd -= dt;
-  let manual = keys.Space || keys.KeyZ || keys.KeyX || keys.ControlLeft || keys.ControlRight;
+  let manual = keys.Space || keys.KeyZ || keys.KeyX || keys.ControlLeft || keys.ControlRight || touch.fire;
   if (fireLock) { if (!manual) fireLock = false; manual = false; }
   // rapid-fire cap (v3): max 8 shots on screen + barrel heat. Holding fire gives ~5-shot bursts with a cool-down gap,
   // so a held button can't keep a solid wall of shots in the lane; deliberate taps at a human rate never overheat.
   player.heat = Math.max(0, (player.heat || 0) - FIRE.cool * dt);
   if (player.overheat && player.heat <= FIRE.resume) player.overheat = false;
   if ((autofire || manual) && player.fireCd <= 0 && pshots.length < FIRE.maxShots && !player.overheat) {
-    pshots.push({ lane: player.lane, z: player.z, pz: player.z, born: T });
+    pshots.push({ lane: player.lane, z: player.z, pz: player.z, born: T }); shotsFired++;
     player.fireCd = manual ? FIRE.cd : 0.12;
     player.heat += 1; if (player.heat >= FIRE.max) player.overheat = true;
     Sound.play('shoot');
@@ -1154,22 +1173,22 @@ function drawClawIcon(x, y, w, color) {
   CLAW.forEach(([u, v], i) => { const px = x + u * w, py = y - v * w; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.closePath(); ctx.stroke();
 }
 function drawHUD() {
-  const sz = U * 3.6;
-  text(String(score), U * 3, U * 2.4, sz, pal.claw === '#ffe81a' ? '#3cf6ff' : pal.claw, 'left');
-  for (let i = 0; i < Math.min(lives - (inGame() ? 1 : 0), 7); i++) drawClawIcon(U * 3 + i * U * 4.2, U * 10, U * 3.4, pal.claw);
+  const sz = U * 3.6, lx = SA.l + U * 3, ty = SA.t;
+  text(String(score), lx, ty + U * 2.4, sz, pal.claw === '#ffe81a' ? '#3cf6ff' : pal.claw, 'left');
+  for (let i = 0; i < Math.min(lives - (inGame() ? 1 : 0), 7); i++) drawClawIcon(lx + i * U * 4.2, ty + U * 10, U * 3.4, pal.claw);
   const hi = Math.max(score, hiscores[0] ? hiscores[0][1] : 0);
-  text(String(hi), W / 2, U * 2.4, U * 2.4, '#ffffff', 'center');
-  text('LEVEL ' + level, W / 2, U * 5.6, U * 1.7, pal.web === '#1a2140' ? '#5c6ab0' : pal.web, 'center');
-  const zx = W - U * 3;
-  text('ZAP', zx - U * 6.5, U * 2.4, U * 1.7, '#ffffff', 'right', 0.85);
+  text(String(hi), W / 2, ty + U * 2.4, U * 2.4, '#ffffff', 'center');
+  text('LEVEL ' + level, W / 2, ty + U * 5.6, U * 1.7, pal.web === '#1a2140' ? '#5c6ab0' : pal.web, 'center');
+  const zx = W - SA.r - U * 3;
+  text('ZAP', zx - U * 6.5, ty + U * 2.4, U * 1.7, '#ffffff', 'right', 0.85);
   for (let i = 0; i < 2; i++) {
     const on = zapUses <= i; ctx.globalAlpha = on ? 1 : 0.25; ctx.strokeStyle = on ? '#ff47e6' : '#888'; ctx.lineWidth = LW(1);
-    const cx = zx - U * 4.6 + i * U * 2.6, cy = U * 3.25, r = U * 0.9;
+    const cx = zx - U * 4.6 + i * U * 2.6, cy = ty + U * 3.25, r = U * 0.9;
     ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  if (Sound.muted) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
-  if (invincible) text('INVINCIBLE', W - U * 3, U * 6.2, U * 1.3, '#f0f', 'right');
+  if (Sound.muted && !touch.on) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
+  if (invincible) text('INVINCIBLE', zx, ty + U * 6.2, U * 1.3, '#f0f', 'right');
 }
 function drawMsgs() {
   for (const m of msgs) {
@@ -1213,7 +1232,7 @@ function drawAttract() {
   drawTitleLogo(H * 0.12, size);
   text('A VECTOR TUBE SHOOTER', W / 2, H * 0.12 + size * 1.25, U * 1.9, '#ffe81a', 'center');
   if (attract.mode === 0) {
-    const rows = [['← →', 'MOVE CLAW AROUND RIM'], ['↑ ↓', 'MOVE TOWARD TOP / BOTTOM'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER'], ['Z / CTRL', 'ALTERNATE FIRE'], ['F', 'TOGGLE AUTOFIRE  (OFF)'], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF']];
+    const rows = touch.on ? [['DRAG', 'SPIN THE CLAW'], ['CIRCLE', 'SPIN IT LIKE A KNOB'], ['FIRE', 'HOLD FOR RAPID FIRE'], ['ZAP', 'SUPERZAPPER'], ['MODE', 'SPINNER OR ARROWS'], ['II', 'PAUSE']] : [['← →', 'MOVE CLAW AROUND RIM'], ['↑ ↓', 'MOVE TOWARD TOP / BOTTOM'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER'], ['Z / CTRL', 'ALTERNATE FIRE'], ['F', 'TOGGLE AUTOFIRE  (OFF)'], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF']];
     const top = H * 0.44, lh = U * 3.6, cs = U * 1.9;
     text('CONTROLS', W / 2, top - lh * 1.4, U * 2.4, '#36e6ff', 'center');
     rows.forEach(([k, d], i) => { text(k, W / 2 - U * 2, top + i * lh, cs, '#ffe81a', 'right'); text(d, W / 2 + U * 2, top + i * lh, cs, '#ffffff', 'left'); });
@@ -1228,18 +1247,23 @@ function drawAttract() {
       text('L' + h[2], W / 2 + U * 17, top + i * lh, cs * 0.8, '#7fa0ff', 'right');
     });
   }
-  if (Math.floor(T * 2) % 2 === 0) text('PRESS SPACE OR ENTER TO START', W / 2, H * 0.9, U * 2.8, '#ff47e6', 'center');
-  text('(C) 2026 BEHRAM ARCADE', W / 2, H * 0.955, U * 1.3, '#6a78c0', 'center');
-  if (Sound.muted) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
+  if (Math.floor(T * 2) % 2 === 0) text(touch.on ? 'TAP TO START' : 'PRESS SPACE OR ENTER TO START', W / 2, H * 0.9 - SA.b * 0.5, U * 2.8, '#ff47e6', 'center');
+  text('(C) 2026 BEHRAM ARCADE', W / 2, H * 0.955 - SA.b * 0.7, U * 1.3, '#6a78c0', 'center');
+  if (Sound.muted && !touch.on) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
 }
+const selRects = [];   // level boxes on RATE YOURSELF (canvas px), for tap selection
 function drawSelect() {
   drawStars();
   text('RATE YOURSELF', W / 2, H * 0.1, U * 5, '#ff2a2a', 'center');
-  text('← → TO CHOOSE A STARTING LEVEL   SPACE / ENTER TO START', W / 2, H * 0.1 + U * 7.5, U * 1.6, '#36e6ff', 'center');
+  text(touch.on ? 'TAP OR SWIPE TO CHOOSE A LEVEL   TAP START' : '← → TO CHOOSE A STARTING LEVEL   SPACE / ENTER TO START', W / 2, H * 0.1 + U * 7.5, U * 1.6, '#36e6ff', 'center');
+  selRects.length = 0;
   const vis = 5, half = 2;
   let first = clamp(select.idx - half, 0, LADDER.length - vis);
-  const bw = Math.min(U * 18, W * 0.17), gap = bw * 0.12, total = vis * bw + (vis - 1) * gap;
-  const x0 = W / 2 - total / 2, top = H * 0.33, bh = bw * 1.25;
+  // narrow (portrait) screens: shrink the boxes so the LEVEL / HOLE / BONUS labels stay on screen
+  const lab = U * 10, room = W - SA.l - SA.r - U * 2;
+  let bw = Math.min(U * 18, W * 0.17), total = vis * bw * 1.12 - bw * 0.12, x0 = W / 2 - total / 2;
+  if (x0 - lab < SA.l + U) { bw = Math.min(bw, (room - lab) / (vis * 1.12 - 0.12)); total = vis * bw * 1.12 - bw * 0.12; x0 = SA.l + U + lab + (room - lab - total) / 2; }
+  const gap = bw * 0.12, top = H * 0.33, bh = bw * 1.25;
   text('LEVEL', x0 - U * 2, top + U * 1.2, U * 1.7, '#ffe81a', 'right');
   text('HOLE', x0 - U * 2, top + bh * 0.45, U * 1.7, '#ffe81a', 'right');
   text('BONUS', x0 - U * 2, top + bh - U * 2.2, U * 1.7, '#ffe81a', 'right');
@@ -1248,6 +1272,7 @@ function drawSelect() {
     const idx = first + i, [L, bonus] = LADDER[idx], x = x0 + i * (bw + gap);
     const sel = idx === select.idx;
     const pw = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
+    selRects.push([x, top - U * 0.8, bw, bh + U * 1.6, idx]);
     if (sel) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = LW(1.3 + 0.4 * Math.sin(T * 8)); ctx.strokeRect(x, top - U * 0.8, bw, bh + U * 1.6); }
     text(String(L), x + bw / 2, top + U * 0.6, U * 2.6, sel ? '#ffffff' : '#36e6ff', 'center');
     web = WEBS[(L - 1) % 16]; pal = pw; camZ = 0; rot = 0;
@@ -1263,11 +1288,13 @@ function drawSelect() {
   ctx.strokeStyle = '#3a4680'; ctx.lineWidth = LW(0.8); ctx.beginPath(); ctx.moveTo(bx0, by); ctx.lineTo(bx1, by); ctx.stroke();
   const px = lerp(bx0, bx1, select.idx / (LADDER.length - 1));
   ctx.strokeStyle = '#ffe81a'; ctx.lineWidth = LW(1.4); ctx.beginPath(); ctx.moveTo(px, by - U); ctx.lineTo(px, by + U); ctx.stroke();
-  text('TIME ' + Math.max(0, Math.ceil(select.t)), W / 2, H * 0.86, U * 2.6, '#ffffff', 'center');
-  text('HIGHER STARTS EARN THE BONUS WHEN THAT LEVEL IS CLEARED', W / 2, H * 0.93, U * 1.3, '#6a78c0', 'center');
+  const yb = touch.on && touch.ctrlTop ? Math.min(H, touch.ctrlTop * DPR) : H;   // touch portrait: stay above the START / arrow buttons
+  text('TIME ' + Math.max(0, Math.ceil(select.t)), W / 2, Math.min(H * 0.86, yb - U * 9), U * 2.6, '#ffffff', 'center');
+  text('HIGHER STARTS EARN THE BONUS WHEN THAT LEVEL IS CLEARED', W / 2, Math.min(H * 0.93, yb - U * 4), U * 1.3, '#6a78c0', 'center');
 }
 function drawInitials() {
   drawStars();
+  const H = touch.on && touch.kbTop ? Math.min(canvas.height, touch.kbTop * DPR) : canvas.height;   // touch: fit above the letter pad
   text('GREAT SCORE!', W / 2, H * 0.16, U * 5, '#ff47e6', 'center');
   text(String(score), W / 2, H * 0.28, U * 3.6, '#ffe81a', 'center');
   text('ENTER YOUR INITIALS', W / 2, H * 0.4, U * 2.6, '#36e6ff', 'center');
@@ -1277,7 +1304,7 @@ function drawInitials() {
     text(initials.chars[i], x + cs / 2, H * 0.5, cs, on ? '#ffffff' : '#ffe81a', 'center', on ? 0.75 + 0.25 * Math.sin(T * 10) : 1);
     ctx.strokeStyle = on ? '#ff47e6' : '#3a4680'; ctx.lineWidth = LW(1.2); ctx.beginPath(); ctx.moveTo(x, H * 0.5 + cs * 1.25); ctx.lineTo(x + cs, H * 0.5 + cs * 1.25); ctx.stroke();
   }
-  text('↑ ↓ OR TYPE TO CHANGE   ENTER TO CONFIRM', W / 2, H * 0.76, U * 1.7, '#ffffff', 'center');
+  text(touch.on ? 'TAP LETTERS OR ↑ ↓   OK TO CONFIRM' : '↑ ↓ OR TYPE TO CHANGE   ENTER TO CONFIRM', W / 2, H * 0.76, U * 1.7, '#ffffff', 'center');
   text('RANK ' + (initials.rank + 1), W / 2, H * 0.83, U * 2, '#2bff4c', 'center');
 }
 // Glow. Built from a progressive half-size downsample chain (each step is an exact 2:1 box
@@ -1338,7 +1365,7 @@ function render() {
     drawHUD();
     drawMsgs();
     if (state === 'gameover') { text('GAME OVER', W / 2, H * 0.47, U * 7, '#ff2a2a', 'center', Math.min(1, gameOverT * 2)); }
-    if (paused) { ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'lighter'; text('PAUSED', W / 2, H * 0.44, U * 6, '#ffffff', 'center'); text('P TO RESUME', W / 2, H * 0.56, U * 2, '#36e6ff', 'center'); }
+    if (paused) { ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'lighter'; text('PAUSED', W / 2, H * 0.44, U * 6, '#ffffff', 'center'); text(touch.on ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, H * 0.56, U * 2, '#36e6ff', 'center'); }
   }
   ctx.globalCompositeOperation = 'source-over';
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1347,15 +1374,239 @@ function render() {
   if (!paused) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; starsPass = true; drawStars(); starsPass = false; ctx.restore(); }
 }
 
+/* ============================== touch controls ==============================
+   Shown automatically on phones / tablets (coarse pointer or mobile UA, or on the first real touch);
+   hidden on desktop. ?touch=1 forces them on, ?touch=0 off. The controls are DOM elements laid out
+   here in CSS px (safe-area aware) over the canvas, and the tube's view box shrinks to sit between them.
+   - Spinner: drag (or circle) anywhere on the left half; sub-steps proportional to drag distance.
+     Drag right / circle clockwise = turn the knob clockwise (same as the → key). MODE swaps in ◀ ▶ buttons.
+   - FIRE (hold = rapid fire, same heat limit), ZAP, pause, mute, fullscreen (where supported).
+   - Menus: tap to start, tap / swipe levels + START, letter pad for initials, tap to resume. */
+const TOUCH_PARAM = params.get('touch');
+const UA = navigator.userAgent || '';
+const mq = q => !!(window.matchMedia && matchMedia(q).matches);
+const IS_MOBILE = /iPhone|iPad|iPod|Android|Mobile|Silk|Kindle/i.test(UA) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform || '')) || (mq('(pointer: coarse)') && !mq('(hover: hover)'));
+const TC = { E: {}, mode: store.get('touchMode', 'spin') === 'arrows' ? 'arrows' : 'spin', stepPx: 8, knobR: 60, box: null, ts: null, sa: { l: 0, r: 0, t: 0, b: 0 }, sync: {}, akeys: new Set(), built: false };
+const mk = (tag, id, cls, html) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const ICON = {
+  pause: '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>',
+  snd: '<svg viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8.5a5 5 0 0 1 0 7M19 5.5a9 9 0 0 1 0 13"/></svg>',
+  mute: '<svg viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 9l6 6M22 9l-6 6"/></svg>',
+  fs: '<svg viewBox="0 0 24 24"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg>',
+  left: '<svg viewBox="0 0 24 24"><path d="M16 4L6 12l10 8z"/></svg>',
+  right: '<svg viewBox="0 0 24 24"><path d="M8 4l10 8-10 8z"/></svg>',
+};
+const probe = mk('div', 'tprobe'); document.body.appendChild(probe);   // reads env(safe-area-inset-*)
+function readSafe() { const cs = getComputedStyle(probe), f = v => parseFloat(v) || 0; return { t: f(cs.paddingTop), r: f(cs.paddingRight), b: f(cs.paddingBottom), l: f(cs.paddingLeft) }; }
+function fsSupported() { const d = document, el = d.documentElement; return !!((d.fullscreenEnabled || d.webkitFullscreenEnabled) && (el.requestFullscreen || el.webkitRequestFullscreen)) && !navigator.standalone && !mq('(display-mode: standalone)'); }
+function fsToggle() {
+  const d = document, el = d.documentElement;
+  try {
+    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+    else { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); }
+  } catch (e) {}
+}
+// press-and-hold helper: pointer capture per finger, so several controls work at once (multi-touch)
+function hold(el, down, up) {
+  const ids = new Set();
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    ids.add(e.pointerId); el.classList.add('on'); if (down) down(e);
+  });
+  const end = e => { if (!ids.delete(e.pointerId)) return; if (!ids.size) { el.classList.remove('on'); if (up) up(e); } };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, end);
+}
+function setMode(m) {
+  TC.mode = m; store.set('touchMode', m);
+  for (const k of TC.akeys) keys[k] = false; TC.akeys.clear(); touch.pend = 0;
+  document.body.classList.toggle('arrows', m === 'arrows');
+  if (TC.E.mode) TC.E.mode.textContent = m === 'arrows' ? 'MODE: ARROWS' : 'MODE: SPINNER';
+}
+const sp = { id: null, x: 0, y: 0, ux: 0, uy: 0, has: false, turn: 0, ang: 0 };
+function spinMove(x, y) {
+  const dx = x - sp.x, dy = y - sp.y, len = Math.hypot(dx, dy);
+  if (len < 3) return;
+  sp.x = x; sp.y = y;
+  const ux = dx / len, uy = dy / len;
+  if (sp.has) {
+    const a = Math.atan2(sp.ux * uy - sp.uy * ux, sp.ux * ux + sp.uy * uy);   // turn between segments, + = clockwise on screen
+    if (Math.abs(a) > 2.2) sp.turn = 0;                // sharp reversal: a back-and-forth scrub, not a circle
+    else sp.turn = sp.turn * Math.exp(-len / 90) + a;  // curvature accumulated over the last ~90 px of path
+  }
+  sp.ux = ux; sp.uy = uy; sp.has = true;
+  // horizontal drag: distance along x (right = clockwise). Small circles: path length, signed by the turning direction
+  const d = Math.abs(sp.turn) > 1.4 ? len * sgn(sp.turn) : dx;
+  sp.ang += d / TC.knobR;
+  TC.E.dial.style.transform = 'rotate(' + sp.ang.toFixed(3) + 'rad)';
+  if ((state === 'zoom' || state === 'play' || state === 'warp') && !paused) touch.pend -= d / TC.stepPx;   // clockwise = lower lane index (→ key)
+}
+function initialsKey(c) {
+  if (c === '↑') onPress('ArrowUp'); else if (c === '↓') onPress('ArrowDown');
+  else if (c === 'DEL') onPress('Backspace'); else if (c === 'OK') onPress('Enter');
+  else if (state === 'initials') { initials.chars[initials.pos] = c; Sound.play('tick'); if (initials.pos < 2) initials.pos++; }
+}
+function touchBuild() {
+  if (TC.built) return; TC.built = true;
+  const root = mk('div', 'tc'), E = TC.E;
+  E.spin = mk('div', 'tspin');
+  E.knob = mk('div', 'tknob', 'tctl', '<i></i><b>SPIN</b>'); E.dial = E.knob.firstChild;
+  E.left = mk('div', 'tleft', 'tctl', ICON.left); E.right = mk('div', 'tright', 'tctl', ICON.right);
+  E.mode = mk('div', 'tmode', 'tctl');
+  E.zap = mk('div', 'tzap', 'tctl', 'ZAP'); E.fire = mk('div', 'tfire', 'tctl', 'FIRE'); E.start = mk('div', 'tstart', 'tctl', 'START');
+  E.pause = mk('div', 'tpause', 'tctl tsq', ICON.pause); E.mute = mk('div', 'tmute', 'tctl tsq', ICON.snd); E.fs = mk('div', 'tfs', 'tctl tsq', ICON.fs);
+  E.keys = mk('div', 'tkeys');
+  for (const c of [...INITIAL_SET, '↑', '↓', 'DEL', 'OK']) { const k = mk('div', null, 'tkey' + (c.length > 1 || c === '↑' || c === '↓' ? ' fn' : ''), c === ' ' ? 'SPC' : c); k.dataset.c = c; E.keys.appendChild(k); }
+  for (const k of ['spin', 'knob', 'left', 'right', 'mode', 'zap', 'fire', 'start', 'pause', 'mute', 'fs', 'keys']) root.appendChild(E[k]);
+  document.body.appendChild(root);
+  E.spin.setAttribute('aria-label', 'spinner'); E.fire.setAttribute('aria-label', 'fire'); E.zap.setAttribute('aria-label', 'superzapper');
+  if (fsSupported()) document.body.classList.add('fsok');
+  // spinner zone
+  E.spin.addEventListener('pointerdown', e => {
+    e.preventDefault(); if (sp.id != null) return;
+    try { E.spin.setPointerCapture(e.pointerId); } catch (_) {}
+    sp.id = e.pointerId; sp.x = e.clientX; sp.y = e.clientY; sp.has = false; sp.turn = 0; touch.pend = 0; E.knob.classList.add('on');
+  });
+  E.spin.addEventListener('pointermove', e => {
+    if (e.pointerId !== sp.id) return; e.preventDefault();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+    if (evs && evs.length) for (const c of evs) spinMove(c.clientX, c.clientY); else spinMove(e.clientX, e.clientY);
+  });
+  const spinEnd = e => { if (e.pointerId !== sp.id) return; sp.id = null; E.knob.classList.remove('on'); };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) E.spin.addEventListener(ev, spinEnd);
+  // arrow buttons (alternative to the spinner; also pick the level on RATE YOURSELF) behave like the arrow keys
+  for (const [el, k] of [[E.left, 'ArrowLeft'], [E.right, 'ArrowRight']]) hold(el, () => { keys[k] = true; TC.akeys.add(k); onPress(k); }, () => { keys[k] = false; TC.akeys.delete(k); });
+  hold(E.mode, () => setMode(TC.mode === 'spin' ? 'arrows' : 'spin'));
+  hold(E.fire, () => { touch.fire = true; }, () => { touch.fire = false; });
+  hold(E.zap, () => onPress('Enter'));
+  hold(E.start, null, () => { if (state === 'select') onPress('Enter'); });
+  hold(E.pause, () => onPress('KeyP'));
+  hold(E.mute, () => { Sound.unlock(); onPress('KeyM'); });
+  // fullscreen needs a real activation: touchend for fingers, pointerup for mouse / pen
+  hold(E.fs, null, e => { if (e.pointerType !== 'touch') fsToggle(); });
+  E.fs.addEventListener('touchend', e => { e.preventDefault(); fsToggle(); });
+  E.keys.addEventListener('pointerdown', e => {
+    const k = e.target.closest && e.target.closest('.tkey'); if (!k) return;
+    e.preventDefault(); k.classList.add('on'); setTimeout(() => k.classList.remove('on'), 130);
+    initialsKey(k.dataset.c);
+  });
+  setMode(TC.mode);
+}
+// taps / swipes on the canvas drive the menus
+const ct = { id: null, x0: 0, y0: 0, ax: 0, swiped: false };
+canvas.addEventListener('pointerdown', e => {
+  if (!touch.on) return; e.preventDefault();
+  ct.id = e.pointerId; ct.x0 = ct.ax = e.clientX; ct.y0 = e.clientY; ct.swiped = false;
+});
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerId !== ct.id || state !== 'select') return;
+  const stepW = Math.max(28, Math.min(innerWidth, innerHeight) * 0.09), n = Math.trunc((e.clientX - ct.ax) / stepW);
+  if (n) { const i = clamp(select.idx - n, 0, LADDER.length - 1); ct.ax += n * stepW; ct.swiped = true; if (i !== select.idx) { select.idx = i; Sound.play('tick'); } }
+});
+canvas.addEventListener('pointerup', e => {
+  if (e.pointerId !== ct.id) return; ct.id = null;
+  if (ct.swiped || Math.hypot(e.clientX - ct.x0, e.clientY - ct.y0) > 16) return;
+  Sound.unlock();
+  if (state === 'attract' || state === 'gameover') onPress('Space');
+  else if (state === 'select') {
+    const px = e.clientX * DPR, py = e.clientY * DPR;
+    const r = selRects.find(r => px >= r[0] && px <= r[0] + r[2] && py >= r[1] && py <= r[1] + r[3]);
+    if (r) { if (r[4] === select.idx) startGame(); else { select.idx = r[4]; Sound.play('tick'); } }
+  } else if (paused && inGame()) paused = false;
+});
+canvas.addEventListener('pointercancel', () => { ct.id = null; });
+// no page scroll, pinch zoom, double-tap zoom, callout or text selection on the game page
+document.addEventListener('touchstart', e => { if (e.target.closest && e.target.closest('a')) return; if (e.cancelable) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('contextmenu', e => { if (touch.on) e.preventDefault(); });
+function touchEnable(on) {
+  if (touch.on === on) return;
+  touch.on = on; document.body.classList.toggle('touch', on);
+  if (on) touchBuild();
+  TC.ts = null; touchSync(); resize();
+}
+// a real finger on a device that wasn't detected as touch (e.g. a touchscreen laptop) switches the controls on
+addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && TOUCH_PARAM !== '0') touchEnable(true); }, true);
+const place = (el, x, y, w, h) => { const s = el.style; s.left = Math.round(x) + 'px'; s.top = Math.round(y) + 'px'; s.width = Math.round(w) + 'px'; s.height = Math.round(h) + 'px'; };
+function touchLayout() {
+  if (!TC.built) return;
+  const E = TC.E, sa = TC.sa, iw = innerWidth, ih = innerHeight, m = Math.min(iw, ih), land = iw >= ih;
+  const ts = TC.ts || 'menu', game = ts === 'game' || ts === 'paused';
+  TC.stepPx = clamp(m * 0.022, 6, 12);
+  const bot = ih - Math.max(sa.b, 8), hudH = sa.t + m * 0.14;
+  const sq = clamp(m * 0.1, 36, 46);
+  let barX, barY, ctrlTop = ih;
+  if (land) {
+    const side = clamp(iw * 0.22, 150, 300), lx = sa.l, rx = iw - sa.r - side;
+    const fireD = clamp(Math.min(side - 30, ih * 0.34), 84, 160), zapD = Math.round(fireD * 0.62);
+    const knobD = clamp(Math.min(side - 20, (bot - hudH - 50) * 0.85), 96, 230);
+    place(E.spin, 0, hudH, iw * 0.5, ih - hudH);
+    place(E.knob, lx + (side - knobD) / 2, bot - 8 - knobD, knobD, knobD);
+    const ab = clamp((side - 34) / 2, 58, 120);
+    place(E.left, lx + side / 2 - ab - 6, bot - 8 - ab, ab, ab); place(E.right, lx + side / 2 + 6, bot - 8 - ab, ab, ab);
+    place(E.mode, lx + 10, hudH + 4, Math.min(side - 20, 150), 32);
+    const fx = iw - sa.r - 14 - fireD, fy = bot - 8 - fireD;
+    place(E.fire, fx, fy, fireD, fireD); place(E.start, fx, fy, fireD, fireD);
+    place(E.zap, Math.max(rx + 6, fx - zapD * 0.3), fy - zapD - 12, zapD, zapD);
+    barX = iw - sa.r - 10; barY = game ? sa.t + m * 0.09 : sa.t + 6;
+    TC.box = [lx + side + 4, sa.t + ih * 0.115, rx - 4, ih - sa.b - ih * 0.035];
+    TC.knobR = knobD / 2;
+  } else {
+    const ctrlH = clamp(ih * 0.33, 200, 330), cy0 = ih - sa.b - ctrlH; ctrlTop = cy0;
+    const knobD = clamp(Math.min(iw * 0.44, ctrlH - 64), 110, 240);
+    place(E.spin, 0, cy0 - 10, iw * 0.56, ih - cy0 + 10);
+    place(E.knob, sa.l + Math.max(12, iw * 0.25 - knobD / 2), bot - 10 - knobD, knobD, knobD);
+    const ab = clamp(iw * 0.2, 60, 110);
+    place(E.left, sa.l + 12, bot - 10 - ab, ab, ab); place(E.right, sa.l + 24 + ab, bot - 10 - ab, ab, ab);
+    place(E.mode, sa.l + 12, cy0 + 4, 150, 32);
+    const fireD = clamp(Math.min(iw * 0.32, ctrlH * 0.5), 90, 160), zapD = Math.round(fireD * 0.62);
+    const fx = iw - sa.r - 14 - fireD, fy = bot - 14 - fireD;
+    place(E.fire, fx, fy, fireD, fireD); place(E.start, fx, fy, fireD, fireD);
+    barX = iw - sa.r - 10; barY = game ? cy0 : sa.t + 4;
+    // ZAP sits up-left of FIRE, below the button bar and clear of the knob
+    place(E.zap, fx - zapD * 0.78, Math.max(fy - zapD * 0.55, cy0 + sq + 10), zapD, zapD);
+    TC.box = [sa.l + iw * 0.035, sa.t + m * 0.14, iw - sa.r - iw * 0.035, cy0 - 12];
+    TC.knobR = knobD / 2;
+  }
+  // small square buttons, right-aligned: [fullscreen] [mute] [pause]
+  const bar = [E.pause, E.mute, E.fs].filter(el => getComputedStyle(el).display !== 'none');
+  bar.forEach((el, i) => place(el, barX - (i + 1) * sq - i * 8, barY, sq, sq));
+  // initials letter pad along the bottom
+  const cols = land ? 17 : 9, rows = Math.ceil(E.keys.children.length / cols);
+  const kw = Math.min(54, (iw - sa.l - sa.r - 20) / cols), kh = clamp(kw * 0.95, 36, 50);
+  const kx = (iw - kw * cols) / 2, ky = bot - 8 - rows * kh;
+  place(E.keys, kx, ky, kw * cols, rows * kh); E.keys.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+  touch.kbTop = ky - 6; touch.ctrlTop = ctrlTop;
+}
+function touchSync() {
+  const ts = !touch.on ? '' : inGame() ? (paused ? 'paused' : 'game') : (state === 'attract' || state === 'gameover') ? 'menu' : state;
+  if (ts !== TC.ts) {
+    TC.ts = ts; document.body.dataset.ts = ts;
+    if (ts !== 'game') { touch.fire = false; touch.pend = 0; }
+    touchLayout();
+  }
+  if (!touch.on || !TC.built) return;
+  const E = TC.E, S = TC.sync;
+  if (player.overheat !== S.hot) { S.hot = player.overheat; E.fire.classList.toggle('hot', S.hot); }
+  if (zapUses !== S.zap) { S.zap = zapUses; E.zap.classList.toggle('used', zapUses >= 2); }
+  if (Sound.muted !== S.mute) { S.mute = Sound.muted; E.mute.innerHTML = S.mute ? ICON.mute : ICON.snd; E.mute.classList.toggle('off', S.mute); }
+  if (paused !== S.pause) { S.pause = paused; E.pause.innerHTML = paused ? ICON.play : ICON.pause; }
+}
+viewBoxHook = () => touch.on && TC.box ? TC.box.map(v => v * DPR) : null;
+if (TOUCH_PARAM === '1' || (TOUCH_PARAM !== '0' && IS_MOBILE)) { touch.on = true; document.body.classList.add('touch'); touchBuild(); touchSync(); }
+
 /* ============================== loop ============================== */
 // Rendering resolution: full devicePixelRatio x supersampling (default 2x), capped at
-// ~9.4 MP for performance; the browser downsamples the canvas for anti-aliased, crisp lines.
+// ~9.4 MP (~5 MP on phones / tablets, to hold 60 fps) for performance; the browser downsamples the canvas for anti-aliased, crisp lines.
 // Adaptive: if the frame rate sags the supersample factor steps down. ?ss=1..3 overrides.
 const SS_FIXED = parseFloat(params.get('ss')) || 0;
 let SS = SS_FIXED || 2, slowT = 0, fastT = 0;
-const MAX_PIX = 9.4e6;
+const MAX_PIX = IS_MOBILE ? 5e6 : 9.4e6;
 function resize() {
   const cw = Math.max(1, innerWidth), ch = Math.max(1, innerHeight), dpr = window.devicePixelRatio || 1;
+  canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';   // exactly the visible viewport (iOS 100vh includes hidden toolbars)
   // never below native device resolution (dpr capped at 3); the pixel cap only limits supersampling
   const nat = Math.min(Math.max(dpr, 1), 3);
   let s = nat * SS; s = Math.min(s, Math.sqrt(MAX_PIX / (cw * ch))); s = Math.max(s, nat);
@@ -1365,9 +1616,12 @@ function resize() {
   // glow buffers sized from CSS pixels so the bloom looks the same at any internal resolution
   buildMips(cw);
   U = Math.min(W, H) / 100;
+  const sa = readSafe(); TC.sa = sa; SA = { l: sa.l * s, r: sa.r * s, t: sa.t * s, b: sa.b * s };
+  touchLayout();
   if (inGame() || state === 'gameover') view = computeView(web);
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => { resize(); setTimeout(resize, 350); });   // iOS updates safe-area insets a moment later
 resize();
 let last = performance.now(), fps = 60;
 function frame(now) {
@@ -1380,6 +1634,7 @@ function frame(now) {
   }
   if (!paused && !window.__freeze) { let rem = dt; while (rem > 1e-6) { const h = Math.min(rem, 1 / 120); update(h); rem -= h; } }
   render();
+  touchSync();
   if (DEBUG) text(Math.round(fps) + ' FPS', W - U * 2, H - U * 6, U * 1.3, '#0f0', 'right');
   requestAnimationFrame(frame);
 }
@@ -1387,7 +1642,7 @@ requestAnimationFrame(frame);
 
 // hooks for automated testing / debugging
 window.VORTEX = {
-  get state() { return { ss: SS, res: W + 'x' + H, sub: player.sub, lean: player.lean, music: Music.track ? Music.track.L : 0, musicOn: !!Music.timer, state, paused, level, score, lives, zapUses, enemies: enemies.length, pool: pool.length, spikes: spikes.slice(), web: web.name, lane: player.lane, pz: player.z, camZ }; },
+  get state() { return { touch: touch.on, touchMode: TC.mode, fire: touch.fire, pend: touch.pend, dpr: DPR, ss: SS, res: W + 'x' + H, sub: player.sub, lean: player.lean, music: Music.track ? Music.track.L : 0, musicOn: !!Music.timer, state, paused, level, score, lives, zapUses, enemies: enemies.length, pool: pool.length, spikes: spikes.slice(), web: web.name, lane: player.lane, pz: player.z, camZ }; },
   debug: DEBUG,
   setInvincible(v) { invincible = !!v; },
   clearLevel() { pool = []; enemies = []; eshots = []; if (state === 'play') startWarp(); },
@@ -1408,6 +1663,14 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
   deathKind: () => death ? death.kind : null,
+  // touch-test helpers (CSS px)
+  selectIdx: () => select.idx,
+  selectBoxes: () => selRects.map(r => ({ x: (r[0] + r[2] / 2) / DPR, y: (r[1] + r[3] / 2) / DPR, idx: r[4] })),
+  webBounds() { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of web.pts) for (const zw of [-0.18, LL]) { const a = proj(q[0], q[1], zw); if (!a) continue; x0 = Math.min(x0, a[0]); x1 = Math.max(x1, a[0]); y0 = Math.min(y0, a[1]); y1 = Math.max(y1, a[1]); } return { x0: x0 / DPR, x1: x1 / DPR, y0: y0 / DPR, y1: y1 / DPR }; },
+  touchStepPx: () => TC.stepPx,
+  shotsFired: () => shotsFired,
+  muted: () => Sound.muted,
+  fps: () => Math.round(fps),
   gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); },
 };
 })();

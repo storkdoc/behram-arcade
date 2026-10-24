@@ -10,7 +10,8 @@
       <div class="meta">
         <div class="title-row"><span class="title">${esc(g.title)}</span><span class="genre">${esc(g.genre || '')}${g.year ? ' · ' + esc(g.year) : ''}</span></div>
         <p class="desc">${esc(g.description)}</p>
-        ${g.controls ? `<div class="controls">${esc(g.controls)}</div>` : ''}
+        ${g.controls ? `<div class="controls">${g.touch ? '<b>KEYS</b> ' : ''}${esc(g.controls)}</div>` : ''}
+        ${g.touch ? `<div class="controls"><b>TOUCH</b> ${esc(g.touch)}</div>` : ''}
         <span class="play">PLAY &#9654;</span>
       </div>
     </a>`).join('') + `
@@ -37,5 +38,9 @@
       setSel(sel + (k === 'ArrowRight' ? 1 : k === 'ArrowLeft' ? -1 : k === 'ArrowDown' ? c : -c));
     } else if ((k === 'Enter' || k === ' ') && sel >= 0) { e.preventDefault(); location.href = cards[sel].href; }
   });
-  cards.forEach((c, i) => c.addEventListener('mouseenter', () => { cards.forEach(x => x.classList.remove('sel')); sel = i; }));
+  // hover highlight only for real mice; on phones / tablets one tap on a cabinet opens the game
+  if (matchMedia('(hover: hover)').matches) cards.forEach((c, i) => c.addEventListener('mouseenter', () => { cards.forEach(x => x.classList.remove('sel')); sel = i; }));
+  if (matchMedia('(hover: none), (pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(hover: hover)').matches) {
+    const hint = document.getElementById('hint'); if (hint) hint.textContent = 'TAP A CABINET TO PLAY';
+  }
 })();
