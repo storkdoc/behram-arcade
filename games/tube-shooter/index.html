@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>VORTEX — Behram Arcade</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+  body.showcursor{cursor:default}
+  canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh;background:#000}
+  #crt{position:fixed;inset:0;pointer-events:none;
+    background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,.16) 3px),
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 62%, rgba(0,0,0,.55) 100%);
+    mix-blend-mode:multiply}
+  #back{position:fixed;left:14px;bottom:12px;font:600 12px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;
+    color:#ff3df5;text-decoration:none;padding:7px 11px;border:1px solid rgba(255,61,245,.5);border-radius:6px;
+    text-shadow:0 0 6px #ff3df5;box-shadow:0 0 10px rgba(255,61,245,.25) inset;opacity:.45;transition:opacity .2s;z-index:5;cursor:pointer}
+  #back:hover{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<div id="crt"></div>
+<a id="back" href="../../index.html">&#9664; BACK TO ARCADE</a>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BEHRAM ARCADE</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Cpath d='M12 46 L32 10 L52 46 Z' fill='none' stroke='%23ff47e6' stroke-width='5'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/arcade.css">
+</head>
+<body>
+<div class="sky"></div>
+<div class="sun"></div>
+<div class="floor"><div class="grid"></div></div>
+
+<main>
+  <header class="marquee">
+    <div class="sign" aria-label="Behram Arcade">
+      <span class="sign-top">BEHRAM</span>
+      <span class="sign-bottom">ARCADE</span>
+    </div>
+    <p class="tag">INSERT COIN &middot; <span class="blink">A NEW GAME EVERY DAY</span></p>
+    <div class="ticker"><div class="ticker-inner" id="ticker"></div></div>
+  </header>
+
+  <section class="cabinets" id="grid" aria-label="Games"></section>
+
+  <footer>
+    <span>&larr; &rarr; &uarr; &darr; SELECT &nbsp;&middot;&nbsp; ENTER PLAY</span>
+    <span id="count"></span>
+  </footer>
+</main>
+<div class="crt"></div>
+
+<script src="games.js"></script>
+<script src="assets/arcade.js"></script>
+</body>
+</html>
