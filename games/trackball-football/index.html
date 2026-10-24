@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#05060c">
+<meta name="description" content="Trackball Football: an homage to the 1978 trackball football coin-op. Heavy virtual trackball, secret play calls, realistic stadium, online two-player and vs computer.">
+<title>Trackball Football</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #05060c; overflow: hidden; touch-action: none; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  body { position: fixed; inset: 0; }
+  #screen { position: fixed; left: 0; top: 0; display: block; touch-action: none; outline: none; }
+  #safe { position: fixed; inset: 0; pointer-events: none; visibility: hidden;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  #home { position: fixed; top: calc(env(safe-area-inset-top) + 8px); left: calc(env(safe-area-inset-left) + 10px); z-index: 5;
+    color: #aab3d8; font: 700 13px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; letter-spacing: 1px; text-decoration: none;
+    padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,.45); }
+  #home:hover { color: #fff; }
+  .ingame #home { display: none; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Trackball Football game screen"></canvas>
+<div id="safe"></div>
+<a id="home" href="../../index.html">&larr; ARCADE</a>
+<script src="peerjs.min.js"></script>
+<script src="js/plays.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/trackball.js"></script>
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

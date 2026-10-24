@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'trackball-football',
+    title: 'TRACKBALL FOOTBALL',
+    tagline: 'Roll the ball, feel the run',
+    description: 'A modern homage to the 1978 trackball coin-op: the faster you stroke the heavy virtual trackball, the faster your man runs, and it keeps rolling when you let go. 7-on-7 under stadium lights with secret play calls, downs, the clock, passes, punts, field goals, big hits and fumbles - spin hard to break tackles. Play the CPU at Rookie, Pro or All-Pro, or go head to head online: one player starts a Two-Player Game, the buddy taps Join Two-Player Game in Progress - no code needed.',
+    thumb: 'games/trackball-football/thumb.png',
+    added: '2026-10-24',
+    genre: 'SPORTS',
+    year: '1978 STYLE',
+    controls: 'click the field to grab the trackball, then roll the mouse/trackpad (or two-finger swipe) · click/SPACE hike, throw, juke, dive · SHIFT/right-click next man · arrows/WASD also roll · ESC lets go · P pause · M sound',
+    touch: 'swipe/flick the on-screen trackball (rest a finger to brake) · red button hike/throw/juke/dive · blue button next man · tap plays to call them · tap to host or join online',
+    accent: '#ff5a3c'
+  },
+  {
     slug: 'atari-football',
     title: 'ATARI FOOTBALL',
     tagline: '7-on-7 pixel gridiron',

@@ -1,0 +1,818 @@
+/* ==========================================================================
+   TRACKBALL FOOTBALL — sim.js
+   The whole game: rules, physics and CPU players. Field units are yards:
+   x 0..120 (goal lines at 10 and 110), y 0..53.33 (0 = far sideline).
+   Team 0 (XPRESS, the X's) always attacks +x, team 1 (OUTLAWS, the O's) -x.
+   Players 0-6 are team 0, 7-13 team 1. One fixed 60 Hz step. The host (or
+   the CPU game) runs this; online guests only ever see snapshot() output,
+   which never contains a play call before the snap.
+   ========================================================================== */
+const STEP = 1 / 60;
+const FIELD_W = 53.333, MID_Y = FIELD_W / 2;
+const HASH = [MID_Y - 3.1, MID_Y + 3.1];
+const BASE_V = { C: 6.4, LG: 6.4, RG: 6.4, QB: 7.6, RB: 8.6, WR: 8.9, DT: 6.7, DE: 7.4, LB: 8.0, CB: 8.8, S: 8.6 };
+let HUMAN_TOP = 1.0; // human-steered player's top speed at full trackball spin (x command magnitude, max 1.15)
+const SKILL = [ // rookie / pro / all-pro (applied to the CPU team; human teammates play at "pro")
+  { spd: 0.87, react: 0.42, tackle: 0.72, shed: 3.2, acc: 2.2, esc: 0.55, read: 2.0, cover: 0.55, int: 0.18 },
+  { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3 },
+  { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42 },
+];
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const hyp = Math.hypot;
+
+const Sim = (() => {
+  let G = null;
+  const dirOf = t => t === 0 ? 1 : -1;
+  const teamOf = i => i < 7 ? 0 : 1;
+  const P = i => G.pl[i];
+  const teamPl = t => G.pl.slice(t * 7, t * 7 + 7);
+  const goalX = t => t === 0 ? 110 : 10;   // the goal line team t attacks
+  const ownYd = (t, x) => t === 0 ? x - 10 : 110 - x;
+  const sk = t => G.human[t] ? SKILL[1] : SKILL[G.opts.diff];
+  function ev(n, x, y, extra) { G.evSeq++; G.ev.push(Object.assign({ s: G.evSeq, n, x: x == null ? null : +x.toFixed(1), y: y == null ? null : +y.toFixed(1) }, extra || {})); if (G.ev.length > 16) G.ev.shift(); }
+  function banner(t, sub, col, dur) { G.bannerSeq++; G.banner = { t, sub: sub || '', c: col || '#fff', id: G.bannerSeq, d: dur || 2.2 }; }
+
+  function newGame(opts) {
+    G = {
+      opts: Object.assign({ diff: 1, half: 150 }, opts || {}), human: (opts && opts.human) || [true, false],
+      phase: 'select', t: 0, clock: (opts && opts.half) || 150, half: 1, score: [0, 0], off: 0, down: 1, togo: 10, los: 35, ballY: MID_Y, flip: 1,
+      pl: [], ball: { x: 35, y: MID_Y, z: 0.3, vx: 0, vy: 0, vz: 0, st: 'dead', holder: -1, kind: '', t: 0, T: 0, tgt: -1 },
+      picks: [null, null], pend: [false, false], selT: 0, ctl: [3, 10], aim: [-1, -1], wrap: null,
+      ev: [], evSeq: 0, banner: null, bannerSeq: 0, calls: null, kind: '', over: false, thrown: false, crossed: false, run: false, runT: 0,
+      playT: 0, result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
+    };
+    for (let i = 0; i < 14; i++) G.pl.push({ i, team: teamOf(i), slot: i % 7, role: '', num: 0, x: 0, y: 0, vx: 0, vy: 0, fa: 0, st: 'ok', stT: 0, eng: -1, engT: 0, shedNeed: 2, noEng: 0, maxv: 7, as: null, wp: 0, route: null, tcd: 0, imm: 0, dv: 0, lastShed: -1 });
+    setPossession(0, 35, false);
+    placeFormation(true);
+    beginSelect();
+    return G;
+  }
+  function setPossession(team, x, keepBall) {
+    G.off = team; G.los = clamp(x, 11, 109); G.down = 1; G.togo = 10; setFd();
+    if (!keepBall) G.ballY = MID_Y;
+  }
+  function setFd() {
+    const d = dirOf(G.off); let fd = G.los + d * G.togo;
+    if ((fd - goalX(G.off)) * d >= 0) { fd = goalX(G.off); G.togo = Math.abs(fd - G.los); G.goalToGo = true; } else G.goalToGo = false;
+    G.fd = fd;
+  }
+  function roleOf(p) { return p.team === G.off ? OFF_ROLE[p.slot] : DEF_ROLE[p.slot]; }
+  function formPos(p) {
+    const d = dirOf(G.off), f = p.team === G.off ? OFF_FORM[p.slot] : DEF_FORM[p.slot];
+    return { x: G.los + d * f[0], y: clamp(G.ballY + f[1] * G.flip, 1, FIELD_W - 1) };
+  }
+  function placeFormation(snapNow) {
+    G.flip = G.ballY > MID_Y + 0.5 ? -1 : 1;
+    for (const p of G.pl) {
+      p.role = roleOf(p); p.num = p.team === G.off ? OFF_NUM[p.slot] : DEF_NUM[p.slot];
+      p.maxv = BASE_V[p.role] * sk(p.team).spd;
+      if (snapNow) { const f = formPos(p); p.x = f.x; p.y = f.y; p.vx = p.vy = 0; }
+    }
+  }
+  function resetPlayers() {
+    for (const p of G.pl) { p.eng = -1; p.engT = 0; p.as = null; p.route = null; p.wp = 0; p.tcd = 0; p.imm = 0; p.noEng = 0; p.lastShed = -1; p.jukeT = -9; p.mashT = -9; if (p.st === 'dive') { p.st = 'down'; p.stT = 0.6; } }
+  }
+  function beginSelect() {
+    G.phase = 'select'; G.t = 0; G.selT = 14; G.picks = [null, null]; G.pend = [false, false]; G.calls = null; G.kind = ''; G.wrap = null;
+    G.ball.st = 'dead'; G.ball.holder = -1; G.ball.x = G.los; G.ball.y = G.ballY; G.ball.z = 0.15; G.thrown = false; G.crossed = false; G.run = false;
+    resetPlayers(); placeFormation(false);
+    for (let t = 0; t < 2; t++) if (!G.human[t]) { G.picks[t] = cpuPick(t); G.pend[t] = true; }
+    const d = dirOf(G.off);
+    G.ctl[G.off] = G.off * 7 + 3;
+    const def = 1 - G.off; G.ctl[def] = def * 7 + 3;
+  }
+  /** a side locks in its call (host / CPU game) */
+  function pick(team, id) {
+    if (G.phase !== 'select' || G.picks[team]) return false;
+    const list = team === G.off ? offenseChoices() : DEFENSE;
+    if (!list.some(p => p.id === id)) id = list[0].id;
+    G.picks[team] = id; G.pend[team] = true; return true;
+  }
+  function lock(team) { if (G.phase === 'select') G.pend[team] = true; }
+  function offenseChoices() {
+    const kickDist = Math.abs(goalX(G.off) - G.los) + 17;
+    return OFFENSE.filter(p => p.id !== 'fg' || kickDist <= 57);
+  }
+  function cpuPick(team) {
+    const off = team === G.off, togo = G.togo, toGoal = Math.abs(goalX(G.off) - G.los), kick = toGoal + 17;
+    if (off) {
+      const late = G.half === 2 && G.clock < 20, behind = G.score[team] < G.score[1 - team];
+      if (G.down === 4 && !(late && behind)) {
+        if (kick <= 47 && !(togo <= 2 && toGoal < 5)) return 'fg';
+        if (togo > 2 || ownYd(team, G.los) < 50) return 'punt';
+      }
+      if (late && !behind && G.score[team] - G.score[1 - team] <= 2 && kick <= 45) return 'fg';
+      const w = togo > 7 ? { dive: 1, sweep: 1.5, slants: 3, post: 3, bomb: 2, screen: 1.5 } : togo <= 3 ? { dive: 4, sweep: 2.5, slants: 2, post: 1, bomb: 0.6, screen: 1 } : { dive: 2.5, sweep: 2, slants: 2.5, post: 2, bomb: 1.2, screen: 1.5 };
+      if (toGoal < 12) w.bomb = 0.3;
+      return wpick(w);
+    }
+    const w = togo > 8 ? { man: 2, zone: 3, blitz: 1.5, stuff: 0.6, prevent: 1.5 } : togo <= 3 ? { man: 2, zone: 1, blitz: 2.5, stuff: 3.5, prevent: 0.2 } : { man: 3, zone: 2.5, blitz: 2, stuff: 1.8, prevent: 0.6 };
+    if (G.half === 2 && G.clock < 30 && G.score[team] > G.score[1 - team]) w.prevent += 3;
+    return wpick(w);
+  }
+  function wpick(w) { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
+
+  /* ---------------- the snap ---------------- */
+  function snap() {
+    const op = PLAY_BY_ID[G.picks[G.off]], dp = PLAY_BY_ID[G.picks[1 - G.off]];
+    G.phase = 'live'; G.t = 0; G.playT = 0; G.kind = op.kind; G.op = op; G.dp = dp;
+    G.calls = [op.name, dp.name];
+    G.thrown = false; G.crossed = false; G.run = false; G.runT = 0; G.wrap = null; G.result = null; G.stats.plays++;
+    const d = dirOf(G.off), fl = G.flip, off = G.off, def = 1 - off;
+    const W = (f, l) => ({ x: G.los + d * f, y: clamp(G.ballY + l * fl, 0.8, FIELD_W - 0.8) });
+    for (const p of G.pl) {
+      p.as = null; p.route = null; p.wp = 0;
+      if (p.team === off) {
+        const r = op.r && op.r[p.slot];
+        if (p.slot <= 2) p.as = r === 'pull' ? 'pull' : 'blk';
+        else if (p.slot === 3) { p.as = 'qb'; p.route = (op.qb || [[-5, 0]]).map(q => W(q[0], q[1])); }
+        else if (r === 'blk') p.as = 'blk';
+        else if (Array.isArray(r)) { p.as = 'route'; p.route = r.map(q => W(q[0], q[1])); }
+        else p.as = p.slot === 4 ? 'blk' : 'route', p.route = p.route || [W(OFF_FORM[p.slot][0] + 20, OFF_FORM[p.slot][1])];
+      } else {
+        const a = dp.a[p.slot]; p.as = a[0]; p.asArg = a;
+        if (a[0] === 'zone') p.zone = W(a[1], a[2]);
+        if (a[0] === 'man') p.manT = off * 7 + a[1];
+      }
+    }
+    const qb = P(off * 7 + 3), c = P(off * 7);
+    G.ctl[off] = qb.i;
+    if (!G.human[def] || G.ctl[def] < 0 || teamOf(G.ctl[def]) !== def) G.ctl[def] = def * 7 + 3;
+    // the snap: ball flies from the center to the QB
+    const b = G.ball; Object.assign(b, { x: c.x, y: c.y, z: 0.25, st: 'air', kind: 'snap', holder: -1, t: 0, T: 0.24, sx: c.x, sy: c.y, sz: 0.25, tx: qb.x, ty: qb.y, tz: 1.1, tgt: qb.i, spin: 0 });
+    ev('hike', G.los, G.ballY);
+    if (op.kind === 'punt' || op.kind === 'fg') { G.special = { k: op.kind, at: 0.85 }; }
+    else G.special = null;
+    G.aim[off] = -1;
+  }
+
+  /* ---------------- helpers ---------------- */
+  const carrier = () => G.ball.st === 'held' ? P(G.ball.holder) : null;
+  function moveTo(p, tx, ty, speed, stopR) {
+    const dx = tx - p.x, dy = ty - p.y, d = hyp(dx, dy);
+    if (d < (stopR || 0.05)) return { x: 0, y: 0 };
+    const s = Math.min(speed, d * 4.2);
+    return { x: dx / d * s, y: dy / d * s };
+  }
+  function pursue(p, q, speed) {
+    const d = hyp(q.x - p.x, q.y - p.y), lead = clamp(d / Math.max(1, speed) * 0.75, 0, 1.3);
+    return moveTo(p, q.x + q.vx * lead, q.y + q.vy * lead, speed);
+  }
+  function eligible(team) { return [4, 5, 6].map(s => P(team * 7 + s)); }
+  function openness(r, team) {
+    let m = 99; for (const q of teamPl(1 - team)) { if (q.st === 'down') continue; m = Math.min(m, hyp(q.x - r.x, q.y - r.y)); } return m;
+  }
+  function leadPoint(qb, r) {
+    let tx = r.x, ty = r.y, T = 0.5;
+    for (let k = 0; k < 3; k++) { const dist = hyp(tx - qb.x, ty - qb.y); T = 0.25 + dist / (17 + dist * 0.22); tx = r.x + r.vx * T; ty = r.y + r.vy * T; }
+    return { x: clamp(tx, 0.5, 119.5), y: clamp(ty, 0.6, FIELD_W - 0.6), T };
+  }
+  function throwTo(qb, r, err) {
+    const L = leadPoint(qb, r), b = G.ball;
+    const ex = err ? rand(-err, err) : 0, ey = err ? rand(-err, err) : 0;
+    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: L.T, sx: qb.x, sy: qb.y, sz: 2.0, tx: L.x + ex, ty: L.y + ey, tz: 1.25, tgt: r.i, from: qb.i, x: qb.x, y: qb.y, z: 2.0 });
+    G.thrown = true; G.ctl[qb.team] = r.i; qb.throwT = 0.35;
+    ev('throw', qb.x, qb.y);
+  }
+  function giveBall(p, how) {
+    const b = G.ball; b.st = 'held'; b.holder = p.i; b.kind = ''; b.tgt = -1;
+    G.ctl[p.team] = p.i;
+    if (p.team !== G.off || p.role !== 'QB') { G.run = true; }
+    if (how) ev(how, p.x, p.y);
+  }
+
+  /* ---------------- AI: offense ---------------- */
+  function aiOffense(p, out) {
+    const d = dirOf(G.off), c = carrier(), b = G.ball;
+    // ball in the air to me: go get it
+    if (b.st === 'air' && b.tgt === p.i && (b.kind === 'pass' || b.kind === 'pitch')) return moveTo(p, b.tx, b.ty, p.maxv, 0.15);
+    if (b.st === 'loose') return moveTo(p, b.x, b.y, p.maxv);
+    if (c === p) return aiCarrier(p);
+    // someone else has it downfield: block for them
+    const downfield = c && c.team === p.team && (c.role !== 'QB' || G.crossed);
+    if (p.as === 'qb') {
+      if (c === p) return aiCarrier(p);
+      const r = p.route; if (r && p.wp < r.length) { const q = r[p.wp]; if (hyp(q.x - p.x, q.y - p.y) < 0.5) p.wp++; return moveTo(p, q.x, q.y, p.maxv * 0.8); }
+      return { x: 0, y: 0 };
+    }
+    if (p.as === 'blk' || p.as === 'pull' || (downfield && p.as === 'route' && G.run && c !== p)) return aiBlock(p, c);
+    if (p.as === 'route') {
+      const r = p.route;
+      if (p.wp < r.length) {
+        const q = r[p.wp]; if (hyp(q.x - p.x, q.y - p.y) < 0.7) p.wp++;
+        if (p.wp < r.length) return moveTo(p, r[p.wp].x, r[p.wp].y, p.maxv * 0.97);
+      }
+      // route finished: deep routes keep running, short ones settle and wait
+      const L = r[r.length - 1], Pr = r.length > 1 ? r[r.length - 2] : { x: L.x - d * 5, y: L.y };
+      const len = hyp(L.x - Pr.x, L.y - Pr.y), deep = Math.abs(L.x - G.los) > 18;
+      if (deep && len > 0) return { x: (L.x - Pr.x) / len * p.maxv * 0.85, y: clamp((L.y - Pr.y) / len, -0.7, 0.7) * p.maxv * 0.6 };
+      return { x: 0, y: 0 };
+    }
+    return { x: 0, y: 0 };
+  }
+  function aiBlock(p, c) {
+    const qb = c || P(G.off * 7 + 3), d = dirOf(G.off), def = 1 - G.off;
+    if (p.eng >= 0) return { x: 0, y: 0 };
+    // choose a defender: nearest threat to the ball carrier that nobody else is blocking
+    let best = null, bs = 1e9;
+    for (const q of teamPl(def)) {
+      if (q.st === 'down' || (q.eng >= 0 && q.eng !== p.i) || q.i === p.lastShed) continue;
+      const toBall = hyp(q.x - qb.x, q.y - qb.y), toMe = hyp(q.x - p.x, q.y - p.y);
+      let s = toMe * 1.0 + toBall * 0.7;
+      if (p.as === 'blk' && p.slot <= 2 && !G.run && (q.x - G.los) * d > 7) s += 30; // linemen: stay home, take rushers
+      if (s < bs) { bs = s; best = q; }
+    }
+    if (p.as === 'pull' && G.t < 1.6) { // lead the sweep
+      const rb = P(G.off * 7 + 4); return moveTo(p, rb.x + d * 3, rb.y + (rb.y > G.ballY ? 2 : -2), p.maxv * 1.05);
+    }
+    if (!best) return { x: 0, y: 0 };
+    const nx = qb.x - best.x, ny = qb.y - best.y, n = hyp(nx, ny) || 1;
+    const gx = best.x + nx / n * 0.85, gy = best.y + ny / n * 0.85;
+    return moveTo(p, gx, gy, p.maxv);
+  }
+  function aiCarrier(p) {
+    const d = dirOf(p.team), def = 1 - p.team;
+    // QB with the ball before throwing
+    if (p.role === 'QB' && p.team === G.off && !G.crossed && !G.thrown && G.kind === 'pass') return aiQB(p);
+    if (p.role === 'QB' && p.team === G.off && (G.kind === 'run') && !G.run) {
+      const r = p.route; if (r && p.wp < r.length) { const q = r[p.wp]; if (hyp(q.x - p.x, q.y - p.y) < 0.5) p.wp++; return moveTo(p, q.x, q.y, p.maxv * 0.6); }
+      return { x: 0, y: 0 };
+    }
+    // runner: head for the end zone, steer away from tacklers, keep off the sideline
+    let vx = d * 1.0, vy = 0;
+    if (p.route && p.as === 'route' && p.wp < p.route.length && G.kind === 'run' && G.t < 2.4) { // follow the designed run path first
+      const q = p.route[p.wp]; if (hyp(q.x - p.x, q.y - p.y) < 1.0) p.wp++;
+      if (p.wp < p.route.length) { const r = p.route[p.wp]; const n = hyp(r.x - p.x, r.y - p.y) || 1; vx = (r.x - p.x) / n; vy = (r.y - p.y) / n; }
+    }
+    for (const q of teamPl(def)) {
+      if (q.st === 'down' || q.eng >= 0) continue;
+      const dx = p.x - q.x, dy = p.y - q.y, dist = hyp(dx, dy); if (dist > 9) continue;
+      const ahead = (q.x - p.x) * d > -1.5 ? 1 : 0.35, w = ahead * 2.2 / Math.max(0.6, dist * dist) * 2.2;
+      vy += dy / dist * w * 1.1; vx += dx / dist * w * 0.3;
+    }
+    if (p.y < 4) vy += (4 - p.y) * 0.35; if (p.y > FIELD_W - 4) vy -= (p.y - FIELD_W + 4) * 0.35;
+    if (vx * d < 0.25) vx = d * 0.25;
+    const n = hyp(vx, vy) || 1, sp = p.maxv * (p.role === 'QB' ? 1 : 0.97); return { x: vx / n * sp, y: vy / n * sp };
+  }
+  function aiQB(p) {
+    const s = sk(p.team), d = dirOf(p.team), def = 1 - p.team;
+    const r = p.route; let mv = { x: 0, y: 0 };
+    if (r && p.wp < r.length) { const q = r[p.wp]; if (hyp(q.x - p.x, q.y - p.y) < 0.4) p.wp++; mv = moveTo(p, q.x, q.y, p.maxv * 0.85); }
+    // pressure?
+    let near = 99, nq = null; for (const q of teamPl(def)) { if (q.st === 'down' || q.eng >= 0) continue; const dd = hyp(q.x - p.x, q.y - p.y); if (dd < near) { near = dd; nq = q; } }
+    if (G.human[p.team]) return mv; // (only reached for a human team's QB before control is applied)
+    const t = G.t, read = p.read || (p.read = s.read + rand(-0.3, 0.5));
+    if (t > 0.55) {
+      let best = null, bs = -1e9;
+      for (const e of eligible(p.team)) {
+        if (e.st !== 'ok') continue;
+        const L = leadPoint(p, e), o = openness({ x: L.x, y: L.y }, p.team), gain = (L.x - G.los) * d;
+        const sc = Math.min(o, 6) * 1.0 + gain * 0.07 - (o < 1.6 ? 5 : 0) + (G.op.screen && e.slot === 4 && t > 1.6 ? 3 : 0) + (G.togo > 8 && gain < G.togo ? -1.2 : 0);
+        if (sc > bs) { bs = sc; best = e; }
+      }
+      const pressure = near < 2.4;
+      if (best && ((t > read && bs > 3.2) || (t > read + 1.0 && bs > 1.8) || (pressure && bs > 2) || t > 3.8)) { throwTo(p, best, s.acc); return { x: 0, y: 0 }; }
+      if (pressure && nq) { const ax = p.x - nq.x, ay = p.y - nq.y, n = hyp(ax, ay) || 1; return { x: ax / n * p.maxv, y: ay / n * p.maxv }; } // scramble away
+    }
+    return mv;
+  }
+
+  /* ---------------- AI: defense ---------------- */
+  function aiDefense(p) {
+    const s = sk(p.team), off = G.off, d = dirOf(off), c = carrier(), b = G.ball;
+    if (p.eng >= 0) return { x: 0, y: 0 };
+    if (b.st === 'loose') return moveTo(p, b.x, b.y, p.maxv);
+    if (G.special) return { x: 0, y: 0 };
+    // ball in the air: break on it if I can get there
+    if (b.st === 'air' && b.kind === 'pass') {
+      const left = Math.max(0, b.T - b.t), dist = hyp(b.tx - p.x, b.ty - p.y);
+      if (dist < left * p.maxv * 1.05 + 1.2 && G.t - b.launch > s.react) return moveTo(p, b.tx, b.ty, p.maxv);
+      const r = P(b.tgt); return pursue(p, r, p.maxv);
+    }
+    if (c && c.team !== off) { // interception return: everybody on the original offense tackles, we block... just pursue roles swap
+      return { x: 0, y: 0 };
+    }
+    // run (or scramble / catch) detected: pursue after the reaction delay
+    if (G.run && c && G.t - G.runT > s.react * (p.as === 'zone' ? 1.3 : 1)) return pursue(p, c, p.maxv * 1.04);
+    const qb = P(off * 7 + 3);
+    switch (p.as) {
+      case 'rush': { const tgt = c || qb; return pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1)); }
+      case 'fill': {
+        if (G.kind === 'run' && c) return pursue(p, c, p.maxv);
+        if (G.t < 1.1) return moveTo(p, G.los + d * 0.8, G.ballY + (p.slot === 6 ? 3 : -1), p.maxv);
+        return pursue(p, c || qb, p.maxv);
+      }
+      case 'man': {
+        const r = P(p.manT), cush = p.asArg[2] * (G.t < 1 ? 1 : 0.6), cov = s.cover;
+        const ex = r.x + r.vx * (0.15 + 0.3 * cov) + d * cush, ey = r.y + r.vy * (0.15 + 0.3 * cov);
+        return moveTo(p, ex, ey, p.maxv * (r.role === 'RB' && p.role === 'LB' ? 0.95 : 1.0), 0.1);
+      }
+      case 'zone': {
+        const Z = p.zone; let best = null, bd = 1e9;
+        for (const r of eligible(off)) { const dz = hyp(r.x - Z.x, r.y - Z.y); if (dz < 9.5 && dz < bd) { bd = dz; best = r; } }
+        if (best) { const gx = best.x + best.vx * 0.3 + d * 1.6, gy = best.y + best.vy * 0.3; return moveTo(p, gx * 0.75 + Z.x * 0.25, gy * 0.8 + Z.y * 0.2, p.maxv); }
+        return moveTo(p, Z.x, Z.y, p.maxv * 0.85);
+      }
+    }
+    return { x: 0, y: 0 };
+  }
+  // interception return: the original offense becomes the tacklers
+  function aiChase(p) { const c = carrier(); if (!c) return { x: 0, y: 0 }; return pursue(p, c, p.maxv); }
+
+  /* ---------------- per-step update ---------------- */
+  let inputs = [null, null];
+  function update(dt, inp) {
+    inputs = inp || [null, null];
+    G.t += dt;
+    G.excite = Math.max(0, G.excite - dt * 0.25);
+    if (G.banner) { G.banner.d -= dt; if (G.banner.d <= 0) G.banner = null; }
+    for (const p of G.pl) { if (p.throwT > 0) p.throwT -= dt; }
+    switch (G.phase) {
+      case 'select': updSelect(dt); break;
+      case 'presnap': updPresnap(dt); break;
+      case 'live': updLive(dt); break;
+      case 'result': updResult(dt); break;
+      case 'half': if (G.t > 3.5) { G.half = 2; G.clock = G.opts.half; setPossession(1, 85); G.ballY = MID_Y; placeFormation(true); beginSelect(); } else drift(dt); break;
+      case 'over': drift(dt); break;
+    }
+  }
+  function drift(dt) { for (const p of G.pl) { integrate(p, { x: 0, y: 0 }, dt, 10); } }
+  function updSelect(dt) {
+    G.selT -= dt;
+    jog(dt, 1);
+    if (G.selT <= -3) for (let t = 0; t < 2; t++) if (!G.picks[t]) { G.picks[t] = (t === G.off ? offenseChoices() : DEFENSE)[0].id; G.pend[t] = true; }
+    if (G.picks[0] && G.picks[1]) { G.phase = 'presnap'; G.t = 0; G.hikeT = G.human[G.off] ? 5.5 : rand(1.3, 2.2); }
+  }
+  function jog(dt, k) { // walk everyone back to the huddle-less formation
+    for (const p of G.pl) {
+      if (p.st === 'down') { p.stT -= dt; if (p.stT <= 0) p.st = 'ok'; integrate(p, { x: 0, y: 0 }, dt, 14); continue; }
+      p.st = 'ok';
+      const f = formPos(p), dd = hyp(f.x - p.x, f.y - p.y);
+      const v = moveTo(p, f.x, f.y, dd > 6 ? 7.5 * k : 4.2 * k, 0.04);
+      integrate(p, v, dt, 12);
+      if (dd < 0.08) { p.vx = p.vy = 0; p.fa = p.team === G.off ? (dirOf(G.off) > 0 ? 0 : Math.PI) : (dirOf(G.off) > 0 ? Math.PI : 0); }
+    }
+  }
+  function updPresnap(dt) {
+    G.clock = Math.max(0, G.clock - dt);
+    // snap players into their spots quickly if they are not there yet
+    for (const p of G.pl) { const f = formPos(p); const k = Math.min(1, dt * (G.t < 1 ? 3 : 8)); p.x += (f.x - p.x) * k; p.y += (f.y - p.y) * k; p.vx = p.vy = 0; p.st = 'ok'; p.fa = p.team === G.off ? (dirOf(G.off) > 0 ? 0 : Math.PI) : (dirOf(G.off) > 0 ? Math.PI : 0); }
+    const di = inputs[1 - G.off];
+    if (G.human[1 - G.off] && di && (di.aP || di.bP)) { const t = 1 - G.off, k = (G.ctl[t] - t * 7 + 1) % 7; G.ctl[t] = t * 7 + k; ev('switch'); }
+    const inp = inputs[G.off];
+    if (G.t > 0.7 && G.human[G.off] && inp && inp.aP) return snap();
+    if (G.t > G.hikeT) snap();
+  }
+  function integrate(p, want, dt, acc) {
+    const dvx = want.x - p.vx, dvy = want.y - p.vy, dm = hyp(dvx, dvy), a = acc * dt;
+    if (dm <= a) { p.vx = want.x; p.vy = want.y; } else { p.vx += dvx / dm * a; p.vy += dvy / dm * a; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const sp = hyp(p.vx, p.vy);
+    if (sp > 0.6) { const fa = Math.atan2(p.vy, p.vx); let df = fa - p.fa; while (df > Math.PI) df -= 2 * Math.PI; while (df < -Math.PI) df += 2 * Math.PI; p.fa += df * Math.min(1, dt * 12); }
+    p.x = clamp(p.x, -6, 126); p.y = clamp(p.y, -3.5, FIELD_W + 3.5);
+  }
+
+  function updLive(dt) {
+    const b = G.ball, d = dirOf(G.off), off = G.off, def = 1 - off;
+    G.playT += dt;
+    G.clock = Math.max(0, G.clock - dt);
+    // ---- special teams
+    if (G.special) return updSpecial(dt);
+    // ---- buttons
+    for (let t = 0; t < 2; t++) {
+      const inp = inputs[t]; if (!G.human[t] || !inp) continue;
+      const c = carrier(), me = P(G.ctl[t]);
+      if (inp.aP) {
+        if (c && c.i === me.i) {
+          if (me.role === 'QB' && t === off && G.kind === 'pass' && !G.thrown && !G.crossed) { const r = P(G.aim[t] >= 0 ? G.aim[t] : bestAim(me)); throwTo(me, r, 0.35); }
+          else if (G.wrap && G.wrap.c === me.i) { if (G.t - (me.mashT || -9) > 0.15) { me.mashT = G.t; G.wrap.m -= 0.06; ev('grunt', me.x, me.y); } }
+          else if (me.imm <= 0 && G.t - (me.jukeT || -9) > 1.0) { me.jukeT = G.t; me.burst = 0.45; ev('juke', me.x, me.y); }
+        } else if (t !== (c ? c.team : off)) {
+          const tgt = c || (b.st === 'air' ? P(b.tgt) : null);
+          if (tgt && hyp(tgt.x - me.x, tgt.y - me.y) < 3.4 && me.st === 'ok' && me.eng < 0) dive(me, tgt);
+          else switchTo(t);
+        }
+      }
+      if (inp.bP) {
+        if (c && c.i === me.i && me.role === 'QB' && !G.thrown && G.kind === 'pass') { cycleAim(t); }
+        else if (!(c && c.team === t)) switchTo(t);
+      }
+    }
+    // ---- QB handoffs / pitches / scramble detection
+    const qb = P(off * 7 + 3), c0 = carrier();
+    if (G.op.kind === 'run' && c0 === qb && !G.run) {
+      const rb = P(off * 7 + 4);
+      if (G.op.hand != null && G.t > 0.3 && (hyp(rb.x - qb.x, rb.y - qb.y) < 1.9 || G.t > 0.75)) { giveBall(rb, 'handoff'); G.runT = G.t; }
+      if (G.op.pitch != null && G.t > 0.42) {
+        const L = { x: rb.x + rb.vx * 0.4, y: rb.y + rb.vy * 0.4 };
+        Object.assign(b, { st: 'air', kind: 'pitch', holder: -1, t: 0, T: 0.4, sx: qb.x, sy: qb.y, sz: 1.3, tx: L.x, ty: L.y, tz: 1.1, tgt: rb.i, launch: G.t });
+        G.ctl[off] = rb.i; G.run = true; G.runT = G.t; ev('pitch', qb.x, qb.y);
+      }
+    }
+    if (c0 && c0 === qb && !G.crossed && (qb.x - G.los) * d > 0.6) { G.crossed = true; if (!G.run) { G.run = true; G.runT = G.t; } }
+    // aim (for a human QB)
+    if (G.human[off] && c0 === qb && G.kind === 'pass' && !G.thrown && G.ctl[off] === qb.i) updAim(off, qb);
+    // ---- desired velocities
+    const wants = [];
+    for (const p of G.pl) {
+      let w;
+      if (p.st === 'down') { p.stT -= dt; if (p.stT <= 0 && G.phase === 'live') { p.st = 'ok'; } wants.push({ x: 0, y: 0 }); continue; }
+      if (p.st === 'dive') { p.stT -= dt; if (p.stT <= 0) { p.st = 'down'; p.stT = 0.9; } wants.push({ x: p.vx, y: p.vy }); continue; }
+      const human = G.human[p.team] && G.ctl[p.team] === p.i && inputs[p.team];
+      if (human) {
+        const cm = inputs[p.team], role = p.role, f = (role === 'C' || role === 'LG' || role === 'RG' || role === 'DT') ? 0.86 : role === 'DE' ? 0.92 : 1;
+        const top = BASE_V[role] * f * HUMAN_TOP;
+        w = { x: cm.x * top, y: cm.y * top };
+        p.hm = cm.m || 0;
+      } else if (p.team === off) w = (c0 && c0.team !== off) ? aiChase(p) : aiOffense(p);
+      else w = (c0 && c0.team === def) ? (c0 === p ? aiCarrier(p) : aiBlock(p, c0)) : aiDefense(p);
+      if (p.st === 'stun') { p.stT -= dt; if (p.stT <= 0) p.st = 'ok'; w = { x: w.x * 0.3, y: w.y * 0.3 }; }
+      if (p.burst > 0) { p.burst -= dt; w = { x: w.x * 1.18, y: w.y * 1.18 }; }
+      wants.push(w);
+    }
+    // ---- move (blocks and wrap-ups restrain)
+    for (const p of G.pl) {
+      const w = wants[p.i];
+      if (p.st === 'dive') { p.x += p.vx * dt; p.y += p.vy * dt; continue; }
+      if (p.eng >= 0) continue;
+      if (G.wrap && (G.wrap.c === p.i || G.wrap.tk.includes(p.i))) continue;
+      const human = G.human[p.team] && G.ctl[p.team] === p.i;
+      integrate(p, w, dt, p.st === 'down' ? 20 : human ? 24 : 14);
+    }
+    updBlocks(dt, wants);
+    updWrap(dt, wants);
+    separate();
+    if (G.phase !== 'live') return;
+    updBall(dt);
+    if (G.phase !== 'live') return;
+    checkTackles();
+    if (G.phase !== 'live') return;
+    checkDead();
+    for (const p of G.pl) { if (p.tcd > 0) p.tcd -= dt; if (p.imm > 0) p.imm -= dt; if (p.noEng > 0) p.noEng -= dt; }
+  }
+  function bestAim(qb) {
+    let best = null, bs = -1e9; const d = dirOf(qb.team);
+    for (const e of eligible(qb.team)) { if (e.st !== 'ok') continue; const L = leadPoint(qb, e); const s = Math.min(openness(L, qb.team), 6) + (L.x - G.los) * d * 0.05; if (s > bs) { bs = s; best = e; } }
+    return best ? best.i : qb.team * 7 + 5;
+  }
+  function updAim(t, qb) {
+    const inp = inputs[t]; if (!inp) return;
+    if (G.aim[t] < 0) G.aim[t] = bestAim(qb);
+    if (inp.m > 0.18 && !qb.aimLock) {
+      let best = -1, bs = 0.35;
+      for (const e of eligible(t)) { const dx = e.x - qb.x, dy = e.y - qb.y, n = hyp(dx, dy) || 1; const cs = (dx * inp.x + dy * inp.y) / (n * inp.m); if (cs > bs) { bs = cs; best = e.i; } }
+      if (best >= 0) G.aim[t] = best;
+    }
+  }
+  function cycleAim(t) { const el = eligible(t).map(e => e.i); const k = el.indexOf(G.aim[t]); G.aim[t] = el[(k + 1) % el.length]; }
+  function switchTo(t) {
+    const c = carrier(); const ref = c || (G.ball.st === 'air' ? { x: G.ball.tx, y: G.ball.ty } : G.ball);
+    let best = null, bd = 1e9;
+    for (const p of teamPl(t)) { if (p.i === G.ctl[t] || p.st === 'down') continue; const dd = hyp(p.x - ref.x, p.y - ref.y); if (dd < bd) { bd = dd; best = p; } }
+    if (best) { G.ctl[t] = best.i; ev('switch', best.x, best.y, { t }); }
+  }
+  function dive(p, tgt) {
+    const dx = tgt.x + tgt.vx * 0.22 - p.x, dy = tgt.y + tgt.vy * 0.22 - p.y, n = hyp(dx, dy) || 1;
+    p.st = 'dive'; p.stT = 0.34; p.vx = dx / n * 10.5; p.vy = dy / n * 10.5; p.fa = Math.atan2(dy, dx); p.eng = -1;
+    ev('dive', p.x, p.y);
+  }
+  function updBlocks(dt, wants) {
+    const off = G.off, c = carrier();
+    // new engagements
+    for (const o of G.pl) {
+      if (o.team === (c ? c.team : off) ? false : true) continue;  // blockers are on the team with the ball
+      if (o.eng >= 0 || o.st !== 'ok' || o === c || o.noEng > 0) continue;
+      if (!(o.as === 'blk' || o.as === 'pull' || (G.run && o.as === 'route') || (c && c.team !== off))) continue;
+      if (G.ball.st === 'held' && G.ball.holder === o.i) continue;
+      for (const dfd of teamPl(1 - o.team)) {
+        if (dfd.eng >= 0 || dfd.st !== 'ok' || dfd.i === o.lastShed || dfd.noEng > 0) continue;
+        if (hyp(dfd.x - o.x, dfd.y - o.y) < 1.05) {
+          o.eng = dfd.i; dfd.eng = o.i; dfd.engT = 0; dfd.shed = 0;
+          const s = sk(dfd.team);
+          dfd.shedNeed = (dfd.role === 'DT' || dfd.role === 'DE' ? 1 : 0.7) * s.shed * rand(0.65, 1.35) * (o.role === 'WR' || o.role === 'RB' ? 0.6 : 1);
+          ev('pad', (o.x + dfd.x) / 2, (o.y + dfd.y) / 2);
+          break;
+        }
+      }
+    }
+    // engaged pairs: they lock up and lean; the defender works free
+    for (const dfd of G.pl) {
+      if (dfd.eng < 0) continue;
+      const o = P(dfd.eng); if (o.eng !== dfd.i) { dfd.eng = -1; continue; }
+      if (dfd.team === (c ? c.team : off)) continue; // iterate from the defender side only
+      const human = G.human[dfd.team] && G.ctl[dfd.team] === dfd.i && inputs[dfd.team];
+      dfd.engT += dt;
+      dfd.shed += dt * (human ? 0.25 + 2.6 * (inputs[dfd.team].m || 0) : 1);
+      const w = wants[dfd.i], nx = dfd.x - o.x, ny = dfd.y - o.y, n = hyp(nx, ny) || 1;
+      const push = o.role === 'WR' || o.role === 'RB' ? 0.5 : 1.0;
+      const vx = w.x * 0.2 + nx / n * push * 0.9, vy = w.y * 0.2 + ny / n * push * 0.9;
+      dfd.vx = vx; dfd.vy = vy; dfd.x += vx * dt; dfd.y += vy * dt;
+      o.vx = vx; o.vy = vy; o.x = dfd.x - nx / n * 0.88; o.y = dfd.y - ny / n * 0.88;
+      o.fa = Math.atan2(ny, nx); dfd.fa = Math.atan2(-ny, -nx);
+      const far = c && hyp(c.x - dfd.x, c.y - dfd.y) > 8 && (c.role !== 'QB' || G.crossed);
+      if (dfd.shed >= dfd.shedNeed || far || dfd.st !== 'ok' || o.st !== 'ok') {
+        dfd.eng = -1; o.eng = -1; o.lastShed = dfd.i; dfd.noEng = 0.6;
+        if (!far && dfd.shed >= dfd.shedNeed) { o.st = 'stun'; o.stT = 0.5; dfd.burst = 0.3; ev('shed', dfd.x, dfd.y); }
+      }
+    }
+  }
+  function separate() {
+    const L = G.pl;
+    for (let i = 0; i < 14; i++) for (let j = i + 1; j < 14; j++) {
+      const a = L[i], b = L[j];
+      if (a.st === 'down' || b.st === 'down' || a.eng === j) continue;
+      if (G.wrap && (G.wrap.c === i || G.wrap.c === j)) continue;
+      const c = carrier(); if (c && (c === a || c === b) && a.team !== b.team) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, d = hyp(dx, dy);
+      if (d < 0.7 && d > 1e-4) { const k = (0.7 - d) / 2 / d; a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k; }
+    }
+  }
+  function checkTackles() {
+    const c = carrier(); if (!c || c.imm > 0) return;
+    for (const q of teamPl(1 - c.team)) {
+      if (!(q.st === 'ok' || q.st === 'dive') || q.eng >= 0 || q.tcd > 0) continue;
+      if (G.wrap && G.wrap.tk.includes(q.i)) continue;
+      const dd = hyp(q.x - c.x, q.y - c.y), reach = q.st === 'dive' ? 1.5 : 1.0;
+      if (dd > reach) continue;
+      const s = sk(q.team);
+      const rvx = q.vx - c.vx, rvy = q.vy - c.vy, closing = dd > 0 ? (rvx * (c.x - q.x) + rvy * (c.y - q.y)) / dd : 0;
+      const humanC = G.human[c.team] && G.ctl[c.team] === c.i && inputs[c.team];
+      const spin = humanC ? inputs[c.team].m || 0 : 0;
+      const sack = c.role === 'QB' && !G.crossed && !G.thrown && c.team === G.off;
+      if (G.wrap) { G.wrap.tk.push(q.i); G.wrap.m += 0.22; q.vx = q.vy = 0; continue; }
+      let instant = false;
+      if (q.st === 'dive') instant = Math.random() < 0.6 * s.tackle - spin * 0.12;
+      else if (closing > 7.2) instant = Math.random() < 0.55 * s.tackle - spin * 0.15;
+      if (sack) instant = instant || Math.random() < 0.45;
+      if (instant) return tackle(c, q, closing > 7.2 || q.st === 'dive');
+      G.wrap = { c: c.i, m: 0.42, tk: [q.i], t: 0 };
+      ev('hit', c.x, c.y);
+    }
+  }
+  function updWrap(dt, wants) {
+    const W = G.wrap; if (!W) return;
+    const c = P(W.c); if (G.ball.holder !== c.i || G.ball.st !== 'held') { for (const i of W.tk) { const q = P(i); if (q.st === 'dive') q.st = 'ok'; } G.wrap = null; return; }
+    W.t += dt;
+    let T = 0;
+    for (const i of W.tk) {
+      const q = P(i), hq = G.human[q.team] && G.ctl[q.team] === q.i && inputs[q.team];
+      T += hq ? 0.55 + (inputs[q.team].m || 0) * 1.3 : 0.15 + 0.95 * sk(q.team).tackle;
+    }
+    const hc = G.human[c.team] && G.ctl[c.team] === c.i && inputs[c.team];
+    const E = hc ? 0.1 + (inputs[c.team].m || 0) * 1.05 : sk(c.team).esc * (c.role === 'QB' ? 0.8 : 1.15) * rand(0.6, 1.4);
+    W.m += (T - E) * dt * 1.3;
+    W.T = T; W.E = E;
+    // the pile drags along the carrier's intended direction
+    const w = wants[c.i], k = 0.3 / Math.max(1, W.tk.length * 0.8);
+    c.vx = w.x * k; c.vy = w.y * k; c.x += c.vx * dt; c.y += c.vy * dt;
+    for (let n = 0; n < W.tk.length; n++) {
+      const q = P(W.tk[n]), a = Math.atan2(q.y - c.y, q.x - c.x);
+      q.x = c.x + Math.cos(a) * 0.62; q.y = c.y + Math.sin(a) * 0.62; q.vx = c.vx; q.vy = c.vy; q.fa = a + Math.PI;
+      if (q.st === 'dive') q.st = 'ok';
+    }
+    if (W.m >= 1 || W.t > 1.8) return tackle(c, P(W.tk[0]), false);
+    if (W.m <= 0) { // broke the tackle!
+      for (const i of W.tk) { const q = P(i); q.st = 'down'; q.stT = 0.9; q.tcd = 1.2; }
+      c.imm = 0.45; c.burst = 0.5; G.wrap = null; G.excite = Math.min(1, G.excite + 0.45);
+      ev('break', c.x, c.y); banner('BROKE THE TACKLE!', '', '#ffd23c', 1.0);
+    }
+  }
+  function tackle(c, q, big) {
+    const b = G.ball;
+    // fumble?
+    const fum = Math.random() < (big ? 0.055 : 0.012) && !(c.role === 'QB' && !G.crossed);
+    c.st = 'down'; c.stT = 99; q.st = 'down'; q.stT = 99;
+    if (G.wrap) for (const i of G.wrap.tk) { P(i).st = 'down'; P(i).stT = 99; }
+    G.wrap = null;
+    ev(big ? 'bighit' : 'tackle', c.x, c.y);
+    if (fum) {
+      const a = rand(0, Math.PI * 2), s = rand(3, 5.5);
+      Object.assign(b, { st: 'loose', holder: -1, x: c.x, y: c.y, z: 1.0, vx: Math.cos(a) * s + c.vx * 0.3, vy: Math.sin(a) * s + c.vy * 0.3, vz: 3.5, t: 0, kind: 'fumble' });
+      ev('fumble', c.x, c.y); banner('FUMBLE!', '', '#ff5a4a', 1.4); G.excite = 1;
+      return;
+    }
+    endPlay({ type: 'tackle', team: c.team, x: c.x, y: c.y, sack: c.role === 'QB' && !G.crossed && !G.thrown && c.team === G.off, big });
+  }
+  function updBall(dt) {
+    const b = G.ball;
+    if (b.st === 'held') { const h = P(b.holder); b.x = h.x; b.y = h.y; b.z = 1.15; return; }
+    if (b.st === 'air') {
+      b.t += dt; const u = Math.min(1, b.t / b.T);
+      const g = b.kind === 'pass' ? 11 : 0, T = b.T;
+      b.x = b.sx + (b.tx - b.sx) * u; b.y = b.sy + (b.ty - b.sy) * u;
+      const vz0 = (b.tz - b.sz + 0.5 * g * T * T) / T; b.z = b.sz + vz0 * b.t - 0.5 * g * b.t * b.t;
+      if (b.kind !== 'pass') b.z = b.sz + (b.tz - b.sz) * u + Math.sin(u * Math.PI) * 0.3;
+      if (b.t >= T) arrive(b, vz0 - g * T);
+      return;
+    }
+    if (b.st === 'loose' || b.st === 'fall') {
+      b.t += dt; b.vz -= 11 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+      if (b.z <= 0.12) { b.z = 0.12; if (Math.abs(b.vz) > 1.5) { b.vz = -b.vz * 0.45; b.vx *= 0.7; b.vy *= 0.7; if (b.st === 'loose') ev('bounce', b.x, b.y); } else { b.vz = 0; b.vx *= 0.92; b.vy *= 0.92; } }
+      if (b.st === 'fall') { if (b.z <= 0.13 && Math.abs(b.vz) < 0.5 || b.t > 1.5) return endPlay({ type: 'incomplete' }); return; }
+      // recover
+      if (b.z < 0.9) {
+        let best = null, bd = 0.95;
+        for (const p of G.pl) { if (p.st === 'down') continue; const dd = hyp(p.x - b.x, p.y - b.y); if (dd < bd) { bd = dd; best = p; } }
+        if (best) { b.st = 'held'; b.holder = best.i; ev('recover', best.x, best.y); return endPlay({ type: 'recover', team: best.team, x: best.x, y: best.y }); }
+      }
+      if (b.y < 0 || b.y > FIELD_W || b.x < 0 || b.x > 120 || b.t > 5) return endPlay({ type: 'fumbleout', x: b.x });
+    }
+  }
+  function arrive(b, vzEnd) {
+    const tgt = b.tgt >= 0 ? P(b.tgt) : null;
+    if (b.kind === 'snap') { const qb = P(b.tgt); giveBall(qb); return; }
+    if (b.kind === 'pitch') { const rb = P(b.tgt); if (hyp(rb.x - b.x, rb.y - b.y) < 3 && rb.st === 'ok') { giveBall(rb, 'catch'); return; } b.st = 'loose'; b.vx = (b.tx - b.sx) * 0.5; b.vy = (b.ty - b.sy) * 0.5; b.vz = 1; ev('fumble', b.x, b.y); return; }
+    // forward pass
+    const off = G.off; let r = null, rd = 1.75, dq = null, dd = 1.45;
+    for (const p of G.pl) {
+      if (p.st === 'down' || p.eng >= 0) continue;
+      const di = hyp(p.x - b.x, p.y - b.y);
+      if (p.team === off && (p.role === 'WR' || p.role === 'RB') && di < rd) { rd = di; r = p; }
+      if (p.team !== off && di < dd) { dd = di; dq = p; }
+    }
+    const s = sk(1 - off);
+    if (dq && (!r || dd < rd - 0.25)) {
+      const hd = G.human[dq.team] && G.ctl[dq.team] === dq.i;
+      const pInt = (hd ? 0.5 : s.int) * (dd < 0.8 ? 1.3 : 0.8);
+      if (Math.random() < pInt) { giveBall(dq, 'int'); G.run = true; G.runT = G.t; G.ctl[dq.team] = dq.i; banner('INTERCEPTED!', '', '#ff5a4a', 1.3); G.excite = 1; G.intercepted = true; return; }
+      ev('deflect', b.x, b.y); return fall(b, vzEnd, true);
+    }
+    if (r) {
+      const pc = 0.94 - (dq ? (1.45 - dd) * 0.38 : 0) - (rd / 1.75) * 0.16;
+      if (Math.random() < pc) { giveBall(r, 'catch'); G.run = true; G.runT = G.t; G.caught = true; if (Math.abs(r.x - G.los) > 15) G.excite = Math.min(1, G.excite + 0.4); return; }
+      ev('drop', b.x, b.y);
+    }
+    fall(b, vzEnd, false);
+  }
+  function fall(b, vz, deflect) {
+    b.st = 'fall'; b.t = 0; const T = Math.max(0.2, b.T);
+    b.vx = (b.tx - b.sx) / T * (deflect ? -0.15 : 0.45); b.vy = (b.ty - b.sy) / T * (deflect ? 0.3 : 0.45); b.vz = deflect ? 3 : Math.min(vz, -1);
+  }
+  function checkDead() {
+    const c = carrier(); if (!c) return;
+    const d = dirOf(c.team);
+    if ((c.x - goalX(c.team)) * d > 0) return endPlay({ type: 'td', team: c.team, x: c.x, y: c.y });
+    if (c.y < 0 || c.y > FIELD_W) return endPlay({ type: 'oob', team: c.team, x: c.x, y: c.y });
+    if (c.x < 0 || c.x > 120) return endPlay({ type: 'oob', team: c.team, x: clamp(c.x, 0, 120), y: c.y });
+  }
+
+  /* ---------------- special teams ---------------- */
+  function updSpecial(dt) {
+    const S = G.special, b = G.ball, off = G.off, d = dirOf(off), qb = P(off * 7 + 3);
+    // everybody: kicking team covers, receiving team waits
+    for (const p of G.pl) {
+      let w = { x: 0, y: 0 };
+      if (p !== qb && p.team === off && S.k === 'punt' && G.t > 0.9) w = { x: d * p.maxv * 0.8, y: (MID_Y - p.y) * 0.05 };
+      if (p.team !== off && S.k === 'punt' && G.t > 0.9 && b.st === 'air') w = moveTo(p, b.tx + d * 4 * (p.slot === 6 ? 0 : 1), b.ty + (p.slot - 3) * 3, p.maxv * 0.7, 1);
+      if (p.team !== off && S.k === 'fg' && p.slot <= 2 && G.t < 1.2) w = { x: -d * 3, y: 0 };
+      integrate(p, w, dt, 12);
+    }
+    if (b.st === 'held' && G.t > S.at) {
+      if (S.k === 'punt') {
+        const dist = rand(36, 49), L = { x: clamp(qb.x + d * dist, -2, 122), y: clamp(qb.y + rand(-9, 9), 3, FIELD_W - 3) };
+        Object.assign(b, { st: 'air', kind: 'punt', holder: -1, t: 0, T: rand(3.6, 4.4), sx: qb.x, sy: qb.y, sz: 1.0, tx: L.x, ty: L.y, tz: 0.2, tgt: -1, launch: G.t });
+      } else {
+        const gx = off === 0 ? 120 : 0, dist = Math.abs(gx - qb.x), pk = clamp(1.04 - Math.max(0, dist - 22) * 0.019, 0.08, 0.97);
+        S.good = Math.random() < pk; S.dist = Math.round(dist);
+        const miss = S.good ? rand(-1.6, 1.6) : (Math.random() < 0.5 ? -1 : 1) * rand(3.4, 6);
+        Object.assign(b, { st: 'air', kind: 'fg', holder: -1, t: 0, T: 1.2 + dist * 0.017, sx: qb.x, sy: qb.y, sz: 0.3, tx: gx + d * 2, ty: MID_Y + miss, tz: S.good ? 6.5 : rand(3, 6), tgt: -1, launch: G.t });
+      }
+      qb.kickT = 0.5; ev('kick', qb.x, qb.y);
+    }
+    if (b.st === 'air' && b.kind === 'snap') { updBall(dt); }
+    else if (b.st === 'air') {
+      b.t += dt; const u = Math.min(1, b.t / b.T);
+      b.x = b.sx + (b.tx - b.sx) * u; b.y = b.sy + (b.ty - b.sy) * u;
+      const H = b.kind === 'punt' ? 16 : 7; b.z = b.sz + (b.tz - b.sz) * u + Math.sin(u * Math.PI) * H;
+      if (u >= 1) {
+        if (b.kind === 'punt') {
+          const recv = 1 - off; let x = b.x, tb = false;
+          if ((x - goalX(off)) * d > 0) { x = off === 0 ? 90 : 30; tb = true; }  // touchback at receiving team's 20
+          return endPlay({ type: 'punt', x, tb, dist: Math.round(Math.abs(b.x - G.los)) });
+        }
+        return endPlay({ type: 'fg', good: S.good, dist: S.dist + 0 });
+      }
+    }
+    if (b.st === 'held') { b.x = qb.x; b.y = qb.y; b.z = 0.9; }
+  }
+
+  /* ---------------- end of a play: the rules ---------------- */
+  function endPlay(r) {
+    if (G.phase !== 'live') return;
+    G.phase = 'result'; G.t = 0; G.result = r; G.wrap = null;
+    const b = G.ball, off = G.off, d = dirOf(off), def = 1 - off;
+    ev('whistle');
+    b.vx = b.vy = 0;
+    if (b.st !== 'held') b.st = 'dead';
+    let next = null; // { team, x, y, first }
+    const spotY = y => clamp(y, HASH[0], HASH[1]);
+    const gainOf = x => (x - G.los) * d;
+    G.lastGain = 0;
+    switch (r.type) {
+      case 'td': {
+        G.score[r.team] += 6; G.stats.tds[r.team]++; G.excite = 1;
+        const pat = Math.random() < 0.96; if (pat) G.score[r.team] += 1;
+        banner('TOUCHDOWN!', (r.team === 0 ? 'XPRESS' : 'OUTLAWS') + (pat ? ' · EXTRA POINT IS GOOD' : ' · EXTRA POINT NO GOOD'), '#ffd23c', 3.2);
+        ev('td', r.x, r.y, { t: r.team });
+        next = { team: 1 - r.team, x: (1 - r.team) === 0 ? 35 : 85, y: MID_Y, first: true, kick: true };
+        break;
+      }
+      case 'tackle': case 'oob': case 'recover': {
+        const team = r.team, x = r.x;
+        // safety: down in your own end zone
+        const ownEZ = team === 0 ? x < 10 : x > 110;
+        if (ownEZ && !(r.type === 'recover' && team !== off && false)) {
+          if (G.intercepted && team !== off) { next = { team, x: team === 0 ? 30 : 90, y: MID_Y, first: true }; banner('TOUCHBACK', '', '#fff'); break; }
+          G.score[1 - team] += 2; banner('SAFETY!', '+2 ' + (1 - team === 0 ? 'XPRESS' : 'OUTLAWS'), '#ff5a4a', 2.6); ev('crowd');
+          next = { team: 1 - team, x: (1 - team) === 0 ? 40 : 80, y: MID_Y, first: true, kick: true };
+          break;
+        }
+        if (team !== off) {
+          banner(r.type === 'recover' ? 'FUMBLE RECOVERED!' : G.intercepted ? 'TURNOVER' : 'TURNOVER', (team === 0 ? 'XPRESS' : 'OUTLAWS') + ' BALL', '#ff5a4a');
+          next = { team, x, y: spotY(r.y), first: true }; G.excite = Math.max(G.excite, 0.7); break;
+        }
+        const g = gainOf(x); G.lastGain = g;
+        if (g >= G.togo - 0.01) {
+          next = { team: off, x, y: spotY(r.y), first: true };
+          banner(g >= 20 ? 'BIG GAIN! FIRST DOWN' : 'FIRST DOWN', fmtGain(g), '#7cff7a'); ev('firstdown');
+          if (g >= 20) G.excite = Math.max(G.excite, 0.8);
+        } else {
+          next = downNext(x, spotY(r.y));
+          if (!next.turn) banner(r.sack ? 'SACKED!' : r.type === 'oob' ? 'OUT OF BOUNDS' : 'TACKLED', fmtGain(g), r.sack ? '#ff8a4a' : '#fff');
+        }
+        if (r.big && !next.turn) { G.banner.t = 'BIG HIT!'; }
+        break;
+      }
+      case 'incomplete': case 'fumbleout': {
+        const x = r.type === 'fumbleout' ? clamp(r.x, 11, 109) : G.los;
+        next = downNext(r.type === 'fumbleout' && (r.x - G.los) * d < 0 ? x : G.los, G.ballY);
+        if (!next.turn) banner(r.type === 'incomplete' ? 'INCOMPLETE' : 'OUT OF BOUNDS', '', '#ddd');
+        ev('aww');
+        break;
+      }
+      case 'punt': {
+        banner(r.tb ? 'PUNT · TOUCHBACK' : 'PUNT ' + r.dist + ' YARDS', (def === 0 ? 'XPRESS' : 'OUTLAWS') + ' BALL', '#fff');
+        next = { team: def, x: r.x, y: MID_Y, first: true }; break;
+      }
+      case 'fg': {
+        if (r.good) { G.score[off] += 3; banner('FIELD GOAL IS GOOD!', r.dist + ' YARDS', '#ffd23c', 2.8); ev('fg'); G.excite = 0.9; next = { team: def, x: def === 0 ? 35 : 85, y: MID_Y, first: true, kick: true }; }
+        else { banner('NO GOOD!', 'WIDE ' + (G.ball.ty < MID_Y ? 'LEFT' : 'RIGHT'), '#ff5a4a', 2.4); ev('aww'); const x = (G.los - d * 7); next = { team: def, x: def === 0 ? Math.max(x, 30) : Math.min(x, 90), y: MID_Y, first: true }; }
+        break;
+      }
+    }
+    G.next = next; G.intercepted = false;
+  }
+  function fmtGain(g) { const n = Math.round(g); return n === 0 ? 'NO GAIN' : n > 0 ? 'GAIN OF ' + n : 'LOSS OF ' + (-n); }
+  function downNext(x, y) {
+    const off = G.off, g = (x - G.los) * dirOf(off);
+    if (G.down >= 4) { banner('TURNOVER ON DOWNS', ((1 - off) === 0 ? 'XPRESS' : 'OUTLAWS') + ' BALL', '#ff5a4a'); return { team: 1 - off, x, y, first: true, turn: true }; }
+    return { team: off, x, y, first: false, gain: g };
+  }
+  function updResult(dt) {
+    // tackled players get up after a moment; everybody slows down
+    for (const p of G.pl) {
+      if (p.st === 'down' && p.stT > 50) p.stT = rand(0.9, 1.6);
+      if (p.st === 'down') { p.stT -= dt; if (p.stT <= 0) p.st = 'ok'; }
+      if (p.eng >= 0) p.eng = -1;
+      integrate(p, { x: 0, y: 0 }, dt, 9);
+    }
+    const b = G.ball; if (b.st === 'held') { const h = P(b.holder); b.x = h.x; b.y = h.y; b.z = h.st === 'down' ? 0.3 : 1.15; }
+    else if (b.st === 'loose' || b.st === 'fall') { b.st = 'dead'; }
+    const hold = G.result && (G.result.type === 'td' || G.result.type === 'fg') ? 3.0 : 2.1;
+    if (G.t < hold) return;
+    // apply the result
+    const n = G.next;
+    if (G.clock <= 0) {
+      if (G.half === 1) { G.phase = 'half'; G.t = 0; banner('HALFTIME', G.score[0] + ' - ' + G.score[1], '#fff', 3.4); ev('horn'); return; }
+      G.phase = 'over'; G.over = true; G.t = 0; ev('horn');
+      const w = G.score[0] === G.score[1] ? 'TIE GAME' : (G.score[0] > G.score[1] ? 'XPRESS WIN!' : 'OUTLAWS WIN!');
+      banner('FINAL', w, '#ffd23c', 999); return;
+    }
+    if (n) {
+      if (n.first) { setPossession(n.team, n.x, true); }
+      else { G.down++; G.togo = Math.max(0.5, G.togo - n.gain); G.los = clamp(n.x, 11, 109); setFd(); }
+      G.ballY = n.y;
+      if (n.kick) { G.ballY = MID_Y; placeFormation(true); }
+    }
+    beginSelect();
+  }
+
+  /* ---------------- snapshot (what screens draw; what the guest receives) ---------------- */
+  const r2 = v => Math.round(v * 100) / 100;
+  function snapshot() {
+    const b = G.ball, revealed = G.phase === 'live' || G.phase === 'result';
+    return {
+      ph: G.phase, clk: Math.ceil(G.clock * 10) / 10, half: G.half, sc: G.score.slice(), dn: G.down, tg: r2(G.togo), los: r2(G.los), fd: r2(G.fd), gtg: G.goalToGo ? 1 : 0, off: G.off, by: r2(G.ballY),
+      pl: G.pl.map(p => [r2(p.x), r2(p.y), r2(p.fa), r2(hyp(p.vx, p.vy)), p.st === 'down' ? 1 : p.st === 'dive' ? 2 : p.eng >= 0 ? 3 : p.st === 'stun' ? 4 : 0, p.num, p.throwT > 0 || p.kickT > 0 ? 1 : 0]),
+      b: [r2(b.x), r2(b.y), r2(b.z), b.st === 'held' ? 0 : b.st === 'air' ? 1 : b.st === 'dead' ? 3 : 2, b.holder, b.kind === 'pass' || b.kind === 'punt' || b.kind === 'fg' ? 1 : 0],
+      bt: b.st === 'air' ? [r2(b.tx), r2(b.ty), b.tgt] : null,
+      ctl: G.ctl.slice(), aim: G.aim.slice(), lk: G.pend.slice(), selT: Math.ceil(G.selT), hum: G.human.slice(),
+      w: G.wrap ? [G.wrap.c, r2(G.wrap.m)] : null,
+      bn: G.banner ? [G.banner.t, G.banner.sub, G.banner.c, G.banner.id] : null,
+      ev: G.ev.slice(), calls: revealed ? G.calls : null, kind: revealed ? G.kind : '', thrown: G.thrown ? 1 : 0, crossed: G.crossed ? 1 : 0,
+      over: G.over ? 1 : 0, ex: r2(G.excite), t: r2(G.t), fgok: offenseChoices().some(p => p.id === 'fg') ? 1 : 0, gid: G.gid,
+    };
+  }
+  return { get G() { return G; }, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier() };
+})();
