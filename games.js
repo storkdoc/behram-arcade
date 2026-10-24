@@ -18,6 +18,19 @@ window.ARCADE_GAMES = [
     accent: '#9dff7a'
   },
   {
+    slug: 'vector-armor',
+    title: 'VECTOR ARMOR',
+    tagline: 'Enemy in range',
+    description: 'A graphically intense homage to the 1980 first-person vector tank coin-op. Peer through the periscope across an endless glowing battlefield under a crescent moon, with an erupting volcano and a mountain skyline that turns with you. Hunt tanks, fast supertanks, zig-zag missiles that hop over obstacles, and the bonus saucer that cannot shoot back. Watch the radar sweep, heed ENEMY TO LEFT / RIGHT / REAR, use blocks and pyramids as cover (they stop shells and tanks), dodge incoming shells - you only get one shell in the air at a time - and see the glass crack when you are hit. HDR bloom, reflections, debris, classic green or modern palette, arcade start-level select, extra tanks and a high score table. Two-player is online: one player starts a Two-Player Game, the buddy taps Join Two-Player Game in Progress - no code needed - and you duel tank to tank on the same battlefield, each through your own periscope.',
+    thumb: 'games/vector-armor/thumb.png',
+    added: '2026-10-24',
+    genre: 'SHOOTER',
+    year: '1980 STYLE',
+    controls: 'arrows/WASD drive and turn · SPACE fire · optional classic twin-tread keys (W/S left tread, up/down right tread) · mouse aim with pointer lock (option) · P pause · M sound · ENTER start · gamepad left stick + A/RT fire',
+    touch: 'left thumb joystick drives and turns (or twin tread sliders in classic mode) · big FIRE button · pause button · tap menus · works portrait and landscape on iPhone and iPad · tap to host or join online',
+    accent: '#ff3b3b'
+  },
+  {
     slug: 'planet-guardian',
     title: 'PLANET GUARDIAN',
     tagline: 'Save the humanoids, save the planet',
