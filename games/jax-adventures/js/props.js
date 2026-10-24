@@ -452,7 +452,7 @@ export function buildProps(scene) {
     const f = B[p.type]; if (!f) continue; const g = f(p);
     g.position.set(p.x, p.y, p.z); g.rotation.y = -p.rot;
     if (p.type === 'firering') { const si = SITES.findIndex(s => s.fire === p); g.traverse(o => { if (o.userData.mark === 'fire') o.userData.site = si; }); }
-    if (p.type === 'bin') { const h = HIDES.find(h => h.prop === p.i); g.userData.dyn = true; if (h) out.bins[h.id] = g; root.add(g); continue; }
+    if (p.type === 'bin') { const h = HIDES.find(h => h.prop === p.i); g.userData.dyn = true; g.userData.yaw = -p.rot; if (h) out.bins[h.id] = g; root.add(g); continue; }
     root.add(g);
   }
   // baskets on campsite tables

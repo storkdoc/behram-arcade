@@ -55,7 +55,8 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; console.log
   // UI screens open and close via keys
   await ev(D, () => { JAX.S.G.fish = null; JAX.S.G.toasts && (JAX.S.G.toasts.length = 0); });
   for (const [code, ui] of [['KeyI', 'inv'], ['KeyM', 'map'], ['KeyQ', 'quests'], ['KeyJ', 'journal'], ['KeyP', 'pause']]) {
-    await D.keyboard.press(code); await D.waitForTimeout(700); const u = await ev(D, () => JAX.hud.ui); check(!!u, `${code} opens a menu`, u); await D.keyboard.press('Escape'); await D.waitForTimeout(700);
+    await ev(D, () => { if (JAX.S.G.menu) JAX.S.act('close'); });
+    await D.keyboard.press(code); await D.waitForTimeout(700); const u = await ev(D, () => JAX.hud.ui); const why = await ev(D, () => ({ menu: JAX.S.G.menu && JAX.S.G.menu.k, fish: !!JAX.S.G.fish, caught: !!JAX.S.G.caught, mode: JAX.mode })); check(!!u, `${code} opens a menu`, u || why); await D.keyboard.press('Escape'); await D.waitForTimeout(700);
     await ev(D, () => JAX.ui(null));
   }
 

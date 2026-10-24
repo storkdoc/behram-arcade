@@ -617,7 +617,7 @@ export class Renderer3D {
   world(dt) {
     const G = S.G, P = this.P, t = this.time, p = G.p;
     for (const id in P.food) P.food[id].visible = !!(G.stash[id] && G.stash[id].items.length);
-    for (const id in P.bins) { const g = P.bins[id]; if (p.hidden === id) { g.rotation.z = Math.sin(t * 13) * 0.02; } else g.rotation.z = 0; }
+    for (const id in P.bins) { const g = P.bins[id]; g.rotation.set(0, g.userData.yaw || 0, p.hidden === id ? Math.sin(t * 13) * 0.02 : 0); }
     for (const k in P.decor) P.decor[k].visible = !!G.owned.decor[k];
     if (P.decor.swing && P.decor.swing.userData.pivot) P.decor.swing.userData.pivot.rotation.x = Math.sin(t * 1.3) * 0.15;
     animateProps(P, t, 0.6 + (G.weather.wind || 0.4));
