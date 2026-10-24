@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'sporewood',
+    title: 'SPOREWOOD',
+    tagline: 'Roll the ball, split the centipede',
+    description: 'A high-fidelity homage to the 1981 trackball bug-shooter coin-op. A glowing, articulated centipede winds down through a lush mushroom forest. Shoot a segment and it splits, the rear half grows its own head, and the hit leaves a mushroom behind. It speeds up every wave, and new heads crawl into your zone once it reaches the bottom. Mushrooms take four hits. Fleas sow more, spiders bounce through your zone eating them, and scorpions poison them so the centipede plunges straight down. Damaged mushrooms are restored for points when you lose a life. Your shooter rides the same virtual trackball as Trackball Football: roll the mouse, trackpad or a two-finger swipe, and the faster you stroke the faster it moves, coasting on after a flick. It has a pulsing synth beat, eight forest palettes, an arcade start-wave select and a high score table. Two-player is online: one player starts a Two-Player Game and the buddy taps Join Two-Player Game in Progress, with no code needed. You each clear your own forest, and clearing a wave sends your rival a row of mushrooms and a flea.',
+    thumb: 'games/sporewood/thumb.png',
+    added: '2026-10-24',
+    genre: 'SHOOTER',
+    year: '1981 STYLE',
+    controls: 'click to grab the trackball, then roll mouse/trackpad or two-finger swipe (faster stroke = faster shooter, flicks coast) · arrows/WASD with acceleration · SPACE or click fire (hold to auto-fire) · ENTER start/select · P pause · M sound · ESC releases the ball · gamepad stick/d-pad + A',
+    touch: 'drag anywhere on the field or the trackball pad to roll the shooter (flick to glide, slow drag to place) · red FIRE button (hold to auto-fire, AUTO toggle) · roll and fire with two thumbs · pause/sound buttons · tap menus · works portrait and landscape on iPhone and iPad · tap to host or join online',
+    accent: '#9dff7a'
+  },
+  {
     slug: 'planet-guardian',
     title: 'PLANET GUARDIAN',
     tagline: 'Save the humanoids, save the planet',
