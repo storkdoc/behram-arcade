@@ -149,12 +149,13 @@ const UI = (() => {
   }
 
   /* ---------------- play diagrams ---------------- */
-  function diagram(ctx, play, x, y, w, h, offense, mirror, mySym, theirSym, myCol, theirCol) {
+  function diagram(ctx, play, x, y, w, h, offense, mirror, mySym, theirSym, myCol, theirCol, flip) {
     // chalkboard
     const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#173d22'); g.addColorStop(1, '#0d2715');
     ctx.fillStyle = g; rr(ctx, x, y, w, h, 6); ctx.fill();
     const F0 = -10, F1 = 32, L0 = -16, L1 = 16;
     const X = fv => mirror ? x + w - (fv - F0) / (F1 - F0) * w : x + (fv - F0) / (F1 - F0) * w, Y = lv => y + (lv - L0) / (L1 - L0) * h;
+    const M = lv => Y(flip ? -lv : lv); // FLIP: your own side is mirrored across the middle of the field
     ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
     for (let fv = 0; fv <= 30; fv += 10) { ctx.beginPath(); ctx.moveTo(X(fv), y + 3); ctx.lineTo(X(fv), y + h - 3); ctx.stroke(); }
     ctx.strokeStyle = 'rgba(80,150,255,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(0), y + 3); ctx.lineTo(X(0), y + h - 3); ctx.stroke();
@@ -175,23 +176,24 @@ const UI = (() => {
       if (play.kind === 'fg') { ctx.strokeStyle = '#ffd23c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(31), Y(-4)); ctx.lineTo(X(31), Y(4)); ctx.stroke(); }
       return;
     }
+    if (offense ? !play.r : !play.a) return; // a card from the other side's book (possession just changed): skip until the panel rebuilds
     if (offense) {
       DEF_FORM.forEach(p => sym(defSym, X(p[0]), Y(p[1]), defCol, r * 0.85));
       OFF_FORM.forEach((p, i) => {
         const rt = play.r && play.r[i];
-        if (i === 3 && play.qb) arrow([[X(p[0]), Y(p[1])], ...play.qb.map(q => [X(q[0]), Y(q[1])])], 'rgba(255,255,255,0.6)', true, 1.2);
-        if (Array.isArray(rt)) arrow([[X(p[0]), Y(p[1])], ...rt.map(q => [X(q[0]), Y(q[1])])], i === 4 && play.kind === 'run' ? '#ffd23c' : '#ffffff', false, i === 4 && play.kind === 'run' ? 2.4 : 1.6);
-        else if (i <= 2 || rt === 'blk' || rt === 'pull') { const px = X(p[0] + 1.5), py = Y(p[1]); ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(X(p[0]), py); ctx.lineTo(px, py); ctx.moveTo(px, py - 3); ctx.lineTo(px, py + 3); ctx.stroke(); }
-        sym(offSym, X(p[0]), Y(p[1]), offCol, r);
+        if (i === 3 && play.qb) arrow([[X(p[0]), M(p[1])], ...play.qb.map(q => [X(q[0]), M(q[1])])], 'rgba(255,255,255,0.6)', true, 1.2);
+        if (Array.isArray(rt)) arrow([[X(p[0]), M(p[1])], ...rt.map(q => [X(q[0]), M(q[1])])], i === 4 && play.kind === 'run' ? '#ffd23c' : '#ffffff', false, i === 4 && play.kind === 'run' ? 2.4 : 1.6);
+        else if (i <= 2 || rt === 'blk' || rt === 'pull') { const px = X(p[0] + 1.5), py = M(p[1]); ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(X(p[0]), py); ctx.lineTo(px, py); ctx.moveTo(px, py - 3); ctx.lineTo(px, py + 3); ctx.stroke(); }
+        sym(offSym, X(p[0]), M(p[1]), offCol, r);
       });
     } else {
       OFF_FORM.forEach(p => sym(offSym, X(p[0]), Y(p[1]), offCol, r * 0.85));
       DEF_FORM.forEach((p, i) => {
-        const a = play.a[i], px = X(p[0]), py = Y(p[1]);
-        if (a[0] === 'rush') arrow([[px, py], [X(-4.2), Y(p[1] * 0.3)]], '#ff6a6a', false, 1.8);
-        else if (a[0] === 'fill') arrow([[px, py], [X(0.5), Y(p[1] * 0.5 + (i === 6 ? 3 : -1))]], '#ffb04a', false, 1.8);
-        else if (a[0] === 'man') { const t = OFF_FORM[a[1]]; arrow([[px, py], [X(t[0] + 4), Y(t[1])]], '#ffffff', true, 1.3); }
-        else if (a[0] === 'zone') { const zx = X(Math.min(a[1], 30)), zy = Y(a[2]); ctx.fillStyle = 'rgba(120,200,255,0.22)'; ctx.beginPath(); ctx.ellipse(zx, zy, w * 0.11, h * 0.15, 0, 0, 7); ctx.fill(); arrow([[px, py], [zx, zy]], 'rgba(160,220,255,0.9)', false, 1.3); }
+        const a = play.a[i], px = X(p[0]), py = M(p[1]);
+        if (a[0] === 'rush') arrow([[px, py], [X(-4.2), M(p[1] * 0.3)]], '#ff6a6a', false, 1.8);
+        else if (a[0] === 'fill') arrow([[px, py], [X(0.5), M(p[1] * 0.5 + (i === 6 ? 3 : -1))]], '#ffb04a', false, 1.8);
+        else if (a[0] === 'man') { const t = OFF_FORM[flip && (a[1] === 5 || a[1] === 6) ? 11 - a[1] : a[1]]; arrow([[px, py], [X(t[0] + 4), Y(t[1])]], '#ffffff', true, 1.3); } // flipped corners trade receivers
+        else if (a[0] === 'zone') { const zx = X(Math.min(a[1], 30)), zy = M(a[2]); ctx.fillStyle = 'rgba(120,200,255,0.22)'; ctx.beginPath(); ctx.ellipse(zx, zy, w * 0.11, h * 0.15, 0, 0, 7); ctx.fill(); arrow([[px, py], [zx, zy]], 'rgba(160,220,255,0.9)', false, 1.3); }
         sym(defSym, px, py, defCol, r);
       });
     }
@@ -234,16 +236,24 @@ const UI = (() => {
       ctx.fillStyle = sel ? 'rgba(255,210,60,0.18)' : 'rgba(255,255,255,0.05)'; rr(ctx, x, y, cw, ch, 8); ctx.fill();
       if (sel) { ctx.strokeStyle = locked ? '#7cff7a' : '#ffd23c'; ctx.lineWidth = 2.5; ctx.stroke(); }
       const dh = ch - (sm ? 18 : 26);
-      diagram(ctx, pl, x + 4, y + 4, cw - 8, dh - 6, offense, me === 1, T.sym, TEAM[1 - me].sym, me ? '#ffcc33' : '#ff5a6e', null);
+      diagram(ctx, pl, x + 4, y + 4, cw - 8, dh - 6, offense, me === 1, T.sym, TEAM[1 - me].sym, me ? '#ffcc33' : '#ff5a6e', null, !!Sel.flip);
       const z = fit(ctx, pl.name, cw - 10, 800, sm ? 11 : 15, DFONT);
       text(ctx, pl.name, x + cw / 2, y + dh + (sm ? 6 : 9), f(800, z, DFONT), sel ? '#ffe27a' : '#eef');
       if (locked) { ctx.save(); ctx.translate(x + cw / 2, y + dh / 2); ctx.rotate(-0.15); text(ctx, 'LOCKED IN', 0, 0, f('italic 900', sm ? 14 : 22, DFONT), '#7cff7a'); ctx.restore(); }
       hits.push({ x, y, w: cw, h: ch, label: 'PLAY:' + pl.id, fn: () => { if (!App.paused) opts.onCard(k); }, focusable: false });
     }
     // footer
-    const fy = py + ph - footH / 2;
-    if (Sel.locked) text(ctx, cpu || oppLocked ? 'HERE WE GO\u2026' : 'LOCKED IN · WAITING FOR YOUR OPPONENT\u2026', px + pw2 / 2, fy, f(800, sm ? 11 : 14, DFONT), '#7cff7a');
-    else text(ctx, opts.hint, px + pw2 / 2, fy, f(700, fit(ctx, opts.hint, pw2 - 20, 700, sm ? 10 : 13, DFONT), DFONT), '#aab3d8');
+    const fy = Math.round(py + ph - footH / 2);
+    // FLIP pill (bottom right): mirrors your call left-right; F / Shift / right-click / blue button / gamepad shoulder also toggle it
+    const fl = !!Sel.flip, bw = sm ? 78 : 104, bh = sm ? 20 : 26, bx = Math.round(px + pw2 - gap - bw), by = Math.round(fy - bh / 2);
+    ctx.fillStyle = fl ? '#ffd23c' : 'rgba(255,255,255,0.08)'; rr(ctx, bx, by, bw, bh, bh / 2); ctx.fill();
+    ctx.strokeStyle = fl ? '#fff3c4' : 'rgba(255,210,60,0.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+    const fls = fl ? '\u21c4 FLIPPED' : '\u21c4 FLIP';
+    text(ctx, fls, bx + bw / 2, fy + 1, f(900, fit(ctx, fls, bw - 12, 900, sm ? 11 : 14, DFONT), DFONT), fl ? '#1b1000' : (Sel.locked ? 'rgba(255,226,122,0.4)' : '#ffe27a'));
+    if (!Sel.locked && opts.onFlip) hits.push({ x: bx - 4, y: by - 4, w: bw + 8, h: bh + 8, label: 'FLIP', fn: () => opts.onFlip(), focusable: false });
+    const fw = pw2 - 20 - bw - gap * 2, fcx = Math.round(px + 10 + fw / 2);
+    if (Sel.locked) { const s = cpu || oppLocked ? 'HERE WE GO\u2026' : 'LOCKED IN · WAITING FOR YOUR OPPONENT\u2026'; text(ctx, s, fcx, fy, f(800, fit(ctx, s, fw, 800, sm ? 11 : 14, DFONT), DFONT), '#7cff7a'); }
+    else text(ctx, opts.hint, fcx, fy, f(700, fit(ctx, opts.hint, fw, 700, sm ? 10 : 13, DFONT), DFONT), '#aab3d8');
   }
 
   return { beginFrame, button, handleKeys, tap, text, rr, f, fit, logo, hud, bannerDraw, callsDraw, wrapMeter, selectPanel, diagram, resetFocus, clockStr, get hits() { return prevHits; }, get liveHits() { return hits; }, kbd: false };

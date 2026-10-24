@@ -73,19 +73,23 @@ let fails = 0; const check = (ok, msg) => { if (!ok) fails++; say(ok ? '  PASS' 
     const markH = await H.evaluate(() => { window.__drawn.clear(); return window.__rx.length; });
     await H.waitForTimeout(400);
     for (let i = 0; i < play % 4; i++) { await H.keyboard.press('ArrowRight'); await H.waitForTimeout(30); }
+    const hFlip = play % 2 === 0, gFlip = play % 3 !== 1; // FLIP is part of the secret call
+    if (hFlip) { await H.keyboard.press('f'); await H.waitForTimeout(30); }
     await H.keyboard.press('Space');
     const hostLockAt = await H.evaluate(() => performance.now());
     await H.waitForTimeout(250);
     const gAfter = await G.evaluate(() => JSON.stringify(TBF.App.snap));
     for (let i = 0; i < (play * 2 + 1) % 5; i++) { await G.keyboard.press('ArrowRight'); await G.waitForTimeout(40); }
+    if (gFlip) { await G.keyboard.press('f'); await G.waitForTimeout(30); }
     await G.waitForTimeout(300);
     await G.keyboard.press('Space');
     await H.waitForFunction(() => TBF.Sim.G.phase === 'presnap' || TBF.Sim.G.phase === 'live', null, { timeout: 8000 });
+    const preFF = await H.evaluate(() => [TBF.Sim.G.phase, TBF.Sim.G.formFlip.slice(), TBF.Sim.G.pflip.slice()]);
     // hike (whoever is on offense)
     const offIsHost = await H.evaluate(() => TBF.Sim.G.off === 0);
     await (offIsHost ? H : G).waitForTimeout(900); await (offIsHost ? H : G).keyboard.press('Space');
     await H.waitForFunction(() => TBF.Sim.G.phase === 'live', null, { timeout: 8000 });
-    const info = await H.evaluate(() => { const G = TBF.Sim.G, P = id => PLAY_BY_ID[id].name; return { off: G.off, h: G.picks[0], hn: P(G.picks[0]), g: G.picks[1], gn: P(G.picks[1]) }; });
+    const info = await H.evaluate(() => { const G = TBF.Sim.G, P = id => PLAY_BY_ID[id].name; return { off: G.off, h: G.picks[0], hn: P(G.picks[0]), g: G.picks[1], gn: P(G.picks[1]), pf: G.pflip.slice(), ff: G.formFlip.slice() }; });
     await G.waitForFunction(() => TBF.App.snap && TBF.App.snap.ph === 'live', null, { timeout: 5000 });
     const gRx = await G.evaluate(m => window.__rx.slice(m), markG), hRx = await H.evaluate(m => window.__rx.slice(m), markH);
     const tok = (raw, v) => raw.includes('"' + v + '"');
@@ -94,10 +98,17 @@ let fails = 0; const check = (ok, msg) => { if (!ok) fails++; say(ok ? '  PASS' 
     secretMsgs += preG.length;
     check(leak.length === 0 && preG.length > 20, `play ${play}: host (${info.off === 0 ? 'OFF' : 'DEF'}) called ${info.hn}; ${preG.length} msgs reached the guest before the snap, none contain it` + (leak.length ? ' LEAK ' + leak[0].raw.slice(0, 160) : ''));
     check(!tok(gAfter, info.h) && !tok(gAfter, info.hn), `play ${play}: guest state right after the host locked has no trace of the host's call`);
+    // FLIP secrecy: the flip travels with the call, after both locked, and nothing shows it before the snap
+    const flLeak = preG.filter(m => /"fl":\[|\(FLIP\)/.test(m.raw));
+    check(info.pf[0] === hFlip && info.pf[1] === gFlip, `play ${play}: flips reached the sim (host ${hFlip}, guest ${gFlip}) -> ${JSON.stringify(info.pf)}`);
+    check(flLeak.length === 0 && !/"fl":\[/.test(gAfter) && (preFF[0] !== 'presnap' || (!preFF[1][0] && !preFF[1][1])), `play ${play}: no flip info in the ${preG.length} pre-snap msgs to the guest, and formations stay unflipped until the snap (presnap formFlip ${JSON.stringify(preFF[1])})`);
+    const gLive = await G.evaluate(() => TBF.App.snap.fl);
+    check(JSON.stringify(gLive) === JSON.stringify([hFlip ? 1 : 0, gFlip ? 1 : 0]) && info.ff[0] === hFlip && info.ff[1] === gFlip, `play ${play}: at the snap both flips are revealed and the formations mirror (${JSON.stringify(gLive)})`);
     const hd = hRx.map(m => ({ at: m.at, d: JSON.parse(m.raw) }));
     const iLock = hd.findIndex(m => m.d.t === 'lock'), iPick = hd.findIndex(m => m.d.t === 'pick');
     const before = iPick < 0 ? hd : hd.slice(0, iPick);
     check(iLock >= 0 && iPick > iLock && hd[iPick].at > hostLockAt && !before.some(m => JSON.stringify(m.d).includes('"' + info.g + '"')), `play ${play}: guest called ${info.gn}; host got 'lock' (no id) first and the id only after it had locked itself`);
+    check(!before.some(m => 'f' in m.d || 'flip' in m.d) && hd[iPick] && hd[iPick].d.f === (gFlip ? 1 : 0), `play ${play}: the guest's flip (${gFlip}) was sent only inside its 'pick', after the host locked`);
     const cur = hd.slice(Math.max(0, iLock), iPick < 0 ? hd.length : iPick).filter(m => m.d.t === 'i' && (m.d.x || m.d.y));
     check(cur.length === 0, `play ${play}: no guest trackball motion reached the host while picking (${cur.length})`);
     const hDrawn = await H.evaluate(() => [...window.__drawn]), gDrawn = await G.evaluate(() => [...window.__drawn]);
@@ -129,6 +140,34 @@ let fails = 0; const check = (ok, msg) => { if (!ok) fails++; say(ok ? '  PASS' 
   check(LAGS.on.length && LAGS.off.length && med(LAGS.on) < med(LAGS.off), 'prediction makes the guest\u2019s own player respond faster');
   const sz = await G.evaluate(() => { const a = window.__rx.filter(m => m.raw.startsWith('{"t":"s"')).slice(-120).map(m => m.raw.length); return [Math.min(...a), Math.round(a.reduce((x, y) => x + y, 0) / a.length), Math.max(...a)]; });
   say('state msg bytes min/avg/max', sz);
+  say('== ONLINE PICK: guest on defense, Space to grab the closest man, Space again as the ball arrives');
+  await H.waitForFunction(() => TBF.Sim.G.phase === 'select', null, { timeout: 60000 });
+  await H.evaluate(() => { const G = TBF.Sim.G; G.off = 0; G.los = 60; G.ballY = 160 / 6; G.down = 1; G.togo = 10; });
+  await G.waitForFunction(() => TBF.App.snap && TBF.App.snap.ph === 'select' && TBF.App.snap.off === 0, null, { timeout: 5000 });
+  await H.waitForTimeout(300); await H.keyboard.press('Space'); await G.waitForTimeout(400); await G.keyboard.press('Space');
+  await H.waitForFunction(() => TBF.Sim.G.phase === 'presnap', null, { timeout: 8000 }); await H.waitForTimeout(500); await H.keyboard.press('Space');
+  await H.waitForFunction(() => TBF.Sim.G.phase === 'live', null, { timeout: 8000 });
+  const markP = await H.evaluate(() => window.__rx.length);
+  await H.evaluate(() => { // a long pass in the air; the guest's corner is near the catch, the guest controls the DT far away
+    const G = TBF.Sim.G, MID = 160 / 6, tx = G.los + 16, ty = MID, b = G.ball;
+    G.pl.forEach((p, k) => { if (k === 5 || k === 11) return; p.x = G.los - 8; p.y = 4 + k * 3.3; p.vx = p.vy = 0; p.st = 'ok'; p.eng = -1; });
+    const r = G.pl[5], me = G.pl[11]; r.x = tx - 6; r.y = ty; r.st = 'ok'; r.eng = -1; r.as = 'route'; r.route = [{ x: tx + 2, y: ty }]; r.wp = 0;
+    me.x = tx - 1; me.y = ty + 1.2; me.st = 'ok'; me.eng = -1; me.vx = me.vy = 0; G.ctl[1] = 7; G.thrown = true;
+    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: 1.8, sx: G.los, sy: ty, sz: 2, tx, ty, tz: 1.25, tgt: 5, from: 3, x: G.los, y: ty, z: 2, hold: 0, lunge: null, arr: null });
+  });
+  const gp = await G.evaluate(() => new Promise(res => { let n = 0; const out = {}; const t0 = performance.now();
+    const key = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', key: ' ' })); };
+    const f = () => { const S = TBF.App.snap; if (performance.now() - t0 > 4000) return res(Object.assign(out, { timeout: true }));
+      if (n === 0 && S.ba != null && S.ba < 1.4) { key(); n = 1; out.first = +S.ba.toFixed(2); }
+      else if (n === 1 && S.ba != null && S.ba <= 0.02) { key(); n = 2; out.second = +S.ba.toFixed(3); out.ctl = S.ctl[1]; }
+      else if (n === 2 && S.ph !== 'live' || n === 2 && S.ba == null) { out.after = S.b[3] === 0 ? S.b[4] : -1; return res(out); }
+      requestAnimationFrame(f); };
+    requestAnimationFrame(f); }));
+  await H.waitForTimeout(400);
+  const hp = await H.evaluate(m => ({ lp: TBF.Sim.G.lastPick, ctl: TBF.Sim.G.ctl[1], lag: TBF.Sim.G.lag, msgs: window.__rx.slice(m).map(x => JSON.parse(x.raw)).filter(d => d.t === 'i' && 'tt' in d).map(d => d.tt) }), markP);
+  say('  guest presses (time-to-arrival on its screen)', gp, ' host saw', hp);
+  check(gp.ctl === 11 && hp.msgs.length > 0, 'online: the guest\u2019s first Space jumped to the corner nearest the catch, and its presses carry the time-to-arrival it saw');
+  check(hp.lp && Math.abs(hp.lp.e) <= 0.12 && hp.lp.g === 'PERFECT', 'online: a press timed to the guest\u2019s own screen is graded on that timing by the host (latency compensated): ' + JSON.stringify(hp.lp));
   say('== DISCONNECT'); await G.close(); await H.waitForFunction(() => TBF.App.screen === 'error', null, { timeout: 15000 });
   await H.waitForTimeout(400); const eb = await H.evaluate(() => TBF.UI.hits.map(h => h.label)); say('host error screen buttons', eb.join(' | '));
   check(eb.includes('MAIN MENU'), 'host sees the opponent-left screen with a way back to the menu');

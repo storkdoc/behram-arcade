@@ -17,6 +17,21 @@ const SKILL = [ // rookie / pro / all-pro (applied to the CPU team; human teamma
   { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3 },
   { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42 },
 ];
+// timed-press interceptions (defensive ACTION while a pass is in the air). e = press time minus ball arrival (s, < 0 = early).
+const INT = {
+  perfect: 0.12, early: 0.32, late: 0.22,   // PERFECT window is +-0.12 s; odds taper to nothing at 0.32 s early / 0.22 s late
+  close: 1.5, reach: 3.2,                    // full odds within 1.5 yd of the catch point, tapering to nothing at 3.2 yd
+  minTTA: 0.6,                               // presses more than 0.6 s before arrival don't lunge (they just confirm your man)
+  lungeT: 0.28, lungeV: 9, lateReach: 0.9,   // the lunge: 0.28 s burst at up to 9 yd/s; a late (in-the-catch) lunge reaches 0.9 yd
+  human: [0.85, 0.78, 0.7], pvp: 0.78,       // perfect + close INT odds for a human defender (vs Rookie / Pro / All-Pro QBs, online)
+  passive: 0.1,                              // human defender who never pressed but is closest to the catch
+  cpu: [0.35, 0.45, 0.55], cpuSig: [0.24, 0.16, 0.1], // CPU defenders: base odds and timing error (s) by difficulty
+};
+function intTiming(e) { const a = Math.abs(e), edge = e < 0 ? INT.early : INT.late; if (a <= INT.perfect) return 1; if (a >= edge) return 0; return 1 - 0.8 * (a - INT.perfect) / (edge - INT.perfect); }
+function intDist(d) { return d <= INT.close ? 1 : d >= INT.reach ? 0 : 1 - (d - INT.close) / (INT.reach - INT.close); }
+function intOdds(e, d, base, recvCloser) { return base * intTiming(e) * intDist(d) * (recvCloser ? 0.7 : 1); }
+function intGrade(e) { return Math.abs(e) <= INT.perfect ? 'PERFECT' : e < 0 ? 'EARLY' : 'LATE'; }
+const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const hyp = Math.hypot;
@@ -38,11 +53,11 @@ const Sim = (() => {
       opts: Object.assign({ diff: 1, half: 150 }, opts || {}), human: (opts && opts.human) || [true, false],
       phase: 'select', t: 0, clock: (opts && opts.half) || 150, half: 1, score: [0, 0], off: 0, down: 1, togo: 10, los: 35, ballY: MID_Y, flip: 1,
       pl: [], ball: { x: 35, y: MID_Y, z: 0.3, vx: 0, vy: 0, vz: 0, st: 'dead', holder: -1, kind: '', t: 0, T: 0, tgt: -1 },
-      picks: [null, null], pend: [false, false], selT: 0, ctl: [3, 10], aim: [-1, -1], wrap: null,
+      picks: [null, null], pflip: [false, false], formFlip: [false, false], lag: [0, 0], pend: [false, false], selT: 0, ctl: [3, 10], aim: [-1, -1], wrap: null,
       ev: [], evSeq: 0, banner: null, bannerSeq: 0, calls: null, kind: '', over: false, thrown: false, crossed: false, run: false, runT: 0,
       playT: 0, result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
     };
-    for (let i = 0; i < 14; i++) G.pl.push({ i, team: teamOf(i), slot: i % 7, role: '', num: 0, x: 0, y: 0, vx: 0, vy: 0, fa: 0, st: 'ok', stT: 0, eng: -1, engT: 0, shedNeed: 2, noEng: 0, maxv: 7, as: null, wp: 0, route: null, tcd: 0, imm: 0, dv: 0, lastShed: -1 });
+    for (let i = 0; i < 14; i++) G.pl.push({ i, team: teamOf(i), slot: i % 7, role: '', num: 0, x: 0, y: 0, vx: 0, vy: 0, fa: 0, st: 'ok', lat: 1, recov: 0, stT: 0, eng: -1, engT: 0, shedNeed: 2, noEng: 0, maxv: 7, as: null, wp: 0, route: null, tcd: 0, imm: 0, dv: 0, lastShed: -1 });
     setPossession(0, 35, false);
     placeFormation(true);
     beginSelect();
@@ -58,9 +73,11 @@ const Sim = (() => {
     G.fd = fd;
   }
   function roleOf(p) { return p.team === G.off ? OFF_ROLE[p.slot] : DEF_ROLE[p.slot]; }
+  /** lateral mirror for a team: the wide-side flip times that team's own FLIP call (once it may be shown) */
+  const latOf = t => G.flip * (G.formFlip[t] ? -1 : 1);
   function formPos(p) {
     const d = dirOf(G.off), f = p.team === G.off ? OFF_FORM[p.slot] : DEF_FORM[p.slot];
-    return { x: G.los + d * f[0], y: clamp(G.ballY + f[1] * G.flip, 1, FIELD_W - 1) };
+    return { x: G.los + d * f[0], y: clamp(G.ballY + f[1] * latOf(p.team), 1, FIELD_W - 1) };
   }
   function placeFormation(snapNow) {
     G.flip = G.ballY > MID_Y + 0.5 ? -1 : 1;
@@ -76,19 +93,22 @@ const Sim = (() => {
   function beginSelect() {
     G.phase = 'select'; G.t = 0; G.selT = 14; G.picks = [null, null]; G.pend = [false, false]; G.calls = null; G.kind = ''; G.wrap = null;
     G.ball.st = 'dead'; G.ball.holder = -1; G.ball.x = G.los; G.ball.y = G.ballY; G.ball.z = 0.15; G.thrown = false; G.crossed = false; G.run = false;
+    G.pflip = [false, false]; G.formFlip = [false, false];
     resetPlayers(); placeFormation(false);
-    for (let t = 0; t < 2; t++) if (!G.human[t]) { G.picks[t] = cpuPick(t); G.pend[t] = true; }
+    for (let t = 0; t < 2; t++) if (!G.human[t]) { G.picks[t] = cpuPick(t); G.pflip[t] = cpuFlip(t, G.picks[t]); G.pend[t] = true; }
     const d = dirOf(G.off);
     G.ctl[G.off] = G.off * 7 + 3;
     const def = 1 - G.off; G.ctl[def] = def * 7 + 3;
   }
   /** a side locks in its call (host / CPU game) */
-  function pick(team, id) {
+  function pick(team, id, flip) {
     if (G.phase !== 'select' || G.picks[team]) return false;
     const list = team === G.off ? offenseChoices() : DEFENSE;
     if (!list.some(p => p.id === id)) id = list[0].id;
-    G.picks[team] = id; G.pend[team] = true; return true;
+    G.picks[team] = id; G.pflip[team] = !!flip; G.pend[team] = true; return true;
   }
+  /** the CPU flips its call now and then (never kicks) */
+  function cpuFlip(team, id) { const p = PLAY_BY_ID[id]; return !!p && p.kind !== 'punt' && p.kind !== 'fg' && Math.random() < 0.4; }
   function lock(team) { if (G.phase === 'select') G.pend[team] = true; }
   function offenseChoices() {
     const kickDist = Math.abs(goalX(G.off) - G.los) + 17;
@@ -117,30 +137,36 @@ const Sim = (() => {
   function snap() {
     const op = PLAY_BY_ID[G.picks[G.off]], dp = PLAY_BY_ID[G.picks[1 - G.off]];
     G.phase = 'live'; G.t = 0; G.playT = 0; G.kind = op.kind; G.op = op; G.dp = dp;
-    G.calls = [op.name, dp.name];
+    G.calls = [op.name + (G.pflip[G.off] ? ' (FLIP)' : ''), dp.name + (G.pflip[1 - G.off] ? ' (FLIP)' : '')];
     G.thrown = false; G.crossed = false; G.run = false; G.runT = 0; G.wrap = null; G.result = null; G.stats.plays++;
-    const d = dirOf(G.off), fl = G.flip, off = G.off, def = 1 - off;
-    const W = (f, l) => ({ x: G.los + d * f, y: clamp(G.ballY + l * fl, 0.8, FIELD_W - 0.8) });
+    const d = dirOf(G.off), off = G.off, def = 1 - off;
+    // the FLIP calls take effect: both formations line up mirrored (online this is the first time anyone sees them)
+    G.formFlip = G.pflip.slice();
+    const flO = latOf(off), flD = latOf(def), cross = flO !== flD;
+    const W = (f, l, fl) => ({ x: G.los + d * f, y: clamp(G.ballY + l * fl, 0.8, FIELD_W - 0.8) });
     for (const p of G.pl) {
-      p.as = null; p.route = null; p.wp = 0;
+      const fp = formPos(p); p.x = fp.x; p.y = fp.y; p.vx = p.vy = 0;
+      p.as = null; p.route = null; p.wp = 0; p.lat = p.team === off ? flO : flD; p.recov = 0;
+      const fl = p.lat;
       if (p.team === off) {
         const r = op.r && op.r[p.slot];
         if (p.slot <= 2) p.as = r === 'pull' ? 'pull' : 'blk';
-        else if (p.slot === 3) { p.as = 'qb'; p.route = (op.qb || [[-5, 0]]).map(q => W(q[0], q[1])); }
+        else if (p.slot === 3) { p.as = 'qb'; p.route = (op.qb || [[-5, 0]]).map(q => W(q[0], q[1], fl)); }
         else if (r === 'blk') p.as = 'blk';
-        else if (Array.isArray(r)) { p.as = 'route'; p.route = r.map(q => W(q[0], q[1])); }
-        else p.as = p.slot === 4 ? 'blk' : 'route', p.route = p.route || [W(OFF_FORM[p.slot][0] + 20, OFF_FORM[p.slot][1])];
+        else if (Array.isArray(r)) { p.as = 'route'; p.route = r.map(q => W(q[0], q[1], fl)); }
+        else p.as = p.slot === 4 ? 'blk' : 'route', p.route = p.route || [W(OFF_FORM[p.slot][0] + 20, OFF_FORM[p.slot][1], fl)];
       } else {
         const a = dp.a[p.slot]; p.as = a[0]; p.asArg = a;
-        if (a[0] === 'zone') p.zone = W(a[1], a[2]);
-        if (a[0] === 'man') p.manT = off * 7 + a[1];
+        if (a[0] === 'zone') p.zone = W(a[1], a[2], fl);
+        // man coverage is by side: when only one team flipped, the corners take the receiver now on their side
+        if (a[0] === 'man') p.manT = off * 7 + (cross && a[1] >= 5 ? 11 - a[1] : a[1]);
       }
     }
     const qb = P(off * 7 + 3), c = P(off * 7);
     G.ctl[off] = qb.i;
     if (!G.human[def] || G.ctl[def] < 0 || teamOf(G.ctl[def]) !== def) G.ctl[def] = def * 7 + 3;
     // the snap: ball flies from the center to the QB
-    const b = G.ball; Object.assign(b, { x: c.x, y: c.y, z: 0.25, st: 'air', kind: 'snap', holder: -1, t: 0, T: 0.24, sx: c.x, sy: c.y, sz: 0.25, tx: qb.x, ty: qb.y, tz: 1.1, tgt: qb.i, spin: 0 });
+    const b = G.ball; Object.assign(b, { x: c.x, y: c.y, z: 0.25, st: 'air', kind: 'snap', holder: -1, t: 0, T: 0.24, sx: c.x, sy: c.y, sz: 0.25, tx: qb.x, ty: qb.y, tz: 1.1, tgt: qb.i, spin: 0, hold: 0, lunge: null, arr: null });
     ev('hike', G.los, G.ballY);
     if (op.kind === 'punt' || op.kind === 'fg') { G.special = { k: op.kind, at: 0.85 }; }
     else G.special = null;
@@ -171,7 +197,7 @@ const Sim = (() => {
   function throwTo(qb, r, err) {
     const L = leadPoint(qb, r), b = G.ball;
     const ex = err ? rand(-err, err) : 0, ey = err ? rand(-err, err) : 0;
-    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: L.T, sx: qb.x, sy: qb.y, sz: 2.0, tx: L.x + ex, ty: L.y + ey, tz: 1.25, tgt: r.i, from: qb.i, x: qb.x, y: qb.y, z: 2.0 });
+    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: L.T, sx: qb.x, sy: qb.y, sz: 2.0, tx: L.x + ex, ty: L.y + ey, tz: 1.25, tgt: r.i, from: qb.i, x: qb.x, y: qb.y, z: 2.0, hold: 0, lunge: null, arr: null });
     G.thrown = true; G.ctl[qb.team] = r.i; qb.throwT = 0.35;
     ev('throw', qb.x, qb.y);
   }
@@ -300,7 +326,7 @@ const Sim = (() => {
       case 'rush': { const tgt = c || qb; return pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1)); }
       case 'fill': {
         if (G.kind === 'run' && c) return pursue(p, c, p.maxv);
-        if (G.t < 1.1) return moveTo(p, G.los + d * 0.8, G.ballY + (p.slot === 6 ? 3 : -1), p.maxv);
+        if (G.t < 1.1) return moveTo(p, G.los + d * 0.8, G.ballY + (p.slot === 6 ? 3 : -1) * (p.lat || 1), p.maxv);
         return pursue(p, c || qb, p.maxv);
       }
       case 'man': {
@@ -342,7 +368,11 @@ const Sim = (() => {
     G.selT -= dt;
     jog(dt, 1);
     if (G.selT <= -3) for (let t = 0; t < 2; t++) if (!G.picks[t]) { G.picks[t] = (t === G.off ? offenseChoices() : DEFENSE)[0].id; G.pend[t] = true; }
-    if (G.picks[0] && G.picks[1]) { G.phase = 'presnap'; G.t = 0; G.hikeT = G.human[G.off] ? 5.5 : rand(1.3, 2.2); }
+    if (G.picks[0] && G.picks[1]) {
+      G.phase = 'presnap'; G.t = 0; G.hikeT = G.human[G.off] ? 5.5 : rand(1.3, 2.2);
+      // vs the CPU the flipped formations line up now; online (opts.secret) they stay hidden until the snap
+      if (!G.opts.secret) G.formFlip = G.pflip.slice();
+    }
   }
   function jog(dt, k) { // walk everyone back to the huddle-less formation
     for (const p of G.pl) {
@@ -388,11 +418,7 @@ const Sim = (() => {
           if (me.role === 'QB' && t === off && G.kind === 'pass' && !G.thrown && !G.crossed) { const r = P(G.aim[t] >= 0 ? G.aim[t] : bestAim(me)); throwTo(me, r, 0.35); }
           else if (G.wrap && G.wrap.c === me.i) { if (G.t - (me.mashT || -9) > 0.15) { me.mashT = G.t; G.wrap.m -= 0.06; ev('grunt', me.x, me.y); } }
           else if (me.imm <= 0 && G.t - (me.jukeT || -9) > 1.0) { me.jukeT = G.t; me.burst = 0.45; ev('juke', me.x, me.y); }
-        } else if (t !== (c ? c.team : off)) {
-          const tgt = c || (b.st === 'air' ? P(b.tgt) : null);
-          if (tgt && hyp(tgt.x - me.x, tgt.y - me.y) < 3.4 && me.st === 'ok' && me.eng < 0) dive(me, tgt);
-          else switchTo(t);
-        }
+        } else if (t !== (c ? c.team : off)) defPress(t, me, inp);
       }
       if (inp.bP) {
         if (c && c.i === me.i && me.role === 'QB' && !G.thrown && G.kind === 'pass') { cycleAim(t); }
@@ -419,6 +445,7 @@ const Sim = (() => {
       let w;
       if (p.st === 'down') { p.stT -= dt; if (p.stT <= 0 && G.phase === 'live') { p.st = 'ok'; } wants.push({ x: 0, y: 0 }); continue; }
       if (p.st === 'dive') { p.stT -= dt; if (p.stT <= 0) { p.st = 'down'; p.stT = 0.9; } wants.push({ x: p.vx, y: p.vy }); continue; }
+      if (p.st === 'lunge') { p.stT -= dt; if (p.stT <= 0) { if (p.recov > 0) { p.st = 'stun'; p.stT = p.recov; p.recov = 0; } else p.st = 'ok'; } wants.push({ x: p.vx, y: p.vy }); continue; }
       const human = G.human[p.team] && G.ctl[p.team] === p.i && inputs[p.team];
       if (human) {
         const cm = inputs[p.team], role = p.role, f = (role === 'C' || role === 'LG' || role === 'RG' || role === 'DT') ? 0.86 : role === 'DE' ? 0.92 : 1;
@@ -434,7 +461,7 @@ const Sim = (() => {
     // ---- move (blocks and wrap-ups restrain)
     for (const p of G.pl) {
       const w = wants[p.i];
-      if (p.st === 'dive') { p.x += p.vx * dt; p.y += p.vy * dt; continue; }
+      if (p.st === 'dive' || p.st === 'lunge') { p.x += p.vx * dt; p.y += p.vy * dt; continue; }
       if (p.eng >= 0) continue;
       if (G.wrap && (G.wrap.c === p.i || G.wrap.tk.includes(p.i))) continue;
       const human = G.human[p.team] && G.ctl[p.team] === p.i;
@@ -466,6 +493,52 @@ const Sim = (() => {
     }
   }
   function cycleAim(t) { const el = eligible(t).map(e => e.i); const k = el.indexOf(G.aim[t]); G.aim[t] = el[(k + 1) % el.length]; }
+  /* ---------------- defensive ACTION: grab the man closest to the ball, then time a play on the pass ---------------- */
+  function closestDef(t, ref) {
+    let best = null, bd = 1e9;
+    for (const p of teamPl(t)) { if (p.st === 'down' || p.st === 'dive') continue; const dd = hyp(p.x - ref.x, p.y - ref.y) + (p.eng >= 0 ? 4 : 0); if (dd < bd) { bd = dd; best = p; } }
+    return best;
+  }
+  /** switch to the defender closest to ref; true if control moved. A 0.6 yd hysteresis stops repeated presses thrashing between two men */
+  function selectClosest(t, ref) {
+    const me = P(G.ctl[t]), best = closestDef(t, ref); if (!best || best === me) return false;
+    const dm = me.st === 'down' || me.st === 'dive' || me.eng >= 0 ? 1e9 : hyp(me.x - ref.x, me.y - ref.y);
+    if (hyp(best.x - ref.x, best.y - ref.y) >= dm - 0.6) return false;
+    G.ctl[t] = best.i; ev('switch', best.x, best.y, { t, i: best.i, sel: 1 }); return true;
+  }
+  function defPress(t, me, inp) {
+    const b = G.ball, c = carrier();
+    if (c) { // somebody has it: dive if close, otherwise take the defender nearest the carrier
+      if (hyp(c.x - me.x, c.y - me.y) < 3.4 && me.st === 'ok' && me.eng < 0) return dive(me, c);
+      return selectClosest(t, c);
+    }
+    if (b.st === 'air' && b.kind === 'pass') { // pass in the air: nearest man to where it comes down, then (already him) play the ball
+      if (selectClosest(t, { x: b.tx, y: b.ty })) return;
+      return tryLunge(t, P(G.ctl[t]), inp);
+    }
+    const tgt = b.st === 'air' && b.tgt >= 0 ? P(b.tgt) : b;
+    selectClosest(t, tgt);
+  }
+  /** timing of a press relative to the ball's arrival (s, < 0 early). Online guests report the time-to-arrival they saw */
+  function pressTiming(t, inp) {
+    const b = G.ball, e = b.t - b.T, lag = G.lag[t] || 0;
+    if (lag > 0 && inp && typeof inp.tta === 'number' && isFinite(inp.tta)) { const eg = -inp.tta; return eg >= e - lag - 0.1 && eg <= e + 0.05 ? eg : e - lag; }
+    return e - lag;
+  }
+  function tryLunge(t, me, inp) {
+    const b = G.ball;
+    if ((b.lunge && b.lunge[t]) || me.st !== 'ok' || me.eng >= 0) return;
+    const e = pressTiming(t, inp);
+    if (-e > INT.minTTA) { ev('switch', me.x, me.y, { t, i: me.i, sel: 1 }); return; } // way early: just confirms your man, no lunge
+    if (e > INT.late) return; // too late: the catch is already decided
+    const held = !!b.hold, dx = b.tx - me.x, dy = b.ty - me.y, dist = hyp(dx, dy) || 1, v = Math.min(INT.lungeV, dist / INT.lungeT);
+    b.lunge = b.lunge || {}; b.lunge[t] = { i: me.i, e, held };
+    me.st = 'lunge'; me.stT = INT.lungeT; me.vx = dx / dist * v; me.vy = dy / dist * v; me.fa = Math.atan2(dy, dx);
+    // early lunges cost a recovery: the longer the guess, the longer you stumble (so mashing doesn't work)
+    me.recov = e < -INT.perfect ? 0.25 + 0.6 * Math.min(1, (-e - INT.perfect) / 0.4) : 0;
+    ev('lunge', me.x, me.y, { t, i: me.i, g: intGrade(e) });
+    if (held) resolvePass(b);
+  }
   function switchTo(t) {
     const c = carrier(); const ref = c || (G.ball.st === 'air' ? { x: G.ball.tx, y: G.ball.ty } : G.ball);
     let best = null, bd = 1e9;
@@ -597,6 +670,12 @@ const Sim = (() => {
   function updBall(dt) {
     const b = G.ball;
     if (b.st === 'held') { const h = P(b.holder); b.x = h.x; b.y = h.y; b.z = 1.15; return; }
+    if (b.st === 'air' && b.hold) { // a contested catch: the ball is at the catch point while a human defender may still play it
+      b.t += dt; const r = b.arr && b.arr.r >= 0 ? P(b.arr.r) : null;
+      if (r && r.st !== 'down') { b.x += (r.x - b.x) * Math.min(1, dt * 10); b.y += (r.y - b.y) * Math.min(1, dt * 10); }
+      if (G.t >= b.hold) resolvePass(b);
+      return;
+    }
     if (b.st === 'air') {
       b.t += dt; const u = Math.min(1, b.t / b.T);
       const g = b.kind === 'pass' ? 11 : 0, T = b.T;
@@ -623,22 +702,54 @@ const Sim = (() => {
     const tgt = b.tgt >= 0 ? P(b.tgt) : null;
     if (b.kind === 'snap') { const qb = P(b.tgt); giveBall(qb); return; }
     if (b.kind === 'pitch') { const rb = P(b.tgt); if (hyp(rb.x - b.x, rb.y - b.y) < 3 && rb.st === 'ok') { giveBall(rb, 'catch'); return; } b.st = 'loose'; b.vx = (b.tx - b.sx) * 0.5; b.vy = (b.ty - b.sy) * 0.5; b.vz = 1; ev('fumble', b.x, b.y); return; }
-    // forward pass
-    const off = G.off; let r = null, rd = 1.75, dq = null, dd = 1.45;
+    // forward pass: who is there when it arrives
+    const off = G.off, def = 1 - off; let r = null, rd = 1.75, dq = null, dd = 1.45;
     for (const p of G.pl) {
       if (p.st === 'down' || p.eng >= 0) continue;
       const di = hyp(p.x - b.x, p.y - b.y);
       if (p.team === off && (p.role === 'WR' || p.role === 'RB') && di < rd) { rd = di; r = p; }
       if (p.team !== off && di < dd) { dd = di; dq = p; }
     }
-    const s = sk(1 - off);
-    if (dq && (!r || dd < rd - 0.25)) {
+    b.arr = { r: r ? r.i : -1, rd, dq: dq ? dq.i : -1, dd, vz: vzEnd, d: G.pl.map(p => hyp(p.x - b.tx, p.y - b.ty)) };
+    // a human defender near the catch who hasn't pressed yet gets the LATE window (plus link lag online) before it is decided
+    const me = G.human[def] ? P(G.ctl[def]) : null;
+    if (me && !(b.lunge && b.lunge[def]) && me.st === 'ok' && me.eng < 0 && b.arr.d[me.i] <= INT.reach) { b.hold = G.t + INT.late + (G.lag[def] || 0); return; }
+    resolvePass(b);
+  }
+  function intercept(p) {
+    if (p.st === 'lunge' || p.st === 'stun') { p.st = 'ok'; p.recov = 0; }
+    p.imm = Math.max(p.imm, 0.3);
+    giveBall(p, 'int'); G.run = true; G.runT = G.t; G.ctl[p.team] = p.i; banner('INTERCEPTED!', '', '#ff5a4a', 1.3); G.excite = 1; G.intercepted = true;
+  }
+  /** decide a forward pass: a timed lunge first, then the ordinary contest */
+  function resolvePass(b) {
+    const A = b.arr, off = G.off, def = 1 - off, vzEnd = A.vz; b.hold = 0;
+    const r = A.r >= 0 ? P(A.r) : null, rd = A.rd; let dq = A.dq >= 0 ? P(A.dq) : null, dd = A.dd;
+    const L = b.lunge && b.lunge[def];
+    if (L) {
+      const p = P(L.i), d = L.held ? Math.max(0, A.d[p.i] - INT.lateReach) : hyp(p.x - b.tx, p.y - b.ty);
+      const base = G.human[off] ? INT.pvp : INT.human[G.opts.diff], ft = intTiming(L.e), fd = intDist(d);
+      const pI = intOdds(L.e, d, base, r && rd < d - 0.25);
+      G.lastPick = { e: +L.e.toFixed(3), d: +d.toFixed(2), ft: +ft.toFixed(2), fd: +fd.toFixed(2), p: +pI.toFixed(3), g: intGrade(L.e) };
+      if (Math.random() < pI) { G.lastPick.int = true; return intercept(p); }
+      const q = ft * fd;
+      if (q >= 0.12 && Math.random() < 0.45 + 0.45 * q) { ev('deflect', b.x, b.y); G.lastPick.brk = true; return fall(b, vzEnd, true); }
+      if (dq === p) dq = null; // he missed it; the receiver can still make the catch
+    }
+    const s = sk(def);
+    if (dq && (!r || dd < rd - 0.25) && dq.st !== 'down') {
       const hd = G.human[dq.team] && G.ctl[dq.team] === dq.i;
-      const pInt = (hd ? 0.5 : s.int) * (dd < 0.8 ? 1.3 : 0.8);
-      if (Math.random() < pInt) { giveBall(dq, 'int'); G.run = true; G.runT = G.t; G.ctl[dq.team] = dq.i; banner('INTERCEPTED!', '', '#ff5a4a', 1.3); G.excite = 1; G.intercepted = true; return; }
+      let pInt;
+      if (hd) pInt = INT.passive * (dd < 0.8 ? 1.3 : 1);
+      else { // CPU defender: a timing-based play on the ball, sharper on higher levels
+        const e = gauss() * INT.cpuSig[G.human[off] ? G.opts.diff : 1];
+        pInt = intOdds(e, dd, INT.cpu[G.human[off] ? G.opts.diff : 1], false);
+        dq.st = 'lunge'; dq.stT = 0.2; dq.recov = 0; dq.vx *= 0.5; dq.vy *= 0.5; ev('lunge', dq.x, dq.y, { t: dq.team, i: dq.i, g: intGrade(e), cpu: 1 });
+      }
+      if (Math.random() < pInt) return intercept(dq);
       ev('deflect', b.x, b.y); return fall(b, vzEnd, true);
     }
-    if (r) {
+    if (r && r.st !== 'down') {
       const pc = 0.94 - (dq ? (1.45 - dd) * 0.38 : 0) - (rd / 1.75) * 0.16;
       if (Math.random() < pc) { giveBall(r, 'catch'); G.run = true; G.runT = G.t; G.caught = true; if (Math.abs(r.x - G.los) > 15) G.excite = Math.min(1, G.excite + 0.4); return; }
       ev('drop', b.x, b.y);
@@ -804,9 +915,10 @@ const Sim = (() => {
     const b = G.ball, revealed = G.phase === 'live' || G.phase === 'result';
     return {
       ph: G.phase, clk: Math.ceil(G.clock * 10) / 10, half: G.half, sc: G.score.slice(), dn: G.down, tg: r2(G.togo), los: r2(G.los), fd: r2(G.fd), gtg: G.goalToGo ? 1 : 0, off: G.off, by: r2(G.ballY),
-      pl: G.pl.map(p => [r2(p.x), r2(p.y), r2(p.fa), r2(hyp(p.vx, p.vy)), p.st === 'down' ? 1 : p.st === 'dive' ? 2 : p.eng >= 0 ? 3 : p.st === 'stun' ? 4 : 0, p.num, p.throwT > 0 || p.kickT > 0 ? 1 : 0]),
+      pl: G.pl.map(p => [r2(p.x), r2(p.y), r2(p.fa), r2(hyp(p.vx, p.vy)), p.st === 'down' ? 1 : p.st === 'dive' ? 2 : p.eng >= 0 ? 3 : p.st === 'stun' ? 4 : p.st === 'lunge' ? 5 : 0, p.num, p.throwT > 0 || p.kickT > 0 ? 1 : 0]),
       b: [r2(b.x), r2(b.y), r2(b.z), b.st === 'held' ? 0 : b.st === 'air' ? 1 : b.st === 'dead' ? 3 : 2, b.holder, b.kind === 'pass' || b.kind === 'punt' || b.kind === 'fg' ? 1 : 0],
-      bt: b.st === 'air' ? [r2(b.tx), r2(b.ty), b.tgt] : null,
+      bt: b.st === 'air' ? [r2(b.tx), r2(b.ty), b.tgt] : null, ba: b.st === 'air' && b.kind === 'pass' ? r2(b.T - b.t) : null,
+      fl: revealed ? G.pflip.map(f => f ? 1 : 0) : null, // FLIP calls: like the calls themselves, only after the snap
       ctl: G.ctl.slice(), aim: G.aim.slice(), lk: G.pend.slice(), selT: Math.ceil(G.selT), hum: G.human.slice(),
       w: G.wrap ? [G.wrap.c, r2(G.wrap.m)] : null,
       bn: G.banner ? [G.banner.t, G.banner.sub, G.banner.c, G.banner.id] : null,
@@ -814,5 +926,5 @@ const Sim = (() => {
       over: G.over ? 1 : 0, ex: r2(G.excite), t: r2(G.t), fgok: offenseChoices().some(p => p.id === 'fg') ? 1 : 0, gid: G.gid,
     };
   }
-  return { get G() { return G; }, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier() };
+  return { get G() { return G; }, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier(), formPos: p => formPos(p), closestDef, INT, intOdds, intTiming, intDist };
 })();

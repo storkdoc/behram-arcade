@@ -114,6 +114,8 @@ const Track = (() => {
       const A = !!(gp.buttons[0] && gp.buttons[0].pressed), B = !!((gp.buttons[1] && gp.buttons[1].pressed) || (gp.buttons[2] && gp.buttons[2].pressed));
       const S = !!(gp.buttons[9] && gp.buttons[9].pressed);
       if (A && !st.padA) press(); if (B && !st.padB) pressAlt(); if (S && !st.padStart) st.typed.push({ code: 'KeyP', key: 'p' });
+      const SH = !!((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[5] && gp.buttons[5].pressed)); // LB / RB: FLIP the play
+      if (SH && !st.padSh) st.typed.push({ code: 'KeyF', key: 'f', pad: true }); st.padSh = SH;
       const ux = gp.axes[0] || 0, uy = gp.axes[1] || 0; // menu nav from the stick / d-pad
       st.padNav = [ux, uy, gp.buttons[12] && gp.buttons[12].pressed, gp.buttons[13] && gp.buttons[13].pressed, gp.buttons[14] && gp.buttons[14].pressed, gp.buttons[15] && gp.buttons[15].pressed];
       st.padA = A; st.padB = B; st.padStart = S;

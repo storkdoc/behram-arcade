@@ -17,7 +17,7 @@ const App = {
   screen: 'title', mode: null, me: 0, snap: null, touch: false, testMouse: false, timeScale: 1,
   opts: { diff: clamp(+(localStorage.getItem('tbf.diff') ?? 1), 0, 2), half: HALVES.includes(+localStorage.getItem('tbf.half')) ? +localStorage.getItem('tbf.half') : 150 },
   acc: 0, paused: false, lastEv: 0, lastGid: null, prevPh: null, Sel: { idx: 0, locked: false, list: [], key: '' },
-  remote: { x: 0, y: 0, m: 0, aP: false, bP: false, ac: 0, bc: 0, n: 0 }, press: { ac: 0, bc: 0 },
+  remote: { x: 0, y: 0, m: 0, aP: false, bP: false, ac: 0, bc: 0, n: 0, tta: null }, press: { ac: 0, bc: 0, tta: null }, flash: null,
   guestPick: null, needT: 0, bcastT: 0, sseq: 0, lastSeq: 0, lastAt: 0, iv: 1000 / 60, jit: 2, delay: 25, guestBuf: [], iseq: 0, lastIn: '', inT: 0, pred: null, wasPicking: false,
   rematchSent: false, hadLock: false, L: null, lastFrameMs: 16, gidLocal: 0,
 
@@ -31,8 +31,9 @@ const App = {
   startGame(mode) {
     this.mode = mode; this.paused = false; this.acc = 0; this.lastEv = 0; this.prevPh = null; this.rematchSent = false; this.guestPick = null;
     this.me = mode === 'guest' ? 1 : 0;
-    this.Sel = { idx: 0, locked: false, list: [], key: '' };
-    if (mode !== 'guest') { Sim.newGame({ human: mode === 'cpu' ? [true, false] : [true, true], diff: this.opts.diff, half: this.opts.half }); this.snap = Sim.snapshot(); }
+    this.Sel = { idx: 0, locked: false, list: [], key: '', flip: false };
+    // online the host's sim keeps FLIP formations hidden until the snap (secret); vs the CPU they line up right away
+    if (mode !== 'guest') { Sim.newGame({ human: mode === 'cpu' ? [true, false] : [true, true], diff: this.opts.diff, half: this.opts.half, secret: mode === 'host' }); this.snap = Sim.snapshot(); }
     else { this.snap = null; }
     Track.stop(); Track.clearNav();
     this.go('game'); Sound.play('whistle'); Sound.cheer(0.5, 2);
@@ -42,11 +43,12 @@ const App = {
     this.startGame(this.mode);
   },
   quit() { if (this.mode === 'host' || this.mode === 'guest') Net.leave(); this.paused = false; this.startAttract(); this.go('title'); },
-  lockPick(id) {
+  lockPick(id, flip) {
     const A = this; if (A.Sel.locked) return;
+    if (flip === undefined) flip = !!A.Sel.flip;
     A.Sel.locked = true; Sound.play('lock');
-    if (A.mode === 'guest') { A.guestPick = id; Net.send({ t: 'lock' }); } // the id itself waits for the host's 'need'
-    else Sim.pick(A.me, id);
+    if (A.mode === 'guest') { A.guestPick = { id, f: flip ? 1 : 0 }; Net.send({ t: 'lock' }); } // the call (and its FLIP) waits for the host's 'need'
+    else Sim.pick(A.me, id, flip);
   },
 };
 
@@ -59,9 +61,9 @@ Net.onMessage = d => {
       const r = A.remote;
       if (d.n != null) { if (d.n <= (r.n || 0)) return; r.n = d.n; }
       r.x = clamp(+d.x || 0, -1.2, 1.2); r.y = clamp(+d.y || 0, -1.2, 1.2); r.m = clamp(+d.m || 0, 0, 1.2);
-      if (d.ac !== r.ac) { r.ac = d.ac; r.aP = true; } if (d.bc !== r.bc) { r.bc = d.bc; r.bP = true; }
+      if (d.ac !== r.ac) { r.ac = d.ac; r.aP = true; r.tta = typeof d.tt === 'number' ? d.tt : null; } if (d.bc !== r.bc) { r.bc = d.bc; r.bP = true; }
     } else if (d.t === 'lock' && A.mode === 'host' && Sim.G && Sim.G.phase === 'select') Sim.lock(1);
-    else if (d.t === 'pick' && A.mode === 'host' && Sim.G && Sim.G.phase === 'select' && Sim.G.pend[1] && Sim.G.picks[0] && typeof d.id === 'string') Sim.pick(1, d.id);
+    else if (d.t === 'pick' && A.mode === 'host' && Sim.G && Sim.G.phase === 'select' && Sim.G.pend[1] && Sim.G.picks[0] && typeof d.id === 'string') Sim.pick(1, d.id, d.f === 1);
     else if (d.t === 'rematch' && A.mode === 'host' && Sim.G && Sim.G.over) A.startGame('host');
   } else if (Net.st.role === 'guest') {
     if (d.t === 'hello') { A.lastSeq = 0; A.guestBuf = []; A.pred = null; return; }
@@ -72,7 +74,7 @@ Net.onMessage = d => {
       A.lastAt = at; A.delay = clamp(1.5 * A.iv + 2 * A.jit, 16, 120);
       A.guestBuf.push({ at, s: d.s }); if (A.guestBuf.length > 24) A.guestBuf.shift();
       if (A.screen === 'connecting') A.startGame('guest');
-    } else if (d.t === 'need' && A.mode === 'guest' && A.guestPick && A.snap && A.snap.ph === 'select') Net.send({ t: 'pick', id: A.guestPick });
+    } else if (d.t === 'need' && A.mode === 'guest' && A.guestPick && A.snap && A.snap.ph === 'select') Net.send({ t: 'pick', id: A.guestPick.id, f: A.guestPick.f });
   }
 };
 const lerpA = (a, b, u) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * u; };
@@ -81,6 +83,7 @@ function lerpSnap(a, b, u) {
   const o = Object.assign({}, b);
   o.pl = b.pl.map((q, i) => { const p = a.pl[i]; if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) return q; const r = q.slice(); r[0] = p[0] + (q[0] - p[0]) * u; r[1] = p[1] + (q[1] - p[1]) * u; r[2] = lerpA(p[2], q[2], u); r[3] = p[3] + (q[3] - p[3]) * u; return r; });
   if (a.b[3] === b.b[3] && a.b[4] === b.b[4]) { o.b = b.b.slice(); for (let k = 0; k < 3; k++) o.b[k] = a.b[k] + (b.b[k] - a.b[k]) * u; }
+  if (a.ba != null && b.ba != null) o.ba = a.ba + (b.ba - a.ba) * u;
   return o;
 }
 function guestSnapshot() {
@@ -279,10 +282,11 @@ const Options = {
   },
 };
 const HOWTO = [
-  ['THE TRACKBALL', 'Your player runs as fast as the ball spins. Stroke it hard and he sprints; stroke it gently and he jogs; let go and the ball coasts and slows on its own, just like the heavy cabinet ball. Stroke against the spin to brake.\n\nMAC: click the field to grab the trackball (the pointer disappears) and roll your mouse or trackpad. Or just two-finger swipe on the trackpad. Esc lets go.\nIPHONE / IPAD: swipe and flick anywhere in the trackball area (the big red ball). Keep your finger on it to stop.\nKEYS / GAMEPAD also work: arrows or WASD, Space = action, Shift = next.'],
-  ['CALLING PLAYS', 'Before every down both sides secretly call a play. You only ever see your own playbook, and your opponent only sees that you are choosing or locked in. Both calls are revealed at the snap.\n\nRoll the trackball or use the arrow keys to pick a card, then click / Space / tap again to lock it in. You have 14 seconds.'],
+  ['THE TRACKBALL', 'Your player runs as fast as the ball spins. Stroke it hard and he sprints; stroke it gently and he jogs; let go and the ball coasts and slows on its own, just like the heavy cabinet ball. Stroke against the spin to brake.\n\nMAC: click the field to grab the trackball (the pointer disappears) and roll your mouse or trackpad. Or just two-finger swipe on the trackpad. Esc lets go.\nIPHONE / IPAD: swipe and flick anywhere in the trackball area (the big red ball). Keep your finger on it to stop.\nKEYS / GAMEPAD also work: arrows or WASD, Space = action, Shift = next, F = flip.'],
+  ['CALLING PLAYS', 'Before every down both sides secretly call a play. You only ever see your own playbook, and your opponent only sees that you are choosing or locked in. Both calls are revealed at the snap.\n\nRoll the trackball or use the arrow keys to pick a card, then click / Space / tap again to lock it in. You have 14 seconds.\nFLIP mirrors your play left-right (formation, routes, run direction, coverage): press F or Shift (or right-click), tap FLIP or the blue button, or a gamepad shoulder button. The diagrams flip so you can see it. Your flip stays secret until the snap too.'],
   ['OFFENSE', 'Press ACTION (click / Space / the red button) to hike. You control the quarterback: drop back, and the cyan ring shows your target receiver (NEXT or Shift cycles it). ACTION throws. Lead your receivers.\nOn runs the ball is handed off and you take over the runner. ACTION gives a burst juke. When a defender wraps you up, spin the trackball like crazy to break free.\nFourth down: PUNT or FIELD GOAL (when in range).'],
-  ['DEFENSE', 'You control the defender with the yellow ring. ACTION near the ball carrier = DIVING TACKLE. Away from him, ACTION (or NEXT) switches to the defender nearest the ball. Before the snap ACTION picks your man.\nWhen you grab the runner, spin the trackball hard to drive him down. Hit him at full speed for a BIG HIT and maybe a fumble.'],
+  ['DEFENSE', 'You control the defender with the yellow ring. ACTION (Space / click / red button) jumps you to the defender closest to the ball: the runner, or where a pass is coming down. Near the runner, ACTION is a DIVING TACKLE. NEXT (Shift) cycles defenders. Before the snap ACTION picks your man.\nWhen you grab the runner, spin the trackball hard to drive him down. Hit him at full speed for a BIG HIT and maybe a fumble.'],
+  ['INTERCEPTIONS', 'Pass in the air? Press ACTION once to take the defender closest to where it is coming down, steer him under it, then press ACTION again right as the ball arrives to lunge for it.\nPERFECT timing (within about a tenth of a second) and within a yard or two of the catch gives a real shot at a pick. EARLY or LATE, or too far away, usually only breaks it up. Guessing early makes you stumble, so mashing does not work.\nGot it? You steer the return. Take it to the house!'],
   ['TWO-PLAYER ONLINE', 'Each player uses their own device, anywhere.\n1. You pick TWO-PLAYER GAME (ONLINE).\n2. Your buddy opens the Behram Arcade, picks Trackball Football and taps JOIN TWO-PLAYER GAME IN PROGRESS. No code needed; the game finds you. A backup room code is on your screen just in case.\nYou are XPRESS (red), your buddy is OUTLAWS (blue). Play calls stay secret until the snap.'],
 ];
 const Howto = {
@@ -433,15 +437,16 @@ const GameScreen = {
     const cmd = Track.command();
     let aP = Track.st.action > 0, bP = Track.st.alt > 0; Track.st.action = 0; Track.st.alt = 0;
     if (menuUp) { aP = bP = false; }
-    if (picking && !A.paused && !(S0 && S0.over)) { this.selectInput(S0, typed, aP); aP = bP = false; }
+    if (picking && !A.paused && !(S0 && S0.over)) { this.selectInput(S0, typed, aP, bP); aP = bP = false; }
     const inp = { x: cmd.x, y: cmd.y, m: cmd.m, aP, bP };
     if (mode === 'guest') {
-      if (aP) A.press.ac++; if (bP) A.press.bc++;
+      if (aP) { A.press.ac++; A.press.tta = S0 && S0.ba != null ? +S0.ba.toFixed(3) : null; } if (bP) A.press.bc++; // tta: when I pressed, how long until the ball arrives ON MY SCREEN
       A.inT -= dt;
       if (picking && !A.wasPicking) Net.send({ t: 'i', x: 0, y: 0, m: 0, ac: A.press.ac, bc: A.press.bc });
       A.wasPicking = !!picking;
       if (!picking) { // stick + press counters: immediately on change, keep-alive every 50 ms
-        const msg = { t: 'i', x: +cmd.x.toFixed(2), y: +cmd.y.toFixed(2), m: +cmd.m.toFixed(2), ac: A.press.ac, bc: A.press.bc }, key = JSON.stringify(msg);
+        const msg = { t: 'i', x: +cmd.x.toFixed(2), y: +cmd.y.toFixed(2), m: +cmd.m.toFixed(2), ac: A.press.ac, bc: A.press.bc }; if (A.press.tta != null) msg.tt = A.press.tta;
+        const key = JSON.stringify(msg);
         if (key !== A.lastIn || A.inT <= 0) { A.lastIn = key; A.inT = 0.05; msg.n = ++A.iseq; Net.sendFast(msg); }
       }
       const S = guestSnapshot(); if (S) A.snap = predictOwn(S, cmd, dt);
@@ -449,6 +454,8 @@ const GameScreen = {
       if (A.snap && A.snap.ph !== 'select') A.guestPick = null;
     } else {
       const r = A.remote, inputs = mode === 'cpu' ? [inp, null] : [inp, r];
+      // online: the guest sees the ball late (link + its smoothing buffer) and its press arrives late; give it that much slack
+      if (mode === 'host' && Sim.G) Sim.G.lag = [0, clamp((Net.st.ping == null ? 80 : Net.st.ping) / 1000 + 0.06, 0.06, 0.35)];
       if (!(A.paused && mode === 'cpu')) {
         const ts = A.timeScale || 1;
         A.acc = Math.min(A.acc + dt * ts, 0.1 * ts);
@@ -476,6 +483,7 @@ const GameScreen = {
       if (S.ph === 'presnap') { Track.stop(); Track.clearNav(); setTimeout(() => Sound.play('set'), 250); }
       if (S.ph === 'over') { Sound.cheer(0.9, 4); }
     }
+    else if (S.ph === 'select' && !A.Sel.locked && A.Sel.offense !== (S.off === A.me)) this.resetSelect(S); // possession changed under the panel: rebuild the cards
     const snapCam = A.prevPh == null || (A.prevPh !== S.ph && S.ph === 'select' && Math.abs(Render.cam.tx - S.los) > 40);
     A.prevPh = S.ph;
     Render.follow(S, dt, snapCam, A.me);
@@ -494,8 +502,9 @@ const GameScreen = {
       case 'td': Sound.play('td'); R.spawn('fw'); setTimeout(() => R.spawn('fw'), 700); shake(0.35); break;
       case 'fg': Sound.play('fg'); R.spawn('fw'); break;
       case 'fumble': Sound.play('fumble'); Sound.play('bounce'); shake(0.3); break;
-      case 'int': Sound.play('catch'); Sound.play('int'); break;
-      case 'switch': if (e.t == null || e.t === App.me) Sound.play('switch'); break;
+      case 'switch': if (e.t == null || e.t === App.me) { Sound.play('switch'); if (e.sel && e.i != null) R.selFlash(e.i); } break;
+      case 'lunge': if (e.t === App.me && !e.cpu) { App.flash = { s: e.g, i: e.i, t0: performance.now() }; Sound.play(e.g === 'PERFECT' ? 'perfect' : 'lunge'); } else Sound.play('dive'); break;
+      case 'int': Sound.play('catch'); Sound.play('int'); if (e.x != null) R.spawn('ring', e.x, e.y); shake(0.25); break;
       case 'handoff': Sound.play('pad'); break;
       case 'drop': Sound.play('aww'); break;
       case 'recover': Sound.play('pad'); Sound.cheer(0.6, 2); break;
@@ -503,7 +512,7 @@ const GameScreen = {
     }
   },
   resetSelect(S) {
-    const A = App, offense = S.off === A.me;
+    const A = App, offense = S.off === A.me; A.Sel.flip = false;
     const list = offense ? OFFENSE.filter(p => p.id !== 'fg' || S.fgok) : DEFENSE.slice();
     const keep = A.Sel.list === list ? A.Sel.idx : 0;
     const lastId = A.Sel['last' + (offense ? 'O' : 'D')];
@@ -512,7 +521,8 @@ const GameScreen = {
     A.Sel = Object.assign(A.Sel, { idx, locked: false, list, offense });
     Track.clearNav();
   },
-  selectInput(S, typed, aP) {
+  toggleFlip() { const Sel = App.Sel; if (Sel.locked) return; Sel.flip = !Sel.flip; Sound.play('flip'); },
+  selectInput(S, typed, aP, bP) {
     const A = App, Sel = A.Sel; if (!Sel.list.length) this.resetSelect(S);
     if (Sel.locked || S.lk[A.me]) { Sel.locked = true; Track.clearNav(); return; }
     const n = Sel.list.length, cols = A.L.portrait ? 2 : Math.min(4, Math.ceil(n / 2));
@@ -522,7 +532,9 @@ const GameScreen = {
       if (e.code === 'ArrowRight' || e.code === 'KeyD') { mv(1, 0); keyed = true; } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') { mv(-1, 0); keyed = true; }
       else if (e.code === 'ArrowDown' || e.code === 'KeyS') { mv(0, 1); keyed = true; } else if (e.code === 'ArrowUp' || e.code === 'KeyW') { mv(0, -1); keyed = true; }
       else if (/^Digit[1-8]$/.test(e.code)) { const k = +e.code.slice(5) - 1; if (k < n) { Sel.idx = k; Sound.play('move'); } }
+      else if (e.code === 'KeyF') this.toggleFlip();
     }
+    if (bP) this.toggleFlip(); // Shift / X / right-click / blue button / gamepad B also flip while calling
     if (keyed || Track.st.kind === 'keys') { Track.stop(); Track.clearNav(); }
     else { const nv = Track.takeNav(0.16); if (nv.dx || nv.dy) mv(Math.sign(nv.dx), Math.sign(nv.dy)); }
     if (aP) this.lockSel();
@@ -530,7 +542,7 @@ const GameScreen = {
   lockSel() { const A = App; if (A.Sel.locked) return; const p = A.Sel.list[A.Sel.idx]; if (!p) return; A.Sel['last' + (A.Sel.offense ? 'O' : 'D')] = p.id; A.lockPick(p.id); },
   actionLabels(S) {
     const me = App.me, i = S.ctl[me], hasBall = S.b[3] === 0 && S.b[4] === i, off = S.off === me;
-    if (S.ph === 'select') return ['LOCK IN', ''];
+    if (S.ph === 'select') return ['LOCK IN', App.Sel.locked ? '' : 'FLIP'];
     if (S.ph === 'presnap') return off ? ['HIKE', ''] : ['NEXT MAN', ''];
     if (S.ph !== 'live') return ['', ''];
     if (hasBall) {
@@ -540,8 +552,13 @@ const GameScreen = {
       return ['JUKE', ''];
     }
     const c = S.b[3] === 0 && S.b[4] >= 0 ? S.pl[S.b[4]] : null, mine = c && (S.b[4] < 7 ? 0 : 1) === me;
-    if (c && !mine) { const q = S.pl[i]; return [Math.hypot(c[0] - q[0], c[1] - q[1]) < 3.4 ? 'DIVE!' : 'SWITCH', 'SWITCH']; }
-    if (S.b[3] === 1 && !off) return ['SWITCH', 'SWITCH'];
+    if (c && !mine) { const q = S.pl[i]; return [Math.hypot(c[0] - q[0], c[1] - q[1]) < 3.4 ? 'DIVE!' : 'SWITCH', 'NEXT']; }
+    if (S.b[3] === 1 && !off && S.ba != null && S.bt) { // pass in the air: grab the closest man, then play the ball
+      const q = S.pl[i], dMe = Math.hypot(S.bt[0] - q[0], S.bt[1] - q[1]); let best = dMe;
+      for (let k = (1 - S.off) * 7; k < (1 - S.off) * 7 + 7; k++) { const p = S.pl[k]; if (p[4] === 1) continue; best = Math.min(best, Math.hypot(S.bt[0] - p[0], S.bt[1] - p[1])); }
+      return [best < dMe - 0.6 ? 'SWITCH' : dMe <= Sim.INT.reach ? 'PICK!' : 'PICK', 'NEXT'];
+    }
+    if (S.b[3] === 1 && !off) return ['SWITCH', 'NEXT'];
     return ['', ''];
   },
   draw(c, dt) {
@@ -553,16 +570,18 @@ const GameScreen = {
     UI.hud(c, S, L, A.me);
     UI.callsDraw(c, S, L);
     UI.wrapMeter(c, S, A.me);
+    this.drawFlash(c, S);
     if (S.ph !== 'select') UI.bannerDraw(c, S, L, dt);
     const sideSel = A.touch && !L.panel && S.ph === 'select' && !S.over; // touch landscape: cards get the left side, LOCK IN stays on the right
     L.selBox = sideSel ? { l: L.safe.l + 8, r: L.act.cx - L.act.R * 1.3 } : null;
     if (S.ph === 'select' && !S.over) {
-      const hint = A.touch ? 'TAP A PLAY TO PICK IT · TAP IT AGAIN (OR LOCK IN) TO LOCK' : 'ROLL THE TRACKBALL OR ARROWS TO PICK · CLICK / SPACE TO LOCK IN';
-      UI.selectPanel(c, S, L, A.Sel, A.me, { hint, onCard: k => { if (A.Sel.locked) return; if (A.Sel.idx === k && (A.touch || !Track.st.locked)) this.lockSel(); else { A.Sel.idx = k; Sound.play('move'); } } });
+      const hint = A.touch ? 'TAP A PLAY, TAP AGAIN TO LOCK · FLIP MIRRORS IT' : 'ROLL OR ARROWS TO PICK · F / SHIFT FLIPS · CLICK / SPACE LOCKS IN';
+      UI.selectPanel(c, S, L, A.Sel, A.me, { hint, onFlip: () => { if (!A.paused) this.toggleFlip(); }, onCard: k => { if (A.Sel.locked) return; if (A.Sel.idx === k && (A.touch || !Track.st.locked)) this.lockSel(); else { A.Sel.idx = k; Sound.play('move'); } } });
     }
     if (S.ph === 'presnap' && !A.paused) {
       const off = S.off === A.me, blink = Math.sin(performance.now() / 160) > -0.2;
       const s = off ? (A.touch ? 'TAP HIKE TO SNAP THE BALL' : 'CLICK OR PRESS SPACE TO HIKE') : 'GET SET\u2026 ' + (A.touch ? 'NEXT MAN' : 'SPACE') + ' PICKS YOUR DEFENDER';
+      if (A.Sel.flip && A.Sel.locked) UI.text(c, 'YOUR CALL IS FLIPPED', L.W / 2, Math.round(L.field.y + L.field.h * 0.86 + (L.small ? 20 : 28)), UI.f(800, L.small ? 11 : 13, DFONT), '#c9d0ee');
       if (blink || !off) UI.text(c, s, L.W / 2, L.field.y + L.field.h * 0.86, UI.f('italic 900', L.small ? 15 : 22, DFONT), off ? '#ffe27a' : '#9fd0ff');
     }
     // controls
@@ -576,7 +595,8 @@ const GameScreen = {
       Render.drawTrackball(c, L.tb.cx, L.tb.cy, L.tb.R, {});
       const keyHint = Track.st.locked ? 'ESC RELEASES' : '';
       if (keyHint) UI.text(c, keyHint, L.tb.cx, L.tb.cy + L.tb.R * 1.6 + 2, UI.f(700, 10, DFONT), 'rgba(220,225,255,0.55)');
-      if (lab[0] && S.ph === 'live') UI.text(c, 'CLICK / SPACE: ' + lab[0] + (lab[1] ? '   SHIFT / RIGHT-CLICK: ' + lab[1] : ''), L.tb.cx + L.tb.R * 1.6, L.tb.cy + 4, UI.f(800, 12, DFONT), 'rgba(235,240,255,0.8)', 'left');
+      if (lab[0] && S.ph === 'live') UI.text(c, 'CLICK / SPACE: ' + lab[0] + (lab[1] ? '   SHIFT / RIGHT-CLICK: ' + lab[1] : ''), Math.round(L.tb.cx + L.tb.R * 1.6), Math.round(L.tb.cy + 4), UI.f(800, 12, DFONT), 'rgba(235,240,255,0.8)', 'left');
+      if (S.ph === 'live' && S.off !== A.me && S.ba != null) UI.text(c, 'PRESS AGAIN AS THE BALL ARRIVES TO LUNGE FOR A PICK', Math.round(L.tb.cx + L.tb.R * 1.6), Math.round(L.tb.cy + 22), UI.f(700, 11, DFONT), 'rgba(255,226,122,0.85)', 'left');
       const recent = performance.now() - (Track.src.wheel.last) < 4000 || Track.st.lastKind === 'keys' || Track.st.lastKind === 'pad';
       if (!Track.st.locked && !recent && S.ph !== 'over') this.lockPill(c, L);
     }
@@ -584,6 +604,15 @@ const GameScreen = {
     if (S.over) this.drawOver(c, S, L);
     if (A.paused) this.drawPause(c, L);
     iconButtons(c);
+  },
+  /** the timing call on your lunge: PERFECT / EARLY / LATE, small and crisp above your man */
+  drawFlash(c, S) {
+    const F = App.flash; if (!F) return; const age = (performance.now() - F.t0) / 1000; if (age > 0.9 || !S.pl[F.i]) { App.flash = null; return; }
+    const q = S.pl[F.i], p = Render.proj(q[0], q[1], 3.3), col = F.s === 'PERFECT' ? '#7cff7a' : '#ffb04a', sz = App.L.small ? 14 : 17;
+    const x = Math.round(p[0]), y = Math.round(p[1] - 8 - Math.min(1, age * 6) * 6);
+    c.save(); c.globalAlpha = age < 0.65 ? 1 : Math.max(0, 1 - (age - 0.65) / 0.25);
+    c.font = UI.f('italic 900', sz, DFONT); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.85)'; c.strokeText(F.s, x, y);
+    c.fillStyle = col; c.fillText(F.s, x, y); c.restore();
   },
   drawPanel(c, L) {
     const p = L.panel, g = c.createLinearGradient(0, p.y, 0, p.y + p.h);

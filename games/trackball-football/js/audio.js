@@ -76,7 +76,11 @@ const Sound = (() => {
       case 'break': cheer(0.45, 1.4); osc('sawtooth', 220, t, 0.25, 0.08, { to: 440, lp: 1200 }); break;
       case 'td': cheer(1, 4.5); horn(t + 0.2); break;
       case 'fg': cheer(0.8, 3); break;
-      case 'int': case 'fumble': cheer(0.7, 2.2); break;
+      case 'int': cheer(1, 3.2); horn(t + 0.15); break; // a pick: the house comes down
+      case 'fumble': cheer(0.7, 2.2); break;
+      case 'lunge': noise(t, 0.16, 0.22, 900, 'bandpass', 1.5, { to: 2200 }); break;
+      case 'perfect': noise(t, 0.16, 0.22, 900, 'bandpass', 1.5, { to: 2200 }); osc('sine', 1320, t, 0.18, 0.12); osc('sine', 1980, t + 0.04, 0.2, 0.07); break;
+      case 'flip': osc('triangle', 600, t, 0.07, 0.09, { to: 900 }); break;
       case 'aww': aww(); break;
       case 'firstdown': cheer(0.3, 1.2); break;
       case 'horn': horn(t); break;

@@ -321,7 +321,7 @@ const Render = (() => {
     const x = q[0], y = q[1], fa = q[2], spd = q[3], st = q[4];
     // gait + pose (client-side)
     A.ph += spd * dt * Math.PI * 2 / (1.5 + spd * 0.11);
-    const tiltTarget = st === 1 ? 1.45 : st === 2 ? 1.15 : st === 3 ? 0.42 : Math.min(0.32, spd * 0.03);
+    const tiltTarget = st === 1 ? 1.45 : st === 2 ? 1.15 : st === 5 ? 0.7 : st === 3 ? 0.42 : Math.min(0.32, spd * 0.03);
     A.tilt += (tiltTarget - A.tilt) * Math.min(1, dt * (st === 1 ? 7 : 9));
     const lineman = info.role === 'C' || info.role === 'LG' || info.role === 'RG' || info.role === 'DT' || info.role === 'DE';
     const crouchT = (S.ph === 'presnap' || (S.ph === 'select' && spd < 0.4)) ? (lineman ? 1 : info.role === 'QB' ? 0.25 : 0.55) : 0;
@@ -350,6 +350,7 @@ const Render = (() => {
       const asw = -Math.sin(p) * amp * 0.8;
       hand = [asw + 0.08, s * 0.33, 1.05 + Math.abs(asw) * 0.25];
       if (st === 2) hand = [0.75, s * 0.22, 1.35];
+      else if (st === 5) hand = [0.5, s * 0.24, 2.05]; // lunging for the ball: arms up
       else if (st === 3) hand = [0.55, s * 0.2, 1.3];
       else if (A.crouch > 0.5 && lineman && s > 0) hand = [0.55, s * 0.25, 0.05];
       if (info.hasBall && s === info.ballSide) hand = info.qbHold ? [0.28, s * 0.08, 1.3] : [0.22, s * 0.2, 1.22];
@@ -533,12 +534,20 @@ const Render = (() => {
     if (!ballDrawn) drawBall(ctx, S, dt);
     drawParts(ctx, dt);
     drawMarkers(ctx, S, me);
+    drawSelFlash(ctx, S);
     // vignette, fireworks
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.drawImage(vignette, 0, 0, W, H);
     drawFireworks(ctx, dt);
   }
   function drawMarkersUnder(ctx, S, me) { }
+  /** Space on defense jumped you to a new man: a quick contracting highlight ring on him */
+  let selF = null;
+  function selFlash(i) { selF = { i, t0: t }; }
+  function drawSelFlash(ctx, S) {
+    if (!selF) return; const age = t - selF.t0; if (age > 0.4 || !S.pl[selF.i]) { selF = null; return; }
+    const q = S.pl[selF.i], k = age / 0.4; ctx.globalAlpha = 1 - k; ring(ctx, q[0], q[1], 2.6 - 1.6 * k, '#ffffff', 0.14); ctx.globalAlpha = 1;
+  }
 
   /* ---------------- the trackball widget ---------------- */
   const specks = []; { const n = 70, ga = Math.PI * (3 - Math.sqrt(5)); for (let i = 0; i < n; i++) { const yy = 1 - (i + 0.5) / n * 2, r = Math.sqrt(1 - yy * yy), th = ga * i; specks.push([Math.cos(th) * r, yy, Math.sin(th) * r, 0.6 + ((i * 37) % 10) / 14]); } }
@@ -593,5 +602,5 @@ const Render = (() => {
     }
   }
 
-  return { cam, quality, layout, proj, pxAt, follow, draw, spawn, drawTrackball, drawBallAt, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, anim, parts };
+  return { cam, quality, layout, proj, pxAt, follow, draw, spawn, selFlash, drawTrackball, drawBallAt, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, anim, parts };
 })();
