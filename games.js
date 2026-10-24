@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'jax-adventures',
+    title: "JAX'S ADVENTURES",
+    tagline: 'Sneak, fish, trade and outfox the ranger',
+    description: 'An open-world 3D adventure in a sunlit national park, starring Jax, a curious 9-year-old with a mop of dark hair and a big appetite for trouble. Explore Lake Pinecrest and its dock, the river, the deep forest, the campground, the ranger station, the general store, the trading post and your own secret tree fort. Sneak up on picnics and grab snacks, but watch the vision cones: the ? meter means a camper is suspicious, and the ! means Ranger Bramble is coming for you. Duck into bushes, bins and tents to hide. Get caught and you lose what you are carrying and get walked home. Fish with a real cast, bite and reel minigame and catch more than 15 species for your journal. Sell your catch at the store, trade with Willa at the trading post (her hot item pays extra), and buy better rods, lures, bait, bigger backpacks, disguises, a mountain bike, a canoe and decorations for the fort. Skip rocks, cook over campfires, hunt for golden acorns and hidden treasures, and follow a three-chapter quest that ends with the legend of Silverjaw. True 3D with a sky, real-time shadows, fog, bloom, water reflections, swaying grass, a day/night cycle and changing weather with rain, plus a Web Audio soundtrack. Saves automatically.',
+    thumb: 'games/jax-adventures/thumb.png',
+    added: '2026-10-24',
+    genre: 'ADVENTURE',
+    year: 'OPEN WORLD',
+    controls: 'WASD/arrows move · SHIFT run · C or CTRL sneak · SPACE jump/interact/hide · E grab/talk/sell · F fish (hold to cast, tap when it bites, hold to reel) · R bike · I/TAB inventory · M map · Q quests · J journal · drag to orbit camera · scroll zoom · P/ESC pause · N mute · gamepad: left stick move, right stick camera, RT run, A interact, B sneak, X fish, Y inventory, LB bike, Start pause',
+    touch: 'left thumb joystick moves (push far to run) · drag the right side to turn the camera · GRAB/TALK, SNEAK, FISH and JUMP buttons (plus BIKE once you own one) · pinch to zoom · tap the bag, map, quest and journal buttons · tap menus · works portrait and landscape on iPhone and iPad',
+    accent: '#ffb040'
+  },
+  {
     slug: 'apex-gp',
     title: 'APEX GRAND PRIX',
     tagline: 'Qualify, then race to the flag',
