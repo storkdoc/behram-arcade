@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'planet-guardian',
+    title: 'PLANET GUARDIAN',
+    tagline: 'Save the humanoids, save the planet',
+    description: 'A high-fidelity homage to the 1981 side-scrolling planet-defense coin-op. Patrol a wrapping world with a long-range scanner, reversing your ship in an instant and riding real inertia. Landers abduct the humanoids on the surface - one that reaches the top becomes a mutant - so shoot the abductor, catch the falling humanoid and fly it home for 1000. Lose them all and the planet explodes and every lander turns mutant; it is rebuilt every fifth wave. Bombers lay mines, pods burst into swarmers, baiters hunt you if you dawdle, and you have smart bombs and risky hyperspace. Parallax nebula, moon and mountains, a glowing lit ridge, voxel explosions, arcade start-wave select and a high score table. Two-player is online: one player starts a Two-Player Game, the buddy taps Join Two-Player Game in Progress - no code needed - and you defend separate planets, sending swarmer raids at your rival with every rescue and cleared wave.',
+    thumb: 'games/planet-guardian/thumb.png',
+    added: '2026-10-24',
+    genre: 'SHOOTER',
+    year: '1981 STYLE',
+    controls: 'up/down (W/S) move · left/right (A/D) thrust, opposite key flips instantly · SPACE fire · ENTER smart bomb · H or SHIFT hyperspace · P pause · M sound · gamepad stick + A fire, B bomb, X/Y hyper',
+    touch: 'left thumb joystick: up/down moves, left/right thrusts and reverses · FIRE button (hold to auto-fire) · BOMB and HYPER buttons · pause/sound buttons · tap menus · works portrait and landscape on iPhone and iPad · tap to host or join online',
+    accent: '#ff9a48'
+  },
+  {
     slug: 'star-invaders',
     title: 'STAR INVADERS',
     tagline: 'Hold the line, count your shots',
