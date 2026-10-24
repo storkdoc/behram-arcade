@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'star-invaders',
+    title: 'STAR INVADERS',
+    tagline: 'Hold the line, count your shots',
+    description: 'A high-fidelity homage to the 1978 alien-invasion coin-op. A 5 x 11 swarm of glossy voxel invaders marches to an accelerating four-note heartbeat - one alien steps per tick, so the rack speeds up as you thin it out. Shields erode crater by crater from both sides, varied bombs (rolling, plunger, squiggly), the mystery ship with the classic shot-count scoring (the 23rd shot scores 300), an extra base, waves that start lower, arcade start-wave select and a high score table - over a parallax starfield and planet horizon, with an optional red/green cellophane cabinet overlay. Two-player is online: one player starts a Two-Player Game, the buddy taps Join Two-Player Game in Progress - no code needed - and you race on separate fields, raiding your rival every time you clear a whole row.',
+    thumb: 'games/star-invaders/thumb.png',
+    added: '2026-10-24',
+    genre: 'SHOOTER',
+    year: '1978 STYLE',
+    controls: 'arrows/A-D move · SPACE fire · ENTER start/select · P pause · M sound · gamepad stick/d-pad + A',
+    touch: 'hold the left/right rocker or drag on the field to move · red FIRE button (hold to auto-fire, AUTO toggle beside it) · pause/sound buttons · tap menus · works portrait and landscape · tap to host or join online',
+    accent: '#5ff2ff'
+  },
+  {
     slug: 'trackball-football',
     title: 'TRACKBALL FOOTBALL',
     tagline: 'Roll the ball, feel the run',
