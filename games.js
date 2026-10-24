@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'apex-gp',
+    title: 'APEX GRAND PRIX',
+    tagline: 'Qualify, then race to the flag',
+    description: 'A true-3D homage to the 1982 Formula One coin-op. Drive one flying qualifying lap against the clock to earn your grid slot, then race 4 laps against 7 CPU cars. Checkpoints every half lap extend your time, and running out of time ends the race. A Fuji-style circuit with its long straight and snow-capped Mt. Fuji ahead, plus Seaside Circuit and Alpine Ring. Low and high gears, tyre squeal and skids, grass and gravel run-off, and billboards and rival cars that explode into fireballs before you respawn. WebGL2 HDR lighting, real-time shadows, lens flare, motion blur and bloom, a detailed chase-cam F1 car, a "Prepare to qualify" voice, a Web Audio engine that tracks RPM and gear, and lap, qualifying and high-score records. Choose a circuit and a difficulty. Two-player is online: one player hosts and the buddy taps Join Two-Player Game in Progress, with no code needed. You race head-to-head on the same grid, and your rival shows up as a yellow car.',
+    thumb: 'games/apex-gp/thumb.png',
+    added: '2026-10-24',
+    genre: 'RACING',
+    year: '1982 STYLE',
+    controls: 'left/right arrows steer · up arrow gas · down arrow brake · SPACE (or SHIFT) gear LO/HI · ENTER start · P/ESC pause · M sound · optional mouse steering (Pointer Lock: move = wheel, left button gas, right button brake) · gamepad stick steers, RT gas, LT brake, X/Y/LB/RB gear, Start pause',
+    touch: '◀ ▶ buttons steer (or drag on the left half) · big GAS button · BRAKE · GEAR (shows LO/HI) · optional TILT steering (tap TILT to allow motion) · hold GAS and steer with two fingers · pause/sound buttons · tap menus · best in landscape, portrait has a controls panel below the view · iPhone and iPad · tap to host or join online',
+    accent: '#ff3b2f'
+  },
+  {
     slug: 'astro-shatter',
     title: 'ASTRO SHATTER',
     tagline: 'Shatter the rocks, dodge the saucers',
