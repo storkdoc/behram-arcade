@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'astro-shatter',
+    title: 'ASTRO SHATTER',
+    tagline: 'Shatter the rocks, dodge the saucers',
+    description: 'A graphically advanced homage to the 1979 vector rock-blasting coin-op. Real-time 3D rocks, procedurally cratered and lit by a distant sun, tumble across a drifting nebula with a ringed planet. Pilot an inertial ship that wraps around the screen. Large rocks split into medium ones, medium into small. The big saucer fires at random, the small one aims, and it gets deadlier as your score climbs. Hyperspace is risky, the two-tone heartbeat speeds up as the wave goes on, and you earn an extra ship every 10,000 points. HDR bloom, 4x MSAA, shockwaves and debris, plus an optional Classic mode with glowing white vector outlines. Arcade start-wave select and a high score table with initials. Two-player is online: one player starts a Two-Player Game and the buddy taps Join Two-Player Game in Progress, with no code needed. You each fly your own field, and every 2nd large rock you break hurls a rock (or a small saucer) into your rival\'s field.',
+    thumb: 'games/astro-shatter/thumb.png',
+    added: '2026-10-24',
+    genre: 'SHOOTER',
+    year: '1979 STYLE',
+    controls: 'left/right arrows rotate · up arrow thrust · SPACE fire (one shot per press, max 4) · ENTER/SHIFT/down arrow hyperspace · P/ESC pause · M sound · arrows + ENTER in menus · gamepad stick/d-pad rotate, A fire, RT thrust, B hyperspace, Start pause',
+    touch: '◀ ▶ buttons rotate · THRUST button · red FIRE button (hold to auto-fire) · HYPER button · use several fingers at once · optional virtual stick steering in Options · pause/sound buttons · tap menus · works portrait and landscape on iPhone and iPad · tap to host or join online',
+    accent: '#7dd8ff'
+  },
+  {
     slug: 'sporewood',
     title: 'SPOREWOOD',
     tagline: 'Roll the ball, split the centipede',
