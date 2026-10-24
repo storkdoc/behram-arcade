@@ -8,9 +8,8 @@ const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug') && params.get('debug') !== '0';
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d', { alpha: false });
-const bc1 = document.createElement('canvas'), bx1 = bc1.getContext('2d');
-const bc2 = document.createElement('canvas'), bx2 = bc2.getContext('2d');
-const FILTER_OK = (() => { try { bx1.filter = 'blur(2px)'; const ok = bx1.filter === 'blur(2px)'; bx1.filter = 'none'; return ok; } catch (e) { return false; } })();
+const bx1 = document.createElement('canvas').getContext('2d');
+const FILTER_OK = new URLSearchParams(location.search).has('nofilter') ? false : (() => { try { bx1.filter = 'blur(2px)'; const ok = bx1.filter === 'blur(2px)'; bx1.filter = 'none'; return ok; } catch (e) { return false; } })();
 let W = 0, H = 0, DPR = 1, U = 1;
 
 const TAU = Math.PI * 2;
@@ -948,8 +947,9 @@ function updStars(dt) {
   starSpeed = lerp(starSpeed, target, Math.min(1, dt * 3));
   for (const s of stars) { s.pz = s.z; s.z -= starSpeed * dt; if (s.z < 0.3) { s.z = 30; s.pz = 30; s.x = rand(-8, 8); s.y = rand(-8, 8); } }
 }
+let starsPass = false;
 function drawStars() {
-  if (starSpeed < 0.05) return;
+  if (!starsPass || starSpeed < 0.05) return; // stars are drawn after the glow pass (no blotchy halos)
   const F = Math.min(W, H) * 0.6, cx = W / 2, cy = H / 2;
   const alpha = inGame() ? clamp(starSpeed / 6, 0, 1) : clamp(starSpeed / 4, 0.25, 1);
   ctx.lineWidth = Math.max(1, 1.3 * DPR);
@@ -1257,17 +1257,46 @@ function drawInitials() {
   text('↑ ↓ OR TYPE TO CHANGE   ENTER TO CONFIRM', W / 2, H * 0.76, U * 1.7, '#ffffff', 'center');
   text('RANK ' + (initials.rank + 1), W / 2, H * 0.83, U * 2, '#2bff4c', 'center');
 }
+// Glow. Built from a progressive half-size downsample chain (each step is an exact 2:1 box
+// filter, so thin lines never alias into dotted/ghosted copies), blurred at two small levels and
+// added back faintly. The full-resolution strokes are left untouched, so the crisp core stays on top.
+// Browsers without ctx.filter (Safari) get an equivalent multi-tap blur instead of unblurred
+// upscaled copies -- that fallback was what smeared and ghosted text on Safari.
+const mips = [];
+let glowA = null, glowB = null;
+function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); return { c, x, w, h }; }
+function buildMips(cssW) {
+  mips.length = 0; let w = W, h = H;
+  while (w > cssW / 3.5 && mips.length < 8) { w = Math.max(1, Math.round(w / 2)); h = Math.max(1, Math.round(h / 2)); mips.push(mkCanvas(w, h)); }
+  glowA = mips.find(m => m.w <= cssW * 0.6) || mips[mips.length - 1];   // ~css/2: tight halo
+  glowB = mips.find(m => m.w <= cssW * 0.3) || mips[mips.length - 1];  // ~css/4: soft ambient
+  glowA.tmp = mkCanvas(glowA.w, glowA.h); glowB.tmp = mkCanvas(glowB.w, glowB.h);
+}
+function blurLevel(m, px) {
+  if (FILTER_OK) {
+    m.tmp.x.globalCompositeOperation = 'copy'; m.tmp.x.filter = `blur(${px}px)`; m.tmp.x.drawImage(m.c, 0, 0); m.tmp.x.filter = 'none';
+    return m.tmp.c;
+  }
+  // separable-ish 5-tap blur, two passes (r=1 then r=2) ~ gaussian of similar radius
+  let src = m, dst = m.tmp;
+  // additive 9-tap kernel (centre + 4 axis + 4 diagonal), weights sum to 1, applied at growing radii
+  for (const r of px > 1.6 ? [1, 2, 3, 4] : [1, 1.5]) {
+    dst.x.globalCompositeOperation = 'copy'; dst.x.globalAlpha = 0.2; dst.x.drawImage(src.c, 0, 0);
+    dst.x.globalCompositeOperation = 'lighter';
+    dst.x.globalAlpha = 0.12; for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) dst.x.drawImage(src.c, dx, dy);
+    dst.x.globalAlpha = 0.08; for (const [dx, dy] of [[r, r], [-r, r], [r, -r], [-r, -r]]) dst.x.drawImage(src.c, dx, dy);
+    dst.x.globalAlpha = 1; dst.x.globalCompositeOperation = 'source-over'; const t = src; src = dst; dst = t;
+  }
+  return src.c;
+}
 function bloomPass() {
-  const w1 = bc1.width, h1 = bc1.height, w2 = bc2.width, h2 = bc2.height;
-  bx1.globalCompositeOperation = 'copy'; if (FILTER_OK) bx1.filter = 'blur(2.1px)';
-  bx1.drawImage(canvas, 0, 0, w1, h1); bx1.filter = 'none';
-  bx2.globalCompositeOperation = 'copy'; if (FILTER_OK) bx2.filter = 'blur(3px)';
-  bx2.drawImage(bc1, 0, 0, w2, h2); bx2.filter = 'none';
+  if (!mips.length) return;
+  let prev = canvas;
+  for (const m of mips) { m.x.globalCompositeOperation = 'copy'; m.x.imageSmoothingEnabled = true; m.x.drawImage(prev, 0, 0, m.w, m.h); prev = m.c; }
+  const a = blurLevel(glowA, 1.4), b = blurLevel(glowB, 4);
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.imageSmoothingEnabled = true;
-  ctx.globalAlpha = 1; ctx.drawImage(bc1, 0, 0, W, H);
-  ctx.globalAlpha = 0.55; ctx.drawImage(bc1, 0, 0, W, H);
-  ctx.globalAlpha = 1; ctx.drawImage(bc2, 0, 0, W, H);
-  ctx.globalAlpha = 0.7; ctx.drawImage(bc2, 0, 0, W, H);
+  ctx.globalAlpha = 0.95; ctx.drawImage(a, 0, 0, W, H);
+  ctx.globalAlpha = 1; ctx.drawImage(b, 0, 0, W, H);
   ctx.restore();
 }
 function render() {
@@ -1292,6 +1321,7 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (flash > 0) { ctx.fillStyle = flashColor; ctx.globalAlpha = flash * 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   bloomPass();
+  if (!paused) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; starsPass = true; drawStars(); starsPass = false; ctx.restore(); }
 }
 
 /* ============================== loop ============================== */
@@ -1303,13 +1333,14 @@ let SS = SS_FIXED || 2, slowT = 0, fastT = 0;
 const MAX_PIX = 9.4e6;
 function resize() {
   const cw = Math.max(1, innerWidth), ch = Math.max(1, innerHeight), dpr = window.devicePixelRatio || 1;
-  let s = dpr * SS; s = Math.min(s, Math.sqrt(MAX_PIX / (cw * ch))); s = Math.max(s, Math.min(dpr, 1));
+  // never below native device resolution (dpr capped at 3); the pixel cap only limits supersampling
+  const nat = Math.min(Math.max(dpr, 1), 3);
+  let s = nat * SS; s = Math.min(s, Math.sqrt(MAX_PIX / (cw * ch))); s = Math.max(s, nat);
   DPR = s;
   W = Math.max(1, Math.round(cw * s)); H = Math.max(1, Math.round(ch * s));
   canvas.width = W; canvas.height = H;
   // glow buffers sized from CSS pixels so the bloom looks the same at any internal resolution
-  bc1.width = Math.max(1, Math.round(cw / 3)); bc1.height = Math.max(1, Math.round(ch / 3));
-  bc2.width = Math.max(1, Math.round(cw / 6)); bc2.height = Math.max(1, Math.round(ch / 6));
+  buildMips(cw);
   U = Math.min(W, H) / 100;
   if (inGame() || state === 'gameover') view = computeView(web);
 }
@@ -1321,7 +1352,8 @@ function frame(now) {
   pollPad();
   Music.update(dt);
   if (!SS_FIXED && !document.hidden && dt > 0) {
-    if (fps < 50 && SS > 1) { slowT += dt; if (slowT > 1.5) { SS = Math.max(1, SS - 0.5); resize(); slowT = 0; fps = 60; } } else slowT = 0;
+    // only step down for sustained slowness (fps < 45 for 3 s of real, non-hitch frames); never below native res
+    if (fps < 45 && SS > 1 && dt < 0.09) { slowT += dt; if (slowT > 3) { SS = Math.max(1, SS - 0.5); resize(); slowT = 0; fps = 60; } } else slowT = Math.max(0, slowT - dt * 2);
   }
   if (!paused && !window.__freeze) { let rem = dt; while (rem > 1e-6) { const h = Math.min(rem, 1 / 120); update(h); rem -= h; } }
   render();
@@ -1342,6 +1374,7 @@ window.VORTEX = {
   setLives(v) { lives = v; },
   addScore(v) { addScore(v); },
   freeze(v) { window.__freeze = !!v; },
+  attractMode(m) { attract.mode = m; attract.modeT = 0; },
   gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); },
 };
 })();
