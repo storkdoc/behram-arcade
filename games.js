@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'atari-football',
+    title: 'ATARI FOOTBALL',
+    tagline: '7-on-7 pixel gridiron',
+    description: 'Call hidden plays from a 12-play offense and 6-play defense, then take control of one highlighted player as the play runs live. Throws, catches, jukes, dive tackles, punts, field goals and kickoffs. Play the CPU, a buddy on the same keyboard, or a buddy online with a 5-letter room code.',
+    thumb: 'games/atari-football/thumb.png',
+    added: '2026-10-24',
+    genre: 'SPORTS',
+    year: '1982 STYLE',
+    controls: 'arrows/WASD move · SPACE action (pass/tackle/kick) · SHIFT cycle player/target · ESC pause',
+    touch: 'joystick (left) · A action · B cycle · tap plays to call them',
+    accent: '#ffd23c'
+  },
+  {
     slug: 'tube-shooter',            // folder name under games/
     title: 'VORTEX',
     tagline: 'Vector tube shooter',
