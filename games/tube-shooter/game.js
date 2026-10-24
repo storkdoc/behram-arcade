@@ -294,6 +294,122 @@ const Sound = {
   }
 };
 
+
+/* ============================== music ==============================
+   Procedural chiptune / synthwave. Each level gets its own track (16 styles per
+   16-level cycle, transposed + faster in later cycles). Low volume, routed through
+   Sound.out so M mutes it too. Look-ahead scheduler for sample-accurate loops. */
+const Music = {
+  VOL: 0.26, bus: null, track: null, pending: null, step: 0, nextT: 0, timer: null, level: 0, cur: 0, offFor: 0,
+  PROGS: [
+    [[0, 0], [8, 1], [3, 1], [10, 1]], [[0, 0], [5, 0], [10, 1], [3, 1]], [[0, 0], [10, 1], [8, 1], [7, 1]], [[0, 0], [3, 1], [5, 0], [8, 1]],
+    [[0, 0], [0, 0], [8, 1], [10, 1]], [[0, 0], [7, 0], [8, 1], [5, 0]], [[0, 0], [8, 1], [5, 0], [7, 1]], [[0, 0], [1, 1], [0, 0], [10, 1]],
+  ],
+  BASS: [
+    [0, null, 0, null, 0, null, 0, null, 0, null, 0, null, 0, null, 12, null],
+    [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 12, 0, 12],
+    [0, null, null, 0, null, null, 0, null, 0, null, null, 0, null, 12, null, null],
+    [0, null, 7, null, 12, null, 7, null, 0, null, 7, null, 12, 10, 7, null],
+  ],
+  ARPS: [
+    [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
+    [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1],
+    [0, 2, 1, 3, 2, 4, 3, 5, 0, 2, 1, 3, 2, 4, 3, 5],
+    [4, 2, 0, 2, 4, 2, 0, 2, 5, 3, 1, 3, 5, 3, 1, 3],
+  ],
+  DRUMS: [ // k = kick, s = snare, h = hat, o = open hat
+    'k.h.s.h.k.h.s.hh', 'k.hhs.hkk.hhs.ho', 'k..hs..hk.k.s..h', 'k.h.k.h.s.h.k.ho',
+  ],
+  ensure() {
+    const ac = Sound.ac; if (!ac) return false;
+    if (!this.bus) {
+      this.bus = ac.createGain(); this.bus.gain.value = 0;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000;
+      this.bus.connect(lp); lp.connect(Sound.out);
+      // echo send for the arpeggio
+      this.dly = ac.createDelay(1); this.fb = ac.createGain(); this.fb.gain.value = 0.32; this.send = ac.createGain(); this.send.gain.value = 0.5;
+      this.send.connect(this.dly); this.dly.connect(this.fb); this.fb.connect(this.dly); this.dly.connect(this.bus);
+    }
+    return true;
+  },
+  makeTrack(L) {
+    const i = (L - 1) % 16, cyc = Math.floor((L - 1) / 16);
+    let seed = 1234 + i * 7919 + cyc * 104729; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const bpm = Math.min(152, 112 + (i % 4) * 6 + (i >> 3) * 4 + cyc * 4);
+    const root = 45 + [0, 5, -2, 3, 7, -4, 2, -5][i % 8] + (cyc % 3) * 2;
+    const scale = [0, 3, 5, 7, 10];
+    const lead = []; for (let k = 0; k < 64; k++) lead.push(k % 2 === 0 && rnd() < 0.55 ? scale[Math.floor(rnd() * 5)] + 12 * (rnd() < 0.3 ? 2 : 1) : null);
+    return {
+      L, bpm, root, s16: 60 / bpm / 4,
+      prog: this.PROGS[i % 8], bass: this.BASS[(i + (i >> 3)) % 4], arp: this.ARPS[(i * 3 + cyc) % 4], drum: this.DRUMS[(i >> 1) % 4],
+      bassWave: ['sawtooth', 'square', 'sawtooth', 'triangle'][i % 4], arpWave: i % 2 ? 'square' : 'sawtooth', lead, leadOn: i % 3 !== 1,
+    };
+  },
+  play(L) {
+    if (!this.ensure()) { this.level = L; return; }
+    this.level = L; const t = this.makeTrack(L);
+    if (!this.timer) { this.track = t; this.step = 0; this.nextT = Sound.ac.currentTime + 0.08; this.timer = setInterval(() => this.tick(), 25); }
+    else this.pending = t;
+  },
+  // called every frame: decide target loudness from game state
+  update(dt) {
+    let want = 0;
+    if (!paused) { if (state === 'zoom' || state === 'play') want = 1; else if (state === 'dying') want = 0.3; else if (state === 'warp') want = 0; }
+    if (want > 0 && !this.timer && Sound.ac && this.level) this.play(this.level);
+    if (this.bus && want !== this.cur) { this.cur = want; this.bus.gain.setTargetAtTime(want * this.VOL, Sound.ac.currentTime, want > 0 ? 0.35 : 0.25); }
+    if (want === 0) { this.offFor += dt; if (this.offFor > 2 && this.timer) { clearInterval(this.timer); this.timer = null; } } else this.offFor = 0;
+  },
+  tick() {
+    const ac = Sound.ac; if (!ac || !this.track) return;
+    if (this.nextT < ac.currentTime - 0.05) this.nextT = ac.currentTime + 0.05; // recover after throttling
+    while (this.nextT < ac.currentTime + 0.14) {
+      if (this.pending && this.step % 16 === 0) { this.track = this.pending; this.pending = null; this.step = 0; }
+      if (this.pending && this.cur === 0) { this.track = this.pending; this.pending = null; this.step = 0; }
+      this.sched(this.track, this.step, this.nextT);
+      this.nextT += this.track.s16; this.step = (this.step + 1) % 128;
+    }
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  voice(type, f, t, dur, vol, { cut = 0, cutEnd = 0, q = 1, att = 0.004, dest = null, det = 0 } = {}) {
+    const ac = Sound.ac, o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; if (det) o.detune.value = det;
+    let n = o;
+    if (cut) { const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.Q.value = q; fl.frequency.setValueAtTime(cut, t); if (cutEnd) fl.frequency.exponentialRampToValueAtTime(cutEnd, t + dur); o.connect(fl); n = fl; }
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(g); g.connect(dest || this.bus); o.start(t); o.stop(t + dur + 0.05);
+    return g;
+  },
+  hit(t, dur, vol, type, f, q) {
+    const ac = Sound.ac, s = ac.createBufferSource(); s.buffer = Sound.noiseBuf;
+    const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(fl); fl.connect(g); g.connect(this.bus); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  },
+  sched(tr, step, t) {
+    const bar = Math.floor(step / 16) % 4, s = step % 16, loop = Math.floor(step / 64);
+    const [cr, minor] = [tr.prog[bar][0], tr.prog[bar][1] === 0];
+    const chordRoot = tr.root + cr, tones = [0, minor ? 3 : 4, 7, 12, minor ? 15 : 16, 19];
+    const S = tr.s16;
+    // pad: once per bar, soft detuned saws
+    if (s === 0) for (const iv of [12, 12 + tones[1], 19]) for (const dt of [-9, 9]) this.voice('sawtooth', this.hz(chordRoot + iv), t, S * 16 * 0.98, 0.018, { cut: 1400, cutEnd: 700, att: S * 3, det: dt });
+    // bass
+    const b = tr.bass[s]; if (b != null) this.voice(tr.bassWave, this.hz(chordRoot - 12 + b), t, S * 0.95, 0.2, { cut: 1600, cutEnd: 220, q: 6 });
+    // arpeggio (with echo)
+    const a = tr.arp[s]; if (a != null && (loop > 0 || bar > 0 || s >= 8)) {
+      const g = this.voice(tr.arpWave, this.hz(chordRoot + 12 + tones[a]), t, S * 0.9, 0.05, { cut: 3200, cutEnd: 900, q: 3 }); g.connect(this.send);
+    }
+    // lead melody every other loop half
+    if (tr.leadOn && (loop % 2 === 1)) { const n = tr.lead[step % 64]; if (n != null) this.voice('triangle', this.hz(tr.root + 12 + n), t, S * 1.8, 0.07, { att: 0.01 }); }
+    // drums
+    const d = tr.drum[s];
+    if (d === 'k') { const ac = Sound.ac, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22); o.connect(g); g.connect(this.bus); o.start(t); o.stop(t + 0.25); }
+    else if (d === 's') { this.hit(t, 0.14, 0.13, 'bandpass', 1900, 0.9); this.voice('triangle', 200, t, 0.08, 0.06); }
+    else if (d === 'h') this.hit(t, 0.03, 0.045, 'highpass', 8000, 0.7);
+    else if (d === 'o') this.hit(t, 0.16, 0.04, 'highpass', 7000, 0.7);
+    if (s % 4 === 2 && d === '.') this.hit(t, 0.025, 0.022, 'highpass', 9000, 0.7);
+  },
+};
+
 /* ============================== input ============================== */
 const keys = {};
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace']);
@@ -314,7 +430,7 @@ function pollPad() {
   if (!g) return;
   const b = i => g.buttons[i] && g.buttons[i].pressed;
   const ax = g.axes[0] || 0;
-  const map = { ArrowLeft: ax < -0.5 || b(14), ArrowRight: ax > 0.5 || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), KeyZ: b(0) || b(7), Space: b(1) || b(2) || b(6), Enter: b(9), KeyP: b(8) };
+  const map = { ArrowLeft: ax < -0.5 || b(14), ArrowRight: ax > 0.5 || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), Space: b(0) || b(7), Enter: b(1) || b(2) || b(6) || b(9), KeyP: b(8) };
   for (const k in map) { const v = !!map[k]; if (v !== !!pad.prev[k]) { keys[k] = v; if (v) { Sound.init(); onPress(k); } } pad.prev[k] = v; }
 }
 
@@ -324,10 +440,10 @@ let score = 0, lives = 3, level = 1, nextLife = 20000, bonusPending = 0, startLe
 let hiscores = store.get('hiscores', null);
 if (!Array.isArray(hiscores)) hiscores = [['VTX', 50000, 20], ['ACE', 40000, 17], ['NEO', 30000, 13], ['ZAP', 25000, 11], ['ARC', 20000, 9], ['CRT', 15000, 7], ['PIX', 10000, 5], ['BIT', 8000, 4], ['SYN', 6000, 3], ['RAD', 5000, 2]];
 let bestLevel = store.get('bestLevel', 1);
-const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0 };
+const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0 };
 let enemies = [], pool = [], eshots = [], pshots = [], fx = [], msgs = [], spikes = [];
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
-let autofire = store.get('autofire', true), invincible = false;
+let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
 let zoom = null, warp = null, death = null, eid = 0;
 let move = { dir: 0, hold: 0, rep: 0 };
 let attract = { t: 0, web: 0, mode: 0, modeT: 0 };
@@ -394,6 +510,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 
 /* ============================== flow ============================== */
 function startGame() {
+  fireLock = true;
   score = 0; lives = 3; nextLife = 20000; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
   Sound.play('start');
@@ -403,7 +520,8 @@ function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
   enemies = []; eshots = []; pshots = []; zapUses = 0; zap.active = false; rot = 0;
-  player.lane = web.start; player.vis = web.start; player.z = 0; player.alive = true;
+  player.lane = web.start; player.vis = web.start; player.z = 0; player.alive = true; player.sub = 0; player.lean = 0;
+  Music.play(L);
   if (L > bestLevel) { bestLevel = L; store.set('bestLevel', L); }
   beginZoom(-18, 1.5, true);
   msg('LEVEL ' + L, 2.2, 0.5, '#fff', 5.5);
@@ -438,7 +556,7 @@ function finishDeath() {
   // remaining enemies return to the far end
   for (const e of enemies) pool.unshift(e.type === 'tanker' ? { type: 'tanker', cargo: e.cargo } : { type: e.type === 'spiker' ? 'spiker' : e.type });
   enemies = []; eshots = []; pshots = [];
-  player.alive = true; player.z = 0; player.lane = Math.round(player.vis) % web.n; player.vis = player.lane;
+  player.alive = true; player.z = 0; player.lane = Math.round(player.vis) % web.n; player.vis = player.lane; player.sub = 0; player.lean = 0;
   beginZoom(-7, 0.9, false);
 }
 function qualifies(s) { return s > 0 && (hiscores.length < 10 || s > hiscores[hiscores.length - 1][1]); }
@@ -447,7 +565,7 @@ function qualifies(s) { return s > 0 && (hiscores.length < 10 || s > hiscores[hi
 const INITIAL_SET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ .-'.split('');
 function onPress(k) {
   if (k === 'KeyM') { Sound.toggle(); return; }
-  if (k === 'KeyF' && inGame()) { autofire = !autofire; store.set('autofire', autofire); msg(autofire ? 'AUTOFIRE ON' : 'AUTOFIRE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
+  if (k === 'KeyF' && inGame()) { autofire = !autofire; store.set('autofire2', autofire); msg(autofire ? 'AUTOFIRE ON' : 'AUTOFIRE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
   const confirm = k === 'Enter' || k === 'NumpadEnter';
   if (DEBUG && inGame()) {
     if (k === 'KeyN') { pool = []; enemies = []; eshots = []; if (state === 'play') startWarp(); return; }
@@ -468,8 +586,8 @@ function onPress(k) {
       break;
     case 'zoom': case 'play': case 'warp': case 'dying':
       if (k === 'KeyP' || k === 'Escape') { paused = !paused; return; }
-      if (paused) { if (confirm) paused = false; return; }
-      if (k === 'Space' && state === 'play') superzap();
+      if (paused) { if (confirm || k === 'Space') paused = false; return; }
+      if (confirm && state === 'play') superzap();
       break;
     case 'gameover':
       if (gameOverT > 1.2 && (confirm || k === 'Space')) endGameOver();
@@ -508,14 +626,22 @@ function verticalDir(sign) {
 }
 function handleMove(dt) {
   let d = 0;
-  if (keys.ArrowLeft && !keys.ArrowRight) d = -1; else if (keys.ArrowRight && !keys.ArrowLeft) d = 1;
-  else if (keys.ArrowUp) d = verticalDir(-1) * 2; else if (keys.ArrowDown) d = verticalDir(1) * 2;
-  const step = dd => { const nl = player.lane + dd; if (web.closed) player.lane = wrapLane(nl); else player.lane = clamp(nl, 0, web.n - 1); };
+  // arrow sense reversed (v2): Left moves toward higher lane index, Right toward lower
+  if (keys.ArrowLeft && !keys.ArrowRight) d = 1; else if (keys.ArrowRight && !keys.ArrowLeft) d = -1;
+  else if (keys.ArrowUp) d = -verticalDir(-1) * 2; else if (keys.ArrowDown) d = -verticalDir(1) * 2;
+  // three claw positions per lane: sub -1 (edge), 0 (center), +1 (edge); crossing a rail lands on the next lane's near edge
+  const step = dd => {
+    const ns = player.sub + dd;
+    if (ns >= -1 && ns <= 1) { player.sub = ns; return; }
+    const nl = player.lane + dd;
+    if (!web.closed && (nl < 0 || nl >= web.n)) return;
+    player.lane = web.closed ? wrapLane(nl) : nl; player.sub = -dd;
+  };
   const sd = sgn(d);
   if (!sd) { move.dir = 0; return; }
-  if (d !== move.dir) { step(sd); move.dir = d; move.hold = 0; move.rep = 0.17; return; }
+  if (d !== move.dir) { step(sd); move.dir = d; move.hold = 0; move.rep = 0.14; return; }
   move.hold += dt; move.rep -= dt;
-  if (move.rep <= 0) { step(sd); move.rep = move.hold > 0.45 ? 0.048 : 0.075; }
+  if (move.rep <= 0) { step(sd); move.rep = move.hold > 0.45 ? 0.017 : 0.027; }
 }
 function updateVis(dt) {
   let diff = player.lane - player.vis;
@@ -523,10 +649,14 @@ function updateVis(dt) {
   const st = 24 * dt;
   player.vis += Math.abs(diff) <= st ? diff : sgn(diff) * st;
   if (web.closed) player.vis = ((player.vis % web.n) + web.n) % web.n;
+  // lean follows sub-position; while crossing a rail it swings from one edge to the other
+  const ld = player.sub - player.lean, ls = (Math.abs(ld) > 1.01 ? 48 : 36) * dt;
+  player.lean += Math.abs(ld) <= ls ? ld : sgn(ld) * ls;
 }
 function handleFire(dt) {
   player.fireCd -= dt;
-  const manual = keys.KeyZ || keys.KeyX || keys.ControlLeft || keys.ControlRight;
+  let manual = keys.Space || keys.KeyZ || keys.KeyX || keys.ControlLeft || keys.ControlRight;
+  if (fireLock) { if (!manual) fireLock = false; manual = false; }
   if ((autofire || manual) && player.fireCd <= 0 && pshots.length < 8) {
     pshots.push({ lane: player.lane, z: player.z, pz: player.z });
     player.fireCd = manual ? 0.072 : 0.12;
@@ -829,13 +959,13 @@ function drawStars() {
     for (let i = g; i < stars.length; i += 3) {
       const s = stars[i]; const z1 = s.z, z0 = Math.min(30, s.z + Math.max(0.05, starSpeed * 0.035));
       const x1 = cx + s.x * F / z1, y1 = cy + s.y * F / z1, x0 = cx + s.x * F / z0, y0 = cy + s.y * F / z0;
-      ctx.moveTo(x0, y0); ctx.lineTo(x1 + 0.6, y1);
+      ctx.moveTo(x0, y0); ctx.lineTo(x1 + 0.6 * DPR, y1);
     }
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
-function LW(m = 1) { return Math.max(1.2, U * 0.24 * m); }
+function LW(m = 1) { return Math.max(DPR * 0.9, U * 0.19 * m); }
 
 function drawWeb(color, laneColor, highlight = true) {
   const p = web.pts, n = web.n, segs = web.closed ? n : n;
@@ -885,7 +1015,7 @@ function drawSpikes() {
   }
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  for (const [m, zw] of tips) { const p = proj(m[0], m[1], zw); if (p) { const r = Math.max(1.5, scaleAt(zw) * 0.018); ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2); } }
+  for (const [m, zw] of tips) { const p = proj(m[0], m[1], zw); if (p) { const r = Math.max(1.5 * DPR, scaleAt(zw) * 0.018); ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2); } }
 }
 const FLIPPER = [[0, -0.032], [1, 0.032], [1, -0.032], [0, 0.032]];
 const FLIPPER_IN = [[0.2, 0], [0.5, -0.016], [0.8, 0], [0.5, 0.016]];
@@ -950,7 +1080,7 @@ function drawShots() {
     for (let k = 0; k < 4; k++) { const a = s.spin + k * TAU / 4; ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + Math.cos(a) * R, p[1] + Math.sin(a) * R); }
     ctx.stroke();
     ctx.fillStyle = '#ff6af0';
-    for (let k = 0; k < 4; k++) { const a = s.spin + (k + 0.5) * TAU / 4; ctx.fillRect(p[0] + Math.cos(a) * R * 0.8 - 1.5, p[1] + Math.sin(a) * R * 0.8 - 1.5, 3, 3); }
+    for (let k = 0; k < 4; k++) { const a = s.spin + (k + 0.5) * TAU / 4; ctx.fillRect(p[0] + Math.cos(a) * R * 0.8 - 1.5 * DPR, p[1] + Math.sin(a) * R * 0.8 - 1.5 * DPR, 3 * DPR, 3 * DPR); }
   }
   // player shots
   ctx.strokeStyle = pal.shot; ctx.fillStyle = '#ffffff';
@@ -961,20 +1091,23 @@ function drawShots() {
     ctx.moveTo(p[0], p[1] - R); ctx.lineTo(p[0] + R, p[1]); ctx.lineTo(p[0], p[1] + R); ctx.lineTo(p[0] - R, p[1]); ctx.closePath();
   }
   ctx.stroke();
-  for (const s of pshots) { const m = laneMid(s.lane), p = proj(m[0], m[1], s.z * LL); if (p) ctx.fillRect(p[0] - 1.2, p[1] - 1.2, 2.4, 2.4); }
+  for (const s of pshots) { const m = laneMid(s.lane), p = proj(m[0], m[1], s.z * LL); if (p) ctx.fillRect(p[0] - 1.2 * DPR, p[1] - 1.2 * DPR, 2.4 * DPR, 2.4 * DPR); }
 }
-function clawPoints(f, zw) {
+function clawPoints(f, zw, lean = 0) {
   const E0 = railF(f), E1 = railF(f + 1), n = inwardF(f + 0.5 - 0.5);
   const len = Math.hypot(E1[0] - E0[0], E1[1] - E0[1]);
   const out = [];
-  for (const [u, w] of CLAW) {
+  for (const [u0, w0] of CLAW) {
+    // lean: slide the claw's peak toward one rail and tilt it (taller on the leaning side)
+    const u = clamp(u0 + lean * (0.04 + 0.19 * w0 / 0.44) * (1 - Math.abs(u0 - 0.5) * 0.9), 0, 1);
+    const w = w0 * (1 + lean * (u0 - 0.5) * 0.5);
     const x = E0[0] + (E1[0] - E0[0]) * u + n[0] * w * len, y = E0[1] + (E1[1] - E0[1]) * u + n[1] * w * len;
     const p = proj(x, y, zw + w * 0.22); if (!p) return null; out.push(p);
   }
   return out;
 }
 function drawClaw() {
-  const pts = clawPoints(player.vis, player.z * LL); if (!pts) return;
+  const pts = clawPoints(player.vis, player.z * LL, player.lean); if (!pts) return;
   ctx.strokeStyle = pal.claw; ctx.lineWidth = LW(1.35);
   ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
   ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[7][0], pts[7][1]); ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[6][0], pts[6][1]);
@@ -1057,7 +1190,7 @@ function drawAttract() {
   drawTitleLogo(H * 0.12, size);
   text('A VECTOR TUBE SHOOTER', W / 2, H * 0.12 + size * 1.25, U * 1.9, '#ffe81a', 'center');
   if (attract.mode === 0) {
-    const rows = [['← →', 'MOVE CLAW AROUND RIM'], ['↑ ↓', 'MOVE TOWARD TOP / BOTTOM'], ['SPACE', 'SUPERZAPPER'], ['Z / CTRL', 'RAPID FIRE  (AUTOFIRE ON)'], ['F', 'TOGGLE AUTOFIRE'], ['P', 'PAUSE'], ['M', 'SOUND ON / OFF'], ['ENTER', 'START / CONFIRM']];
+    const rows = [['← →', 'MOVE CLAW AROUND RIM'], ['↑ ↓', 'MOVE TOWARD TOP / BOTTOM'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER'], ['Z / CTRL', 'ALTERNATE FIRE'], ['F', 'TOGGLE AUTOFIRE  (OFF)'], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF']];
     const top = H * 0.44, lh = U * 3.6, cs = U * 1.9;
     text('CONTROLS', W / 2, top - lh * 1.4, U * 2.4, '#36e6ff', 'center');
     rows.forEach(([k, d], i) => { text(k, W / 2 - U * 2, top + i * lh, cs, '#ffe81a', 'right'); text(d, W / 2 + U * 2, top + i * lh, cs, '#ffffff', 'left'); });
@@ -1072,14 +1205,14 @@ function drawAttract() {
       text('L' + h[2], W / 2 + U * 17, top + i * lh, cs * 0.8, '#7fa0ff', 'right');
     });
   }
-  if (Math.floor(T * 2) % 2 === 0) text('PRESS ENTER TO START', W / 2, H * 0.9, U * 2.8, '#ff47e6', 'center');
+  if (Math.floor(T * 2) % 2 === 0) text('PRESS SPACE OR ENTER TO START', W / 2, H * 0.9, U * 2.8, '#ff47e6', 'center');
   text('(C) 2026 BEHRAM ARCADE', W / 2, H * 0.955, U * 1.3, '#6a78c0', 'center');
   if (Sound.muted) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
 }
 function drawSelect() {
   drawStars();
   text('RATE YOURSELF', W / 2, H * 0.1, U * 5, '#ff2a2a', 'center');
-  text('← → TO CHOOSE A STARTING LEVEL   ENTER TO START', W / 2, H * 0.1 + U * 7.5, U * 1.6, '#36e6ff', 'center');
+  text('← → TO CHOOSE A STARTING LEVEL   SPACE / ENTER TO START', W / 2, H * 0.1 + U * 7.5, U * 1.6, '#36e6ff', 'center');
   const vis = 5, half = 2;
   let first = clamp(select.idx - half, 0, LADDER.length - vis);
   const bw = Math.min(U * 18, W * 0.17), gap = bw * 0.12, total = vis * bw + (vis - 1) * gap;
@@ -1126,14 +1259,15 @@ function drawInitials() {
 }
 function bloomPass() {
   const w1 = bc1.width, h1 = bc1.height, w2 = bc2.width, h2 = bc2.height;
-  bx1.globalCompositeOperation = 'copy'; if (FILTER_OK) bx1.filter = 'blur(1.6px)';
+  bx1.globalCompositeOperation = 'copy'; if (FILTER_OK) bx1.filter = 'blur(2.1px)';
   bx1.drawImage(canvas, 0, 0, w1, h1); bx1.filter = 'none';
-  bx2.globalCompositeOperation = 'copy'; if (FILTER_OK) bx2.filter = 'blur(2.5px)';
+  bx2.globalCompositeOperation = 'copy'; if (FILTER_OK) bx2.filter = 'blur(3px)';
   bx2.drawImage(bc1, 0, 0, w2, h2); bx2.filter = 'none';
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.imageSmoothingEnabled = true;
   ctx.globalAlpha = 1; ctx.drawImage(bc1, 0, 0, W, H);
-  ctx.drawImage(bc2, 0, 0, W, H);
-  ctx.globalAlpha = 0.6; ctx.drawImage(bc2, 0, 0, W, H);
+  ctx.globalAlpha = 0.55; ctx.drawImage(bc1, 0, 0, W, H);
+  ctx.globalAlpha = 1; ctx.drawImage(bc2, 0, 0, W, H);
+  ctx.globalAlpha = 0.7; ctx.drawImage(bc2, 0, 0, W, H);
   ctx.restore();
 }
 function render() {
@@ -1161,12 +1295,21 @@ function render() {
 }
 
 /* ============================== loop ============================== */
+// Rendering resolution: full devicePixelRatio x supersampling (default 2x), capped at
+// ~9.4 MP for performance; the browser downsamples the canvas for anti-aliased, crisp lines.
+// Adaptive: if the frame rate sags the supersample factor steps down. ?ss=1..3 overrides.
+const SS_FIXED = parseFloat(params.get('ss')) || 0;
+let SS = SS_FIXED || 2, slowT = 0, fastT = 0;
+const MAX_PIX = 9.4e6;
 function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
-  W = Math.max(1, Math.floor(innerWidth * DPR)); H = Math.max(1, Math.floor(innerHeight * DPR));
+  const cw = Math.max(1, innerWidth), ch = Math.max(1, innerHeight), dpr = window.devicePixelRatio || 1;
+  let s = dpr * SS; s = Math.min(s, Math.sqrt(MAX_PIX / (cw * ch))); s = Math.max(s, Math.min(dpr, 1));
+  DPR = s;
+  W = Math.max(1, Math.round(cw * s)); H = Math.max(1, Math.round(ch * s));
   canvas.width = W; canvas.height = H;
-  bc1.width = Math.max(1, W >> 2); bc1.height = Math.max(1, H >> 2);
-  bc2.width = Math.max(1, W >> 3); bc2.height = Math.max(1, H >> 3);
+  // glow buffers sized from CSS pixels so the bloom looks the same at any internal resolution
+  bc1.width = Math.max(1, Math.round(cw / 3)); bc1.height = Math.max(1, Math.round(ch / 3));
+  bc2.width = Math.max(1, Math.round(cw / 6)); bc2.height = Math.max(1, Math.round(ch / 6));
   U = Math.min(W, H) / 100;
   if (inGame() || state === 'gameover') view = computeView(web);
 }
@@ -1176,6 +1319,10 @@ let last = performance.now(), fps = 60;
 function frame(now) {
   let dt = (now - last) / 1000; last = now; if (dt > 0.1) dt = 0.1; if (dt > 0) fps = lerp(fps, 1 / dt, 0.05);
   pollPad();
+  Music.update(dt);
+  if (!SS_FIXED && !document.hidden && dt > 0) {
+    if (fps < 50 && SS > 1) { slowT += dt; if (slowT > 1.5) { SS = Math.max(1, SS - 0.5); resize(); slowT = 0; fps = 60; } } else slowT = 0;
+  }
   if (!paused && !window.__freeze) { let rem = dt; while (rem > 1e-6) { const h = Math.min(rem, 1 / 120); update(h); rem -= h; } }
   render();
   if (DEBUG) text(Math.round(fps) + ' FPS', W - U * 2, H - U * 6, U * 1.3, '#0f0', 'right');
@@ -1185,7 +1332,7 @@ requestAnimationFrame(frame);
 
 // hooks for automated testing / debugging
 window.VORTEX = {
-  get state() { return { state, paused, level, score, lives, zapUses, enemies: enemies.length, pool: pool.length, spikes: spikes.slice(), web: web.name, lane: player.lane, pz: player.z, camZ }; },
+  get state() { return { ss: SS, res: W + 'x' + H, sub: player.sub, lean: player.lean, music: Music.track ? Music.track.L : 0, musicOn: !!Music.timer, state, paused, level, score, lives, zapUses, enemies: enemies.length, pool: pool.length, spikes: spikes.slice(), web: web.name, lane: player.lane, pz: player.z, camZ }; },
   debug: DEBUG,
   setInvincible(v) { invincible = !!v; },
   clearLevel() { pool = []; enemies = []; eshots = []; if (state === 'play') startWarp(); },
