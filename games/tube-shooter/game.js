@@ -439,7 +439,7 @@ let score = 0, lives = 3, level = 1, nextLife = 20000, bonusPending = 0, startLe
 let hiscores = store.get('hiscores', null);
 if (!Array.isArray(hiscores)) hiscores = [['VTX', 50000, 20], ['ACE', 40000, 17], ['NEO', 30000, 13], ['ZAP', 25000, 11], ['ARC', 20000, 9], ['CRT', 15000, 7], ['PIX', 10000, 5], ['BIT', 8000, 4], ['SYN', 6000, 3], ['RAD', 5000, 2]];
 let bestLevel = store.get('bestLevel', 1);
-const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0 };
+const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0, heat: 0, overheat: false };
 let enemies = [], pool = [], eshots = [], pshots = [], fx = [], msgs = [], spikes = [];
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
 let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
@@ -454,43 +454,49 @@ const inGame = () => ['zoom', 'play', 'warp', 'dying'].includes(state);
 // arcade starting-level ladder and bonus values
 const LADDER = [[1, 0], [3, 6000], [5, 16000], [7, 32000], [9, 54000], [11, 74000], [13, 94000], [15, 114000], [17, 134000], [20, 152000], [22, 170000], [24, 188000], [26, 208000], [28, 228000], [31, 248000], [33, 266000], [36, 284000], [38, 302000], [40, 320000], [42, 340000], [44, 360000], [47, 380000], [49, 400000], [52, 422000], [54, 442000], [56, 462000], [58, 482000], [60, 502000], [63, 522000], [65, 542000], [68, 562000], [70, 584000], [72, 606000], [74, 626000], [76, 646000], [79, 666000], [81, 688000], [84, 710000], [86, 732000], [88, 752000], [90, 774000], [92, 796000], [95, 818000], [97, 842000], [99, 868000]];
 
+// v3 difficulty: steeper, arcade-like ramp (see README). s = level - 1
 function levelParams(L) {
   const s = Math.min(L, 99) - 1;
   return {
-    flipSpeed: Math.min(0.12 + 0.0095 * s, 0.6),
-    flipRate: L === 1 ? 0.12 : Math.min(0.38 + 0.045 * s, 1.7),
-    flipDur: Math.max(0.15, 0.34 - 0.004 * s),
-    rimFlipDur: Math.max(0.12, 0.3 - 0.0037 * s),
-    rimPause: Math.max(0.03, 0.26 - 0.0055 * s),
-    chaseBias: Math.min(0.25 + 0.03 * s, 0.9),
-    tankerSpeed: Math.min(0.085 + 0.006 * s, 0.38),
-    spikerSpeed: Math.min(0.14 + 0.007 * s, 0.48),
-    spikerTurnMin: Math.max(0.16, 0.55 - 0.012 * s),
-    fuseSpeed: Math.min(0.17 + 0.004 * s, 0.42),
-    pulsarSpeed: Math.min(0.1 + 0.006 * s, 0.42),
-    pulsePeriod: Math.max(1.35, 2.6 - 0.02 * s),
-    eshotSpeed: Math.min(0.42 + 0.008 * s, 0.95),
-    fireRate: Math.min(0.1 + 0.028 * s, 0.85),
-    maxEShots: Math.min(1 + Math.floor(s / 4), 5),
-    maxActive: Math.min(3 + Math.floor(L / 3), 10),
-    spawnGap: Math.max(0.35, 1.45 - 0.03 * s),
-    grace: Math.max(0.09, 0.2 - 0.002 * s),
+    flipSpeed: Math.min(0.17 + 0.016 * s, 0.75),      // climb speed (tube lengths / s)
+    flipRate: Math.min(0.45 + 0.07 * s, 2.2),          // in-tube flips per second
+    flipDur: Math.max(0.13, 0.3 - 0.007 * s),
+    rimFlipDur: Math.max(0.09, 0.22 - 0.006 * s),      // rim hunting: one lane flip
+    rimPause: Math.max(0.02, 0.16 - 0.007 * s),        // rim hunting: pause between flips
+    chaseBias: Math.min(0.4 + 0.04 * s, 0.92),
+    tankerSpeed: Math.min(0.11 + 0.01 * s, 0.45),
+    spikerSpeed: Math.min(0.18 + 0.011 * s, 0.55),
+    spikerTurnMin: Math.max(0.12, 0.45 - 0.015 * s),
+    fuseSpeed: Math.min(0.2 + 0.008 * s, 0.5),
+    fuseRimPause: Math.max(0.12, 0.3 - 0.008 * s),
+    pulsarSpeed: Math.min(0.13 + 0.01 * s, 0.5),
+    pulsePeriod: Math.max(1.1, 2.2 - 0.04 * s),
+    eshotSpeed: Math.min(0.5 + 0.015 * s, 1.1),
+    fireRate: Math.min(0.22 + 0.05 * s, 1.2),
+    maxEShots: Math.min(2 + Math.floor(s / 3), 6),
+    maxActive: Math.min(4 + Math.floor(L / 2), 12),
+    spawnGap: Math.max(0.25, 1.05 - 0.04 * s),
+    grabDelay: Math.max(0.1, 0.25 - 0.0075 * s),      // rim enemy settled in your lane: time before it grabs (the kill window)
   };
 }
-function buildPool(L) {
-  const total = Math.min(10 + Math.floor(L * 0.9), 36);
-  const tankers = L >= 3 ? Math.min(1 + Math.floor((L - 3) / 6), 5) : 0;
-  const spikers = L >= 4 ? Math.min((L === 4 ? 2 : 1) + Math.floor((L - 4) / 7), 4) : 0;
-  const fuses = L >= 11 ? Math.min(1 + Math.floor((L - 11) / 7), 4) : 0;
-  const pulsars = L >= 17 ? Math.min(1 + Math.floor((L - 17) / 6), 5) : 0;
+function poolCounts(L) {
+  const total = Math.min(14 + Math.floor(L * 1.5), 44);
+  const tankers = L >= 2 ? Math.min(1 + Math.floor((L - 2) / 3), 6) : 0;
+  const spikers = L >= 3 ? Math.min(1 + Math.floor((L - 3) / 4), 5) : 0;
+  const fuses = L >= 6 ? Math.min(1 + Math.floor((L - 6) / 4), 5) : 0;
+  const pulsars = L >= 9 ? Math.min(1 + Math.floor((L - 9) / 4), 6) : 0;
   const flippers = Math.max(4, total - tankers - spikers - fuses - pulsars);
-  const cargo = ['flipper']; if (L >= 33) cargo.push('fuseball'); if (L >= 41) cargo.push('pulsar');
+  return { total: flippers + tankers + spikers + fuses + pulsars, flippers, tankers, spikers, fuses, pulsars };
+}
+function buildPool(L) {
+  const c = poolCounts(L);
+  const cargo = ['flipper']; if (L >= 17) cargo.push('fuseball'); if (L >= 25) cargo.push('pulsar');
   const list = [];
-  for (let i = 0; i < tankers; i++) list.push({ type: 'tanker', cargo: cargo[randi(0, cargo.length - 1)] });
-  for (let i = 0; i < spikers; i++) list.push({ type: 'spiker' });
-  for (let i = 0; i < fuses; i++) list.push({ type: 'fuseball' });
-  for (let i = 0; i < pulsars; i++) list.push({ type: 'pulsar' });
-  for (let i = 0; i < flippers - 2; i++) list.push({ type: 'flipper' });
+  for (let i = 0; i < c.tankers; i++) list.push({ type: 'tanker', cargo: cargo[randi(0, cargo.length - 1)] });
+  for (let i = 0; i < c.spikers; i++) list.push({ type: 'spiker' });
+  for (let i = 0; i < c.fuses; i++) list.push({ type: 'fuseball' });
+  for (let i = 0; i < c.pulsars; i++) list.push({ type: 'pulsar' });
+  for (let i = 0; i < c.flippers - 2; i++) list.push({ type: 'flipper' });
   for (let i = list.length - 1; i > 0; i--) { const j = randi(0, i); [list[i], list[j]] = [list[j], list[i]]; }
   list.unshift({ type: 'flipper' }, { type: 'flipper' });
   return list;
@@ -519,7 +525,7 @@ function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
   enemies = []; eshots = []; pshots = []; zapUses = 0; zap.active = false; rot = 0;
-  player.lane = web.start; player.vis = web.start; player.z = 0; player.alive = true; player.sub = 0; player.lean = 0;
+  player.lane = web.start; player.vis = web.start; player.z = 0; player.alive = true; player.sub = 0; player.lean = 0; player.heat = 0; player.overheat = false;
   Music.play(L);
   if (L > bestLevel) { bestLevel = L; store.set('bestLevel', L); }
   beginZoom(-18, 1.5, true);
@@ -656,13 +662,19 @@ function handleFire(dt) {
   player.fireCd -= dt;
   let manual = keys.Space || keys.KeyZ || keys.KeyX || keys.ControlLeft || keys.ControlRight;
   if (fireLock) { if (!manual) fireLock = false; manual = false; }
-  if ((autofire || manual) && player.fireCd <= 0 && pshots.length < 8) {
-    pshots.push({ lane: player.lane, z: player.z, pz: player.z });
-    player.fireCd = manual ? 0.072 : 0.12;
+  // rapid-fire cap (v3): max 8 shots on screen + barrel heat. Holding fire gives ~5-shot bursts with a cool-down gap,
+  // so a held button can't keep a solid wall of shots in the lane; deliberate taps at a human rate never overheat.
+  player.heat = Math.max(0, (player.heat || 0) - FIRE.cool * dt);
+  if (player.overheat && player.heat <= FIRE.resume) player.overheat = false;
+  if ((autofire || manual) && player.fireCd <= 0 && pshots.length < FIRE.maxShots && !player.overheat) {
+    pshots.push({ lane: player.lane, z: player.z, pz: player.z, born: T });
+    player.fireCd = manual ? FIRE.cd : 0.12;
+    player.heat += 1; if (player.heat >= FIRE.max) player.overheat = true;
     Sound.play('shoot');
     checkShotHits();
   }
 }
+const FIRE = { maxShots: 8, cd: 0.07, cool: 6, max: 6, resume: 3, speed: 2.3 };
 function superzap() {
   if (zapUses === 0) { zapUses = 1; zap.active = true; zap.t = 0; zap.next = 0; zap.flash = 0.75; eshots = []; Sound.play('zap'); }
   else if (zapUses === 1) {
@@ -711,12 +723,16 @@ function maybeFire(e, dt) {
     eshots.push({ lane: e.lane, z: e.z, pz: e.z, spin: Math.random() * 6 }); Sound.play('eshot');
   }
 }
+function rimGrab(e) { if (e.type === 'pulsar') killPlayer('zap'); else killPlayer('capture', e); }
 function updFlipper(e, dt) {
   const pl = player.lane;
   if (e.flipping) {
     e.ft += dt / e.flipDur;
+    // a rim flipper flipping into the claw's lane pivots on the shared rail; if the claw sits on that edge
+    // (sub-position facing the incoming flipper) it is grabbed as soon as the flipper swings past vertical
+    if (e.z <= 0 && player.alive && state === 'play' && e.ft >= 0.5 && wrapLane(e.lane + e.dir) === pl && player.sub === -e.dir) { rimGrab(e); return; }
     if (e.z > 0) e.z = Math.max(0, e.z - (e.type === 'pulsar' ? LP.pulsarSpeed : LP.flipSpeed) * e.spMul * dt * 0.35);
-    if (e.ft >= 1) { e.flipping = false; e.lane = wrapLane(e.lane + e.dir); e.ft = 0; e.landT = 0; if (e.z <= 0) Sound.play('flip'); }
+    if (e.ft >= 1) { e.flipping = false; e.lane = wrapLane(e.lane + e.dir); e.ft = 0; e.landT = 0; if (e.z <= 0) e.pause = LP.rimPause; if (e.z <= 0) Sound.play('flip'); }
     return;
   }
   if (e.z > 0) {
@@ -732,15 +748,20 @@ function updFlipper(e, dt) {
     }
     return;
   }
-  // on the rim: hunt the claw
+  // on the rim (v3): hunt the claw along the rim, shortest way round on closed webs, never parking.
   if (!player.alive) return;
   if (e.lane === pl) {
+    // settled in the claw's lane: short grab delay = the only window in which it can be shot
     e.landT += dt;
-    if (e.landT > LP.grace) { if (e.type === 'pulsar') killPlayer('zap'); else killPlayer('capture', e); }
+    if (e.landT >= LP.grabDelay) rimGrab(e);
     return;
   }
+  e.landT = 0;
   e.pause -= dt;
-  if (e.pause <= 0) { const d = sgn(laneDiff(e.lane, pl)); if (d) { startFlip(e, d, LP.rimFlipDur); e.pause = LP.rimPause; } }
+  if (e.pause <= 0) {
+    const d = sgn(laneDiff(e.lane, pl));
+    if (d) { startFlip(e, d, LP.rimFlipDur); e.pause = LP.rimPause; }
+  }
 }
 function updTanker(e, dt) {
   e.z -= LP.tankerSpeed * e.spMul * dt; maybeFire(e, dt);
@@ -779,7 +800,7 @@ function updFuse(e, dt) {
   if (!e.atRim) {
     e.z += e.mdir * LP.fuseSpeed * dt;
     if (e.z >= 1) { e.z = 1; e.mdir = -1; }
-    if (e.z <= 0) { e.z = 0; e.atRim = true; e.rimTimer = rand(2.5, 4.5); e.pause = 0.35; Sound.play('fuse'); return; }
+    if (e.z <= 0) { e.z = 0; e.atRim = true; e.rimTimer = rand(3, 5); e.pause = LP.fuseRimPause; Sound.play('fuse'); return; }
     if (Math.random() < 0.9 * dt) startJump(e, Math.random() < 0.5 ? -1 : 1);
     else if (Math.random() < 0.3 * dt && e.z < 0.85) e.mdir = -e.mdir;
     return;
@@ -793,16 +814,17 @@ function updFuse(e, dt) {
     const d1 = laneDiff(e.rail, pl), d2 = laneDiff(e.rail, pl + 1);
     const d = Math.abs(d1) < Math.abs(d2) ? d1 : d2;
     if (d) startJump(e, sgn(d));
-    e.pause = 0.3;
+    e.pause = LP.fuseRimPause;
   }
 }
 function hittableLane(e) {
   if (e.type === 'fuseball') {
+    if (e.atRim) return -1;               // arcade rule: fuseballs on the rim are invulnerable, dodge them
     if (!e.jumping || e.jt < 0.15 || e.jt > 0.85) return -1;
     return e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
   }
   if (e.flipping) {
-    if (e.z <= 0) { if (e.ft < 0.2) return e.lane; if (e.ft > 0.8) return wrapLane(e.lane + e.dir); return -1; }
+    if (e.z <= 0) return -1;              // mid-flip on the rim: can't be hit (no free kills from a held trigger)
     return e.ft < 0.5 ? e.lane : wrapLane(e.lane + e.dir);
   }
   return e.lane;
@@ -816,6 +838,7 @@ function checkShotHits() {
     for (const e of enemies) {
       if (e.dead || e.spawnT < 0.5) continue;
       if (hittableLane(e) !== s.lane) continue;
+      if (e.z <= 0 && e.type !== 'fuseball' && (e.lane !== player.lane || !player.alive)) continue; // rim: only while settled in the claw's lane
       if (e.z >= z0 && e.z <= z1) { killEnemy(e, true); s.dead = true; break; }
     }
     if (s.dead) continue;
@@ -829,7 +852,7 @@ function checkShotHits() {
   pshots = pshots.filter(s => !s.dead); eshots = eshots.filter(s => !s.dead); enemies = enemies.filter(e => !e.dead);
 }
 function updShots(dt) {
-  const v = 2.6;
+  const v = FIRE.speed;
   for (const s of pshots) { s.pz = s.z; s.z += v * dt; if (s.z > 1.02) s.dead = true; }
   pshots = pshots.filter(s => !s.dead);
   for (const s of eshots) {
@@ -1375,6 +1398,16 @@ window.VORTEX = {
   addScore(v) { addScore(v); },
   freeze(v) { window.__freeze = !!v; },
   attractMode(m) { attract.mode = m; attract.modeT = 0; },
+  // test harness: deterministic fast-forward (call freeze(true) first so the rAF loop doesn't also advance)
+  key(code, down) { keys[code] = !!down; },
+  step(sec, until) { const n = Math.round(sec * 120); for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) return i / 120; } return sec; },
+  emptyField() { pool = []; enemies = []; eshots = []; pshots = []; spikes.fill(0); },
+  setLane(l, sub) { player.lane = wrapLane(l); player.vis = player.lane; player.sub = sub || 0; player.lean = player.sub; },
+  params: L => L ? levelParams(L) : Object.assign({}, LP),
+  poolCounts: L => poolCounts(L),
+  enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
+  fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
+  deathKind: () => death ? death.kind : null,
   gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); },
 };
 })();

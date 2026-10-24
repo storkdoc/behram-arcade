@@ -54,7 +54,7 @@ cd arcade && python3 -m http.server 8080
 | --- | --- |
 | ← / → | Move around the rim (reversed sense: ← moves the claw one way, → the other; ↑ / ↓ also move) |
 | | The claw has 3 positions per lane (edge, center, edge) and tilts as it slides |
-| Space | Fire — hold for rapid fire (Z / X / Ctrl also fire) |
+| Space | Fire — hold for rapid-fire bursts (max 8 shots on screen; the barrel needs a moment to cool between bursts). Z / X / Ctrl also fire |
 | Enter | Superzapper (1st use destroys all enemies, 2nd destroys one) |
 | Space / Enter | Start game, confirm starting level |
 | ← / → on RATE YOURSELF | Choose starting level (1–99, with arcade start bonuses) |
@@ -67,3 +67,9 @@ Music: procedurally synthesized chiptune/synthwave (Web Audio), a different trac
 Rendering: full devicePixelRatio × 2 supersampling (capped ~9.4 MP), steps down automatically if the frame rate drops.
 
 Gamepad supported (A/RT fire, B/X/LT/Start superzapper). URL options: `?level=N` preselects a starting level; `?ss=1..3` forces the supersampling factor; `?debug=1` enables test keys (N clear level, K kill all, I invincible, S spikes).
+
+### Difficulty and the rim fight (v3)
+
+- Difficulty ramps quickly: more enemies (15 at level 1, 39 by level 17), faster climbing, flipping and enemy fire, and Tankers / Spikers / Fuseballs / Pulsars arrive from levels 2 / 3 / 6 / 9. Tuning lives in `levelParams()` and `poolCounts()`.
+- Enemies that reach the rim hunt the claw lane by lane (shortest way round on closed webs). One that settles in your lane grabs you after a short delay (0.25 s at level 1, down to 0.1 s), and that delay is the only time it can be shot. A rim enemy mid-flip can't be hit, and one flipping onto the edge where the claw sits grabs it at once. Fuseballs on the rim can't be shot, so dodge them.
+- Regression tests: `tests/vortex-rim.test.js` (camping must fail; a well-timed shot must work). See the header for how to run it.
