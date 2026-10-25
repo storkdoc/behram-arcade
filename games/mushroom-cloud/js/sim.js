@@ -180,6 +180,9 @@
           if (this.defcon > 3) return { ok: false, msg: 'Fleets may sail from DEFCON 3' };
           const p = seaPath([u.lat, u.lon], [c.lat, c.lon]); if (!p) return { ok: false, msg: 'No sea route there' }; u.path = p; return { ok: true }; }
         case 'launch': return this.launchFrom(bloc, c.id, c.lat, c.lon);
+        case 'salvo': { const r = this.launchFrom(bloc, c.id, c.lat, c.lon); if (!r.ok) return r; const u = this.unit(c.id), n = Math.min(u.wh, Math.max(0, (c.n || 99) - 1));
+          for (let k = 1; k <= n; k++) this.orders.push({ bloc, id: u.id, lat: c.lat + (k % 2 ? 0.25 : -0.25) * Math.ceil(k / 2) * 0.6, lon: c.lon + (k % 3 - 1) * 0.3, at: this.t + k * (u.type === 'silo' ? 5.2 : 7.2) });
+          return { ok: true, msg: (n + 1) + ' warhead' + (n ? 's' : '') + ' away' }; }
         case 'air': return this.launchAir(bloc, c.id, c.kind, c.lat, c.lon);
         case 'recall': { const a = this.air.find(a => a.id === c.id); if (!a || a.bloc !== bloc) return { ok: false, msg: 'No aircraft' }; a.state = 'return'; return { ok: true, msg: 'Recalled' }; }
         case 'strike': return this.strikePackage(bloc, c.target, c.pkg, c.count, !!c.sync);

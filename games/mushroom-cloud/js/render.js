@@ -374,6 +374,7 @@ export class Globe {
   /* ---------- per-frame inputs ---------- */
   setBlocs(blocs, BL) { this.BL = BL; this.blocCols = BL.map(b => hex(b.color)); for (let i = 0; i < 6; i++) { this.U.blocCol.value[i].copy(this.blocCols[i]); this.U.blocOn.value[i] = blocs[i] && blocs[i].active ? 1 : 0.25; } this.U.blocCol.value[6].setRGB(0.4, 0.4, 0.4); this.U.blocOn.value[6] = 0.2; }
   setCursor(c) { this.cursor = c; }
+  resetFx() { for (const k in this.fx) this.fx[k].length = 0; this.dmgX.fillStyle = 'rgb(255,0,0)'; this.dmgX.fillRect(0, 0, 2048, 1024); this.dmgTex.needsUpdate = true; this.shake = 0; this.sel = this.hover = null; }
   /** big one-off effects, driven by sim events (with real-time animation) */
   event(e) {
     if (!this.ready) return;
