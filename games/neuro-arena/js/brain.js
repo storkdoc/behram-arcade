@@ -26,8 +26,11 @@ export const AREA_DEF = [
 export const L = {}; { let o = 0; for (const [k, n, t] of AREA_DEF) { L[k] = { s: o, n, e: o + n, t }; o += n; } L.N = o; }
 export const N = L.N;
 const NA = L.A_E.n, NM = L.M_UP.n + L.M_DN.n, M0 = L.M_UP.s;
-// sensory channels: 0 ball y, 1 own paddle y, 2 ball distance (x, egocentric), 3 ball vertical velocity
-export const CH = ['ball y', 'paddle y', 'ball x', 'ball vy'];
+// sensory channels: 0 ball height relative to the own paddle (foveal, magnified near 0), 1 own paddle y,
+// 2 ball distance (x, egocentric), 3 ball vertical velocity
+export const CH = ['ball − paddle', 'paddle y', 'ball x', 'ball vy'];
+export const FOV = 0.22;   // foveal magnification: channel 0 = 0.5 + 0.5 tanh((ball y - paddle y) / FOV)
+export const fovea = d => 0.5 + 0.5 * Math.tanh(d / FOV);
 const TH_SPLIT = [112, 112, 48, 48];
 const GF = [28, 28];            // gain-field grid: 28 ball-y x 28 paddle-y = 784 cells
 const CTX = [16, 11];           // context grid: 16 ball-y x 11 vy = 176 cells
@@ -57,7 +60,7 @@ export class Brain {
     // plastic Assoc -> Motor weights: dense NA x NM matrix with a structural mask
         this.initPlastic(weights);
     this.xPre = new Float32Array(NA); this.yPost = new Float32Array(NM);
-    this.rateM = new Float32Array(NM); this.cntM = new Uint16Array(NM);
+    this.rateM = new Float32Array(NM); this.rExp = new Float32Array(NM); this.cntM = new Uint16Array(NM);
     this.reset();
   }
   labelFeatures() {
@@ -126,7 +129,7 @@ export class Brain {
     for (let a = 0; a < NA; a++) {
       const i = L.A_E.s + a;
       // innate guidance cue: + when the ball is above the paddle (gain-field cells) or moving up (context cells)
-      const bias = this.ch[i] === 4 ? band(g, 'gb', NGB, this.c1[i] - this.c2[i]) : band(g, 'gv', NGV, this.c2[i] * 2 - 1);
+      const bias = this.ch[i] === 4 ? band(g, 'gb', NGB, this.c1[i] * 2 - 1) : band(g, 'gv', NGV, this.c2[i] * 2 - 1);
       for (let m = 0; m < NM; m++) {
         if (rnd() >= g.pAM) continue;
         const k = a * NM + m, up = m < L.M_UP.n ? 1 : -1, w0 = Math.max(0, g.wAM0 * (1 + up * bias) * Math.exp(0.3 * gaussR(rnd)));
@@ -154,7 +157,7 @@ export class Brain {
   }
   // set receptor drive from the egocentric game state (all in 0..1)
   sense(by, py, bx, vy) {
-    const g = this.g, w2 = 2 * g.rfW * g.rfW, x = [by, py, bx, vy], d = this.drive;
+    const g = this.g, w2 = 2 * g.rfW * g.rfW, x = [fovea(by - py), py, bx, vy], d = this.drive;
     for (let k = 0; k < L.TH_E.n; k++) { const i = L.TH_E.s + k, v = x[this.ch[i]] - this.c1[i]; d[k] = 3 + g.thGain * Math.exp(-v * v / w2); }
   }
   reward(r) { this.da += r; this.daLog += r; }
@@ -240,7 +243,14 @@ export class Brain {
     this.daBar += (this.da - this.daBar) * (ms / 2000);
     this.rpe = this.da - this.daBar;
     const de = Math.exp(-ms / g.tauElig), lr = g.eta * this.rpe * wMax;
-    for (let s = 0; s < n; s++) { const e = Eg[s]; const w = W[s] + lr * e; W[s] = w < 0 ? 0 : w > wMax ? wMax : w; Eg[s] = e * de; }
+    // eligibility is pre x (post - its expected rate): uncorrelated firing leaves no trace, so only
+    // pre/post co-activity above baseline is credited (no common-mode drift of all weights)
+    const xPre = this.xPre, rowS = this.rowS, rowM = this.rowM, rE = this.rExp, rateM = this.rateM, k = ms * 1e-3 * (this.g.base ?? 1);
+    for (let m = 0; m < rE.length; m++) rE[m] = rateM[m] * k;
+    for (let a = 0, NA_ = xPre.length; a < NA_; a++) {
+      const x = xPre[a];
+      for (let s = rowS[a], e1 = rowS[a + 1]; s < e1; s++) { const e = Eg[s] - x * rE[rowM[s]]; const w = W[s] + lr * e; W[s] = w < 0 ? 0 : w > wMax ? wMax : w; Eg[s] = e * de; }
+    }
     this.da *= Math.exp(-ms / g.tauDA);
   }
   homeostasis(ms) {   // synaptic scaling of each motor cell's plastic inputs toward a target rate
