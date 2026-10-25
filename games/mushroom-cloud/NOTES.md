@@ -9,7 +9,9 @@
   - thumb: `node tools/thumb.mjs`
 - Fixes this session: bloom threshold (was washing out clouds), deferred tier resize (no cleared frame), loading screen waits for real frames (WebKit first-frame black tiles), mobile select layout (sticky start button), fmtM(0).
 
+- Also PASS: chromium/webkit small (1024x600@2x) + ipad; `NODE_PATH=/workspace/tools/node_modules node games/mushroom-cloud/tests/mp.test.js` ALL PASS (16 checks).
+- Live verified: https://storkdoc.github.io/behram-arcade/games/mushroom-cloud/ 200, cabinet in carousel (Chromium + WebKit).
+- Phone portrait HUD: forces strip moved under the top bar, key hints hidden on touch.
+
 ## Next steps
-1. tests/mp.test.mjs (fakepeer broker, host message text, namespace behram-mc-v1-, guest view contains no hidden host units, LINK ms).
-2. Run small (1024x600) + ipad in both engines.
 3. Polish: thumb at night with detonations; mobile camera offset so the globe centre is above the bottom panel; INCOMING banner contrast; balance (veteran AI is brutal).

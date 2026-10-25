@@ -261,13 +261,13 @@ function updateHUD() {
 }
 function renderSel(v) {
   const s = findSel(); let h = '', c = '';
-  const B = (cmd, label, cls) => '<button class="btn' + (cls ? ' ' + cls : '') + '" data-cmd="' + cmd + '">' + label + '</button>';
+  const B = (cmd, label, cls) => '<button class="btn' + (cls ? ' ' + cls : '') + '" data-cmd="' + cmd + '">' + (TOUCH ? label.replace(/ \((?:[A-Z⇧]+|DEL|ESC|SPACE|ENTER|⇧SPACE)\)$/, '') : label) + '</button>';
   const tap = TOUCH ? 'Tap' : 'Click';
   if (app.mode2 === 'sat') { h = '<h4>SPY SATELLITE</h4><div class="tip">' + tap + ' anywhere on the globe to task a reconnaissance pass. ' + v.my.sats + ' left.</div>'; c = B('cancel', 'CANCEL (ESC)'); }
   else if (app.mode2 === 'air') { h = '<h4>' + (app.airKind === 'bomber' ? 'BOMBER SORTIE' : 'FIGHTER SORTIE') + '</h4><div class="tip">' + tap + ' a destination. ' + (app.airKind === 'bomber' ? 'Bombers release a cruise weapon near their target at DEFCON 1, and can be recalled.' : 'Fighters scout, shoot down bombers and fight enemy fighters, then return to refuel.') + '</div>'; c = B('cancel', 'CANCEL (ESC)'); }
   else if (!s) {
-    if (v.defcon >= 4) h = '<h4>DEPLOYMENT</h4><div class="tip">' + (app.place ? 'Placing <b>' + NICE[app.place] + '</b>: ' + tap.toLowerCase() + (UNIT[app.place].land ? ' inside your territory.' : ' your coastal waters.') : 'Pick a unit type (1–6).') + ' Units must be at least 1.2° apart.</div>';
-    else h = '<h4>COMMAND</h4><div class="tip">' + (v.defcon === 1 ? 'Select a launcher (SPACE cycles), ' + tap.toLowerCase() + ' a target, then FIRE. ' + (TOUCH ? '' : 'ENTER for a strike package.') : v.defcon === 2 ? 'Task satellites and work the hotline. Decide which silos will launch.' : 'Move fleets, scout with fighters, set silo modes.') + '</div>';
+    if (v.defcon >= 4) h = '<h4>DEPLOYMENT</h4><div class="tip">' + (app.place ? 'Placing <b>' + NICE[app.place] + '</b>: ' + tap.toLowerCase() + (UNIT[app.place].land ? ' inside your territory.' : ' your coastal waters.') : (TOUCH ? 'Pick a unit type below.' : 'Pick a unit type (1–6).')) + ' Units must be at least 1.2° apart.</div>';
+    else h = '<h4>COMMAND</h4><div class="tip">' + (v.defcon === 1 ? 'Select a launcher' + (TOUCH ? '' : ' (SPACE cycles)') + ', ' + tap.toLowerCase() + ' a target, then FIRE. ' + (TOUCH ? '' : 'ENTER for a strike package.') : v.defcon === 2 ? 'Task satellites and work the hotline. Decide which silos will launch.' : 'Move fleets, scout with fighters, set silo modes.') + '</div>';
     if (!v.over) { if (v.defcon === 1) c += B('strike', 'STRIKE PACKAGE (ENTER)', 'fire'); if (v.defcon <= 2) c += B('sat', 'SATELLITE (' + v.my.sats + ')'); c += B('diplo', 'HOTLINE (D)'); c += B('war', app.warRoom ? 'GLOBE VIEW (V)' : 'WAR ROOM (V)'); if (v.my.orders) c += B('cancelorders', 'CANCEL ORDERS (' + v.my.orders + ')'); }
   } else if (s.kind) {
     const mine = s.bloc === app.me; h = '<h4 style="color:' + BL[s.bloc].color + '">' + (mine ? '' : BL[s.bloc].key + ' ') + NICE[s.kind].toUpperCase() + '</h4>' + (mine ? '<div class="kv"><span>STATE</span><b>' + String(s.state || '').toUpperCase() + '</b></div><div class="kv"><span>FUEL</span><b>' + s.fuel + '</b></div>' + (s.kind === 'bomber' ? '<div class="kv"><span>WEAPON</span><b>' + (s.wh ? 'ARMED' : 'RELEASED') + '</b></div>' : '') : '<div class="tip">Hostile aircraft.</div>');
@@ -346,7 +346,7 @@ function openStrike() {
   h += '<div class="mrow"><span class="lbl">PACKAGE</span>' + Object.entries(P).map(([k, p]) => '<button class="btn chip' + (strike.pkg === k ? ' on' : '') + '" data-pkg="' + k + '">' + p[0] + '</button>').join('') + '</div><div class="mtext">' + P[strike.pkg][1] + '</div>';
   h += '<div class="mrow"><span class="lbl">WARHEADS: <b id="scount" style="color:#fff">' + strike.count + '</b> OF ' + wh + ' AVAILABLE</span><input type="range" id="srange" min="1" max="' + Math.max(1, wh) + '" value="' + strike.count + '"></div>';
   h += '<div class="mrow"><button class="btn chip' + (strike.sync ? ' on' : '') + '" data-sync="1">SIMULTANEOUS IMPACT: ' + (strike.sync ? 'ON' : 'OFF') + '</button></div><div class="mtext">Silos used are switched to LAUNCH mode and stop intercepting. Every launch is seen by the world.</div>';
-  h += '<div class="bfoot"><button class="btn" data-m="close">CANCEL (ESC)</button><button class="btn go" data-m="exec"' + (v.defcon > 1 || !wh || strike.target == null ? ' disabled' : '') + '>AUTHORISE (SPACE)</button></div>';
+  h += '<div class="bfoot"><button class="btn" data-m="close">' + (TOUCH ? 'CANCEL' : 'CANCEL (ESC)') + '</button><button class="btn go" data-m="exec"' + (v.defcon > 1 || !wh || strike.target == null ? ' disabled' : '') + '>' + (TOUCH ? 'AUTHORISE' : 'AUTHORISE (SPACE)') + '</button></div>';
   openModal('strike', h);
   $('srange').addEventListener('input', e => { strike.count = +e.target.value; $('scount').textContent = strike.count; });
 }
@@ -361,7 +361,7 @@ function openDiplo() {
       (ally ? '' : '<button class="btn" data-dip="force" data-tg="' + b.id + '">SHOW OF FORCE</button><button class="btn" data-dip="bluff" data-tg="' + b.id + '">BLUFF</button>') + '</div></div>';
   }
   h += '<div class="mrow" style="margin-top:12px"><button class="btn" data-dip="standdown">STAND DOWN (90 s)</button><span class="mtext">Locks your silos in defense and lowers everyone’s tension.</span></div>';
-  h += '<div class="bfoot"><span></span><button class="btn" data-m="close">CLOSE (ESC)</button></div>';
+  h += '<div class="bfoot"><span></span><button class="btn" data-m="close">' + (TOUCH ? 'CLOSE' : 'CLOSE (ESC)') + '</button></div>';
   openModal('diplo', h);
 }
 function openPause() {
@@ -388,7 +388,7 @@ function toast(msg, bad) { const t = $('toast'); t.textContent = msg; t.classLis
 function bigMsg(a, b, red) { const m = $('bigmsg'); m.innerHTML = '<b class="' + (red ? 'd1' : '') + '">' + esc(a) + '</b><span>' + esc(b || '') + '</span>'; m.classList.add('show'); clearTimeout(bigT); bigT = setTimeout(() => m.classList.remove('show'), 3200); }
 const tapW = TOUCH ? 'tap' : 'click';
 const HINTS = {
-  5: 'DEFCON 5 · Deploy. Pick a unit (1–6) and ' + tapW + ' inside your glowing territory; subs and carriers go in your coastal waters. Short on time? AUTO-DEPLOY.',
+  5: 'DEFCON 5 · Deploy. Pick a unit' + (TOUCH ? '' : ' (1–6)') + ' and ' + tapW + ' inside your glowing territory; subs and carriers go in your coastal waters. Short on time? AUTO-DEPLOY.',
   4: 'DEFCON 4 · Last chance to deploy. Enemy forces stay hidden until radar, ships or aircraft find them.',
   3: 'DEFCON 3 · Fleets may move: select a ship, then ' + tapW + ' the sea. Launch fighters (F) to scout. Switch some silos to LAUNCH (M), or keep them defending.',
   2: 'DEFCON 2 · Task spy satellites (T) to find enemy silos. Work the hotline (D): alliances, ceasefires, bluffs.',

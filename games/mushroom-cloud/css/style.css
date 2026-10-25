@@ -211,3 +211,16 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   #right { right: calc(10px + var(--sar)); left: auto; }
   body.placing #right { display: none; }
 }
+@media (max-width: 600px) and (orientation: portrait) {
+  #topbar { flex-wrap: wrap; row-gap: 4px; }
+  #phase { order: 9; flex: 1 1 100%; display: flex; gap: 8px; align-items: baseline; }
+  #phasea, #phaseb { white-space: nowrap; }
+  #left { top: calc(112px + var(--sat)); bottom: auto; max-height: 30vh; }
+  #offers { top: calc(112px + var(--sat)); z-index: 30; }
+  body:not(.placing) #left .sh, body:not(.placing) #lefth { display: none; }
+  #hint { top: auto; bottom: calc(200px + var(--sab)); }
+  body.placing #hint { top: auto; bottom: calc(60px + var(--sab)); }
+  #toast { top: calc(250px + var(--sat)); }
+  #banner { top: 32%; }
+}
+
