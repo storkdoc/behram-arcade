@@ -99,7 +99,8 @@ export class Evolution {
       this.gen++;
       // Lamarckian: compare with the champion's kept synapses (deterministic score); Darwinian: with the champion copy in the same duel
       const cmp = o.lamarck ? c.bench : bc;
-      const clear = clearlyBetter(cmp, bk) && (o.lamarck || bk.hit > c.fit);
+      // Darwinian lifetimes are stochastic: picking the luckiest of K lives would crown noise, so also demand a 3-serve margin over the champion's mean
+      const clear = clearlyBetter(cmp, bk) && (o.lamarck || bk.hit >= c.fit + 0.06);
       const e = { gen: this.gen, champBench: c.fit, childBench: bk.hit, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]],
         childWon: winnerOf(st) === ks, clear, champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false, seg: st.seg, cs, prevBench };
       if (clear && bk.hits > bestH) { bestH = bk.hits; bestK = k; }

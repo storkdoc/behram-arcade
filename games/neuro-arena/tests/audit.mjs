@@ -118,10 +118,10 @@ console.log('— 4. Plasticity');
   T('homeostatic scaling does not undo learning (20 s, learning off, scaling on)', p3 > 0.7 * p1, `policy index ${p1.toFixed(3)} → ${p3.toFixed(3)}`);
   const q = dequant(quant(w, br.g.wMax)); let qe = 0; for (let k = 0; k < w.length; k++) if (w[k] >= 0) qe = Math.max(qe, Math.abs(q[k] - w[k]));
   const bA = benchmark(br.g, w), bB = benchmark(br.g, q), rr = mulberry32(5), pert = [];
-  for (let k = 0; k < (quick ? 4 : 8); k++) pert.push(benchmark(br.g, Float32Array.from(w, x => x < 0 ? x : x * (1 + 1e-3 * (rr() - 0.5)))).hits);
+  for (let k = 0; k < (quick ? 6 : 12); k++) pert.push(benchmark(br.g, Float32Array.from(w, x => x < 0 ? x : Math.max(0, x + (rr() - 0.5) * br.g.wMax / 254))).hits);
   const lo = Math.min(bA.hits, ...pert), hi = Math.max(bA.hits, ...pert);
-  console.log(`      chaos: the spiking net is deterministic but chaotic — ±0.05% weight jitter moves the benchmark ${lo}…${hi} of 50 (exact ${bA.hits}).`);
-  T('8-bit storage keeps learned weights (max error ≤ 0.5/254 wMax; benchmark inside the ±0.05%-jitter range)', qe <= br.g.wMax / 254 * 0.51 && bB.hits >= lo - 1 && bB.hits <= hi + 1, `max err ${qe.toExponential(2)}, bench ${bA.hits} → ${bB.hits} (jitter range ${lo}…${hi})`);
+  console.log(`      chaos: the spiking net is deterministic but chaotic — random jitter as large as the 8-bit step (±0.2% of wMax) moves the benchmark ${lo}…${hi} of 50 (exact ${bA.hits}).`);
+  T('8-bit storage keeps learned weights (max error ≤ 0.5/254 wMax; benchmark inside the range of equal-size random jitter)', qe <= br.g.wMax / 254 * 0.51 && bB.hits >= lo - 1 && bB.hits <= hi + 1, `max err ${qe.toExponential(2)}, bench ${bA.hits} → ${bB.hits} (jitter range ${lo}…${hi})`);
   globalThis.__range = [lo, hi];
   globalThis.__trained = { g: br.g, w };
 }
