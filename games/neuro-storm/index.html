@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#03050b">
+<meta name="description" content="Neuro Storm: an interactive 3D virtual brain of spiking neurons. Resting potential, action potentials, EPSPs and IPSPs, absolute and relative refractoriness, and an E/I-balanced chain reaction you can trigger with a tap.">
+<title>Neuro Storm: a virtual brain</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl" aria-label="3D brain: click or tap a neuron to stimulate it"></canvas>
+
+<header id="top">
+  <a id="home" href="../../index.html" title="Back to the arcade">← Arcade</a>
+  <div id="brand"><h1>NEURO STORM</h1><p>a virtual cortex of <span id="ncount">4000</span> spiking neurons</p></div>
+  <div id="dock">
+    <button id="bPlay" class="ib" title="Pause / play (Space)" aria-label="Pause">❚❚</button>
+    <button id="bDemo2" class="ib txt" title="Run the guided demo (D)">★ Demo</button>
+    <button id="bCtl" class="ib" title="Controls" aria-label="Controls">☰</button>
+    <button id="bInfo2" class="ib" title="Physiology notes (I)" aria-label="Info">i</button>
+  </div>
+</header>
+
+<div id="legend">
+  <div><i class="dot e"></i>Excitatory pyramidal cell (80%) · EPSP</div>
+  <div><i class="dot i"></i>Inhibitory interneuron (20%) · IPSP</div>
+  <div><i class="dot s"></i>Action potential</div>
+  <div><i class="dot r"></i>Refractory · <i class="dot h"></i>Hyperpolarised</div>
+  <div class="hint" id="hint">Click a neuron to stimulate it · drag to rotate · scroll to zoom</div>
+</div>
+
+<div id="caption" aria-live="polite"></div>
+<div id="stats"><span id="sT">t = 0.0 ms</span><span id="sF">firing 0.0%</span><span id="sR">wave 0 cells</span><span id="sS"></span></div>
+
+<section id="panel" class="glass" aria-label="Controls">
+  <div class="phead"><b>Controls</b><button id="bClose" class="x" aria-label="Close controls">✕</button></div>
+  <div class="row btns">
+    <button id="bPlay2" title="Space">❚❚ Pause</button>
+    <button id="bStep" title="Step 0.5 ms (.)">Step +0.5 ms</button>
+    <button id="bReset" title="R">⟲ Reset</button>
+  </div>
+  <div class="row btns">
+    <button id="bDemo" class="hl" title="D">★ Demo</button>
+    <button id="bDefaults">Defaults</button>
+    <button id="bInfo" title="I">Physiology</button>
+  </div>
+  <div class="seg" role="radiogroup" aria-label="Stimulus mode">
+    <button id="mTap" class="on" role="radio" aria-checked="true" title="E toggles">Single pulse</button>
+    <button id="mTrain" role="radio" aria-checked="false" title="E toggles">Electrode (hold: 50 Hz)</button>
+  </div>
+  <label class="sl"><span>Stimulus strength</span><output id="oStim"></output><input id="sStim" type="range" min="0.2" max="3" step="0.05"></label>
+  <label class="sl"><span>Excitation <small>AMPA → EPSP</small></span><output id="oE"></output><input id="sE" type="range" min="0" max="2" step="0.01"></label>
+  <label class="sl"><span>Inhibition <small>GABA-A → IPSP</small></span><output id="oI"></output><input id="sI" type="range" min="0" max="3" step="0.01"></label>
+  <div class="balance"><div class="bar"><i id="balMark"></i></div><span id="balTxt">balanced</span></div>
+  <label class="sl"><span>Background noise</span><output id="oN"></output><input id="sN" type="range" min="0" max="2" step="0.01"></label>
+  <label class="sl"><span>Simulation speed</span><output id="oSp"></output><input id="sSp" type="range" min="0" max="1" step="0.001"></label>
+  <div class="row chk">
+    <label><input type="checkbox" id="cRot" checked> Auto-rotate</label>
+    <label><input type="checkbox" id="cTh" checked> Threshold trace</label>
+    <label><input type="checkbox" id="cAx" checked> Axons</label>
+  </div>
+  <p class="keys">Keys: <b>Space</b> pause · <b>.</b> step · <b>R</b> reset · <b>D</b> demo · <b>E</b> electrode · <b>A</b> rotate · <b>T</b> threshold · <b>[ ]</b> speed · <b>I</b> info · <b>H</b> hide panels · Shift-click inspects without stimulating</p>
+</section>
+
+<section id="insp" class="glass" aria-label="Neuron inspector">
+  <div class="ihead">
+    <span id="iName">No neuron selected</span>
+    <span id="iPhase" class="phase">—</span>
+    <span class="grow"></span>
+    <button id="bWin" class="mini" title="Time window">60 ms</button>
+    <button id="bNext" class="mini" title="Inspect a downstream neighbour">Next ⇢</button>
+    <button id="bPick" class="mini" title="Pick a neuron to inspect without stimulating it">Inspect</button>
+    <button id="bMin" class="mini" aria-label="Minimise">–</button>
+  </div>
+  <canvas id="scope"></canvas>
+</section>
+
+<section id="rast" class="glass" aria-label="Population raster"><canvas id="raster"></canvas></section>
+
+<div id="info" hidden>
+  <div class="card glass">
+    <button id="bInfoX" class="x" aria-label="Close">✕</button>
+    <h2>What you are looking at</h2>
+    <p>Each glowing dot is a neuron in the cortical grey matter of both hemispheres. Cyan cells are <b>excitatory pyramidal cells</b> (80%) and magenta cells are <b>inhibitory fast-spiking interneurons</b> (20%, Dale's law: each cell has only one kind of output). Brightness follows the membrane potential. A cell brightens as EPSPs depolarise it, flashes white when it fires, glows ember-orange while it is refractory, and turns dim blue when IPSPs or the after-hyperpolarisation push it below rest.</p>
+    <h3>The neuron</h3>
+    <ul>
+      <li><b>Resting potential −70 mV</b>: K⁺ leak conductance with E<sub>L</sub> = −70 mV, membrane time constant 10 ms (pyramidal) or 6 ms (interneuron), C = 1 µF/cm².</li>
+      <li><b>Threshold ≈ −55 mV</b> (±1.2 mV cell-to-cell). When V crosses it the cell fires an <b>action potential</b>: a 0.35 ms upstroke to <b>+35 mV</b> (interneurons +28 mV, narrower spike), then repolarisation.</li>
+      <li><b>After-hyperpolarisation</b>: a K⁺ conductance (E<sub>K</sub> = −90 mV) opens with each spike, pulls V down to about <b>−79 mV</b> and then decays. A slow K⁺ adaptation current (pyramidal cells only, τ 180 ms) lets V creep back to −70 over ~170 ms.</li>
+      <li><b>Absolute refractory period</b> (2.0 ms pyramidal, 1.2 ms interneuron): Na⁺ channels are inactivated. No input, however strong, can fire the cell.</li>
+      <li><b>Relative refractory period</b> (about 2 to 17 ms and fading): the threshold jumps by 22 mV and decays with τ 5 ms, while the AHP holds V below rest. Only a stronger input fires the cell. Threshold and V then return to baseline.</li>
+    </ul>
+    <h3>The synapses</h3>
+    <ul>
+      <li><b>EPSP</b>: AMPA-like conductance, reversal 0 mV, decay τ 3 ms (about +4 mV at rest).</li>
+      <li><b>IPSP</b>: GABA<sub>A</sub>-like Cl⁻ conductance, reversal −80 mV, decay τ 7 ms. Near rest it is only a small hyperpolarisation, but near threshold it is strongly <i>shunting</i>.</li>
+      <li>Each cell gets about 45 excitatory and 23 inhibitory inputs, mostly from close neighbours (Gaussian fall-off with distance), plus a few fast callosal fibres from the other hemisphere. Axonal delays grow with distance (0.6 ms synaptic + conduction). You can watch the light pulses run along the axons.</li>
+    </ul>
+    <h3>Why balance matters</h3>
+    <p>A pulse fires a small patch of cells. Their EPSPs summate in neighbours, which fire and pass the wave on. The interneurons are recruited too, and their IPSPs, together with every cell's refractoriness and AHP, make the wave shrink and die out. The cortex then returns to its quiet resting state. Turn <b>inhibition</b> down and the same pulse becomes a runaway, seizure-like storm (at 0% it never stops). Turn it up and the spread is blocked. Raising <b>noise</b> enough makes the network ignite spontaneously.</p>
+    <h3>Reading the inspector</h3>
+    <p>The trace shows V (mV) of the selected cell. Dashed lines mark rest (−70) and threshold (−55), and the orange line is the moving threshold. Red shading marks the absolute refractory period and amber shading the relative one. ▲ marks an arriving EPSP and ▼ an arriving IPSP, and ⚡ marks your stimulus. The bottom strip is a raster: one row per neuron, sorted front to back, left hemisphere above and right below. The line on it is the population firing rate.</p>
+    <p class="fine">Model: conductance-based leaky integrate-and-fire with an explicit spike waveform, AHP and adaptation K⁺ currents and a dynamic threshold. Fixed 0.05 ms time step, several substeps per frame, deterministic seeds. Each model cell stands in for a small group of real neurons, so unitary PSPs are larger than a typical single cortical synapse, and time runs in slow motion (see Simulation speed).</p>
+  </div>
+</div>
+<div id="fatal" hidden></div>
+<noscript><div style="color:#fff;font:16px system-ui;padding:40px">Neuro Storm needs JavaScript.</div></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
