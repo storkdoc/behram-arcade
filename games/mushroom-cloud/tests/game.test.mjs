@@ -59,18 +59,19 @@ await tapSel('[data-act=bskip]'); await wait(800); ok(await ev(() => MC.screen) 
 if (await ev(() => MC.app.place !== 'silo')) await tapSel('#palette [data-type=silo]');
 ok(await ev(() => MC.app.place === 'silo'), 'silo selected for placement');
 const spot = await ev(() => { const g = MC.globe, me = MC.app.me, S = MC.sim; let best = null;
-  for (let la = -60; la <= 70; la += 1.5) for (let lo = -180; lo < 180; lo += 1.5) { if (S.landBloc(la, lo) !== me) continue; const s = g.project(la, lo, 0); if (!s.front) continue;
+  for (let la = -60; la <= 70; la += 1.5) for (let lo = -180; lo < 180; lo += 1.5) { if ([[0,0],[1.5,0],[-1.5,0],[0,1.5],[0,-1.5]].some(([a,o]) => S.landBloc(la + a, lo + o) !== me)) continue; const s = g.project(la, lo, 0); if (!s.front) continue;
     const d = Math.hypot(s.x - innerWidth / 2, s.y - innerHeight * 0.45); const el = document.elementFromPoint(s.x, s.y); if (!el || el.id !== 'gl') continue; if (!best || d < best.d) best = { d, x: s.x, y: s.y }; }
   return best; });
 const n0 = await ev(() => MC.view.units.filter(u => u.bloc === MC.app.me).length);
 if (spot) { await tap(spot.x, spot.y); await wait(200); await frames(); }
+console.log('toast:', await ev(() => document.getElementById('toast').textContent));
 ok(spot && await ev(() => MC.view.units.filter(u => u.bloc === MC.app.me).length) === n0 + 1, 'silo placed by ' + (touch ? 'tap' : 'click'));
 await shot('4-deploy');
 await tapSel('[data-cmd=auto]'); await wait(400);
 const nu = await ev(() => MC.view.units.filter(u => u.bloc === MC.app.me).length); ok(nu >= 10, 'auto-deploy filled forces (' + nu + ' units)');
 // fast-forward to DEFCON 3 / 2 / 1 with the ▶▶ button
 for (const target of [3, 1]) {
-  for (let i = 0; i < 6 && await ev(() => MC.view.defcon) > target; i++) { if (await ev(() => !MC.app.ff)) await tapSel('#speed [data-speed=ff]'); await ev(() => { const g = MC.game; for (let k = 0; k < 900 && g.defcon > 1 && !(g.t + 1 >= g.phaseEnd); k++) g.step(0.1); }); await wait(500); }
+  for (let i = 0; i < 6 && await ev(() => MC.view.defcon) > target; i++) { if (await ev(() => !MC.app.ff)) await tapSel('#speed [data-speed=ff]'); await ev(t => { const g = MC.game; for (let k = 0; k < 6000 && g.defcon > t; k++) g.step(0.1); }, target); await wait(500); }
   if (target === 3) { ok(await ev(() => MC.view.defcon) <= 3, 'reached DEFCON 3'); await shot('5-defcon3');
     // switch a silo to LAUNCH with keyboard / touch button
     await ev(() => { const s = MC.view.units.find(u => u.bloc === MC.app.me && u.type === 'silo'); MC.select(s); });
@@ -86,12 +87,15 @@ await ev(() => { const s = MC.view.units.find(u => u.bloc === MC.app.me && u.typ
 const opp = await ev(() => MC.app.cfg.opp);
 const tgt = await ev(o => { const c = MC.sim.AI.centroid(o); MC.globe.focus(c[0], c[1], 2.6); return c; }, opp);
 await wait(2500);
-const tp = await ev(c => MC.globe.project(c[0], c[1], 0), tgt);
+const tp = await ev(o => { const g = MC.globe, S = MC.sim; let best = null;
+  for (let la = -60; la <= 75; la += 1.5) for (let lo = -180; lo < 180; lo += 1.5) { if ([[0,0],[1.5,0],[-1.5,0],[0,1.5],[0,-1.5]].some(([a,b]) => S.landBloc(la + a, lo + b) !== o)) continue; const s = g.project(la, lo, 0); if (!s.front) continue;
+    const el = document.elementFromPoint(s.x, s.y); if (!el || el.id !== 'gl') continue; const d = Math.hypot(s.x - innerWidth / 2, s.y - innerHeight * 0.4); if (!best || d < best.d) best = { d, x: s.x, y: s.y }; }
+  return best; }, opp);
 const m0 = await ev(() => MC.game.missiles.length);
 await tap(tp.x, tp.y); await frames();
-ok(await ev(() => !!MC.app.target), 'target chosen by ' + (touch ? 'tap' : 'click'));
+ok(await ev(() => !!MC.app.target), (await ev(() => document.getElementById('toast').textContent)) + ' | target chosen by ' + (touch ? 'tap' : 'click'));
 if (touch) await tapSel('[data-cmd=fire]'); else await p.keyboard.press('Space');
-await frames(); ok(await ev(() => MC.game.missiles.length) > m0 || await ev(() => MC.game.blocs[MC.app.me].launched > 0), 'launch fired');
+await frames(); ok(await ev(() => MC.game.missiles.length) > m0 || await ev(() => MC.view.blocs[MC.app.me].launched > 0), 'launch fired');
 // strike package via ENTER (desktop) / button (touch)
 if (touch) await tapSel('[data-cmd=desel]'), await tapSel('[data-cmd=strike]'); else await p.keyboard.press('Enter');
 await wait(400); ok(await ev(() => MC.screen) === 'play-modal', 'strike package panel opens'); await shot('6-strike');

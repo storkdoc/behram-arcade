@@ -646,7 +646,8 @@ async function boot() {
   catch (err) { $('lmsg').textContent = 'COULD NOT LOAD: ' + err.message; console.error(err); return; }
   globe.setBlocs(BL.map(() => ({ active: true })), BL); globe.U.meBloc.value = -1;
   requestAnimationFrame(frame);
-  setTimeout(() => go('title'), 200);
+  // keep the loading screen up until the globe has really been drawn for a moment (WebKit can composite a big canvas tile-by-tile on its first frames)
+  const t0 = performance.now(), ready = () => { if ((globe.time > 1.2 && globe.selfChecks > 0) || performance.now() - t0 > 6000) go('title'); else setTimeout(ready, 100); }; ready();
 }
 window.MC = { app, get globe() { return globe; }, get game() { return app.game; }, get view() { return app.view; }, get screen() { return app.screen; }, net: Net, go, startGame, startSP, makeCfg, order, clickAt, cmd, fire, select, openStrike, openDiplo, toTitle, sim: S, showEnd, escape };
 boot();
