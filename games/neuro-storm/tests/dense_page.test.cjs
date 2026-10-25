@@ -34,10 +34,13 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
       await p.waitForFunction(() => NS.net.sel != null && !NS.S.quiet, null, { timeout: 8000 }).catch(() => {});
       const st = await p.evaluate(() => ({ sel: NS.net.sel, name: document.getElementById('iName').textContent, wave: NS.S.wave }));
       ok(st.sel != null, `tap selects + stimulates (${st.name})`);
-      await p.evaluate(() => { NS.setSpeed(100); NS.setView('column'); });
-      await p.waitForTimeout(2500);
+      // software GL renders slowly, so advance the GPU simulation directly (300 ms of model time) with rendering paused
+      await p.evaluate(() => { NS.togglePause(true); NS.setView('column'); for (let k = 0; k < 4; k++) NS.runBlocks(100); });
+      await p.waitForTimeout(1500);
       await p.screenshot({ path: `/tmp/nsd_${name.replace(/\W+/g, '_')}_wave.png` });
-      await p.waitForFunction(() => NS.S.quiet && NS.net.t - NS.S.quietSince > 60, null, { timeout: 120000 }).catch(() => {});
+      await p.evaluate(() => { for (let k = 0; k < 11; k++) NS.runBlocks(100); });
+      await p.waitForFunction(() => NS.S.quiet && NS.net.t - NS.S.quietSince > 60, null, { timeout: 30000 }).catch(() => {});
+      await p.evaluate(() => NS.togglePause(false));
       const end = await p.evaluate(() => ({ quiet: NS.S.quiet, msg: NS.S.lastQuietMsg, wave: NS.S.wave, N: NS.N, t: NS.net.t, ms: NS.msPerBlock() }));
       ok(end.quiet && end.wave < end.N * 0.6, `cascade spreads then returns to baseline (${end.wave} fired = ${(end.wave / end.N * 100).toFixed(1)}%, ${end.msg}, sim t ${end.t.toFixed(0)} ms, ${end.ms.toFixed(1)} ms/block)`);
     }
