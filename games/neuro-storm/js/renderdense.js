@@ -87,6 +87,6 @@ export class DenseRender3D extends Render3D {
       if (u >= 1) { r.mesh.visible = false; continue; }
       const s = 0.05 + 0.5 * Math.pow(u, 0.6); r.mesh.scale.set(s, s, s); r.mesh.quaternion.copy(c.quaternion); r.mesh.material.uniforms.uA.value = (1 - u) * (1 - u);
     }
-    this.composer.render();
+    if (this.noFx) this.r.render(this.scene, this.camera); else this.composer.render();
   }
 }

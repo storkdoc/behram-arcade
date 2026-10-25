@@ -25,6 +25,7 @@ export class Render3D {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.05, 50);
     this.pr = Math.min(window.devicePixelRatio || 1, 3);
+    this.noFx = /[?&]fx=0/.test(location.search);
     this.clip = { value: 99 }; this.lobeMix = { value: 0 };
     this.buildBackdrop(); this.buildBrain(); this.buildNeurons(); this.buildLines(); this.buildPulses(); this.buildFx();
     this.composer = null; this.resize(window.innerWidth, window.innerHeight);
@@ -242,7 +243,8 @@ uniform float uSim, uScale, uPR; attribute vec3 aB; attribute vec2 aT; attribute
     this.r.setPixelRatio(this.pr); this.r.setSize(w, h, false);
     this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
     const sz = this.r.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: 4 });
+    // a multisampled HDR target rendered black on some Macs, so MSAA is opt-in (?msaa=1)
+    const rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: /[?&]msaa=1/.test(location.search) ? 4 : 0 });
     if (this.composer) this.composer.dispose();
     this.composer = new EffectComposer(this.r, rt);
     this.composer.setPixelRatio(this.pr); this.composer.setSize(w, h);
@@ -267,7 +269,7 @@ uniform float uSim, uScale, uPR; attribute vec3 aB; attribute vec2 aT; attribute
       if (u >= 1) { r.mesh.visible = false; continue; }
       const s = 0.05 + 0.5 * Math.pow(u, 0.6); r.mesh.scale.set(s, s, s); r.mesh.quaternion.copy(c.quaternion); r.mesh.material.uniforms.uA.value = (1 - u) * (1 - u);
     }
-    this.composer.render();
+    if (this.noFx) this.r.render(this.scene, this.camera); else this.composer.render();
   }
   project(out) { // screen coords (css px) and depth for picking
     const c = this.camera, pos = this.net.pos, N = this.net.N, m = new THREE.Matrix4().multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse).elements;
