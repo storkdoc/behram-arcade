@@ -142,3 +142,4 @@ body.short #panel { --ph: 150px; }
 body.side #cardGenome { grid-template-columns: 1fr; } body.side #maps { display: none; }
 body.compact .card:not(.on) { display: none !important; }
 #score .mid, #genLbl, #clock { white-space: nowrap; }
+body.thumb #panel, body.thumb #ctl, body.thumb .meters, body.thumb #top, body.thumb #toast { display: none !important; }

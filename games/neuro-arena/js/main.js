@@ -30,6 +30,7 @@ function save(force) {
 
 // ------------------------------------------------------------------ renderer + layout
 const canvas = $('gl');
+if (/[?&]thumb/.test(location.search)) document.body.classList.add('thumb');
 let R = null;
 try { R = new Render3D(canvas); } catch (e) { console.warn(e); document.body.insertAdjacentHTML('beforeend', '<div id="nogl" style="position:fixed;top:40%;width:100%;text-align:center">WebGL2 is needed for the 3D view.</div>'); }
 const labelsEl = $('labels'), labelEls = [];
@@ -51,6 +52,7 @@ function layout() {
     panel.style.cssText = ''; document.documentElement.style.setProperty('--ph', ph + 'px'); bottom = H - ph - 18 - sab;
     if (b.contains('dockctl')) right = W - 300;
   }
+  if (b.contains('thumb')) { top = 70; bottom = H - 10; right = W; }
   rect = { x: left + 6, y: top, w: Math.max(50, right - left - 12), h: Math.max(50, bottom - top - (compact ? 40 : 66)) };
   if (R) R.resize(W, H, rect);
   document.querySelectorAll('.card').forEach(c => c.classList.toggle('on', c.dataset.card === ui.tab));
