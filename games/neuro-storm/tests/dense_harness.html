@@ -9,6 +9,12 @@ window.H = {
   run(ms, chunk = 16) { const net = this.net, nbT = Math.round(ms / BLOCK_MS), res = { tot: 0, perBlock: [], wave: 0, pop: new Float64Array(7) }; let done = 0; const t0 = performance.now();
     while (done < nbT) { const nb = Math.min(chunk, nbT - done); const o = net.run(nb); for (let b = 0; b < nb; b++) { let s = 0; for (let c = 0; c < 7; c++) { s += o.pop[b * 7 + c]; res.pop[c] += o.pop[b * 7 + c]; } res.perBlock.push(s); } res.tot += o.total; res.wave = o.wave; done += nb; }
     res.ms = performance.now() - t0; res.msPerBlock = res.ms / nbT; res.pop = Array.from(res.pop); return res; },
+  waveMap(top = 12) { const net = this.net, g = this.g, gl = net.gl, { W, H } = g; gl.bindFramebuffer(gl.FRAMEBUFFER, net.fS[net.cur]); gl.readBuffer(gl.COLOR_ATTACHMENT2);
+    const buf = new Float32Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.FLOAT, buf); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const cell = new Map(), cls = new Array(7).fill(0), lay = new Array(5).fill(0); let n = 0;
+    for (let i = 0; i < g.N; i++) if (buf[i * 4 + 1] > 0.5) { n++; cls[g.cls[i]]++; lay[g.layer[i]]++; const k = ((i / W | 0) / g.by | 0) * 1000 + ((i % W) / g.bx | 0); cell.set(k, (cell.get(k) || 0) + 1); }
+    const arr = [...cell.entries()].sort((a, b) => b[1] - a[1]).slice(0, top).map(([k, c]) => { const y = Math.floor(k / 1000), x = k % 1000; const ci = (y * g.C + x) * 4; return `r${y}c${x}:${c} (${g.cellPos[ci].toFixed(2)},${g.cellPos[ci+1].toFixed(2)},${g.cellPos[ci+2].toFixed(2)})`; });
+    return { n, cells: cell.size, cls, lay, top: arr.join(' ') }; },
   site(x, y, z) { const g = this.g; let best = 0, bd = 1e9; for (let i = 0; i < g.N; i++) { if (g.cls[i] !== 0) continue; const d = (g.pos[i*3]-x)**2+(g.pos[i*3+1]-y)**2+(g.pos[i*3+2]-z)**2; if (d < bd) { bd = d; best = i; } } return best; },
 };
 window.ready = true;

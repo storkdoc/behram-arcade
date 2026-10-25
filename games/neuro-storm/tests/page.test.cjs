@@ -1,13 +1,13 @@
-// Browser smoke test: desktop + iPhone (portrait/landscape) + Canvas2D fallback.
+// Browser smoke test of the classic 4K CPU model: desktop + iPhone (portrait/landscape) + Canvas2D fallback.
 // Usage: serve the repo root on :8080 (python3 -m http.server 8080), then
 //   NODE_PATH=<dir with playwright-core> node games/neuro-storm/tests/page.test.cjs
 const { chromium, devices } = require('playwright-core');
 const BASE = process.env.BASE || 'http://localhost:8080/games/neuro-storm/';
 const CASES = [
-  ['desktop 1440x900 @2x', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }, ''],
-  ['iPhone 13 portrait', { ...devices['iPhone 13'] }, ''],
-  ['iPhone 13 landscape', { ...devices['iPhone 13 landscape'] }, ''],
-  ['iPad Pro 11', { ...devices['iPad Pro 11'] }, ''],
+  ['desktop 1440x900 @2x', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }, '?tier=4k'],
+  ['iPhone 13 portrait', { ...devices['iPhone 13'] }, '?tier=4k'],
+  ['iPhone 13 landscape', { ...devices['iPhone 13 landscape'] }, '?tier=4k'],
+  ['iPad Pro 11', { ...devices['iPad Pro 11'] }, '?tier=4k'],
   ['Canvas2D fallback (?gl=0)', { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }, '?gl=0'],
 ];
 let fails = 0;
@@ -23,7 +23,7 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
     await p.waitForFunction('window.NS && (NS.ready || NS.fatal)', null, { timeout: 90000 });
     const info = await p.evaluate(() => ({ r: NS.renderer, N: NS.N, fatal: NS.fatal, cls: document.body.className }));
     ok(!info.fatal, `loads (${info.r}, N=${info.N}, body="${info.cls}")`);
-    ok(q ? info.r === '2d' : info.r === '3d', 'expected renderer');
+    ok(q.includes('gl=0') ? info.r === '2d' : info.r === '3d', 'expected renderer');
     await p.waitForTimeout(800);
     // find a front-facing excitatory neuron that is actually under the pointer (not covered by a panel)
     const pt = await p.evaluate(() => {
