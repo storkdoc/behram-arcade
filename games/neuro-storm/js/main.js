@@ -322,7 +322,7 @@ function loop(now) {
   try {
     R = await makeRenderer();
     bindCanvas(R.canvas || canvas); bindUI(); layout(); syncUI(); S.quiet = true; setTimeout(layout, 300);
-    if (Q.has('thumb')) { document.body.classList.add('hideui'); S.hidden = true; }
+    if (Q.has('thumb')) { document.body.classList.add('hideui', 'thumb'); S.hidden = true; }
     // warm up 200 ms so the resting state is settled
     for (let k = 0; k < 200 / DT; k++) net.step(); net.spikeLog.length = 0;
     window.NS = { net, S, R, cam, stimulate, select, pick, resetSim, defaults, setP, setSpeed, runDemo, stopDemo, advance, harvest, raster, togglePause, inject, ready: true, renderer: R.kind, N };

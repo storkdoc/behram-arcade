@@ -129,3 +129,4 @@ body.mobile.portrait #legend > div:not(.hint) { white-space: nowrap; }
 body.mobile.landscape #brand p { display: none; }
 body.mobile.landscape #bWin { display: none; }
 body.mobile.landscape .ihead { gap: 6px; }
+body.thumb #top, body.thumb #caption { display: none !important; }
