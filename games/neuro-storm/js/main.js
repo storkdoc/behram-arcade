@@ -62,7 +62,7 @@ function stimulate(i, opts = {}) {
 function select(i) {
   if (net.sel !== i || !net.rec) { net.select(i); R.setSelected(i); }
   const t = net.type[i] ? 'Interneuron' : 'Pyramidal';
-  $('iName').textContent = innerWidth < 520 ? `${net.type[i] ? 'I' : 'E'}-cell #${i}` : `${t} #${i} · ${net.hemi[i] < 0 ? 'L' : 'R'}`; $('iName').title = `${t} #${i}, ${net.hemi[i] < 0 ? 'left' : 'right'} hemisphere`;
+  $('iName').textContent = innerWidth < 1200 ? `${net.type[i] ? 'I' : 'E'}-cell #${i}` : `${t} #${i} · ${net.hemi[i] < 0 ? 'L' : 'R'}`; $('iName').title = `${t} #${i}, ${net.hemi[i] < 0 ? 'left' : 'right'} hemisphere`;
   $('iName').style.color = net.type[i] ? '#ff8fe4' : '#8fe6ff';
 }
 function inject(i, amp, ms) { net.Iext[i] += amp; net.pulses.push({ idx: [i], amps: [amp], end: net.step_ + Math.round(ms / DT) }); if (net.rec) net.rec.stims.push(net.t); }

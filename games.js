@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'neuro-storm',
+    title: 'NEURO STORM',
+    tagline: 'Spark a chain reaction in a living virtual cortex',
+    description: 'A real-time 3D brain made of 4,000 spiking neurons (2,400 on phones) laid out in the cortex of two folded hemispheres. Every neuron rests near -70 mV, fires an action potential when EPSPs push it past about -55 mV (overshooting to +35 mV), then shows an afterhyperpolarisation and both absolute and relative refractory periods before returning to baseline. 80% are excitatory pyramidal cells (AMPA EPSPs) and 20% are inhibitory interneurons (GABA-A IPSPs, reversal -80 mV), wired mostly to their neighbours with distance-dependent axonal delays and callosal fibres between the hemispheres. Click or tap any neuron to stimulate it and watch the wave spread, then die out as inhibition and refractoriness catch up. Inspect any cell on a live membrane-potential oscilloscope with marked EPSPs, IPSPs, threshold and refractory windows, follow every spike on the raster, and turn the excitation and inhibition sliders to tip the network into a seizure-like storm or choke it off. Slow motion, step-by-step mode, a 50 Hz electrode and a guided demo.',
+    thumb: 'games/neuro-storm/thumb.png',
+    added: '2026-10-24',
+    genre: 'SIMULATION',
+    year: 'NEUROSCIENCE',
+    controls: 'click a neuron to stimulate it · SHIFT-click to inspect without stimulating · drag to rotate · scroll or trackpad pinch to zoom · SPACE pause · . step 0.5 ms · [ ] slower/faster · E electrode mode (hold for 50 Hz) · D guided demo · R reset · I physiology notes · H hide panels',
+    touch: 'tap a neuron to stimulate it · drag to rotate · pinch to zoom · ☰ opens the controls drawer (stimulus, excitation, inhibition, noise, speed) · ★ Demo for a guided tour · Inspect then tap to watch a cell without stimulating · works portrait and landscape on iPhone and iPad',
+    accent: '#2ec8ff'
+  },
+  {
     slug: 'jax-adventures',
     title: "JAX'S ADVENTURES",
     tagline: 'Sneak, fish, trade and outfox the ranger',
