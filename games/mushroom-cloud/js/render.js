@@ -327,7 +327,7 @@ export class Globe {
     this.fxaa = new ShaderPass(FXAA); this.composer.addPass(this.fxaa);
   }
   /** quality tiers: 3 = supersampled + bloom, 2 = native + bloom + FXAA, 1 = native MSAA canvas (no post), 0 = also no clouds/fewer particles */
-  setTier(t) { t = Math.max(0, Math.min(this.maxTier, t)); if (t === this.tier && this._sized) return; this.tier = t; this._sized = false; this.resize(); this.lastCheck = this.time - 999; }
+  setTier(t) { t = Math.max(0, Math.min(this.maxTier, t)); if (t === this.tier && this._sized) return; this.tier = t; this._sized = false; /* resized at the start of the next frame, right before it renders: never present a cleared buffer */ this.lastCheck = this.time - 999; }
   resize() {
     const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);

@@ -19,7 +19,7 @@ p.on('pageerror', e => errs.push('PAGEERROR ' + e.message)); p.on('response', r 
 const wait = ms => p.waitForTimeout(ms), ev = (f, a) => p.evaluate(f, a);
 const frames = (n = 3) => ev(n => new Promise(r => { let k = 0; const f = () => ++k >= n ? r() : requestAnimationFrame(f); requestAnimationFrame(f); }), n);
 const tap = async (x, y) => touch ? p.touchscreen.tap(x, y) : p.mouse.click(x, y);
-const tapSel = async sel => { const el = await p.waitForSelector(sel, { state: 'visible', timeout: 8000 }); const bb = await el.boundingBox(); await tap(bb.x + bb.width / 2, bb.y + bb.height / 2); await wait(150); await frames(); };
+const tapSel = async sel => { const el = await p.waitForSelector(sel, { state: 'visible', timeout: 8000 }); await el.scrollIntoViewIfNeeded(); const bb = await el.boundingBox(); await tap(bb.x + bb.width / 2, bb.y + bb.height / 2); await wait(150); await frames(); };
 // black-region check: sample the sunlit, front-facing part of the globe in a real screenshot
 async function shot(name) {
   const file = out + name + '.png'; await p.screenshot({ path: file });

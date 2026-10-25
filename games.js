@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'mushroom-cloud',
+    title: 'MUSHROOM CLOUD',
+    tagline: 'A real-time strategy game of nuclear brinkmanship. Nobody wins. Somebody scores.',
+    description: 'A somber Cold War grand-strategy game played on a photoreal, sunlit Earth with city lights, drifting clouds and a living terminator. Lead one of six fictional blocs through DEFCON 5 to 1: deploy ICBM silos, radar, air defense, airbases, missile submarines and carrier groups in secret, scout with fighters and spy satellites, and use the hotline for alliances, ceasefires, shows of force and bluffs. Silos must choose between defending (intercepting incoming warheads) and launching. Warheads arc across the globe in real time, bombers can be recalled, launch-on-warning can be armed, and every launch reveals you to the world. CPU rivals have personalities (hawkish, cautious, opportunistic) and three difficulty levels. Scenarios: Brinkmanship (one rival), Pacific Standoff (three powers), Six Blocs (up to five CPUs) and Second Strike (you are already under attack). Score is kills minus losses, unless no warhead is ever fired: then deterrence holds. Two players can play online on separate devices. All sounds are synthesized.',
+    thumb: 'games/mushroom-cloud/thumb.png',
+    added: '2026-10-25',
+    genre: 'STRATEGY',
+    year: 'COLD WAR',
+    controls: 'drag to rotate the globe, scroll or pinch to zoom · 1–6 pick a unit type (place it during DEFCON 5–4, cycle units later) · click to place, select, set a course or choose a target · SPACE fires the selected launcher (SHIFT+SPACE fires all) · ENTER opens the strike package · M silo mode, F fighter, B bomber, R recall, T satellite, D hotline, L launch on warning, V war room · [ ] or the speed buttons change time, P pauses · ESC cancels · gamepad: left stick cursor, right stick rotate, triggers zoom, A select, X fire, Y strike package',
+    touch: 'drag to rotate, pinch to zoom, tap to place, select or target · on-screen buttons for every command: FIRE, STRIKE PACKAGE, silo mode, fighter/bomber sorties, satellite, hotline, war room and speed · works on iPhone and iPad in portrait and landscape',
+    accent: '#ff7a3a'
+  },
+  {
     slug: 'neuro-arena',
     title: 'NEURO ARENA',
     tagline: 'Two spiking brains learn Pong, and the winner spawns the next challenger',
