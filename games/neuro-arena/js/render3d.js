@@ -8,7 +8,7 @@ import { OutputPass } from '../vendor/three/postprocessing/OutputPass.js';
 import { Brain, L, N, AREA_DEF } from './brain.js';
 import { COURT } from './pong.js';
 
-const S = 2;                       // court scale: world units per court unit
+export const S = 2;                       // court scale: world units per court unit
 const CW = COURT.W * S, CH = COURT.H * S;
 const hash = (i, k) => { let x = Math.imul(i + 1, 0x9E3779B1) ^ Math.imul(k + 7, 0x85EBCA77); x ^= x >>> 15; x = Math.imul(x, 0x2C1B3C6D); x ^= x >>> 12; return (x >>> 0) / 4294967296; };
 const AREA_COL = { TH_E: [1.0, 0.68, 0.25], TH_I: [1.0, 0.35, 0.75], S_E: [0.2, 0.95, 0.82], S_I: [1.0, 0.32, 0.8], A_E: [0.6, 0.48, 1.0], A_I: [1.0, 0.3, 0.85], M_UP: [0.36, 1.0, 0.6], M_DN: [1.0, 0.55, 0.22], M_I: [1.0, 0.3, 0.8] };
@@ -17,7 +17,7 @@ export const REGION_LABELS = [
 ];
 
 // neuron positions in brain-local coordinates: x toward the court, y up, z toward the viewer
-function layout() {
+export function layout() {
   const f = { ch: new Int8Array(N).fill(-1), c1: new Float32Array(N), c2: new Float32Array(N) };
   Brain.prototype.labelFeatures.call(f);
   const pos = new Float32Array(N * 3), col = new Float32Array(N * 3), typ = new Float32Array(N);
@@ -63,6 +63,11 @@ const PTS_F = /* glsl */`
 export class Render3D {
   constructor(canvas) {
     this.canvas = canvas;
+    // post-processing level: 0 = HDR + bloom, 1 = plain render. A multisampled HDR target is opt-in (?msaa=1):
+    // with UnrealBloom it renders an all-black frame on Safari/WebKit and on ANGLE-over-OpenGL.
+    this.fx = !/[?&]fx=0/.test(location.search); this.msaa = /[?&]msaa=1/.test(location.search);
+    this.nFrames = 0; this.failed = false; this.onFallback = null;
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.failed = 'WebGL context lost'; });
     const r = this.r = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', stencil: false });
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0; r.setClearColor(0x03050b, 1);
     this.scene = new THREE.Scene();
@@ -221,14 +226,14 @@ export class Render3D {
     this.r.setPixelRatio(this.pr); this.r.setSize(W, H, false);
     this.canvas.style.width = W + 'px'; this.canvas.style.height = H + 'px';
     const sz = this.r.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: this.msaa ? 4 : 0 });
     if (this.composer) this.composer.dispose();
     this.composer = new EffectComposer(this.r, rt);
     this.composer.setPixelRatio(this.pr); this.composer.setSize(W, H);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.6, 0.45, 0.72);
     this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
-    this.setLayout(rect, W, H);
+    this.setLayout(rect, W, H); this.nFrames = 0;
   }
   // screen (css px) -> court coordinates, or null
   toCourt(sx, sy) {
@@ -272,6 +277,27 @@ export class Render3D {
     }
     this.tGeo.attributes.position.needsUpdate = true; this.tGeo.attributes.aA.needsUpdate = true; this.tGeo.attributes.aC.needsUpdate = true;
     this.uPts.uScale.value = this.H * this.pr / (2 * Math.tan(this.camera.fov * Math.PI / 360));
-    this.composer.render();
+    if (this.fx) this.composer.render(); else this.r.render(this.scene, this.camera);
+    this.nFrames++;
+    if (this.nFrames === 20 || this.nFrames === 80 || this.nFrames % 900 === 0) this.selfCheck();   // also re-checked after every resize
+  }
+  // read back a few rows right after drawing: an all-dark frame means this GPU path is broken -> step down
+  selfCheck() {
+    this.r.setRenderTarget(null);
+    const gl = this.r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, row = new Uint8Array(w * 4);
+    let mx = 0, zero = 0, tot = 0;
+    for (const fy of [0.15, 0.3, 0.5, 0.7, 0.85]) {
+      const y = Math.round(h * (1 - (this.rect ? (this.rect.y + this.rect.h * fy) / this.H : fy)));
+      gl.readPixels(0, Math.max(0, Math.min(h - 1, y)), w, 1, gl.RGBA, gl.UNSIGNED_BYTE, row);
+      for (let i = 0; i < row.length; i += 4) { const v = Math.max(row[i], row[i + 1], row[i + 2]); if (v > mx) mx = v; if (v === 0) zero++; tot++; }
+    }
+    // the backdrop is never exactly black, so pure-black pixels mean a pass (or part of the frame) was never drawn
+    this.lastCheck = mx; this.lastZero = zero / tot;
+    if (mx >= 24 && this.lastZero < 0.08) return;
+    if (this.msaa) { this.msaa = false; this.resize(this.W, this.H, this.rect); }
+    else if (this.fx) this.fx = false;
+    else { this.failed = 'WebGL draws nothing on this device'; return; }
+    console.warn('NEURO ARENA: dark frame (max ' + mx + '), falling back to ' + (this.fx ? 'no MSAA' : 'no post-processing'));
+    this.nFrames = 0;
   }
 }

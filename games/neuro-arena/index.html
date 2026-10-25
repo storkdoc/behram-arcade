@@ -105,6 +105,15 @@
   </div>
 </div>
 <div id="toast" class="hidden"></div>
+<div id="banner" class="hidden" role="alert"><span></span><button type="button" aria-label="Dismiss" onclick="this.parentNode.className='hidden'">×</button></div>
+<script>
+/* classic-script safety net: if the module app fails to load (old browser, blocked file), say so instead of showing a blank page */
+(function () {
+  function show(m) { var b = document.getElementById('banner'); if (!b) return; b.className = 'err'; b.firstChild.textContent = m; }
+  window.addEventListener('error', function (e) { if (!window.NA_started) show('NEURO ARENA could not start: ' + (e.message || (e.target && e.target.src) || 'a file failed to load')); }, true);
+  setTimeout(function () { if (!window.NA_started) show('NEURO ARENA did not start. Your browser may be too old (it needs ES modules), or a file failed to load. Try reloading, or a current Safari/Chrome/Firefox.'); }, 12000);
+})();
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

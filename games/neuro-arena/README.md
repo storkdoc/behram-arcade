@@ -46,3 +46,9 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
 | Darwinian, 2% | 0.26 | 0.36 | 0.36 | | |
 
 About 100 generations take roughly 5 minutes (4 cores, Node). The results are noisy from run to run, and a champion can also be dethroned by a lucky spawn.
+
+## Rendering & robustness
+- The WebGL view renders HDR + bloom into a **non-multisampled** half-float target. With a 4× MSAA half-float target, Safari/WebKit, and Chrome on some Macs, left large opaque black rectangles over the scene, so MSAA is now opt-in (`?msaa=1`).
+- After startup, after each resize, and periodically, the renderer reads back a few pixel rows. If the frame is dark or has pure-black holes, it steps down: MSAA → no MSAA → no post-processing → **Canvas 2D renderer**. The 2D renderer is also used if WebGL is missing or the context is lost (`?r2d` forces it).
+- If module Web Workers fail or don't respond, the simulation runs on the main thread (`?noworker` forces it).
+- Errors show in an on-screen banner. Watch mode starts on load, with no click needed.

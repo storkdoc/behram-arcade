@@ -4,6 +4,8 @@ import { GENES, GENE, fmtGene, gen0Genome } from './genome.js';
 import { N, L } from './brain.js';
 import { COURT } from './pong.js';
 import { Render3D, REGION_LABELS } from './render3d.js';
+import { Render2D } from './render2d.js';
+import { makeHandler } from './simcore.js';
 
 const $ = id => document.getElementById(id);
 const KEY = 'neuroArena.v1';
@@ -12,12 +14,20 @@ const RANDOM_HIT = 0.26;              // measured: random paddle vs a perfect wa
 const coarse = matchMedia('(pointer: coarse)').matches;
 const HC = navigator.hardwareConcurrency || 4;
 const errs = [];
-window.addEventListener('error', e => errs.push(String(e.message)));
+// visible error banner instead of a silently blank page
+function banner(msg, level = 'err') {
+  const el = $('banner'); if (!el) return;
+  el.className = level; el.querySelector('span').textContent = msg;
+  clearTimeout(banner.t); if (level === 'info') banner.t = setTimeout(() => { el.className = 'hidden'; }, 9000);
+}
+window.NA_banner = banner;
+window.addEventListener('error', e => { errs.push(String(e.message)); banner('Something went wrong: ' + e.message); });
+window.addEventListener('unhandledrejection', e => { const m = String(e.reason && e.reason.message || e.reason); errs.push(m); banner('Something went wrong: ' + m); });
 
 // ------------------------------------------------------------------ state
 let evo = load() || new Evolution({ lamarck: true });
 const ui = { mode: 'watch', speed: 1, K: Math.max(1, Math.min(coarse ? 3 : 6, HC - 1)), epoch: 0, live: null, lastSave: 0, turboGen0: 0, turboT0: 0, gps: 0, tip: null, tab: 'chart', polMaps: [null, null] };
-window.NA = { get evo() { return evo; }, ui, errs, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
+window.NA = { get evo() { return evo; }, ui, errs, get R() { return R; }, get noWorkers() { return noWorkers; }, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
 
 function load() {
   try { const s = localStorage.getItem(KEY); if (!s) return null; return Evolution.restore(JSON.parse(s)); } catch (e) { console.warn('could not restore', e); return null; }
@@ -29,10 +39,19 @@ function save(force) {
 }
 
 // ------------------------------------------------------------------ renderer + layout
-const canvas = $('gl');
+let canvas = $('gl');
 if (/[?&]thumb/.test(location.search)) document.body.classList.add('thumb');
 let R = null;
-try { R = new Render3D(canvas); } catch (e) { console.warn(e); document.body.insertAdjacentHTML('beforeend', '<div id="nogl" style="position:fixed;top:40%;width:100%;text-align:center">WebGL2 is needed for the 3D view.</div>'); }
+// renderer: WebGL (three.js) first; Canvas 2D if WebGL is missing, throws, loses its context, or draws a blank frame
+function use2D(why) {
+  console.warn('NEURO ARENA: using the 2D renderer:', why);
+  const c = document.createElement('canvas'); c.id = 'gl'; c.setAttribute('aria-label', canvas.getAttribute('aria-label') || '');
+  canvas.replaceWith(c); canvas = c;
+  try { R = new Render2D(c); ui.renderer = '2d'; if (rect.w > 1) layout(); if (lastFrame) R.setFrame(lastFrame); banner('3D view unavailable here (' + why + '), showing the 2D view.', 'info'); }
+  catch (e) { R = null; ui.renderer = 'none'; banner('Could not draw the arena: ' + e.message); }
+}
+if (/[?&]r2d/.test(location.search)) queueMicrotask(() => use2D('requested'));
+else { try { R = new Render3D(canvas); ui.renderer = 'webgl'; } catch (e) { const m = e.message || 'WebGL unavailable'; queueMicrotask(() => use2D(m)); } }
 const labelsEl = $('labels'), labelEls = [];
 function mkLabel(cls, txt) { const d = document.createElement('div'); d.className = 'lbl ' + cls; d.textContent = txt; labelsEl.appendChild(d); labelEls.push(d); return d; }
 const regionEls = [0, 1].map(k => REGION_LABELS.map(([t]) => mkLabel(k ? 'b' : 'a', t)));
@@ -79,9 +98,31 @@ function placeOverlays() {
 
 // ------------------------------------------------------------------ workers
 const WURL = new URL('./worker.js', import.meta.url);
-const mkWorker = () => { const w = new Worker(WURL, { type: 'module' }); w.onerror = e => { errs.push('worker: ' + (e.message || e)); console.error('worker error', e.message); }; return w; };
+// main-thread stand-in with the Worker interface, for browsers where module workers fail
+class LocalWorker {
+  constructor() { this.local = true; this.onmessage = null; this.dead = false; this.h = makeHandler(m => setTimeout(() => { if (!this.dead && this.onmessage) this.onmessage({ data: m }); }, 0)); }
+  postMessage(m) { setTimeout(() => { if (!this.dead) this.h({ data: m }); }, 0); }
+  terminate() { this.dead = true; }
+}
+let noWorkers = /[?&]noworker/.test(location.search);
+function workersFailed(why) {
+  if (noWorkers) return; noWorkers = true; ui.workerMode = 'main thread';
+  console.warn('NEURO ARENA: workers unavailable, running on the main thread:', why);
+  banner('Background workers unavailable (' + why + '); simulating on the main thread, so it may be slower.', 'info');
+  if (liveW) { liveW.terminate(); liveW = null; }
+  pool.forEach(w => w.terminate()); pool = [];
+  ui.started = false; setMode(ui.mode);
+}
+const mkWorker = () => {
+  if (noWorkers) return new LocalWorker();
+  try {
+    const w = new Worker(WURL, { type: 'module' });
+    w.onerror = e => { const m = e.message || 'worker failed to load'; errs.push('worker: ' + m); console.error('worker error', m); workersFailed(m); };
+    return w;
+  } catch (e) { noWorkers = true; ui.workerMode = 'main thread'; return new LocalWorker(); }
+};
 let liveW = null, pool = [];
-function getLive() { if (!liveW) { liveW = mkWorker(); liveW.onmessage = onLive; } return liveW; }
+function getLive() { if (!liveW) { liveW = mkWorker(); liveW.onmessage = onLive; } ui.liveT0 = performance.now(); ui.lastLiveMsg = 0; return liveW; }
 function ensurePool(K) {
   while (pool.length < K) { const w = mkWorker(); w.busy = null; w.onmessage = e => { const cb = w.busy; w.busy = null; if (cb) cb(e.data.res); }; pool.push(w); }
   while (pool.length > K) pool.pop().terminate();
@@ -151,7 +192,7 @@ let lastFrame = null, lastTickT = performance.now();
 function onLive(e) {
   const f = e.data, lv = ui.live;
   if (!lv || f.t !== 'frame') return;
-  lv.pending = false; lastFrame = f; ui.frame = { time: f.time, pad: f.pad, bx: f.bx, by: f.by, stats: f.stats, hold: f.hold };
+  ui.lastLiveMsg = performance.now(); lv.pending = false; lastFrame = f; ui.frame = { time: f.time, pad: f.pad, bx: f.bx, by: f.by, stats: f.stats, hold: f.hold };
   if (R) {
     R.setFrame(f);
     f.br.forEach((b, k) => { if (b) { R.spikes(k, f.spk, k * N, f); R.setDopamine(k, b.rpe * 1.2); } });
@@ -205,14 +246,15 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyI') toggleInfo(); else if (e.code === 'Escape') { toggleInfo(false); document.body.classList.remove('ctl'); }
 });
 addEventListener('keyup', e => { if (KMAP[e.code]) input.keys.delete(KMAP[e.code]); });
+const onCanvas = (type, fn) => document.addEventListener(type, e => { if (e.target === canvas) fn(e); });
 function pointerCourt(e) {
   if (!R || ui.mode !== 'play') return null;
   const c = R.toCourt(e.clientX, e.clientY);
   if (c.x < -0.2 || c.x > COURT.W + 0.2 || c.y < -0.25 || c.y > 1.25) return null;
   return c;
 }
-canvas.addEventListener('pointerdown', e => { const c = pointerCourt(e); if (c) { input.y = Math.max(0, Math.min(1, c.y)); input.serve = true; input.drag = e.pointerId; } });
-canvas.addEventListener('pointermove', e => { if (ui.mode !== 'play') return; if (e.pointerType === 'mouse' || input.drag === e.pointerId) { const c = pointerCourt(e); if (c) input.y = Math.max(0, Math.min(1, c.y)); } });
+onCanvas('pointerdown', e => { const c = pointerCourt(e); if (c) { input.y = Math.max(0, Math.min(1, c.y)); input.serve = true; input.drag = e.pointerId; } });
+onCanvas('pointermove', e => { if (ui.mode !== 'play') return; if (e.pointerType === 'mouse' || input.drag === e.pointerId) { const c = pointerCourt(e); if (c) input.y = Math.max(0, Math.min(1, c.y)); } });
 addEventListener('pointerup', e => { if (input.drag === e.pointerId) input.drag = null; });
 function pollGamepad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : []; let v = 0;
@@ -389,10 +431,16 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - prevT) / 1000); prevT = now;
   if (ui.mode === 'play') pollGamepad();
-  if (R) { R.render(dt, ui.mode !== 'turbo'); placeOverlays(); }
+  if (R && R.failed && !R.is2D) use2D(R.failed);
+  if (R) { try { R.render(dt, ui.mode !== 'turbo'); } catch (e) { if (!R.is2D) use2D(e.message); else throw e; } placeOverlays(); }
+  // watchdog: a live match that produces no frames for 8 s means the worker never started
+  if (ui.live && ui.mode !== 'turbo' && !noWorkers && !document.hidden && now - Math.max(ui.liveT0 || 0, ui.lastLiveMsg || 0, ui.visT || 0) > 8000) workersFailed('no response from worker');
 }
+document.addEventListener('visibilitychange', () => { ui.visT = performance.now(); });
 syncControls(); layout(); renderLog(); renderGenome(); updateStatus(); drawMaps();
 if (evo.champ.weights) ui.polMaps = [polFromWeights(evo.champ.weights), null];
 setMode('watch');
 requestAnimationFrame(frame);
-if (!localStorage.getItem('neuroArena.seenInfo')) { toggleInfo(true); localStorage.setItem('neuroArena.seenInfo', '1'); }
+// the live duel starts immediately; first-time visitors get a hint instead of a modal over the arena
+if (!localStorage.getItem('neuroArena.seenInfo')) { setTimeout(() => toast('Live duel running · press i or ⓘ for how it works'), 1200); try { localStorage.setItem('neuroArena.seenInfo', '1'); } catch (e) { /* private mode */ } }
+window.NA_started = true;
