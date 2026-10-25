@@ -30,6 +30,15 @@
 | D1 (Darwinian) | 46 | 54 | 66 | 92 | 96 | innate 0.37 → 0.25 |
 Champion benchmark never dropped in Lamarckian runs. Start: held-out 0.275 (random ≈ 0.24–0.27).
 
+## Darwinian mode (genes only) — weaker, honest numbers
+- Old-rule runs D1–D3 (seeds 1–3): reported champion score was inflated by a winner's curse (best of 6 stochastic lifetimes,
+  e.g. D3 92% → 62% next rounds). Real ability of the final champions, measured as fresh 30-s lives → benchmark:
+  D1 0.84/0.58, D2 0.72/0.58 vs gen 0 0.36/0.40. So genes do evolve better *learners*, but slowly and noisily.
+- Fix: Darwinian challengers must also beat the champion's running mean by ≥3 serves. Re-run Dm1–Dm3 pending.
+- Bug 9: **Darwinian winner's curse** (above).
+
 ## Next steps
+- [x] audit.mjs --quick ALL PASS; full run: 2 storage tests too strict (jitter scale) → fixed, re-run pending
+- [x] pushed 974e814 (live, verified 200 + new code served)
 - [ ] audit.mjs all green (fixed tests: sensory centroid mid-range, covariance %, tonic dopamine, chaos-aware quantization)
 - [ ] page tests + WebKit/Chromium render checks, README, push, verify live 200
