@@ -187,6 +187,7 @@
         case 'diplo': return this.diplo(bloc, c.act, c.target);
         case 'respond': return this.respond(bloc, c.id, c.accept);
         case 'low': B.low = !!c.on; return { ok: true, msg: 'Launch on warning ' + (B.low ? 'ARMED' : 'off') };
+        case 'auto': if (this.defcon < 4) return { ok: false, msg: 'Deployment is closed' }; Game.AI.autoDeploy(this, bloc, c.pers || 'opportunist'); return { ok: true, msg: 'Forces deployed by your staff' };
         case 'cancel': this.orders = this.orders.filter(o => !(o.bloc === bloc)); return { ok: true, msg: 'Pending launches cancelled' };
       }
       return { ok: false, msg: 'Unknown order' };
@@ -446,7 +447,7 @@
         if (a.state === 'return') {
           let h = home && home.alive ? home : null;
           if (!h) { let bd = 1e9; for (const u of this.units) if (u.alive && u.bloc === a.bloc && (u.type === 'airbase' || u.type === 'carrier')) { const d = gc(a.lat, a.lon, u.lat, u.lon); if (d < bd) { bd = d; h = u; } } if (h) a.home = h.id; }
-          if (!h) { a.alive = false; this.ev({ type: 'crash', id: a.id }); continue; }
+          if (!h) { a.alive = false; this.ev({ type: 'crash', id: a.id }, [a.bloc]); continue; }
           dest = [h.lat, h.lon];
         }
         if (a.fuel <= 0) { a.alive = false; this.ev({ type: 'crash', id: a.id }, [a.bloc]); continue; }
@@ -474,8 +475,8 @@
         if (!tgt || (i.tm && !tgt.alive)) continue;
         if (this.rng() < i.pk) {
           if (i.tm) { tgt.alive = false; tgt.killed = true; const p = this.missilePos(tgt, this.t); this.ev({ type: 'intercept', id: tgt.id, lat: p[0], lon: p[1], by: i.bloc }); if (this.humans.includes(i.bloc)) this.b[i.bloc].intercepts = (this.b[i.bloc].intercepts || 0) + 1; }
-          else { tgt.alive = false; this.ev({ type: 'downed', id: tgt.id, kind: tgt.kind, lat: tgt.lat, lon: tgt.lon, by: i.bloc }); }
-        } else this.ev({ type: 'miss', id: tgt.id, by: i.bloc, lat: i.to[0], lon: i.to[1] });
+          else { tgt.alive = false; this.ev({ type: 'downed', id: tgt.id, kind: tgt.kind, lat: tgt.lat, lon: tgt.lon, by: i.bloc }, [i.bloc, tgt.bloc]); }
+        } else this.ev({ type: 'miss', id: tgt.id, by: i.bloc, lat: i.to[0], lon: i.to[1] }, [i.bloc]);
       }
       this.missiles = this.missiles.filter(m => m.alive || this.t - m.t0 - m.dur < 1);
       this.ints = this.ints.filter(i => i.alive);
@@ -513,7 +514,7 @@
       const to = isMissile ? this.missilePos(tgt, this.t + 1.6) : [tgt.lat, tgt.lon];
       const i = { id: this.nid++, bloc: u.bloc, from: [u.lat, u.lon], to, t0: this.t, dur: 1.6, tm: isMissile, tgt: tgt.id, pk, alive: true };
       if (isMissile) tgt.shots++;
-      this.ints.push(i); this.ev({ type: 'ifire', id: i.id, bloc: u.bloc, lat: u.lat, lon: u.lon });
+      this.ints.push(i); this.ev({ type: 'ifire', id: i.id, bloc: u.bloc, lat: u.lat, lon: u.lon }, [u.bloc]);
     }
     reveal(u, to, s) { u.rev[to] = Math.max(u.rev[to] || 0, this.t + s); }
     /** conventional skirmishes from DEFCON 3: fighters, carriers. Every engagement reveals both sides. */
@@ -522,7 +523,8 @@
       this._sk = (this._sk || 0) + dt; if (this._sk < 1) return; this._sk = 0;
       for (const a of this.air) if (a.kind === 'fighter' && a.alive !== false) {
         for (const o of this.air) if (o.bloc !== a.bloc && this.hostile(a.bloc, o.bloc) && o.alive !== false && !(this.b[a.bloc].ceasefire[o.bloc] > this.t) && gc(a.lat, a.lon, o.lat, o.lon) < AIR.fighter.aaRange) {
-          if (this.rng() < AIR.fighter.aaPk * (o.kind === 'bomber' ? 1.2 : 1)) { o.alive = false; this.ev({ type: 'downed', id: o.id, kind: o.kind, lat: o.lat, lon: o.lon, by: a.bloc }); this.news(BLOCS[a.bloc].name + ' fighters shoot down a ' + BLOCS[o.bloc].name + ' ' + o.kind + '.', null, 'combat'); }
+          a.rev[o.bloc] = this.t + 30; o.rev[a.bloc] = this.t + 30;
+          if (this.rng() < AIR.fighter.aaPk * (o.kind === 'bomber' ? 1.2 : 1)) { o.alive = false; this.ev({ type: 'downed', id: o.id, kind: o.kind, lat: o.lat, lon: o.lon, by: a.bloc }, [a.bloc, o.bloc]); this.news(BLOCS[a.bloc].name + ' fighters shoot down a ' + BLOCS[o.bloc].name + ' ' + o.kind + '.', [a.bloc, o.bloc], 'combat'); }
           break;
         }
         // strafing runs on ships
@@ -534,7 +536,7 @@
           const d = gc(u.lat, u.lon, o.lat, o.lon); if (d > 3) continue;
           if (o.type === 'sub' && d > UNIT.carrier.sonar) continue;
           this.reveal(o, u.bloc, 60); this.reveal(u, o.bloc, 60);
-          if (!this._skNews || this.t - this._skNews > 20) { this._skNews = this.t; this.news('Naval engagement: ' + BLOCS[u.bloc].name + ' and ' + BLOCS[o.bloc].name + ' fleets exchange fire.', null, 'combat'); this.ev({ type: 'skirmish', lat: (u.lat + o.lat) / 2, lon: (u.lon + o.lon) / 2 }); }
+          if (!this._skNews || this.t - this._skNews > 20) { this._skNews = this.t; this.news('Naval engagement: ' + BLOCS[u.bloc].name + ' and ' + BLOCS[o.bloc].name + ' fleets exchange fire.', [u.bloc, o.bloc], 'combat'); this.ev({ type: 'skirmish', lat: (u.lat + o.lat) / 2, lon: (u.lon + o.lon) / 2 }, [u.bloc, o.bloc]); }
           for (const b of [u.bloc, o.bloc]) this.b[b].tension[b === u.bloc ? o.bloc : u.bloc] = Math.min(100, this.b[b].tension[b === u.bloc ? o.bloc : u.bloc] + 1.5);
           if (this.rng() < (o.type === 'sub' ? 0.1 : 0.06)) this.destroyUnit(o, u.bloc, 'naval action');
           break;
@@ -543,7 +545,7 @@
     }
     destroyUnit(u, by, why) {
       if (!u.alive) return; u.alive = false; u.dead = this.t;
-      this.ev({ type: 'destroyed', id: u.id, utype: u.type, bloc: u.bloc, lat: u.lat, lon: u.lon, by, why });
+      this.ev({ type: 'destroyed', id: u.id, utype: u.type, bloc: u.bloc, lat: u.lat, lon: u.lon, by, why }, why === 'nuclear strike' ? null : [u.bloc, by]);
       for (const a of this.air) if (a.home === u.id && a.state === 'return') a.home = -1;
       this.orders = this.orders.filter(o => o.id !== u.id);
     }
