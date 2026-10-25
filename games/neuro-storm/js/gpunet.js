@@ -262,7 +262,7 @@ export class GpuNet {
         gl.bindTexture(gl.TEXTURE_2D, t); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y0, W, rows, gl.RGBA, gl.FLOAT, d.subarray(0, cnt * 4));
       }
     }
-    const gl = this.gl; gl.bindFramebuffer(gl.FRAMEBUFFER, this.fR); gl.viewport(0, 0, this.tR[0].w, this.tR[0].h); gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 0]); gl.clearBufferfv(gl.COLOR, 1, [0, 0, 0, 0]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fR); gl.viewport(0, 0, this.tR[0].w, this.tR[0].h); gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 0]); gl.clearBufferfv(gl.COLOR, 1, [0, 0, 0, 0]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.blk = 0; this.step_ = 0; this.t = 0; this.stims = []; this.inj = null; this.clearWave = 1;
     this.lastV = new Float32Array(NSAMP).fill(PHYS.EL); this.lastKs = new Float32Array(NSAMP).fill(1e5); this.lastTh = new Float32Array(NSAMP);
