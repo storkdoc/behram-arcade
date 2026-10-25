@@ -27,8 +27,11 @@
 </header>
 
 <div id="legend">
-  <div><i class="dot e"></i>Excitatory pyramidal cell (80%) · EPSP</div>
-  <div><i class="dot i"></i>Inhibitory interneuron (20%) · IPSP</div>
+  <div class="classic-only"><i class="dot e"></i>Excitatory pyramidal cell (80%) · EPSP</div>
+  <div class="classic-only"><i class="dot i"></i>Inhibitory interneuron (20%) · IPSP</div>
+  <div class="dense-only lg"><i class="dot" style="--c:#45d0ff"></i>L2/3 pyramidal <i class="dot" style="--c:#62f5a0"></i>L4 stellate</div>
+  <div class="dense-only lg"><i class="dot" style="--c:#7a9cff"></i>L5 pyramidal <i class="dot" style="--c:#3fb8c8"></i>L6 pyramidal</div>
+  <div class="dense-only lg"><i class="dot" style="--c:#ff4fd8"></i>PV basket <i class="dot" style="--c:#ff9a3c"></i>SST <i class="dot" style="--c:#ffe45a"></i>VIP</div>
   <div><i class="dot s"></i>Action potential</div>
   <div><i class="dot r"></i>Refractory · <i class="dot h"></i>Hyperpolarised</div>
   <div class="hint" id="hint">Click a neuron to stimulate it · drag to rotate · scroll to zoom</div>
@@ -39,6 +42,10 @@
 
 <section id="panel" class="glass" aria-label="Controls">
   <div class="phead"><b>Controls</b><button id="bClose" class="x" aria-label="Close controls">✕</button></div>
+  <label class="sel"><span>Neuron count</span><select id="selN" aria-label="Neuron count">
+    <option value="4k">4K · classic (CPU)</option><option value="55k">55K · GPU cortex</option><option value="147k">147K · GPU cortex</option><option value="276k">276K · GPU cortex</option><option value="1m">1M · GPU cortex</option>
+  </select></label>
+  <p class="fine dense-only" id="synInfo">Six layers, 7 cell types, ~1,900 synapses per neuron on average</p>
   <div class="row btns">
     <button id="bPlay2" title="Space">❚❚ Pause</button>
     <button id="bStep" title="Step 0.5 ms (.)">Step +0.5 ms</button>
@@ -52,6 +59,7 @@
   <div class="seg" role="radiogroup" aria-label="Stimulus mode">
     <button id="mTap" class="on" role="radio" aria-checked="true" title="E toggles">Single pulse</button>
     <button id="mTrain" role="radio" aria-checked="false" title="E toggles">Electrode (hold: 50 Hz)</button>
+    <button id="mThal" class="dense-only" role="radio" aria-checked="false" title="E toggles">Thalamic → L4</button>
   </div>
   <label class="sl"><span>Stimulus strength</span><output id="oStim"></output><input id="sStim" type="range" min="0.2" max="3" step="0.05"></label>
   <label class="sl"><span>Excitation <small>AMPA → EPSP</small></span><output id="oE"></output><input id="sE" type="range" min="0" max="2" step="0.01"></label>
@@ -62,16 +70,20 @@
   <div class="row chk">
     <label><input type="checkbox" id="cRot" checked> Auto-rotate</label>
     <label><input type="checkbox" id="cTh" checked> Threshold trace</label>
-    <label><input type="checkbox" id="cAx" checked> Axons</label>
+    <label class="classic-only"><input type="checkbox" id="cAx" checked> Axons</label>
+    <label class="dense-only"><input type="checkbox" id="cCut"> Cutaway (C)</label>
+    <label class="dense-only"><input type="checkbox" id="cLobe"> Lobes</label>
   </div>
-  <p class="keys">Keys: <b>Space</b> pause · <b>.</b> step · <b>R</b> reset · <b>D</b> demo · <b>E</b> electrode · <b>A</b> rotate · <b>T</b> threshold · <b>[ ]</b> speed · <b>I</b> info · <b>H</b> hide panels · Shift-click inspects without stimulating</p>
+  <p class="keys">Keys: <b>Space</b> pause · <b>.</b> step · <b>R</b> reset · <b>D</b> demo · <b>E</b> electrode · <b>A</b> rotate · <b>T</b> threshold · <b>[ ]</b> speed · <b>I</b> info · <b>H</b> hide panels · <span class="dense-only"><b>L</b> layer view · <b>C</b> cutaway ·</span> Shift-click inspects without stimulating</p>
 </section>
 
 <section id="insp" class="glass" aria-label="Neuron inspector">
   <div class="ihead">
     <span id="iName">No neuron selected</span>
     <span id="iPhase" class="phase">—</span>
+    <span id="iSyn" class="phase dense-only"></span>
     <span class="grow"></span>
+    <button id="bView" class="mini dense-only" title="Switch between the voltage trace and the layer I–VI column slice (L)">Layers</button>
     <button id="bWin" class="mini" title="Time window">60 ms</button>
     <button id="bNext" class="mini" title="Inspect a downstream neighbour">Next ⇢</button>
     <button id="bPick" class="mini" title="Pick a neuron to inspect without stimulating it">Inspect</button>
@@ -86,6 +98,18 @@
   <div class="card glass">
     <button id="bInfoX" class="x" aria-label="Close">✕</button>
     <h2>What you are looking at</h2>
+    <div class="dense-only">
+    <p>In the GPU modes (55K to 1M neurons) this is a <b>layered cortex</b>. Both hemispheres are covered by a folded grey-matter sheet 2.5 mm thick, with the central sulcus, the Sylvian fissure and the longitudinal fissure, joined by the corpus callosum. The <b>Lobes</b> option tints the frontal, parietal, temporal and occipital lobes.</p>
+    <ul>
+      <li><b>Six layers.</b> Layer I is almost cell-free. II/III holds pyramidal cells. IV is granular and densest, with spiny stellate cells. V holds large pyramidal cells. VI holds corticothalamic pyramidal cells. Shares are I 1%, II/III 39%, IV 17%, V 17% and VI 26%.</li>
+      <li><b>Seven cell types</b>, with 80% excitatory and 20% inhibitory cells. Excitatory cells are regular-spiking with adaptation. <b>PV basket cells</b> are fast-spiking, with a short refractory period and strong, fast perisomatic IPSPs. <b>SST/Martinotti cells</b> are adapting and low-threshold, and send slow IPSPs to the upper layers. <b>VIP cells</b> are disinhibitory and mainly inhibit SST cells.</li>
+      <li><b>Canonical microcircuit.</b> Thalamus → IV → II/III → V → VI → IV, plus long horizontal II/III connections and homotopic callosal fibres. Each neuron integrates about 700–2,200 synapses (the average is shown above). Each one gives a 0.2–1 mV PSP, with conduction delays that grow with distance.</li>
+      <li><b>Thalamic → L4</b> mode delivers a sensory volley into layer IV. Activity then spreads up to II/III, down to V/VI, and then sideways.</li>
+      <li>The <b>Layers</b> view in the inspector is a slice through the sheet under the selected cell, with every simulated neuron of the patch at its true depth. <b>Cutaway</b> clips the brain at the selected cell.</li>
+    </ul>
+    <p class="fine">How it runs: the whole network is simulated on the GPU (WebGL2 float textures, 0.05 ms steps). Synapses are not stored one by one. Each neuron draws its synaptic input every step from the spikes of each presynaptic population around it, using distance-dependent Gaussian connection fields, per-population in-degrees and axonal delays (a statistically exact mean-field "binomial" draw of its ~2,000 inputs). Every cell has hashed individual thresholds and positions. Simplifications: layers II and III are merged, layer I neurons are modelled as VIP-like, the folding is procedural, and the sheet area (~840 cm²) is smaller than a real cortex (~1,800 cm²), so each model neuron still stands in for a few real ones.</p>
+    <h3>The single neuron (all modes)</h3>
+    </div>
     <p>Each glowing dot is a neuron in the cortical grey matter of both hemispheres. Cyan cells are <b>excitatory pyramidal cells</b> (80%) and magenta cells are <b>inhibitory fast-spiking interneurons</b> (20%, Dale's law: each cell has only one kind of output). Brightness follows the membrane potential. A cell brightens as EPSPs depolarise it, flashes white when it fires, glows ember-orange while it is refractory, and turns dim blue when IPSPs or the after-hyperpolarisation push it below rest.</p>
     <h3>The neuron</h3>
     <ul>
@@ -110,6 +134,6 @@
 </div>
 <div id="fatal" hidden></div>
 <noscript><div style="color:#fff;font:16px system-ui;padding:40px">Neuro Storm needs JavaScript.</div></noscript>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/boot.js"></script>
 </body>
 </html>

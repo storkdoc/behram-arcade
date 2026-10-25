@@ -23,7 +23,7 @@ export class Scope {
       g.fillStyle = '#8fa3c4'; g.font = `13px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('Click or tap a neuron: its membrane potential appears here', L + pw / 2, T + ph / 2); return;
     }
-    const i = rec.i, T0 = net.type[i] ? PHYS.I : PHYS.E, rel = relEnd(T0);
+    const i = rec.i, T0 = net.paramsOf ? net.paramsOf(i) : net.type[i] ? PHYS.I : PHYS.E, rel = relEnd(T0);
     g.save(); g.beginPath(); g.rect(L, T, pw, ph); g.clip();
     // refractory shading
     for (const ts of rec.spikes) {
@@ -34,7 +34,7 @@ export class Scope {
       g.fillStyle = 'rgba(255,60,60,0.30)'; g.fillRect(xa, T, Math.max(1, xb - xa), ph);
     }
     // reference lines
-    const ref = [[T0.Vpk, 'spike peak', 'rgba(255,255,255,0.18)'], [0, '0 mV', 'rgba(255,255,255,0.10)'], [-55, 'threshold −55', 'rgba(255,190,90,0.55)'], [-70, 'rest −70', 'rgba(120,200,255,0.55)'], [-80, 'E GABA / AHP −80', 'rgba(220,120,255,0.35)']];
+    const thr = Math.round(T0.th0 ?? -55); const ref = [[T0.Vpk, 'spike peak', 'rgba(255,255,255,0.18)'], [0, '0 mV', 'rgba(255,255,255,0.10)'], [thr, 'threshold', 'rgba(255,190,90,0.55)'], [-70, 'rest −70', 'rgba(120,200,255,0.55)'], [-80, 'E GABA / AHP −80', 'rgba(220,120,255,0.35)']];
     g.setLineDash([4, 4]); g.lineWidth = 1;
     for (const [v, , c] of ref) { g.strokeStyle = c; g.beginPath(); g.moveTo(L, Math.round(y(v)) + 0.5); g.lineTo(L + pw, Math.round(y(v)) + 0.5); g.stroke(); }
     g.setLineDash([]);
@@ -55,7 +55,7 @@ export class Scope {
       g.stroke();
     };
     if (this.showTh) drawTrace(rec.th, 'rgba(255,170,60,0.9)', 1.25, false);
-    const col = net.type[i] ? '#ff7be3' : '#7fe2ff';
+    const col = net.colorOf ? net.colorOf(i) : net.type[i] ? '#ff7be3' : '#7fe2ff';
     g.shadowColor = col; g.shadowBlur = 6; drawTrace(rec.V, col, 1.6, true); g.shadowBlur = 0;
     // synaptic arrival markers
     g.font = `9px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -79,7 +79,7 @@ export class Scope {
     g.restore();
     // axis labels
     g.font = `10px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'middle';
-    for (const [v, lab, c] of (ph < 110 ? [[T0.Vpk, `+${T0.Vpk}`], [0, '0'], [-55, '−55'], [-70, '−70']] : [[T0.Vpk, `+${T0.Vpk}`], [0, '0'], [-55, '−55'], [-70, '−70'], [-80, '−80']])) { g.fillStyle = v === -55 ? '#ffbe5a' : v <= -70 && v > -80 ? '#7fd0ff' : '#8fa3c4'; g.fillText(lab, L - 5, y(v)); }
+    for (const [v, lab, c] of (ph < 110 ? [[T0.Vpk, `+${T0.Vpk}`], [0, '0'], [thr, '−' + -thr], [-70, '−70']] : [[T0.Vpk, `+${T0.Vpk}`], [0, '0'], [thr, '−' + -thr], [-70, '−70'], [-80, '−80']])) { g.fillStyle = v === thr ? '#ffbe5a' : v <= -70 && v > -80 ? '#7fd0ff' : '#8fa3c4'; g.fillText(lab, L - 5, y(v)); }
     g.save(); g.translate(9, T + ph / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillStyle = '#8fa3c4'; g.fillText('mV', 0, 0); g.restore();
     g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = '#8fa3c4';
     g.fillText(`−${W} ms`, L, h - 3); g.textAlign = 'right'; g.fillText('now', L + pw, h - 3);
@@ -91,7 +91,7 @@ export class Scope {
     if (lw < pw - 2 * tw) { let lx = L + pw / 2 - lw / 2; for (const [t, c] of items) { g.fillStyle = c; g.fillText(t, lx, h - 3); lx += g.measureText(t).width + 9; } }
     // live readout
     g.textAlign = 'right'; g.textBaseline = 'top'; g.font = `600 11px ${FONT}`; g.fillStyle = '#e9f1ff';
-    g.fillText(`V ${net.V[i].toFixed(1)} mV   θ ${net.th[i].toFixed(1)} mV`, L + pw - 4, 1);
+    g.fillText(`V ${(net.vOf ? net.vOf(i) : net.V[i]).toFixed(1)} mV   θ ${(net.thOf ? net.thOf(i) : net.th[i]).toFixed(1)} mV`, L + pw - 4, 1);
   }
 }
 
@@ -102,10 +102,19 @@ export class Raster {
     this.rateBins = new Float32Array(4000); this.rateT0 = 0;
   }
   setNet(net) {
-    this.net = net; const N = net.N, ord = [...Array(N).keys()];
+    this.net = net;
+    if (net.gSamp) {   // dense mode: rows are a fixed sample of neurons (already sorted), rate from GPU totals
+      const S = net.gSamp; this.rows = S.length; this.rank = Int32Array.from(S.keys()); this.rowCol = Uint32Array.from(S, n => this.abgr(net.colorOf(n)));
+      this.nLeft = S.reduce((a, n) => a + (net.hemi[n] < 0 ? 1 : 0), 0); return;
+    }
+    const N = net.N, ord = [...Array(N).keys()];
     ord.sort((a, b) => (net.hemi[a] - net.hemi[b]) || (net.pos[b * 3 + 2] - net.pos[a * 3 + 2]));
-    this.rank = new Int32Array(N); ord.forEach((n, r) => (this.rank[n] = r));
+    this.rank = new Int32Array(N); ord.forEach((n, r) => (this.rank[n] = r)); this.rows = N; this.rowCol = null;
+    this.nLeft = net.hemi.reduce((a, s) => a + (s < 0 ? 1 : 0), 0);
   }
+  abgr(hex) { const v = parseInt(hex.slice(1), 16); return (0xff000000 | ((v & 255) << 16) | (v & 0xff00) | (v >> 16)) >>> 0; }
+  pushOnly(t, i) { const h = this.head; this.t[h] = t; this.id[h] = i; this.head = (h + 1) % this.cap; if (this.count < this.cap) this.count++; }
+  addRate(t, c) { this.rateBins[Math.floor(t) % 4000] += c; }
   clear() { this.head = 0; this.count = 0; this.rateBins.fill(0); }
   push(t, i) { const h = this.head; this.t[h] = t; this.id[h] = i; this.head = (h + 1) % this.cap; if (this.count < this.cap) this.count++; this.rateBins[Math.floor(t) % 4000]++; }
   tick(now) { // zero rate bins that are about to be reused
@@ -122,14 +131,14 @@ export class Raster {
     const u = this.u32; u.fill(0);
     const bgc = 0xb0120804; for (let yy = pt; yy < pb; yy++) u.fill(bgc, yy * W + pl, yy * W + pr);
     // hemisphere divider
-    const nL = net.hemi.reduce((a, s) => a + (s < 0 ? 1 : 0), 0), yDiv = pt + Math.round(nL / N * ph);
+    const NR = this.rows, yDiv = pt + Math.round(this.nLeft / NR * ph);
     u.fill(0x40ffffff, yDiv * W + pl, yDiv * W + pr);
     const cE = 0xffffd85a, cI = 0xffd85aff; // ABGR: E cyan-ish (r=5a,g=d8,b=ff), I magenta
-    const t0 = now - this.win, rowH = Math.max(1, Math.round(ph / N * 1.6));
+    const t0 = now - this.win, rowH = Math.max(1, Math.round(ph / NR * 1.6));
     for (let k = 0, idx = (this.head - 1 + this.cap) % this.cap; k < this.count; k++, idx = (idx - 1 + this.cap) % this.cap) {
       const t = this.t[idx]; if (t < t0) break;
-      const n = this.id[idx], xx = pl + Math.floor((t - t0) / this.win * pw), yy = pt + Math.floor(this.rank[n] / N * ph);
-      const c = net.type[n] ? cI : cE;
+      const n = this.id[idx], xx = pl + Math.floor((t - t0) / this.win * pw), yy = pt + Math.floor(this.rank[n] / NR * ph);
+      const c = this.rowCol ? this.rowCol[n] : net.type[n] ? cI : cE;
       for (let r = 0; r < rowH && yy + r < pb; r++) { const o = (yy + r) * W + xx; u[o] = c; if (dpr > 1.5 && xx + 1 < pr) u[o + 1] = c; }
     }
     g.setTransform(1, 0, 0, 1, 0, 0); g.putImageData(this.img, 0, 0);
@@ -144,7 +153,7 @@ export class Raster {
     g.strokeStyle = 'rgba(255,211,106,0.95)'; g.lineWidth = 1.4; g.beginPath();
     pts.forEach((v, k) => { const px = L + k * 2, py = T + ph2 - v / top * ph2; k ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke();
     g.font = `10px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillStyle = '#8fa3c4'; g.textAlign = 'left';
-    g.fillText(w < 560 ? `raster · ${this.win} ms · L above, R below` : `raster · ${this.win} ms · rows = neurons front→back (L hemisphere above, R below)`, L, h - 2);
+    g.fillText(w < 560 ? `raster · ${this.win} ms · L above, R below` : `raster · ${this.win} ms · rows = ${this.rowCol ? NR + ' sampled ' : ''}neurons front→back (L hemisphere above, R below)`, L, h - 2);
     g.textAlign = 'right'; g.fillStyle = '#ffd36a'; g.fillText(w < 560 ? `${pts[pts.length - 1].toFixed(1)}%/5 ms` : `firing ${pts[pts.length - 1].toFixed(1)}%/5 ms (scale ${top.toFixed(0)}%)`, w - R, h - 2);
   }
 }

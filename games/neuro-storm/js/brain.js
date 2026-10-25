@@ -51,7 +51,7 @@ const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a)
 
 // u = unit direction in hemisphere-local frame (x>0 = lateral/outward). Returns radius.
 // Also leaves the local sulcus intensity (0..1) in SULC.v for the renderer.
-export const SULC = { v: 0 };
+export const SULC = { v: 0, lobe: 0 };
 export function hemiRadius(ux, uy, uz, side) {
   let r = baseRadius(ux, uy, uz);
   const syl = Math.exp(-((SD.body - SD.temp) ** 2) / 0.0012) * sstep(-0.1, 0.25, ux + 0.2); // Sylvian crease
@@ -67,6 +67,9 @@ export function hemiRadius(ux, uy, uz, side) {
   const med = sstep(-0.6, -0.85, ux);               // medial wall: shallower folds
   r -= 0.035 * g * (1 - 0.6 * med);
   SULC.v = Math.min(1, gm * (1 - 0.65 * med) + 0.9 * csI + 0.9 * syl);
+  // lobe (for the optional lobe tint): temporal below the Sylvian fissure, occipital behind the
+  // parieto-occipital line, frontal in front of the central sulcus, parietal in between
+  SULC.lobe = (SD.temp < SD.body + 0.01 && uy < 0.12 && uz > -0.62) ? 2 : (uz < -0.68 + 0.12 * uy) ? 3 : cs > 0 ? 0 : 1;
   return r;
 }
 
@@ -104,20 +107,20 @@ export function genNeurons(N, seed = 7, iFrac = 0.2) {
 
 // Surface meshes as plain arrays (renderer turns them into geometry)
 export function hemiMesh(side, segU = 256, segV = 160) {
-  const verts = [], idx = [], tmp = [0, 0, 0], sulc = [];
+  const verts = [], idx = [], tmp = [0, 0, 0], sulc = [], lobe = [];
   for (let j = 0; j <= segV; j++) {
     const v = j / segV, ph = v * Math.PI;
     for (let i = 0; i <= segU; i++) {
       const u = i / segU, th = u * Math.PI * 2;
       const ux = Math.sin(ph) * Math.cos(th), uy = Math.cos(ph), uz = Math.sin(ph) * Math.sin(th);
-      hemiPoint(side, ux, uy, uz, 1.0, tmp); verts.push(tmp[0], tmp[1], tmp[2]); sulc.push(SULC.v);
+      hemiPoint(side, ux, uy, uz, 1.0, tmp); verts.push(tmp[0], tmp[1], tmp[2]); sulc.push(SULC.v); lobe.push(SULC.lobe);
     }
   }
   for (let j = 0; j < segV; j++) for (let i = 0; i < segU; i++) {
     const a = j * (segU + 1) + i, b = a + segU + 1;
     if (side > 0) idx.push(a, b, a + 1, b, b + 1, a + 1); else idx.push(a, a + 1, b, b, a + 1, b + 1);
   }
-  return { verts: new Float32Array(verts), idx, sulc: new Float32Array(sulc) };
+  return { verts: new Float32Array(verts), idx, sulc: new Float32Array(sulc), lobe: new Float32Array(lobe) };
 }
 export function cerebellumMesh(segU = 160, segV = 96) {
   const verts = [], idx = [];
@@ -144,5 +147,23 @@ export function stemMesh(segU = 48, segV = 24) {
     for (let i = 0; i <= segU; i++) { const th = i / segU * Math.PI * 2; verts.push(Math.cos(th) * rad * 1.1, y, z + Math.sin(th) * rad); }
   }
   for (let j = 0; j < segV; j++) for (let i = 0; i < segU; i++) { const a = j * (segU + 1) + i, b = a + segU + 1; idx.push(a, a + 1, b, b, a + 1, b + 1); }
+  return { verts: new Float32Array(verts), idx };
+}
+
+// corpus callosum: the arched commissural band in the floor of the longitudinal fissure
+// (genu in front, body, splenium behind), as a flattened, tapered tube along a sagittal arc
+export function callosumMesh(segS = 64, segT = 24) {
+  const verts = [], idx = [];
+  for (let j = 0; j <= segS; j++) {
+    const s = j / segS, a = Math.PI * (0.06 + 0.88 * s);
+    const z = 0.47 * Math.cos(a) - 0.04, y = 0.06 + 0.17 * Math.sin(a);
+    const thick = 0.035 + 0.03 * Math.exp(-((s - 0.95) ** 2) / 0.004) + 0.02 * Math.exp(-((s - 0.04) ** 2) / 0.004); // splenium + genu bulges
+    const half = 0.5 * (0.55 + 0.35 * Math.sin(Math.PI * s));
+    for (let i = 0; i <= segT; i++) {
+      const t = i / segT * Math.PI * 2, cx = Math.cos(t), cy = Math.sin(t);
+      verts.push(cx * half, y + cy * thick * (1 - 0.6 * cx * cx), z);
+    }
+  }
+  for (let j = 0; j < segS; j++) for (let i = 0; i < segT; i++) { const a = j * (segT + 1) + i, b = a + segT + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
   return { verts: new Float32Array(verts), idx };
 }

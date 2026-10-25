@@ -25,6 +25,7 @@ export class Render3D {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.05, 50);
     this.pr = Math.min(window.devicePixelRatio || 1, 3);
+    this.clip = { value: 99 }; this.lobeMix = { value: 0 };
     this.buildBackdrop(); this.buildBrain(); this.buildNeurons(); this.buildLines(); this.buildPulses(); this.buildFx();
     this.composer = null; this.resize(window.innerWidth, window.innerHeight);
   }
@@ -41,21 +42,24 @@ export class Render3D {
     const mk = (d, tint, strength, side = 0) => {
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(d.verts, 3)); g.setIndex(d.idx); g.computeVertexNormals();
       g.setAttribute('aSulc', new THREE.BufferAttribute(d.sulc || new Float32Array(d.verts.length / 3), 1));
+      g.setAttribute('aLobe', new THREE.BufferAttribute(d.lobe || new Float32Array(d.verts.length / 3).fill(-1), 1));
       // dark translucent body: gives the brain mass against the backdrop
-      const body = new THREE.Mesh(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.FrontSide,
-        vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-        fragmentShader: `varying vec3 vN; varying vec3 vV; void main(){ float f = abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(0.004,0.006,0.016, 0.42*f); }` }));
+      const body = new THREE.Mesh(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.FrontSide, uniforms: { uClip: this.clip },
+        vertexShader: `varying vec3 vN; varying vec3 vV; varying float vZ; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vZ = position.z; vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+        fragmentShader: `uniform float uClip; varying vec3 vN; varying vec3 vV; varying float vZ; void main(){ if (vZ > uClip) discard; float f = abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(0.004,0.006,0.016, 0.42*f); }` }));
       body.renderOrder = -2; this.scene.add(body);
       const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.FrontSide,
-        uniforms: { uTint: { value: new THREE.Color(...tint) }, uStr: { value: strength }, uSide: { value: side } },
-        vertexShader: `attribute float aSulc; uniform float uSide; varying vec3 vN; varying vec3 vV; varying float vS; varying float vMed;
-          void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); vS = aSulc;
+        uniforms: { uTint: { value: new THREE.Color(...tint) }, uStr: { value: strength }, uSide: { value: side }, uClip: this.clip, uLobe: this.lobeMix },
+        vertexShader: `attribute float aSulc; attribute float aLobe; uniform float uSide; varying vec3 vN; varying vec3 vV; varying float vS; varying float vMed; varying float vZ; varying vec3 vL;
+          void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); vS = aSulc; vZ = position.z;
+            vL = aLobe < -0.5 ? vec3(0.0) : aLobe < 0.5 ? vec3(0.25,0.45,1.0) : aLobe < 1.5 ? vec3(0.3,0.95,0.55) : aLobe < 2.5 ? vec3(1.0,0.7,0.25) : vec3(0.75,0.4,1.0);
             vMed = uSide == 0.0 ? 0.0 : smoothstep(0.15, 0.75, -normal.x * uSide); gl_Position = projectionMatrix*mv; }`,
-        fragmentShader: `uniform vec3 uTint; uniform float uStr; varying vec3 vN; varying vec3 vV; varying float vS; varying float vMed;
-          void main(){ vec3 n = normalize(vN); float ndv = abs(dot(n, normalize(vV))); float f = 1.0 - ndv; float rim = pow(f, 3.0) * (1.0 - 0.8*vMed);
+        fragmentShader: `uniform vec3 uTint; uniform float uStr; uniform float uClip; uniform float uLobe; varying vec3 vN; varying vec3 vV; varying float vS; varying float vMed; varying float vZ; varying vec3 vL;
+          void main(){ if (vZ > uClip) discard; vec3 n = normalize(vN); float ndv = abs(dot(n, normalize(vV))); float f = 1.0 - ndv; float rim = pow(f, 3.0) * (1.0 - 0.8*vMed);
             float key = max(0.0, dot(n, normalize(vec3(-0.35,0.75,0.55)))); float fill = max(0.0, dot(n, normalize(vec3(0.6,-0.2,-0.4))));
             float sul = smoothstep(0.2, 0.9, vS) * (0.35 + 0.65*ndv) * (1.0 - 0.6*vMed);
-            vec3 c = uTint * (0.025 + 0.4*rim + 0.07*key*key + 0.025*fill) + vec3(0.42,0.5,1.0) * sul * 0.42;
+            vec3 tint = mix(uTint, vL * 0.8, uLobe * step(0.01, dot(vL, vL)));
+            vec3 c = tint * (0.025 + 0.4*rim + 0.07*key*key + 0.025*fill) + vec3(0.42,0.5,1.0) * sul * 0.42 + vL * uLobe * 0.05;
             gl_FragColor = vec4(c*uStr, 1.0); }` });
       const mesh = new THREE.Mesh(g, m); mesh.renderOrder = -1; this.scene.add(mesh); mesh.body = body; return mesh;
     };
