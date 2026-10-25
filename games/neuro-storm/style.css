@@ -138,8 +138,11 @@ body.dense .classic-only { display: none !important; }
 .lg .dot + .dot, .lg .dot { margin-left: 0; } .lg { white-space: nowrap; }
 .lg i:not(:first-child) { margin-left: 8px; }
 .sel { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-weight: 600; }
-.sel select { flex: 1; font: inherit; font-weight: 500; color: var(--fg); background: rgba(120,150,230,0.12); border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px; }
+.sel select { -webkit-appearance: none; appearance: none; flex: 1; font: inherit; font-weight: 500; color: var(--fg); background: #16203a url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M0 0l5 6 5-6z%27 fill=%27%23c9d6ee%27/%3E%3C/svg%3E") no-repeat right 10px center; padding-right: 26px !important; border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px; }
 .sel select option { background: #0b1226; }
 #synInfo { margin: 0 0 8px; color: var(--dim); font-size: 11.5px; }
 #bView.on { background: rgba(120,255,180,0.2); }
 body.loading::after { content: 'Building the cortex…'; position: fixed; inset: 0; display: grid; place-items: center; color: #c9d6ee; font-size: 15px; letter-spacing: .08em; z-index: 30; pointer-events: none; }
+
+@media (max-width: 1700px) { #iSyn { display: none !important; } }
+#iName { min-width: 60px; flex-shrink: 1; }

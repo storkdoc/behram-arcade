@@ -17,7 +17,7 @@ export class DenseRender3D extends Render3D {
     const sc = 4000 / N;
     const rel = CP.map(c => c.tAbs + c.tauTh * Math.log(c.dTh));
     this.uni = { uSA: { value: this.texA }, uSB: { value: this.texB }, uW: { value: net.g.W }, uScale: { value: 500 }, uPR: { value: 1 },
-      uSize: { value: 0.03 * Math.pow(sc, 0.3) }, uRest: { value: 0.42 * Math.pow(sc, 0.42) }, uHot: { value: 5.0 * Math.pow(sc, 0.3) }, uSel: { value: -1 }, uTime: { value: 0 },
+      uSize: { value: 0.03 * Math.pow(sc, 0.3) }, uRest: { value: 0.6 * Math.pow(sc, 0.2) }, uHot: { value: 3.0 * Math.pow(sc, 0.3) }, uSel: { value: -1 }, uTime: { value: 0 },
       uFlashMs: { value: 3 }, uClip: this.clip, uCols: { value: CLASSES.map(c => hex(c.color)) }, uRel: { value: rel } };
     const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, uniforms: this.uni,
       vertexShader: /* glsl */`
@@ -39,7 +39,7 @@ export class DenseRender3D extends Render3D {
           float flash = exp(-since / uFlashMs);
           float dep = smoothstep(-70.0, -54.0, V), hyp = smoothstep(-70.5, -79.0, V);
           float relW = uRel[cls], refr = since < relW ? 1.0 - since / relW : 0.0;
-          vec3 c = base * uRest * (0.55 + 1.6 * dep);
+          vec3 c = base * uRest * (1.0 + 2.0 * dep);
           c = mix(c, vec3(0.22, 0.26, 0.95) * uRest * 0.45, hyp * 0.85);
           c += vec3(1.0, 0.3, 0.1) * refr * uRest * 0.6 * (1.0 - flash);
           c = mix(c, mix(base, vec3(1.0), 0.55) * uHot, flash);
