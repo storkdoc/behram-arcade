@@ -4,7 +4,7 @@ import { Brain, mulberry32 } from './brain.js';
 import { Match } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
 
-export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: false };
+export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true };
 
 // run one complete duel headlessly. gA/gB genomes, wA/wB dense weights or null
 export function runDuel(job) {

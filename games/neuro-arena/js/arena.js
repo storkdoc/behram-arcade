@@ -8,7 +8,7 @@ export class Match {
   // players: [{brain}|{human:true}|{random:true}|{track:true}]
   constructor(players, rnd, opts = {}) {
     this.P = players; this.rnd = rnd; this.pong = new Pong(rnd); this.t = 0; this.prevErr = [0, 0]; this.cmd = [0, 0];
-    this.humanY = 0.5; this.randCmd = [0, 0]; this.critT = 0; this.opts = opts;
+    this.humanY = 0.5; this.humanCmd = 0; this.randCmd = [0, 0]; this.critT = 0; this.opts = opts; if (opts.manualServe) this.pong.hold = true;
   }
   stepMs(ms) {
     const pg = this.pong, C = COURT;
@@ -21,7 +21,7 @@ export class Match {
           b.run(Math.round(1 / DT));
           this.cmd[p] = b.out;
         } else if (pl.human) {
-          const d = this.humanY - pg.pad[p]; this.cmd[p] = Math.max(-1, Math.min(1, d / (C.padV * 16)));
+          if (this.humanCmd) this.cmd[p] = this.humanCmd; else { const d = this.humanY - pg.pad[p]; this.cmd[p] = Math.abs(d) < 0.004 ? 0 : Math.max(-1, Math.min(1, d / (C.padV * 16))); }
         } else if (pl.track) {
           const d = pg.by - pg.pad[p]; this.cmd[p] = Math.max(-1, Math.min(1, d / (C.padV * 30)));
         } else {
@@ -36,6 +36,7 @@ export class Match {
         const b = this.P[ev.p].brain, o = this.P[1 - ev.p].brain;
         if (ev.t === 'hit' && b) b.reward(b.g.hitR);
         if (ev.t === 'miss') { if (b) b.reward(-b.g.missR); if (o) o.reward(0.3 * o.g.hitR); }
+        if (ev.t === 'miss' && this.opts.manualServe) pg.hold = true;
         if (this.onEvent) this.onEvent(ev);
       }
       pg.events.length = 0;

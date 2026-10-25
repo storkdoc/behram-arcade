@@ -14,10 +14,10 @@ if (!isMainThread) {
   const evo = new Evolution({ rate: +rate, lamarck: !!+lam, matchSec: +matchSec });
   const pool = Array.from({ length: +K }, () => new Worker(here));
   const run = (w, j) => new Promise(r => { w.once('message', r); w.postMessage(j); });
-  const evalChamp = async (n = 3) => {   // standardised test: champion vs a perfect wall-tracker, 60 s, n seeds in parallel
-    const c = evo.champ;
-    const rs = await Promise.all(pool.slice(0, n).map((w, i) => run(w, { evalOnly: 1, g: c.genome, w: c.weights, seed: 1000 + i, sec: 60 })));
-    return rs.reduce((a, r) => a + r.hit, 0) / rs.length;
+  const evalChamp = async (n = 6) => {   // standardised test: champion vs a perfect wall-tracker, 60 s x n seeds (pooled balls)
+    const c = evo.champ, rs = [];
+    await Promise.all(pool.map(async (w, wi) => { for (let i = wi; i < n; i += pool.length) rs.push(await run(w, { evalOnly: 1, g: c.genome, w: c.weights, seed: 1000 + i, sec: 60 })); }));
+    return rs.reduce((a, r) => a + r.hit * r.n, 0) / rs.reduce((a, r) => a + r.n, 0);
   };
   const t0 = Date.now(), rows = [];
   rows.push({ gen: 0, t: 0, test: await evalChamp() });

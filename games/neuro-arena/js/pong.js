@@ -12,7 +12,7 @@ export class Pong {
   step(cmd, dt) {
     const C = COURT, h = C.padH / 2;
     for (let p = 0; p < 2; p++) { let y = this.pad[p] + cmd[p] * C.padV * dt; this.pad[p] = y < h ? h : y > 1 - h ? 1 - h : y; }
-    if (this.wait > 0) { this.wait -= dt; return; }
+    if (this.wait > 0) { if (!this.hold) this.wait -= dt; return; }
     this.bx += this.vx * dt; this.by += this.vy * dt;
     if (this.by < C.r) { this.by = 2 * C.r - this.by; this.vy = -this.vy; }
     if (this.by > 1 - C.r) { this.by = 2 * (1 - C.r) - this.by; this.vy = -this.vy; }
