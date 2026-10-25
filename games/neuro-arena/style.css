@@ -60,7 +60,12 @@ body.dockctl #panel { right: calc(var(--cw) + 20px + var(--sar)); }
 .ch .lg { font-weight: 500; color: var(--dim); margin-left: 6px; letter-spacing: 0; }
 .lg i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin: 0 3px 0 8px; font-style: normal; }
 .lg .l1 { background: var(--gold); } .lg .l2 { background: rgba(185,139,255,.7); height: 4px; width: 4px; border-radius: 2px; } .lg .l3 { background: repeating-linear-gradient(90deg, #8aa 0 3px, transparent 3px 5px); } .lg .l4 { width: auto; height: auto; color: var(--ok); background: none; }
-#chart { flex: 1; width: 100%; min-height: 0; display: block; touch-action: none; }
+#chart { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; display: block; touch-action: none; }
+.chrow { flex: 1; display: flex; gap: 8px; min-height: 0; }
+#life { flex: 0 0 30%; min-width: 0; min-height: 0; display: block; border-left: 1px solid rgba(120,160,255,.12); }
+body.phone #life { flex-basis: 36%; }
+#benchLbl { font-size: 10px; letter-spacing: .08em; color: #ffe7a6; font-weight: 600; }
+.lg .l5 { background: repeating-linear-gradient(90deg, #fff 0 4px, transparent 4px 7px); opacity: .7; } .lg .l6 { background: rgba(80,220,255,.85); }
 #tip { position: absolute; z-index: 3; max-width: 260px; pointer-events: none; padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,.85); border: 1px solid var(--line); font-size: 11px; }
 #log { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; font-size: 11px; touch-action: pan-y; }
 #log li { padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,.05); }
@@ -141,7 +146,7 @@ body.short #panel { --ph: 150px; }
 @media (max-width: 420px) { #top { gap: 8px; } .mode { padding: 6px 8px; font-size: 12px; } }
 body.side #cardGenome { grid-template-columns: 1fr; } body.side #maps { display: none; }
 body.compact .card:not(.on) { display: none !important; }
-#score .mid, #genLbl, #clock { white-space: nowrap; }
+#score .mid, #genLbl, #benchLbl, #clock { white-space: nowrap; }
 body.thumb #panel, body.thumb #ctl, body.thumb .meters, body.thumb #top, body.thumb #toast { display: none !important; }
 #banner { position: fixed; top: calc(58px + var(--sat)); left: 50%; transform: translateX(-50%); z-index: 60; max-width: min(92vw, 640px); display: flex; gap: 10px; align-items: center; padding: 9px 12px 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; line-height: 1.35; box-shadow: 0 6px 24px rgba(0,0,0,.4); }
 #banner.err { background: rgba(70,10,24,.95); border: 1px solid #ff5c7a; color: #ffe3e8; }

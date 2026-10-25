@@ -1,5 +1,5 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
-import { Evolution, quant, dequant } from './evo.js';
+import { Evolution, quant, dequant, BENCH_N } from './evo.js';
 import { GENES, GENE, fmtGene, gen0Genome } from './genome.js';
 import { N, L } from './brain.js';
 import { COURT } from './pong.js';
@@ -8,9 +8,10 @@ import { Render2D } from './render2d.js';
 import { makeHandler } from './simcore.js';
 
 const $ = id => document.getElementById(id);
-const KEY = 'neuroArena.v1';
+const KEY = 'neuroArena.v2';          // v2: benchmark selection + fixed learner; v1 saves (buggy learner) are discarded
+try { localStorage.removeItem('neuroArena.v1'); } catch (e) { /* storage disabled */ }
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
-const RANDOM_HIT = 0.27;              // measured: random paddle vs a perfect wall (see README)
+const RANDOM_HIT = 0.24;              // measured: a random paddle on the benchmark serves (see README)
 const coarse = matchMedia('(pointer: coarse)').matches;
 const HC = navigator.hardwareConcurrency || 4;
 const errs = [];
@@ -129,10 +130,11 @@ const mkWorker = () => {
 let liveW = null, pool = [];
 function getLive() { if (!liveW) { liveW = mkWorker(); liveW.onmessage = onLive; } ui.liveT0 = performance.now(); ui.lastLiveMsg = 0; return liveW; }
 function ensurePool(K) {
-  while (pool.length < K) { const w = mkWorker(); w.busy = null; w.onmessage = e => { const cb = w.busy; w.busy = null; if (cb) cb(e.data.res); }; pool.push(w); }
+  while (pool.length < K) { const w = mkWorker(); w.busy = null; w.onmessage = e => { const b = w.busy; if (!b || e.data.rid !== b.rid) return; w.busy = null; b.r(e.data.res); }; pool.push(w); }
   while (pool.length > K) pool.pop().terminate();
 }
-const runOn = (w, job) => new Promise(r => { w.busy = r; w.postMessage({ t: 'duel', job }); });
+let ridC = 0;
+const runOn = (w, job) => new Promise(r => { const rid = ++ridC; w.busy = { rid, r }; w.postMessage(job.t === 'bench' ? { ...job, rid } : { t: 'duel', job, rid }); });
 const copyJob = j => ({ ...j, wA: j.wA ? new Float32Array(j.wA) : null, wB: j.wB ? new Float32Array(j.wB) : null });
 
 // ------------------------------------------------------------------ modes
@@ -187,7 +189,7 @@ function onGenerations(out, child) {
   if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
   if (ui.mode === 'turbo') {
     $('tGen').textContent = evo.gen; $('tRate').textContent = ui.gps.toFixed(2);
-    const r = recentFit(); $('tChamp').textContent = `champion #${evo.champ.id} · recent hit rate ${(r * 100).toFixed(0)}% (gen 0–10: ${(earlyFit() * 100).toFixed(0)}%)`;
+    $('tChamp').textContent = `champion #${evo.champ.id} · benchmark ${pct(evo.champ.fit)} · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}`;
     ui.polMaps = [evo.champ.weights ? polFromWeights(evo.champ.weights) : null, null]; drawMaps();
   }
 }
@@ -208,12 +210,7 @@ function onLive(e) {
   }
   f.br.forEach((b, k) => { if (b && b.pol) ui.polMaps[k] = b.pol; }); if (f.br.some(b => b && b.pol)) drawMaps();
   if (performance.now() - (ui.lastMeters || 0) > 50) { ui.lastMeters = performance.now(); updateMeters(f); }
-  if (f.result && lv.kind === 'watch') {
-    const out = evo.record([lv.child], [lv.job], [f.result]);
-    onGenerations(out, lv.child);
-    if (ui.mode === 'watch' && lv.ep === ui.epoch) setTimeout(() => { if (ui.mode === 'watch' && lv.ep === ui.epoch) startWatch(); }, 900);
-    return;
-  }
+  if (f.result && lv.kind === 'watch') { benchWatch(lv, f.result); return; }
   if (lv.kind === 'play') {
     const s = f.stats.score;
     $('serveHint').classList.toggle('hidden', !f.hold);
@@ -221,6 +218,20 @@ function onLive(e) {
   }
   tickLive();
 }
+// after a watched duel: score both brains on the benchmark serves (in two background workers), then select
+async function benchWatch(lv, r) {
+  const job = lv.job, ev0 = evo, lam = !!job.lamarck; lv.benching = true;
+  $('clock').textContent = `benchmarking ${BENCH_N} serves…`;
+  ensurePool(Math.max(2, pool.length));
+  const [bA, bB] = await Promise.all([runOn(pool[0], { t: 'bench', g: job.gA, w: r.wA }), runOn(pool[1], { t: 'bench', g: job.gB, w: r.wB })]);
+  if (evo !== ev0 || lv.ep !== ui.epoch || ui.mode !== 'watch') return;
+  const out = evo.record([lv.child], [job], [{ stats: r.stats, wA: lam ? r.wA : null, wB: lam ? r.wB : null, bench: [bA, bB] }]);
+  onGenerations(out, lv.child);
+  const e = out[0];
+  toast(e.newChamp ? `Spawn #${e.childId} scored ${pct(e.childBench)} on the benchmark → new champion` : `Benchmark: spawn ${pct(e.childBench)} · champion ${pct(e.champBench)} (champion stays)`);
+  setTimeout(() => { if (ui.mode === 'watch' && lv.ep === ui.epoch) startWatch(); }, 1400);
+}
+const pct = v => Math.round(v * 100) + '%';
 // the simulation is paced by wall-clock time, independent of the render frame rate
 function tickLive() {
   const lv = ui.live; if (!lv || lv.pending || !liveW) return;
@@ -281,11 +292,12 @@ function updateNames() {
     $(k ? 'mtB' : 'mtA').textContent = n;
   }
   $('metB').classList.toggle('hidden', ui.mode === 'play');
-  $('genLbl').textContent = 'GEN ' + evo.gen;
+  $('genLbl').textContent = 'GENERATION ' + evo.gen;
+  $('benchLbl').textContent = evo.champ.bench ? `champion benchmark ${pct(evo.champ.fit)}` : 'champion not yet benchmarked';
 }
 function updateMeters(f) {
   $('scA').textContent = f.stats.score[0]; $('scB').textContent = f.stats.score[1];
-  $('clock').textContent = ui.mode === 'play' ? 'first to 11' : `${(f.time / 1000).toFixed(1)} / ${evo.opts.matchSec} s`;
+  if (!(ui.live && ui.live.benching)) $('clock').textContent = ui.mode === 'play' ? 'first to 11' : `${(f.time / 1000).toFixed(1)} / ${evo.opts.matchSec} s`;
   f.br.forEach((b, k) => {
     if (!b) return; const s = k ? 'B' : 'A';
     $('up' + s).style.width = Math.min(100, b.rU / 50 * 100) + '%'; $('dn' + s).style.width = Math.min(100, b.rD / 50 * 100) + '%';
@@ -295,17 +307,17 @@ function updateMeters(f) {
     $('hr' + s).textContent = `returned ${h}/${h + m}${h + m ? ` · ${Math.round(100 * h / (h + m))}%` : ''} · ${b.out > 0.15 ? '▲ UP' : b.out < -0.15 ? '▼ DOWN' : '• hold'}`;
   });
 }
-function recentFit(n = 20) { const h = evo.history.slice(-n); return h.length ? h.reduce((a, e) => a + (e.champHit + e.childHit) / 2, 0) / h.length : 0; }
-function earlyFit() { const h = evo.history.slice(0, 10); return h.length ? h.reduce((a, e) => a + (e.champHit + e.childHit) / 2, 0) / h.length : 0; }
+function recentRally(n = 20) { const h = evo.history.slice(-n); return h.length ? h.reduce((a, e) => a + e.rally, 0) / h.length : 0; }
 function updateStatus() {
   const c = evo.champ, h = evo.history, nb = h.filter(e => e.beneficial).length, nc = h.filter(e => e.newChamp).length;
-  $('stat').innerHTML = `<b>Generation ${evo.gen}</b><br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>Champion hit rate ${(c.fit * 100).toFixed(1)}% over ${c.balls} balls<br>` +
-    `Recent hit rate (20 duels) ${(recentFit() * 100).toFixed(1)}% · first 10: ${(earlyFit() * 100).toFixed(1)}%<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
+  $('stat').innerHTML = `<b>Generation ${evo.gen}</b><br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>` +
+    `Benchmark ${pct(c.fit)} of ${BENCH_N} standard serves · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}<br>Mean rally (20 duels) ${recentRally().toFixed(1)} hits<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
     `Hall of Fame ${evo.hof.map(x => '#' + x.id + ' ' + Math.round(x.fit * 100) + '%').join(', ') || '–'}<br>Inheritance <b>${evo.opts.lamarck ? 'Lamarckian' : 'Darwinian'}</b> · copy errors <b>${(evo.opts.rate * 100).toFixed(1)}%</b>`;
 }
 function renderLog() {
   const items = evo.log.slice(0, 40).map(e => {
-    const er = e.errors || [], res = e.newChamp ? `won ${e.score[1]}–${e.score[0]} → champion` : e.childWon ? `won ${e.score[1]}–${e.score[0]}${e.clear ? "" : " (not clear, champion stays)"}` : `lost ${e.score[1]}–${e.score[0]}`;
+    const er = e.errors || [], duel = `duel ${e.score[1]}–${e.score[0]}`, bm = `bench ${pct(e.childBench)} vs ${pct(e.champBench)}`;
+    const res = e.newChamp ? `${duel} · ${bm} → champion` : `${duel} · ${bm}${e.childBench > e.champBench ? ' (not clearly better)' : ''}`;
     const genes = er.map(x => `<span class="gn ${x.kind}" title="${x.kind} copy error">${GENE[x.key]?.label || x.key}: ${fmtGene(x.key, x.from)}→${fmtGene(x.key, x.to)}</span>`).join('');
     const w = e.wErrors ? ` · ${e.wErrors.toLocaleString()} synapse copy errors` : '';
     const head = e.hof ? 'Hall of Fame rematch' : `<span class="ce">${er.length} copy error${er.length === 1 ? '' : 's'}</span>${w}`;
@@ -345,35 +357,56 @@ function drawMaps() {
 // ------------------------------------------------------------------ fitness chart (2D canvas at native DPR)
 const chart = $('chart');
 function drawChart() {
-  const dpr = Math.min(3, devicePixelRatio || 1), w = chart.clientWidth, h = chart.clientHeight; if (!w || !h) return;
+  const dpr = Math.min(3, devicePixelRatio || 1), w = chart.clientWidth, h = chart.clientHeight; if (!w || !h) { drawLife(); return; }
   if (chart.width !== Math.round(w * dpr) || chart.height !== Math.round(h * dpr)) { chart.width = Math.round(w * dpr); chart.height = Math.round(h * dpr); }
   const x = chart.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
-  const H = evo.history, G = Math.max(10, evo.gen), pl = 30, pr = 8, pt = 6, pb = 16, iw = w - pl - pr, ih = h - pt - pb;
-  const X = g => pl + (g / G) * iw, Y = v => pt + (1 - v) * ih;
+  const H = evo.history, G = Math.max(10, evo.gen), pl = 30, pr = 22, pt = 6, pb = 16, iw = w - pl - pr, ih = h - pt - pb;
+  const RM = Math.max(10, Math.ceil(Math.max(0, ...H.map(e => e.rally)) / 5) * 5);
+  const X = g => pl + (g / G) * iw, Y = v => pt + (1 - v) * ih, YR = v => pt + (1 - Math.min(1, v / RM)) * ih;
   x.font = '10px -apple-system, system-ui, sans-serif'; x.fillStyle = '#7f93b8'; x.strokeStyle = 'rgba(120,160,255,.12)'; x.lineWidth = 1;
   for (let v = 0; v <= 1.001; v += 0.25) { x.beginPath(); x.moveTo(pl, Y(v)); x.lineTo(w - pr, Y(v)); x.stroke(); x.fillText(Math.round(v * 100) + '%', 2, Y(v) + 3); }
+  x.fillStyle = 'rgba(80,220,255,.75)'; x.fillText(String(RM), w - pr + 3, Y(1) + 3); x.fillText('0', w - pr + 3, Y(0) + 3); x.fillStyle = '#7f93b8';
   const step = Math.pow(10, Math.floor(Math.log10(G / 4))), st = G / step > 8 ? step * 2 : step;
   for (let g = 0; g <= G; g += st) x.fillText(String(g), X(g) - 6, h - 3);
   x.setLineDash([3, 3]); x.strokeStyle = 'rgba(140,170,170,.7)'; x.beginPath(); x.moveTo(pl, Y(RANDOM_HIT)); x.lineTo(w - pr, Y(RANDOM_HIT)); x.stroke(); x.setLineDash([]);
   const dotR = H.length > 400 ? 1 : 1.6;
-  x.fillStyle = 'rgba(185,139,255,.45)'; for (const e of H) { x.beginPath(); x.arc(X(e.gen), Y(e.childHit), dotR, 0, 7); x.fill(); }
-  x.fillStyle = 'rgba(255,210,90,.35)'; for (const e of H) { x.beginPath(); x.arc(X(e.gen), Y(e.champHit), dotR, 0, 7); x.fill(); }
-  // rolling mean of the duel hit rate
-  const win = Math.max(5, Math.round(H.length / 25)); x.strokeStyle = '#ffd25a'; x.lineWidth = 2; x.shadowColor = '#ffd25a'; x.shadowBlur = 6; x.beginPath();
-  let s = 0; const q = [];
-  H.forEach((e, i) => { const v = (e.champHit + e.childHit) / 2; q.push(v); s += v; if (q.length > win) s -= q.shift(); const m = s / q.length; if (i === 0) x.moveTo(X(e.gen), Y(m)); else x.lineTo(X(e.gen), Y(m)); });
-  x.stroke(); x.shadowBlur = 0;
-  // beneficial copy errors that produced a new champion
+  x.fillStyle = 'rgba(185,139,255,.5)'; for (const e of H) { x.beginPath(); x.arc(X(e.gen), Y(e.childBench), dotR, 0, 7); x.fill(); }
+  // mean rally length in the duels (right axis), rolling mean
+  const win = Math.max(3, Math.round(H.length / 30)); let s = 0; const q = [];
+  x.strokeStyle = 'rgba(80,220,255,.8)'; x.lineWidth = 1.4; x.beginPath();
+  H.forEach((e, i) => { q.push(e.rally); s += e.rally; if (q.length > win) s -= q.shift(); const m = s / q.length; if (i === 0) x.moveTo(X(e.gen), YR(m)); else x.lineTo(X(e.gen), YR(m)); }); x.stroke();
+  // best ever (thin) and the champion's benchmark score (bold step line)
+  const stepLine = (key, style, lw, glow) => { x.strokeStyle = style; x.lineWidth = lw; x.shadowColor = style; x.shadowBlur = glow; x.beginPath(); let prev = null;
+    H.forEach((e, i) => { const v = e[key]; if (i === 0) x.moveTo(X(e.gen - 1), Y(v)); else x.lineTo(X(e.gen), Y(prev)); x.lineTo(X(e.gen), Y(v)); prev = v; }); x.stroke(); x.shadowBlur = 0; };
+  if (H.length) { x.setLineDash([4, 3]); stepLine('bestFit', 'rgba(255,255,255,.55)', 1, 0); x.setLineDash([]); stepLine('champFit', '#ffd25a', 2.2, 6); }
   ui.marks = [];
-  for (const e of H) if (e.newChamp && e.beneficial) { const px = X(e.gen), py = Y(e.childHit); ui.marks.push({ px, py, e }); x.fillStyle = '#5cff9d'; x.beginPath(); x.moveTo(px, py - 4.5); x.lineTo(px + 3.5, py); x.lineTo(px, py + 4.5); x.lineTo(px - 3.5, py); x.closePath(); x.fill(); }
-  else if (e.newChamp && e.hof) { x.fillStyle = '#ffd25a'; x.fillText('♛', X(e.gen) - 4, Y(e.childHit) + 4); }
+  for (const e of H) if (e.newChamp && e.beneficial) { const px = X(e.gen), py = Y(e.champFit); ui.marks.push({ px, py, e }); x.fillStyle = '#5cff9d'; x.beginPath(); x.moveTo(px, py - 4.5); x.lineTo(px + 3.5, py); x.lineTo(px, py + 4.5); x.lineTo(px - 3.5, py); x.closePath(); x.fill(); }
+  else if (e.newChamp && e.hof) { x.fillStyle = '#ffd25a'; x.fillText('♛', X(e.gen) - 4, Y(e.champFit) + 4); }
+  drawLife();
+}
+// lifetime learning: hit rate in each 5 s of a duel, pooled over the last 20 duels (champion vs challengers)
+function drawLife() {
+  const c = $('life'); if (!c) return;
+  const dpr = Math.min(3, devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  const H = evo.history.slice(-20).filter(e => e.seg && e.seg.length), pl = 4, pr = 4, pt = 14, pb = 14, iw = w - pl - pr, ih = h - pt - pb;
+  x.font = '10px -apple-system, system-ui, sans-serif'; x.fillStyle = '#7f93b8'; x.fillText('lifetime learning (last 20 duels)', pl, 10);
+  x.strokeStyle = 'rgba(120,160,255,.12)'; for (let v = 0; v <= 1.001; v += 0.5) { x.beginPath(); x.moveTo(pl, pt + (1 - v) * ih); x.lineTo(w - pr, pt + (1 - v) * ih); x.stroke(); }
+  if (!H.length) { x.fillText('waiting for the first duel…', pl, pt + ih / 2); return; }
+  const S = Math.max(...H.map(e => e.seg.length)), acc = [0, 1].map(() => Array.from({ length: S }, () => [0, 0]));
+  for (const e of H) e.seg.forEach((sg, i) => { const cs = e.cs ?? 0; for (const [r, side] of [[0, cs], [1, 1 - cs]]) { acc[r][i][0] += sg[side * 2]; acc[r][i][1] += sg[side * 2] + sg[side * 2 + 1]; } });
+  const X = i => pl + (S > 1 ? i / (S - 1) : 0.5) * iw, Y = v => pt + (1 - v) * ih;
+  [['#ffd25a', 0], ['rgba(185,139,255,.95)', 1]].forEach(([col, r]) => { x.strokeStyle = col; x.fillStyle = col; x.lineWidth = 1.8; x.beginPath(); let first = true;
+    acc[r].forEach(([hh, n], i) => { if (!n) return; const v = hh / n; if (first) { x.moveTo(X(i), Y(v)); first = false; } else x.lineTo(X(i), Y(v)); }); x.stroke(); });
+  x.fillStyle = '#7f93b8'; x.fillText('0 s', pl, h - 3); const lbl = S * 5 + ' s'; x.fillText(lbl, w - pr - x.measureText(lbl).width, h - 3);
 }
 function chartTip(e) {
   const r = chart.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, tip = $('tip');
   let best = null, bd = 12; for (const m of ui.marks || []) { const d = Math.hypot(m.px - mx, m.py - my); if (d < bd) { bd = d; best = m; } }
   if (!best) { tip.classList.add('hidden'); return; }
   const ev = best.e, er = ev.errors || [];
-  tip.innerHTML = `<b>Gen ${ev.gen}: spawn #${ev.childId} dethroned #${ev.champId}</b><br>${er.map(x => `${GENE[x.key]?.label || x.key} ${fmtGene(x.key, x.from)}→${fmtGene(x.key, x.to)} (${x.kind})`).join('<br>') || 'synapse copy errors only'}${ev.wErrors ? `<br>+${ev.wErrors} synapse copy errors` : ''}<br>hit rate ${(ev.childHit * 100).toFixed(0)}% vs ${(ev.champHit * 100).toFixed(0)}%`;
+  tip.innerHTML = `<b>Gen ${ev.gen}: spawn #${ev.childId} dethroned #${ev.champId}</b><br>${er.map(x => `${GENE[x.key]?.label || x.key} ${fmtGene(x.key, x.from)}→${fmtGene(x.key, x.to)} (${x.kind})`).join('<br>') || 'synapse copy errors only'}${ev.wErrors ? `<br>+${ev.wErrors} synapse copy errors` : ''}<br>benchmark ${pct(ev.childBench)} (champion before: ${pct(ev.prevBench ?? ev.champBench)})`;
   tip.classList.remove('hidden'); tip.style.left = Math.min(r.width - 200, Math.max(0, mx + 8)) + 'px'; tip.style.top = Math.max(0, my - 10) + 'px';
 }
 chart.addEventListener('pointermove', chartTip); chart.addEventListener('pointerdown', chartTip); chart.addEventListener('pointerleave', () => $('tip').classList.add('hidden'));
@@ -409,8 +442,8 @@ $('bReset').onclick = () => {
 $('bExport').onclick = () => {
   const c = evo.champ;
   const data = { app: 'neuro-arena', v: 1, exported: new Date().toISOString(), generation: evo.gen, opts: evo.opts,
-    champion: { id: c.id, fit: c.fit, n: c.n, born: c.born, balls: c.balls, genome: c.genome, weights: c.weights ? quant(c.weights, c.genome.wMax) : null },
-    fitness: evo.history.map(e => [e.gen, +e.champHit.toFixed(3), +e.childHit.toFixed(3), e.newChamp ? 1 : 0, e.beneficial ? 1 : 0]) };
+    champion: { id: c.id, fit: c.fit, n: c.n, born: c.born, bench: c.bench, genome: c.genome, weights: c.weights ? quant(c.weights, c.genome.wMax) : null },
+    fitness: evo.history.map(e => [e.gen, +e.champFit.toFixed(3), +e.childBench.toFixed(3), +e.rally.toFixed(2), e.newChamp ? 1 : 0, e.beneficial ? 1 : 0]) };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' }), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `neuro-arena-champion-gen${evo.gen}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   toast('Champion exported');
@@ -424,7 +457,7 @@ $('fImport').onchange = async e => {
     const w = d.champion.weights ? dequant(d.champion.weights) : null;
     if (w && w.length !== L.A_E.n * (L.M_UP.n + L.M_DN.n)) throw new Error('weight matrix has the wrong size');
     evo.toHof(evo.champ);
-    evo.champ = { id: evo.nextId++, genome: g, weights: w, born: evo.gen, n: 0, fit: d.champion.fit || 0, hits: 0, balls: 0, imported: true };
+    evo.champ = { id: evo.nextId++, genome: g, weights: w, born: evo.gen, n: 0, fit: 0, bench: null, scores: [], imported: true };   // re-benchmarked next round
     if (w && !evo.opts.lamarck) toast('Imported. Its learned synapses are kept only in Lamarckian mode.'); else toast(`Imported champion from generation ${d.generation ?? '?'}`);
     save(true); updateStatus(); renderGenome(); ui.started = false; setMode(ui.mode);
   } catch (err) { toast('Import failed: ' + err.message); }

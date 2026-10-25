@@ -2,7 +2,7 @@
    Used by worker.js inside a Web Worker, or directly on the main thread when workers are unavailable. */
 import { Brain, mulberry32, L, N, AREA_DEF } from './brain.js';
 import { Match } from './arena.js';
-import { runDuel } from './evo.js';
+import { runDuel, benchmark } from './evo.js';
 
 const NA_ = AREA_DEF.length;
 
@@ -38,6 +38,8 @@ return e => {
     const res = runDuel(m.job);
     const tr = []; if (res.wA) tr.push(res.wA.buffer); if (res.wB) tr.push(res.wB.buffer);
     postMessage({ t: 'duel', rid: m.rid, res }, tr);
+  } else if (m.t === 'bench') {
+    postMessage({ t: 'bench', rid: m.rid, res: benchmark(m.g, m.w) });
   } else if (m.t === 'live') {
     startLive(m);
     postMessage(frame(true));
@@ -55,8 +57,8 @@ return e => {
     const f = frame(withPol); f.simMs = done; f.wall = performance.now() - t0;
     if (mt.t >= live.limit) {
       live.done = true;
-      const lam = live.job.lamarck;
-      f.result = { stats: mt.stats(), wA: lam ? live.A.exportWeights() : null, wB: lam && live.B ? live.B.exportWeights() : null };
+      // post-duel synapses are always returned: the benchmark scores the trained brains (inheritance is decided by the caller)
+      f.result = { stats: mt.stats(), wA: live.A.exportWeights(), wB: live.B ? live.B.exportWeights() : null };
     }
     const tr = [f.spk.buffer]; if (f.result) { if (f.result.wA) tr.push(f.result.wA.buffer); if (f.result.wB) tr.push(f.result.wB.buffer); }
     postMessage(f, tr);

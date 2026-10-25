@@ -30,8 +30,9 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
     // finish a short match quickly -> a generation is recorded
     await p.evaluate(() => { NA.evo.opts.matchSec = 5; NA.ui.speed = 8; NA.restart(); });
     await p.waitForFunction(() => NA.evo.gen >= 1, null, { timeout: 120000 }).catch(() => {});
-    const g1 = await p.evaluate(() => ({ gen: NA.evo.gen, log: document.querySelectorAll('#log li').length, h: NA.evo.history[0] }));
+    const g1 = await p.evaluate(() => ({ gen: NA.evo.gen, log: document.querySelectorAll('#log li').length, h: NA.evo.history[0], bl: document.getElementById('benchLbl').textContent, gl: document.getElementById('genLbl').textContent }));
     ok(g1.gen >= 1 && g1.log >= 1, `watch match completes and is recorded (gen ${g1.gen}, ${g1.h ? g1.h.errors.length : '?'} copy errors logged)`);
+    ok(g1.h && typeof g1.h.childBench === 'number' && /\d+%/.test(g1.bl) && /GENERATION 1/.test(g1.gl), `watch: both brains benchmarked, badge shows "${g1.gl} · ${g1.bl}"`);
     await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_watch.png` });
     // turbo
     await p.evaluate(() => { NA.ui.K = 2; });

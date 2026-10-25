@@ -8,7 +8,7 @@ export class Match {
   // players: [{brain}|{human:true}|{random:true}|{track:true}]
   constructor(players, rnd, opts = {}) {
     this.P = players; this.rnd = rnd; this.pong = new Pong(rnd); this.t = 0; this.prevErr = [0, 0]; this.cmd = [0, 0];
-    this.humanY = 0.5; this.humanCmd = 0; this.randCmd = [0, 0]; this.critT = 0; this.opts = opts; if (opts.manualServe) this.pong.hold = true;
+    this.humanY = 0.5; this.humanCmd = 0; this.randCmd = [0, 0]; this.critT = 0; this.opts = opts; this.seg = []; this.segAt = [0, 0, 0, 0]; if (opts.manualServe) this.pong.hold = true;
   }
   stepMs(ms) {
     const pg = this.pong, C = COURT;
@@ -31,6 +31,10 @@ export class Match {
       }
       pg.step(this.cmd, 1);
       this.t++;
+      if (this.t % 5000 === 0) {   // lifetime-learning record: hits / misses per side in each 5 s of the match
+        const a = this.segAt, now = [pg.hits[0], pg.miss[0], pg.hits[1], pg.miss[1]];
+        this.seg.push(now.map((v, i) => v - a[i])); this.segAt = now;
+      }
       // rewards -> dopamine
       for (const ev of pg.events) {
         const b = this.P[ev.p].brain, o = this.P[1 - ev.p].brain;
@@ -59,6 +63,6 @@ export class Match {
   stats() {
     const pg = this.pong, hr = p => (pg.hits[p] + pg.miss[p]) ? pg.hits[p] / (pg.hits[p] + pg.miss[p]) : 0;
     const rl = pg.rallies.length ? pg.rallies.reduce((a, b) => a + b, 0) / pg.rallies.length : pg.rally;
-    return { score: [...pg.score], hits: [...pg.hits], miss: [...pg.miss], hitRate: [hr(0), hr(1)], rally: rl, t: this.t };
+    return { score: [...pg.score], hits: [...pg.hits], miss: [...pg.miss], hitRate: [hr(0), hr(1)], rally: rl, t: this.t, seg: this.seg.map(x => [...x]) };
   }
 }
