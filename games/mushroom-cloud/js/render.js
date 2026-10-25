@@ -29,7 +29,7 @@ varying vec2 vUv; varying vec3 vN; varying vec3 vW;
 void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 const EARTH_FS = `
 uniform sampler2D dayMap, nightMap, cloudMap, terrMap, dmgMap;
-uniform vec3 sunDir, camPos; uniform float cloudOff, warRoom, showTerr, time, cloudsOn;
+uniform vec3 sunDir, camPos; uniform float cloudOff, warRoom, showTerr, time, cloudsOn, tac;
 uniform vec3 blocCol[7]; uniform float blocOn[7]; uniform float meBloc;
 uniform vec4 rings[24]; uniform vec4 ringCol[24]; uniform int nRings;
 uniform vec4 flashes[8]; uniform vec3 flashCol[8];
@@ -82,7 +82,7 @@ void main(){
   vec += coast * vec3(0.05, 0.4, 0.5) * 0.6 + border * vec3(0.1, 0.3, 0.35) * 0.5;
   vec += tint * on * (0.06 + e * 1.4);
   col = mix(col, vec, wr);
-  col += showTerr * (1.0 - wr) * (tint * on * (0.022 * (1.0 - water) + e * (0.5 + 0.25 * sin(time * 1.5))) + border * vec3(0.5, 0.65, 0.8) * 0.05 * (1.0 - water));
+  col += showTerr * (1.0 - wr) * (tint * on * ((0.022 + 0.05 * tac + step(abs(id - meBloc), 0.5) * tac * (0.05 + 0.03 * sin(time * 2.0))) * (1.0 - water) + e * (0.5 + 0.25 * sin(time * 1.5))) + border * vec3(0.5, 0.65, 0.8) * 0.05 * (1.0 - water));
   // sensor coverage rings (radar / satellite)
   for (int i = 0; i < 24; i++) { if (i >= nRings) break; float c = dot(n, rings[i].xyz); float edge = rings[i].w; float w = 0.0012;
     float ring = smoothstep(w, 0.0, abs(c - edge)); float inside = step(edge, c);
@@ -94,7 +94,7 @@ void main(){
   ${TAIL}
 }`;
 const CLOUD_FS = `
-uniform sampler2D cloudMap; uniform vec3 sunDir, camPos; uniform float cloudOff; uniform vec4 flashes[8]; uniform vec3 flashCol[8]; uniform float warRoom;
+uniform sampler2D cloudMap; uniform vec3 sunDir, camPos; uniform float cloudOff, tac; uniform vec4 flashes[8]; uniform vec3 flashCol[8]; uniform float warRoom;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW;
 void main(){ vec3 n = normalize(vN), L = normalize(sunDir), V = normalize(camPos - vW);
   float a = texture2D(cloudMap, vUv + vec2(cloudOff, 0.0)).r; a = smoothstep(0.08, 0.9, a);
@@ -102,7 +102,7 @@ void main(){ vec3 n = normalize(vN), L = normalize(sunDir), V = normalize(camPos
   vec3 c = mix(vec3(1.0, 0.55, 0.35), vec3(1.0), smoothstep(0.0, 0.3, NdL)) * 2.2 * lit + vec3(0.006, 0.008, 0.015);
   for (int i = 0; i < 8; i++) { float k = flashes[i].w; if (k <= 0.0) continue; float d = 1.0 - dot(n, flashes[i].xyz); c += flashCol[i] * k * exp(-d * 2500.0) * 4.0; }
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-  gl_FragColor = vec4(c, a * (0.92 - rim * 0.4) * (1.0 - warRoom)); ${TAIL} }`;
+  gl_FragColor = vec4(c, a * (0.92 - rim * 0.4) * (1.0 - warRoom) * (1.0 - 0.5 * tac)); ${TAIL} }`;
 const ATMO_VS = `varying vec3 vN; varying vec3 vW; void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 const ATMO_FS = `
 uniform vec3 sunDir, camPos; uniform float warRoom; varying vec3 vN; varying vec3 vW;
@@ -271,7 +271,7 @@ export class Globe {
     const U = this.U = {
       dayMap: { value: day }, nightMap: { value: night }, cloudMap: { value: clouds }, terrMap: { value: terr }, dmgMap: { value: this.dmgTex },
       sunDir: { value: new THREE.Vector3(1, 0.2, 0.3).normalize() }, camPos: { value: new THREE.Vector3() }, cloudOff: { value: 0 }, warRoom: { value: 0 }, showTerr: { value: 1 }, time: { value: 0 }, cloudsOn: { value: 1 },
-      blocCol: { value: Array.from({ length: 7 }, () => new THREE.Color(0.5, 0.5, 0.5)) }, blocOn: { value: new Array(7).fill(0) }, meBloc: { value: 0 },
+      blocCol: { value: Array.from({ length: 7 }, () => new THREE.Color(0.5, 0.5, 0.5)) }, blocOn: { value: new Array(7).fill(0) }, meBloc: { value: 0 }, tac: { value: 0 },
       rings: { value: Array.from({ length: 24 }, () => new THREE.Vector4()) }, ringCol: { value: Array.from({ length: 24 }, () => new THREE.Vector4()) }, nRings: { value: 0 },
       flashes: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, flashCol: { value: Array.from({ length: 8 }, () => new THREE.Color()) },
       cursor: { value: new THREE.Vector4() }, cursorCol: { value: new THREE.Color(0.3, 1, 0.6) },
@@ -322,7 +322,7 @@ export class Globe {
     const r = this.r;
     this.composer = new EffectComposer(r); // default target: HalfFloat, samples 0 (no MSAA offscreen on purpose)
     this.composer.addPass(new RenderPass(this.scene, this.cam));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.82); this.composer.addPass(this.bloom);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.45, 1.5); this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.fxaa = new ShaderPass(FXAA); this.composer.addPass(this.fxaa);
   }
@@ -426,7 +426,8 @@ export class Globe {
     this.sun.geometry.attributes.position.array.set([sd.x * 90, sd.y * 90, sd.z * 90, sd.x * 90, sd.y * 90, sd.z * 90]); this.sun.geometry.attributes.position.needsUpdate = true;
     U.camPos.value.copy(this.cam.position); U.time.value = this.time; U.cloudOff.value = (this.time * 0.0008 + simT * 0.00005) % 1;
     this.warRoom += ((ui && ui.warRoom ? 1 : 0) - this.warRoom) * (1 - Math.exp(-dt * 4)); U.warRoom.value = this.warRoom;
-    U.cloudsOn.value = this.tier >= 1 ? 1 : 0; this.clouds.visible = this.tier >= 1 && this.warRoom < 0.99;
+    this.tac = (this.tac || 0) + ((view ? 1 : 0) - (this.tac || 0)) * (1 - Math.exp(-dt * 1.5)); U.tac.value = this.tac;
+    U.cloudsOn.value = this.tier >= 1 ? 1 - 0.5 * this.tac : 0; this.clouds.visible = this.tier >= 1 && this.warRoom < 0.99;
     // flashes
     this.fx.flashes = this.fx.flashes.filter(f => (f.t += dt) < 2.2);
     for (let i = 0; i < 8; i++) { const f = this.fx.flashes[this.fx.flashes.length - 1 - i]; if (f) { const k = f.t < 0.08 ? f.t / 0.08 : Math.exp(-(f.t - 0.08) * 2.4); U.flashes.value[i].set(f.n.x, f.n.y, f.n.z, k * 3); U.flashCol.value[i].setRGB(1, 0.75 + 0.25 * Math.exp(-f.t * 3), 0.5 + 0.5 * Math.exp(-f.t * 4)); } else U.flashes.value[i].w = 0; }
@@ -455,7 +456,8 @@ export class Globe {
     if (n >= 4 && black >= Math.max(2, n * 0.15)) { this.blackHoles++; console.warn('[mushroom-cloud] black regions detected at quality tier ' + this.tier + '; stepping effects down'); this.maxTier = Math.max(1, this.tier - 1); this.setTier(this.maxTier); }
   }
   adapt(dt) {
-    this.ft.push(dt); if (this.ft.length < 90) return;
+    if (this.lockTier) return;
+    this.ft.push(dt); if (this.ft.length < 90 && this.ft.reduce((a, b) => a + b, 0) < 2.5) return;
     const avg = this.ft.reduce((a, b) => a + b, 0) / this.ft.length; this.ft = [];
     if (document.hidden) return;
     if (avg > 1 / 40 && this.tier > 0) { this.setTier(this.tier - 1); this.goodRuns = 0; }

@@ -637,7 +637,7 @@
   }
   function setTimeoutish(g, s, f) { (g._timers = g._timers || []).push({ at: g.t + s, f }); }
   const r2 = v => Math.round(v * 100) / 100;
-  function fmtM(m) { if (m >= 1) return (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' million'; return Math.round(m * 1000) + ',000'; }
+  function fmtM(m) { if (m >= 1) return (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' million'; return Math.round(m * 1000) ? Math.round(m * 1000) + ',000' : 'no one'; }
 
   const MCSim = { Game, BLOCS, UNIT, TYPES, AIR, BUDGET, PHASE, D1_LEN, FINAL, SCENARIOS, DIFF, PERS, RNG, gc, slerp, vec, toLL, landBloc, isWater, waterOwner, cellAt, seaPath, waterLine, fmtM };
   if (typeof module !== 'undefined') module.exports = MCSim; else root.MCSim = MCSim;

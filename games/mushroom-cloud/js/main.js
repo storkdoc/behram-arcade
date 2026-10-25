@@ -5,7 +5,7 @@ const Q = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-const fmtM = m => m >= 1000 ? (m / 1000).toFixed(2) + ' billion' : m >= 1 ? (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' million' : Math.round(m * 1000) + ',000';
+const fmtM = m => m >= 1000 ? (m / 1000).toFixed(2) + ' billion' : m >= 1 ? (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' million' : Math.round(m * 1000) ? Math.round(m * 1000) + ',000' : 'no one';
 const shortM = m => m >= 1000 ? (m / 1000).toFixed(1) + 'B' : m >= 10 ? Math.round(m) + 'M' : m.toFixed(1) + 'M';
 const TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 const TYPES = ['silo', 'radar', 'sam', 'airbase', 'sub', 'carrier'];
@@ -602,14 +602,14 @@ function labelFn(x) {
 }
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now; app.rt += dt;
+  const rawDt = Math.max(0, (now - last) / 1000), dt = Math.min(0.1, rawDt), simDt = Math.min(0.25, rawDt); last = now; app.rt += dt;
   if (!globe || !globe.ready) return;
   if (app.slow < 1 && now > app.slowUntil) app.slow = Math.min(1, app.slow + dt * 0.5);
   pollPad(dt);
   const playing = app.screen === 'play' || app.screen === 'play-modal' || app.screen === 'end';
   if (playing && app.game) {
     const g = app.game; syncSpeed();
-    if (!app.paused) { acc += dt * g.speed * app.slow; let n = 0; while (acc >= 0.1 && n++ < 240) { g.step(0.1); acc -= 0.1; } if (n >= 240) acc = 0; }
+    if (!app.paused) { acc += simDt * g.speed * app.slow; let n = 0; while (acc >= 0.1 && n++ < 240) { g.step(0.1); acc -= 0.1; } if (n >= 240) acc = 0; }
     app.simT = g.t + (app.paused ? 0 : acc);
     if (g.events.length) { const evs = g.events.splice(0); handleEvents(g.eventsFor(app.me, evs)); if (app.online && app.online.role === 'host' && app.online.evq) app.online.evq.push(...g.eventsFor(app.online.guestBloc, evs)); }
     app.view = g.viewFor(app.me);
@@ -640,7 +640,7 @@ function frame(now) {
 /* ============================== boot ============================== */
 async function boot() {
   globe = new Globe($('gl'), $('lab'), { sunStart: -20 });
-  if (Q.get('q')) { globe.maxTier = +Q.get('q'); globe.tier = +Q.get('q'); }
+  if (Q.get('q')) { globe.maxTier = +Q.get('q'); globe.tier = +Q.get('q'); globe.lockTier = true; }
   window.addEventListener('resize', () => { globe._sized = false; });
   try { await globe.load(f => { $('lprog').style.width = Math.round(f * 100) + '%'; }); }
   catch (err) { $('lmsg').textContent = 'COULD NOT LOAD: ' + err.message; console.error(err); return; }
