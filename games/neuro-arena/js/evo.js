@@ -56,7 +56,7 @@ export class Evolution {
   spawn() {
     const o = this.opts, c = this.champ;
     const hof = this.hof[0];
-    if (hof && this.gen > 0 && this.gen % 25 === 0 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck))
+    if (hof && this.gen - (this.lastRM || 0) >= 25 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck) && (this.lastRM = this.gen) >= 0)
       return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? new Float32Array(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
     const { genome, errors } = copyGenome(c.genome, o.rate, this.rnd);   // copy errors go into the CHILD's copy only
     let weights = null, wErrors = 0;
@@ -126,17 +126,18 @@ export class Evolution {
     this.hof = this.hof.filter(h => h.id !== c.id); this.hof.push(e); this.hof.sort((a, b) => b.fit - a.fit); this.hof.length = Math.min(this.hof.length, 5);
   }
   summary() { return { gen: this.gen, champ: { id: this.champ.id, fit: this.champ.fit, n: this.champ.n, born: this.champ.born }, best: this.best && { id: this.best.id, fit: this.best.fit, gen: this.best.gen } }; }
-  // compact, JSON-safe snapshot (weights quantised to 8 bits; Hall-of-Fame synapses are not stored, so those entries
-  // cannot be re-challenged in Lamarckian mode after a reload)
+  // compact, JSON-safe snapshot (weights quantised to 8 bits; the synapses of the top 2 Hall-of-Fame entries are kept
+  // too, so they can still be re-challenged in Lamarckian mode after a reload)
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quant(c.weights, c.genome.wMax) : null;
-    return { v: STORE_V, opts: this.opts, gen: this.gen, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map(h => ({ ...h, weights: null })),
+    return { v: STORE_V, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
+      champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6) })) };
   }
   static restore(s) {
     if (!s || s.v !== STORE_V) return null;   // older saves came from the buggy learner: start fresh
-    const st = { ...s, champ: { ...s.champ, weights: s.champ.weights ? dequant(s.champ.weights) : null }, log: (s.history || []).slice(-40).reverse() };
+    const st = { ...s, champ: { ...s.champ, weights: s.champ.weights ? dequant(s.champ.weights) : null }, log: (s.history || []).slice(-40).reverse(),
+      hof: (s.hof || []).map(h => ({ ...h, weights: h.weights ? dequant(h.weights) : null })) };
     // weights lost in storage (quota): the stored benchmark no longer describes the champion, so re-earn it
     if (s.opts.lamarck && !st.champ.weights && s.champ.bench) { st.champ.bench = null; st.champ.fit = 0; }
     delete st.opts; delete st.v;
