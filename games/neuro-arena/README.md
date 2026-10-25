@@ -35,8 +35,13 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
 ## Tests
 - `node tests/evolve.mjs [gens] [K] [rate] [lamarck] [matchSec] [tag]` runs headless evolution and evaluates against a wall-serving tracker.
 - `tests/page.test.cjs` runs Playwright on desktop, iPhone and iPad.
+- `node tests/serve.mjs` checks the service rule: after a point against one side, the next serve goes toward the other side (the first serve of a game is random).
 
-## Measured (headless, tests/evolve.mjs, eval = hit rate vs a wall-serving tracker, 6 seeds × 60 s; random paddle ≈ 0.26)
+## Service
+
+A point against blue (champion, left) is served toward red (spawn, right), and vice versa. In Play mode, a point against you is served toward the champion. The first serve of each game goes to a random side, and the serve angle stays randomized. Turbo, Watch and Play all use the same rule in `js/pong.js`.
+
+## Measured (headless, tests/evolve.mjs, eval = hit rate vs a wall-serving tracker, 6 seeds × 60 s; random paddle ≈ 0.26; ≈ 0.27 since the service-direction rule)
 | run | gen 0 | ~gen 32 | ~gen 64 | ~gen 96 | later |
 |---|---|---|---|---|---|
 | Lamarckian, 2% (shipped rules), K=4 | 0.26 | 0.46 | 0.51 | **0.56** | 0.41 (gen 120) |
@@ -44,6 +49,8 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
 | Lamarckian, 0% copy errors, K=2 | 0.26 | 0.34 | 0.32 | 0.40 (gen 90) | |
 | Lamarckian, 20% copy errors, K=2 | 0.26 | 0.39 | 0.41 | 0.41 (gen 90) | |
 | Darwinian, 2% | 0.26 | 0.36 | 0.36 | | |
+
+After the service rule change (Lamarckian 2%, K=4, 30 s matches): gen 0 0.30 → gen 32 0.41 → gen 64 0.37.
 
 About 100 generations take roughly 5 minutes (4 cores, Node). The results are noisy from run to run, and a champion can also be dethroned by a lucky spawn.
 

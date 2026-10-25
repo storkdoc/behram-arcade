@@ -47,7 +47,7 @@ return e => {
     if (m.humanY != null) mt.humanY = m.humanY;
     mt.humanCmd = m.humanCmd || 0;
     if (m.serve) mt.pong.hold = false;
-    if (m.reset && live.m.mode === 'play') { const p = mt.pong; p.score = [0, 0]; p.hits = [0, 0]; p.miss = [0, 0]; p.rallies = []; p.hold = true; p.serve(1); }
+    if (m.reset && live.m.mode === 'play') { const p = mt.pong; p.score = [0, 0]; p.hits = [0, 0]; p.miss = [0, 0]; p.rallies = []; p.hold = true; p.serve(p.rnd() < 0.5 ? 0 : 1); }   // a new game: first serve to a random side
     const t0 = performance.now(), budget = m.budget || 30;
     let ms = Math.min(m.ms, live.limit - mt.t), done = 0;
     while (done < ms) { const k = Math.min(10, ms - done); mt.stepMs(k); done += k; if (performance.now() - t0 > budget) break; }

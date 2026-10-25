@@ -6,7 +6,7 @@ export class Pong {
     const a = (this.rnd() - 0.5) * 1.2, sp = COURT.v0;
     this.bx = COURT.W / 2; this.by = 0.2 + 0.6 * this.rnd();
     this.vx = (toward === 0 ? -1 : 1) * sp * Math.cos(a); this.vy = sp * Math.sin(a);
-    this.rally = 0; this.wait = 250; // ms pause before ball moves
+    this.rally = 0; this.wait = 250; this.serveTo = toward; this.serves = (this.serves || 0) + 1; // ms pause before ball moves
   }
   // cmd: paddle commands in [-1,1]; dt ms
   step(cmd, dt) {
@@ -27,7 +27,7 @@ export class Pong {
         this.bx = px - dir * C.r; this.hits[p]++; this.rally++; this.events.push({ t: 'hit', p, off });
       } else if (p === 0 ? this.bx < -0.04 : this.bx > C.W + 0.04) {
         this.miss[p]++; this.score[1 - p]++; this.rallies.push(this.rally); this.events.push({ t: 'miss', p });
-        this.serve(p);
+        this.serve(1 - p);   // service changes direction: a point against one side is served toward the other side
       }
     }
   }

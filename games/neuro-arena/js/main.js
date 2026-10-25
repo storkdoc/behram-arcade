@@ -10,7 +10,7 @@ import { makeHandler } from './simcore.js';
 const $ = id => document.getElementById(id);
 const KEY = 'neuroArena.v1';
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
-const RANDOM_HIT = 0.26;              // measured: random paddle vs a perfect wall (see README)
+const RANDOM_HIT = 0.27;              // measured: random paddle vs a perfect wall (see README)
 const coarse = matchMedia('(pointer: coarse)').matches;
 const HC = navigator.hardwareConcurrency || 4;
 const errs = [];
@@ -91,6 +91,11 @@ function placeOverlays() {
     const maxY = rect.y + rect.h + (document.body.classList.contains('compact') ? 40 : 60) - h;
     x = Math.max(6, Math.min(innerWidth - w - 6, x)); y = Math.min(y, maxY);
     m.style.left = x + 'px'; m.style.top = y + 'px';
+    // when the card has to sit up inside the brain (short screens), keep the region labels clear of it
+    if (!m.classList.contains('hidden')) regionEls[k].forEach(el => {
+      const ly = parseFloat(el.style.top), lx = parseFloat(el.style.left), hw = el.offsetWidth / 2 + 4;
+      if (ly > y - 9 && ly < y + h + 9 && lx + hw > x && lx - hw < x + w) el.style.top = (y - 10) + 'px';
+    });
   }
   const c = R.courtAnchor(COURT.W / 2, 1.0), sc = $('score');
   sc.style.top = Math.max(52, c.y - sc.offsetHeight - 6) + 'px'; sc.style.left = c.x + 'px';
