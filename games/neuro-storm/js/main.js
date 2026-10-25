@@ -56,7 +56,6 @@ function stimulate(i, opts = {}) {
   if (S.quiet) { S.waveMark.fill(0); S.wave = 0; S.waveT0 = net.t; S.quiet = false; S.lastQuietMsg = ''; }
   S.quietSince = net.t;
   net.stimulate(i, opts.scale || 1);
-  if (net.rec) net.rec.stims.push(net.t);
   R.ripple(i, opts.color);
   if (opts.select !== false) select(i);
 }
@@ -261,13 +260,21 @@ async function runDemo() {
     caption('Magenta <b>interneurons</b> fire too. Their <b>IPSPs</b>, plus every cell\'s <b>refractoriness</b> (the orange wake), make the wave shrink and <b>die out</b>.'); await quiet(30);
     caption(`<b>Back to baseline.</b> ${S.wave} neurons fired and the cortex is quiet again. That is a balanced network.`); await real(4);
     // --- single-cell refractoriness, in the inspector
-    caption('<b>Refractoriness</b>, in one cell (watch the trace). First, a pulse just above threshold strength fires it.'); setSpeed(2.5); scope.win = 60; $('bWin').textContent = '60 ms';
-    const cell = demoSite(-1.0, 0.0, -0.4); select(cell); await real(1.2);
-    inject(cell, 22, 1); await sim(1.6);
-    caption('<b>Absolute refractory period:</b> a pulse 1.6 ms later, even at 10× strength, does nothing, because the Na⁺ channels are inactivated.'); inject(cell, 220, 0.3); await sim(6.5);
-    caption('<b>Relative refractory period:</b> 8 ms after the spike the threshold is still raised and the AHP holds V down, so the same pulse fails…'); inject(cell, 22, 1); await sim(4); await real(1.2);
-    caption('…but a <b>3× stronger</b> pulse overcomes it and the cell fires.'); inject(cell, 66, 1); await sim(40); await real(0.5);
-    caption('After ~40 ms the threshold and potential have relaxed back to baseline, and the original pulse fires it again.'); inject(cell, 22, 1); await sim(25); await real(1.5);
+    const beat = async (html, secs) => { togglePause(true); caption(html); await real(secs); togglePause(false); };
+    setSpeed(2.5); scope.win = 60; $('bWin').textContent = '60 ms';
+    let cell = demoSite(-1.0, 0.0, -0.4); for (let k = 0; k < 50 && (Math.abs(net.V[cell] + 70) > 2 || net.type[cell] || (net.step_ - net.last[cell]) * DT < 300); k++) cell = (cell + 13) % N;
+    select(cell);
+    await beat('<b>Refractoriness, in one cell.</b> Watch its membrane potential in the inspector. First, a small 1 ms current pulse (⚡) fires an action potential.', 4.5);
+    inject(cell, 26, 1); await sim(1.6);
+    await beat('<b>Absolute refractory period</b> (red band): a second pulse now, 8× stronger, does nothing at all. The Na⁺ channels are inactivated.', 4.5);
+    inject(cell, 220, 0.3); await sim(6.5);
+    await beat('<b>Relative refractory period</b> (amber band): 8 ms after the spike the threshold (orange line) is still raised and the AHP holds V down. The original pulse now fails…', 5);
+    inject(cell, 26, 1); await sim(3);
+    await beat('…but a <b>3× stronger</b> pulse overcomes the raised threshold, and the cell fires.', 3.5);
+    inject(cell, 78, 1); await sim(25);
+    caption('Over the next tens of milliseconds the threshold and membrane potential relax back to baseline…'); await sim(60);
+    await beat('…and the original small pulse fires it again. The cell has fully recovered.', 2);
+    inject(cell, 26, 1); await sim(25); await real(1.5);
     // --- low inhibition
     setSpeed(12); select(site); cam.goTo(-0.9, 1.0, 0.95);
     caption('Now turn <b>inhibition down to 25%</b> and give the same pulse…'); await slide('wI', 0.25); stimulate(site); await real(2);
