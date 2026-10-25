@@ -139,3 +139,6 @@ body.phone #cardGenome { grid-template-columns: 96px 1fr; }
 body.phone .mapnote { display: none; }
 body.short #panel { --ph: 150px; }
 @media (max-width: 420px) { #top { gap: 8px; } .mode { padding: 6px 8px; font-size: 12px; } }
+body.side #cardGenome { grid-template-columns: 1fr; } body.side #maps { display: none; }
+body.compact .card:not(.on) { display: none !important; }
+#score .mid, #genLbl, #clock { white-space: nowrap; }

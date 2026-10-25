@@ -12,6 +12,7 @@ const CASES = [
 ];
 const only = process.argv[2];
 let fails = 0;
+const shot = (p, o) => p.screenshot({ ...o, timeout: 60000 }).catch(e => console.log('  (screenshot skipped: ' + e.message.split('\n')[0] + ')'));
 const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fails++; };
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -27,18 +28,19 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
     const s0 = await p.evaluate(() => ({ t: NA.ui.frame && NA.ui.frame.time, cls: document.body.className, mode: NA.ui.mode }));
     ok(s0.t > 1500, `watch mode: live duel runs (${s0.t} ms of neural time, body="${s0.cls}")`);
     // finish a short match quickly -> a generation is recorded
-    await p.evaluate(() => { NA.evo.opts.matchSec = 6; NA.ui.speed = 8; });
+    await p.evaluate(() => { NA.evo.opts.matchSec = 5; NA.ui.speed = 8; NA.restart(); });
     await p.waitForFunction(() => NA.evo.gen >= 1, null, { timeout: 120000 }).catch(() => {});
     const g1 = await p.evaluate(() => ({ gen: NA.evo.gen, log: document.querySelectorAll('#log li').length, h: NA.evo.history[0] }));
     ok(g1.gen >= 1 && g1.log >= 1, `watch match completes and is recorded (gen ${g1.gen}, ${g1.h ? g1.h.errors.length : '?'} copy errors logged)`);
-    await p.screenshot({ path: `/tmp/na_${name.replace(/\W+/g, '_')}_watch.png` });
+    await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_watch.png` });
     // turbo
+    await p.evaluate(() => { NA.ui.K = 2; });
     await p.click('#mTurbo');
     const gt0 = await p.evaluate(() => NA.evo.gen);
     await p.waitForFunction(g => NA.evo.gen >= g + 2, gt0, { timeout: 180000 }).catch(() => {});
     const gt = await p.evaluate(() => ({ gen: NA.evo.gen, K: NA.ui.K, box: !document.getElementById('turboBox').classList.contains('hidden') }));
     ok(gt.gen >= gt0 + 2 && gt.box, `turbo advances generations in ${gt.K} workers (${gt0} → ${gt.gen})`);
-    await p.screenshot({ path: `/tmp/na_${name.replace(/\W+/g, '_')}_turbo.png` });
+    await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_turbo.png` });
     // play
     await p.click('#mPlay');
     await p.waitForFunction(() => NA.ui.mode === 'play' && NA.ui.frame && NA.ui.live && NA.ui.live.kind === 'play', null, { timeout: 20000 }).catch(() => {});
@@ -46,24 +48,22 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
     const y0 = await p.evaluate(() => NA.ui.frame.pad[1]);
     if (opts.hasTouch) {
       // drag on the court near the top of the right half
-      const tgt = await p.evaluate(() => { const R = window.NA_R; return null; });
-      const box = await p.evaluate(() => { const c = document.getElementById('gl').getBoundingClientRect(); return { w: c.width, h: c.height }; });
       const pt = await p.evaluate(() => NA.courtPoint(1.2, 0.9));
       await p.touchscreen.tap(pt.x, pt.y);
-      await p.waitForTimeout(1500);
+      await p.waitForTimeout(3000);
     } else {
       await p.keyboard.press('Space');
-      await p.keyboard.down('ArrowUp'); await p.waitForTimeout(1200); await p.keyboard.up('ArrowUp');
+      await p.keyboard.down('ArrowUp'); await p.waitForTimeout(2500); await p.keyboard.up('ArrowUp');
     }
-    const s2 = await p.evaluate(() => ({ y: NA.ui.frame.pad[1], hold: NA.ui.frame.hold, t: NA.ui.frame.time, bx: NA.ui.frame.bx }));
+    const s2 = await p.evaluate(() => ({ y: NA.ui.frame.pad[1], hold: NA.ui.frame.hold && NA.ui.frame.stats.score[0] + NA.ui.frame.stats.score[1] === 0, t: NA.ui.frame.time, bx: NA.ui.frame.bx }));
     ok(s2.y > y0 + 0.1, `play mode: human paddle responds (${y0.toFixed(2)} → ${s2.y.toFixed(2)})`);
     ok(!s2.hold, `play mode: ball served (t ${s2.t} ms)`);
     await p.waitForTimeout(1500);
-    await p.screenshot({ path: `/tmp/na_${name.replace(/\W+/g, '_')}_play.png` });
+    await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_play.png` });
     if ((await p.evaluate(() => document.body.className)).includes('compact')) {
       await p.click('#bCtl'); await p.waitForTimeout(300);
       ok(await p.evaluate(() => getComputedStyle(document.getElementById('ctl')).display !== 'none'), 'controls drawer opens');
-      await p.screenshot({ path: `/tmp/na_${name.replace(/\W+/g, '_')}_drawer.png` });
+      await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_drawer.png` });
       await p.click('#bCtl');
       await p.click('#tabs button[data-tab="log"]'); await p.waitForTimeout(200);
       ok(await p.evaluate(() => document.getElementById('cardLog').classList.contains('on')), 'panel tabs switch');

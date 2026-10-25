@@ -17,7 +17,7 @@ window.addEventListener('error', e => errs.push(String(e.message)));
 // ------------------------------------------------------------------ state
 let evo = load() || new Evolution({ lamarck: true });
 const ui = { mode: 'watch', speed: 1, K: Math.max(1, Math.min(coarse ? 3 : 6, HC - 1)), epoch: 0, live: null, lastSave: 0, turboGen0: 0, turboT0: 0, gps: 0, tip: null, tab: 'chart', polMaps: [null, null] };
-window.NA = { get evo() { return evo; }, ui, errs, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null };   // for tests / console tinkering
+window.NA = { get evo() { return evo; }, ui, errs, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
 
 function load() {
   try { const s = localStorage.getItem(KEY); if (!s) return null; return Evolution.restore(JSON.parse(s)); } catch (e) { console.warn('could not restore', e); return null; }
@@ -47,7 +47,7 @@ function layout() {
   let top = 50 + sat + 46, bottom = H - 10 - sab, right = W, left = 0;
   if (side) { panel.style.cssText = `top:${56 + sat}px;bottom:${8 + sab}px;height:auto;left:auto;width:${Math.round(W * 0.36)}px`; right = W - Math.round(W * 0.36) - 18; top = 50 + sat + 36; }
   else {
-    const ph = compact ? Math.round(Math.max(150, Math.min(250, H * 0.28))) : 236;
+    const ph = compact ? Math.round(Math.max(150, Math.min(250, H * (W < H ? 0.3 : 0.28)))) : 236;
     panel.style.cssText = ''; document.documentElement.style.setProperty('--ph', ph + 'px'); bottom = H - ph - 18 - sab;
     if (b.contains('dockctl')) right = W - 300;
   }
@@ -62,7 +62,8 @@ addEventListener('orientationchange', () => setTimeout(layout, 250));
 function placeOverlays() {
   if (!R) return;
   for (let k = 0; k < 2; k++) {
-    REGION_LABELS.forEach(([t, x, y], j) => { const p = R.anchor(k, x, y); const el = regionEls[k][j]; el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.style.opacity = ui.mode === 'play' && k === 1 ? 0.25 : 1; });
+    const short = R.ppu < 75, AB = ['Sens.', 'Thal.', 'Assoc.', 'Motor ▲', 'Motor ▼'];
+    REGION_LABELS.forEach(([t, x, y], j) => { const p = R.anchor(k, x, y); const el = regionEls[k][j]; const txt = short ? AB[j] : t; if (el.textContent !== txt) el.textContent = txt; el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.style.opacity = ui.mode === 'play' && k === 1 ? 0.25 : 1; });
     const p = R.anchor(k, 0, 1.06); nameEls[k].style.left = p.x + 'px'; nameEls[k].style.top = p.y + 'px';
     const m = $(k ? 'metB' : 'metA'), q = R.anchor(k, 0, -1.0), w = m.offsetWidth, h = m.offsetHeight;
     let x = q.x - w / 2, y = q.y + 4;
@@ -126,8 +127,8 @@ async function startTurbo() {
     const res = await Promise.all(ws.map((w, i) => runOn(w, copyJob(jobs[i]))));
     if (evo !== ev0) return;                       // evolution was reset meanwhile
     const out = evo.record(kids, jobs, res);
-    onGenerations(out, kids[0]);
     const dt = (performance.now() - ui.turboT0) / 1000; ui.gps = (evo.gen - ui.turboGen0) / Math.max(0.001, dt);
+    onGenerations(out, kids[0]);
     $('tWorkers').textContent = ws.length;
     if (ui.mode !== 'turbo' || ui.epoch !== ep) { save(true); return; }
   }
@@ -255,7 +256,7 @@ function updateStatus() {
 }
 function renderLog() {
   const items = evo.log.slice(0, 40).map(e => {
-    const er = e.errors || [], res = e.newChamp ? `won ${e.score[1]}–${e.score[0]} → champion` : e.childWon ? `won ${e.score[1]}–${e.score[0]}` : `lost ${e.score[1]}–${e.score[0]}`;
+    const er = e.errors || [], res = e.newChamp ? `won ${e.score[1]}–${e.score[0]} → champion` : e.childWon ? `won ${e.score[1]}–${e.score[0]}${e.clear ? "" : " (not clear, champion stays)"}` : `lost ${e.score[1]}–${e.score[0]}`;
     const genes = er.map(x => `<span class="gn ${x.kind}" title="${x.kind} copy error">${GENE[x.key]?.label || x.key}: ${fmtGene(x.key, x.from)}→${fmtGene(x.key, x.to)}</span>`).join('');
     const w = e.wErrors ? ` · ${e.wErrors.toLocaleString()} synapse copy errors` : '';
     const head = e.hof ? 'Hall of Fame rematch' : `<span class="ce">${er.length} copy error${er.length === 1 ? '' : 's'}</span>${w}`;

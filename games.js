@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'neuro-arena',
+    title: 'NEURO ARENA',
+    tagline: 'Two spiking brains learn Pong, and the winner spawns the next challenger',
+    description: 'Two 3D brains of 2,800 spiking neurons each play Pong against each other, and nothing but their spikes moves the paddles. The neurons follow the same physiology as Neuro Storm: conductance-based integrate-and-fire cells resting at -70 mV with a threshold near -55 mV, spikes to +35 mV, an afterhyperpolarisation, absolute and relative refractory periods, AMPA EPSPs and GABA-A IPSPs, an 80/20 excitatory/inhibitory split and Dale\'s law. Population codes for the ball and paddle travel through a thalamic relay to sensory cortex, then to an E/I-balanced association cortex of gain-field cells, then to a motor layer 5 whose UP and DOWN groups compete through lateral inhibition. Within a lifetime the brains learn by reward-modulated STDP: eligibility traces turn into weight changes when dopamine bursts after a hit or dips after a miss, and homeostatic synaptic scaling keeps the motor cells in range. Across lifetimes they evolve: the champion duels its newest spawn, and the winner reproduces. Every spawn is copied with a small error rate, like DNA replication errors. Most errors are small, a few are larger point mutations, and structural changes are rare. Pick Darwinian or Lamarckian inheritance (learned synapses passed on), watch each duel live with spike traffic flowing from sensory to motor areas, or run Turbo to evolve hundreds of generations in parallel Web Workers. Charts show fitness rising, mark the copy errors that produced a new champion, and log every mutated gene. Then play against your champion yourself. Progress saves automatically, and champions can be exported as JSON.',
+    thumb: 'games/neuro-arena/thumb.png',
+    added: '2026-10-24',
+    genre: 'SIMULATION',
+    year: 'NEUROEVOLUTION',
+    controls: 'Watch / Turbo / Play buttons (or 1 / 2 / 3) · Play: W/S or arrow keys move your paddle, mouse over the court steers, SPACE serves, gamepad left stick or d-pad + A · copy error rate, match length, Darwinian/Lamarckian, watch speed and turbo arenas in the side panel · hover the ◆ chart markers for the mutations behind each new champion · I how it works',
+    touch: 'tap Watch, Turbo or Play · in Play, drag on the court to move your paddle and tap to serve · ☰ opens the controls drawer (copy error rate, match length, inheritance, speed, export/import, reset) · Fitness / Mutations / Genome tabs at the bottom · works portrait and landscape on iPhone and iPad',
+    accent: '#b38bff'
+  },
+  {
     slug: 'neuro-storm',
     title: 'NEURO STORM',
     tagline: 'Spark a chain reaction in a living virtual cortex',

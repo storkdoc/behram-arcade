@@ -55,7 +55,10 @@ export class Evolution {
       c.n++; c.hits += st.hits[cs]; c.balls += st.hits[cs] + st.miss[cs]; c.fit = c.balls ? c.hits / c.balls : 0;
       const e = { gen: this.gen, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]], childWon,
         champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false };
-      if (childWon) { const mg = (st.score[ks] - st.score[cs]) + (st.hitRate[ks] - st.hitRate[cs]); if (mg > bestM) { bestM = mg; bestK = k; } }
+      // dethroning needs a clear win (by 2+ points, or 1 point with a better return rate): a 1-0 fluke keeps the incumbent
+      const lead = st.score[ks] - st.score[cs], clear = lead >= 2 || (lead === 1 && st.hitRate[ks] > st.hitRate[cs] + 0.05);
+      e.clear = childWon && clear;
+      if (childWon && clear) { const mg = (st.score[ks] - st.score[cs]) + (st.hitRate[ks] - st.hitRate[cs]); if (mg > bestM) { bestM = mg; bestK = k; } }
       out.push(e);
     });
     if (this.opts.lamarck) { const j = jobs[0]; c.weights = j.side === 0 ? results[0].wA : results[0].wB; }

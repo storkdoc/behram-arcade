@@ -193,7 +193,7 @@ export class Render3D {
   // ---------------------------------------------------------------- layout & camera
   setLayout(rect, W, H) {
     this.rect = rect; const asp = rect.w / Math.max(1, rect.h);
-    const tall = asp < 1.15; this.mode = tall ? 'tall' : 'wide';
+    const tall = asp < 1.15 || (W < H && W < 700); this.mode = tall ? 'tall' : 'wide';
     const A = this.brains[0].grp, B = this.brains[1].grp;
     let bw, bh;
     if (!tall) {
