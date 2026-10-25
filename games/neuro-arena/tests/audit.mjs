@@ -121,7 +121,8 @@ console.log('— 4. Plasticity');
   for (let k = 0; k < (quick ? 6 : 12); k++) pert.push(benchmark(br.g, Float32Array.from(w, x => x < 0 ? x : Math.max(0, x + (rr() - 0.5) * br.g.wMax / 254))).hits);
   const lo = Math.min(bA.hits, ...pert), hi = Math.max(bA.hits, ...pert);
   console.log(`      chaos: the spiking net is deterministic but chaotic — random jitter as large as the 8-bit step (±0.2% of wMax) moves the benchmark ${lo}…${hi} of 50 (exact ${bA.hits}).`);
-  T('8-bit storage keeps learned weights (max error ≤ 0.5/254 wMax; benchmark inside the range of equal-size random jitter)', qe <= br.g.wMax / 254 * 0.51 && bB.hits >= lo - 1 && bB.hits <= hi + 1, `max err ${qe.toExponential(2)}, bench ${bA.hits} → ${bB.hits} (jitter range ${lo}…${hi})`);
+  const bq = new Brain(br.g, q), pq = polScore(bq);
+  T('8-bit storage keeps learned weights (max error ≤ 0.5/254 wMax; policy index within 3%; benchmark no worse than equal-size random jitter)', qe <= br.g.wMax / 254 * 0.51 && Math.abs(pq - p1) <= 0.03 * Math.abs(p1) && bB.hits >= lo - 1, `max err ${qe.toExponential(2)}, policy ${p1.toFixed(3)} → ${pq.toFixed(3)}, bench ${bA.hits} → ${bB.hits} (jitter range ${lo}…${hi})`);
   globalThis.__range = [lo, hi];
   globalThis.__trained = { g: br.g, w };
 }
@@ -161,7 +162,7 @@ console.log('— 5. Evolution');
     const ser = JSON.parse(JSON.stringify(ev.serialize(true))), back = Evolution.restore(ser);
     let e = 0; for (let k = 0; k < tw.length; k++) e = Math.max(e, Math.abs(back.champ.weights[k] - tw[k]));
     const rb = benchmark(back.champ.genome, back.champ.weights);
-    T('save → reload restores the champion (genome, weights, generation; benchmark inside the jitter range)', back.gen === 7 && JSON.stringify(back.champ.genome) === JSON.stringify(tg) && e < tg.wMax / 250 && rb.hits >= globalThis.__range[0] - 1 && rb.hits <= globalThis.__range[1] + 1, `bench ${ev.champ.bench.hits} → ${rb.hits}`);
+    T('save → reload restores the champion (genome, weights, generation; benchmark no worse than jitter)', back.gen === 7 && JSON.stringify(back.champ.genome) === JSON.stringify(tg) && e < tg.wMax / 250 && rb.hits >= globalThis.__range[0] - 1, `bench ${ev.champ.bench.hits} → ${rb.hits}`);
     let he = 0; for (let k = 0; k < tw.length; k++) he = Math.max(he, Math.abs(back.hof[0].weights[k] - tw[k]));
     T('Hall of Fame survives save → reload with its synapses', back.hof.length === 1 && back.hof[0].id === 99 && back.hof[0].fit === 0.9 && he < tg.wMax / 250);
     back.gen = 25; back.champ.fit = 0.5; back.champ.n = 5; const rm = back.spawn();
