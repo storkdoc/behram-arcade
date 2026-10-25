@@ -12,8 +12,7 @@ export class DenseRender3D extends Render3D {
     const net = this.net, N = net.N;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(net.pos, 3));
-    const code = new Float32Array(N); for (let i = 0; i < N; i++) code[i] = net.cls[i];
-    g.setAttribute('aCls', new THREE.BufferAttribute(code, 1));
+    g.setAttribute('aCls', new THREE.BufferAttribute(net.cls, 1));   // Uint8 class code, read as a float
     this.texA = new THREE.Texture(); this.texB = new THREE.Texture();
     const sc = 4000 / N;
     const rel = CP.map(c => c.tAbs + c.tauTh * Math.log(c.dTh));

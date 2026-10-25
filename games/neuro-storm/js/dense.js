@@ -22,6 +22,7 @@ export const TIERS = [
   { id: '147k', bx: 4, by: 4, label: '147K' },
   { id: '276k', bx: 6, by: 5, label: '276K' },
   { id: '1m', bx: 11, by: 10, label: '1M' },
+  { id: '10m', bx: 35, by: 31, label: '10M', experimental: true },   // ~1.2 GB of GPU memory: desktop GPUs only
 ];
 export const tierN = t => 2 * GRID.C * GRID.R * t.bx * t.by;
 export const SHEET = 0.042;                   // grey-matter thickness in scene units (1 unit ~ 6 cm -> 2.5 mm)

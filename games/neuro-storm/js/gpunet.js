@@ -193,7 +193,7 @@ export class GpuNet {
     this.pConv = mk(CONV_FS(g), 'conv'); this.pNeu = mk(NEURON_FS(g, false), 'neuron'); this.pProbe = mk(NEURON_FS(g, true), 'probe');
     this.pRed = mk(REDUCE_FS(g), 'reduce'); this.pSum = mk(SUM_FS(g), 'summary');
     const { W, H, C, R } = g;
-    this.tPos = this.tex(W, H, g.posTex);
+    this.tPos = this.tex(W, H, g.posTex); g.posTex = null;   // only needed on the GPU
     this.tCP = this.tex(C, 2 * R, g.cellPos); this.tN0 = this.tex(C, 2 * R, g.cellN0); this.tN1 = this.tex(C, 2 * R, g.cellN1);
     this.S = [0, 1].map(() => [this.tex(W, H), this.tex(W, H), this.tex(W, H)]);
     this.fS = this.S.map(t => this.fbo(t));
@@ -252,9 +252,16 @@ export class GpuNet {
   }
   // ---------------------------------------------------------------- state
   reset() {
-    const g = this.g, N = this.N, A = new Float32Array(N * 4), B = new Float32Array(N * 4), Cz = new Float32Array(N * 4);
-    for (let n = 0; n < N; n++) { const s = nSeed(n); A[n * 4] = PHYS.EL + (u01(hash32((s + 0x31) >>> 0)) - 0.5) * 2; B[n * 4] = this.th0(n); B[n * 4 + 2] = 1e5; B[n * 4 + 3] = PHYS.EL; }
-    for (const k of [0, 1]) { this.upload(this.S[k][0], A); this.upload(this.S[k][1], B); this.upload(this.S[k][2], Cz); }
+    // initial state, uploaded in row bands so the 10M tier does not need three full-size CPU copies
+    const g = this.g, { W, H } = g, gl = this.gl, band = Math.max(1, Math.min(H, Math.floor(4194304 / W)));
+    const A = new Float32Array(W * band * 4), B = new Float32Array(W * band * 4), Cz = new Float32Array(W * band * 4);
+    for (let y0 = 0; y0 < H; y0 += band) {
+      const rows = Math.min(band, H - y0), cnt = W * rows;
+      for (let k = 0; k < cnt; k++) { const n = y0 * W + k, s = nSeed(n); A[k * 4] = PHYS.EL + (u01(hash32((s + 0x31) >>> 0)) - 0.5) * 2; A[k * 4 + 1] = A[k * 4 + 2] = A[k * 4 + 3] = 0; B[k * 4] = this.th0(n); B[k * 4 + 1] = 0; B[k * 4 + 2] = 1e5; B[k * 4 + 3] = PHYS.EL; }
+      for (const kk of [0, 1]) for (const [t, d] of [[this.S[kk][0], A], [this.S[kk][1], B], [this.S[kk][2], Cz]]) {
+        gl.bindTexture(gl.TEXTURE_2D, t); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y0, W, rows, gl.RGBA, gl.FLOAT, d.subarray(0, cnt * 4));
+      }
+    }
     const gl = this.gl; gl.bindFramebuffer(gl.FRAMEBUFFER, this.fR); gl.viewport(0, 0, this.tR[0].w, this.tR[0].h); gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 0]); gl.clearBufferfv(gl.COLOR, 1, [0, 0, 0, 0]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.blk = 0; this.step_ = 0; this.t = 0; this.stims = []; this.inj = null; this.clearWave = 1;

@@ -1,7 +1,7 @@
 /* NEURO STORM boot: choose the classic 4K CPU model or a dense GPU cortex tier (55K to 1M neurons). */
 const Q = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
-const TIER_IDS = ['55k', '147k', '276k', '1m'];
+const TIER_IDS = ['55k', '147k', '276k', '1m', '10m'];
 function probeGpu() {
   try {
     const c = document.createElement('canvas'), gl = c.getContext('webgl2');
@@ -31,7 +31,7 @@ function choose() {
   const gpu = probeGpu();
   if (!gpu || !gpu.ok || gpu.maxTex < 4096) return { mode: 'classic', why: 'nofloat' };
   if (TIER_IDS.includes(t)) return { mode: 'dense', tier: t, why: 'url', gpu };
-  if (n) { const v = n < 100e3 ? '55k' : n < 200e3 ? '147k' : n < 600e3 ? '276k' : '1m'; return { mode: 'dense', tier: v, why: 'url', gpu }; }
+  if (n) { const v = n < 100e3 ? '55k' : n < 200e3 ? '147k' : n < 600e3 ? '276k' : n < 5e6 ? '1m' : '10m'; return { mode: 'dense', tier: v, why: 'url', gpu }; }
   const saved = sessionStorage.getItem('ns-tier');
   if (saved === '4k') return { mode: 'classic', why: 'saved' };
   if (TIER_IDS.includes(saved)) return { mode: 'dense', tier: saved, why: 'saved', gpu };

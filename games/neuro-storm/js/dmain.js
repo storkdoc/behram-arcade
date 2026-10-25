@@ -29,7 +29,6 @@ export async function startDense(tierId, why) {
   R.net = net;
   const S = { paused: false, speed: 12, mode: 'tap', inspectOnce: false, demo: null, wave: 0, waveT0: -1, quietSince: 0, lastQuietMsg: '', hold: null, gpuLimited: false, hidden: false, view: 'trace', quiet: true, tier: tier.id, why };
   const scope = new Scope($('scope')), column = new ColumnView($('scope')), raster = new Raster($('raster'), net);
-  let proj = null;
 
   // ---------------------------------------------------------------- layout (same as classic)
   function layout() {
@@ -102,14 +101,18 @@ export async function startDense(tierId, why) {
   // ---------------------------------------------------------------- input
   const ptrs = new Map(); let gesture = null;
   function pick(x, y, rad) {
-    if (!proj) proj = new Float32Array(N * 3);
-    R.project(proj); let best = -1, bd = 1e9; const r2 = rad * rad; let minW = 1e9; const clip = R.clip.value;
-    for (let i = 0; i < N; i++) { const dx = proj[i * 3] - x, dy = proj[i * 3 + 1] - y; if (dx * dx + dy * dy < r2 && proj[i * 3 + 2] > 0 && net.pos[i * 3 + 2] <= clip) minW = Math.min(minW, proj[i * 3 + 2]); }
-    for (let i = 0; i < N; i++) {
-      const dx = proj[i * 3] - x, dy = proj[i * 3 + 1] - y, d = dx * dx + dy * dy, w = proj[i * 3 + 2];
-      if (d > r2 || w <= 0 || net.pos[i * 3 + 2] > clip) continue;
-      const score = d / r2 + (w - minW) * 1.6; if (score < bd) { bd = score; best = i; }
+    // project (a stride-sampled subset at very large N) and pick the front-most neuron near the pointer
+    const c = R.camera, m = new Float64Array(16), A = c.projectionMatrix.elements, Bm = c.matrixWorldInverse.elements;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let v = 0; for (let k = 0; k < 4; k++) v += A[k * 4 + i] * Bm[j * 4 + k]; m[j * 4 + i] = v; }
+    const P = net.pos, clip = R.clip.value, r2 = rad * rad, st = Math.max(1, Math.floor(N / 1.2e6)), w2 = R.w, h2 = R.h;
+    let best = -1, bd = 1e9, minW = 1e9; const hits = [];
+    for (let i = 0; i < N; i += st) {
+      const px = P[i * 3], py = P[i * 3 + 1], pz = P[i * 3 + 2]; if (pz > clip) continue;
+      const w = m[3] * px + m[7] * py + m[11] * pz + m[15]; if (w <= 0) continue;
+      const sx = ((m[0] * px + m[4] * py + m[8] * pz + m[12]) / w * 0.5 + 0.5) * w2 - x, sy = (1 - ((m[1] * px + m[5] * py + m[9] * pz + m[13]) / w * 0.5 + 0.5)) * h2 - y, d = sx * sx + sy * sy;
+      if (d < r2) { hits.push(i, d, w); if (w < minW) minW = w; }
     }
+    for (let k = 0; k < hits.length; k += 3) { const score = hits[k + 1] / r2 + (hits[k + 2] - minW) * 1.6; if (score < bd) { bd = score; best = hits[k]; } }
     return best < 0 ? null : best;
   }
   function onDown(e) {
