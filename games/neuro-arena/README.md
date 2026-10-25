@@ -23,8 +23,8 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
   - In **Darwinian** mode, each spawn starts from innate wiring and must learn from scratch.
 - **Selection:**
   - The champion duels its spawn for a 30 s match.
-  - The spawn takes the throne only on a *clear* win: lead ≥ 2, or lead 1 with a clearly better hit rate. It must also play about as well as the champion's long-run record.
-  - A Hall of Fame of 5 keeps the best champions, and every 25 generations a HoF member gets a rematch (elitism).
+  - The spawn takes the throne only on a *clear* win: lead ≥ 2, or lead 1 with a clearly better hit rate (a 1–0 fluke keeps the incumbent).
+  - A Hall of Fame of 5 keeps the best champions, and every 25 generations the best HoF member gets a rematch if the reigning champion's record is well below it (elitism).
 
 ## Controls
 - **Mac:** W/S or ↑/↓ moves your paddle in Play mode. Space serves. A gamepad works too.
@@ -35,3 +35,14 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
 ## Tests
 - `node tests/evolve.mjs [gens] [K] [rate] [lamarck] [matchSec] [tag]` runs headless evolution and evaluates against a wall-serving tracker.
 - `tests/page.test.cjs` runs Playwright on desktop, iPhone and iPad.
+
+## Measured (headless, tests/evolve.mjs, eval = hit rate vs a wall-serving tracker, 6 seeds × 60 s; random paddle ≈ 0.26)
+| run | gen 0 | ~gen 32 | ~gen 64 | ~gen 96 | later |
+|---|---|---|---|---|---|
+| Lamarckian, 2% (shipped rules), K=4 | 0.26 | 0.46 | 0.51 | **0.56** | 0.41 (gen 120) |
+| Lamarckian, 2%, variant selection rules (2 runs) | 0.26 | 0.30–0.40 | 0.32–0.38 | 0.31–0.33 | 0.32–0.33 (gen 150) |
+| Lamarckian, 0% copy errors, K=2 | 0.26 | 0.34 | 0.32 | 0.40 (gen 90) | |
+| Lamarckian, 20% copy errors, K=2 | 0.26 | 0.39 | 0.41 | 0.41 (gen 90) | |
+| Darwinian, 2% | 0.26 | 0.36 | 0.36 | | |
+
+About 100 generations take roughly 5 minutes (4 cores, Node). The results are noisy from run to run, and a champion can also be dethroned by a lucky spawn.

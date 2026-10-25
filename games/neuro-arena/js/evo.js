@@ -56,8 +56,7 @@ export class Evolution {
       const e = { gen: this.gen, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]], childWon,
         champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false };
       // dethroning needs a clear win (by 2+ points, or 1 point with a better return rate): a 1-0 fluke keeps the incumbent
-      const lead = st.score[ks] - st.score[cs], proven = c.balls >= 30 ? st.hitRate[ks] >= c.fit - 0.05 : true;   // and must play about as well as the champion's long-run record
-      const clear = (lead >= 2 || (lead === 1 && st.hitRate[ks] > st.hitRate[cs] + 0.05)) && proven;
+      const lead = st.score[ks] - st.score[cs], clear = lead >= 2 || (lead === 1 && st.hitRate[ks] > st.hitRate[cs] + 0.05);
       e.clear = childWon && clear;
       if (childWon && clear) { const mg = (st.score[ks] - st.score[cs]) + (st.hitRate[ks] - st.hitRate[cs]); if (mg > bestM) { bestM = mg; bestK = k; } }
       out.push(e);
