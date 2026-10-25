@@ -80,7 +80,7 @@ export const KC = 60;        // callosal (homotopic L2/3 -> L2/3 and L5 pyramids
 export const GS = { eE: 0.0016, eI: 0.0024, pv: 0.0070, sst: 0.0040, vip: 0.0040, call: 0.0016, tauIs: 15, tauIf: 6 };
 // presynaptic spatial reach (Gaussian sigma / cut-off in scene units; 0.05 ~ 3 mm)
 export const REACH = [[0.15, 0.30], [0.07, 0.15], [0.10, 0.22], [0.07, 0.15], [0.06, 0.13], [0.08, 0.18], [0.05, 0.11]];
-export const DTUNE = { gE: 1.0, gI: 1.0, ext: 1.0, stimSig: 0.08, thalSig: 0.10 };
+export const DTUNE = { gE: 1.1, gI: 2.5, ext: 0.3, stimSig: 0.12, thalSig: 0.12 };   // tuned in tests/dense_harness.html (55K, SwiftShader): spont ~0.005 Hz, wI 0.25 runaway, wI 3 blocked
 export const synPerNeuron = () => {
   const n = []; for (let c = 0; c < 4; c++) n.push(K[c].reduce((a, b) => a + b, 0) + (c === 0 || c === 2 ? KC : 0));
   for (const c of [4, 5, 6]) { const k = KI[c]; n.push(k.own + 3 * k.oth + k.pv + k.sst + k.vip); }
