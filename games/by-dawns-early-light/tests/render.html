@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#05080f;overflow:hidden}canvas{position:fixed;left:0;top:0}</style></head><body>
+<canvas id="c"></canvas><canvas id="l"></canvas>
+<script src="../js/sim.js"></script>
+<script type="module">
+import * as THREE from '../vendor/three/three.module.min.js';
+import { Stage } from '../js/render.js';
+const q = new URLSearchParams(location.search), mode = q.get('m') || 'globe';
+const st = new Stage(document.getElementById('c'), document.getElementById('l'), { base: '../' });
+window.__errs = []; window.addEventListener('error', e => __errs.push(String(e.message)));
+await st.load(); window.st = st;
+const sim = new BDSim.Sim({ seed: 3, diff: 1, chapter: 'campaign' }); sim.step(80);
+let V = sim.viewFor(0); const ui = { mode, SIDES: BDSim.SIDES, LADDER: BDSim.LADDER.map(l => l.name || l), dawn: +(q.get('dawn') || 0), sunLon: 40 };
+if (mode === 'sky') { st.place('post', new THREE.Vector3(0, 9500, 0), 0.3); st.skyCam = { pos: new THREE.Vector3(-120, 9520, 160), look: new THREE.Vector3(30000, 2000, -30000), fov: 50 }; if (!q.has('nonuke')) { const d = st.skyNuke(new THREE.Vector3(30000, 300, -30000)); window.__nt = +(q.get('nt') || 0); d.t = Math.max(0, __nt - 2.5); } }
+if (mode === 'globe') st.focus(55, -40, 2.6);
+if (mode === 'cabin') st.cabView(q.get('v') || 'post');
+let last = performance.now(); window.__frames = 0;
+function loop(){ const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now; st.frame(dt, V, ui); __frames++; requestAnimationFrame(loop); }
+loop();
+</script></body></html>
