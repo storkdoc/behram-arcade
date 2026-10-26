@@ -10,6 +10,15 @@
 - [x] tests: tests/sim.test.js (node), tests/mp.test.js (stand-in PeerJS), tests/page.test.mjs (chromium|webkit × desktop|iphone|iphone-land|ipad)
 - [x] thumb.png (tools/thumb.mjs), games.js entry
 
+## iPhone hardening (2026-10-25, after a user report that it was "not working on iPhone correctly")
+- Portrait phone view was drowned in fog: the camera sits farther back in portrait (about 97 units vs about 40) but the fog range was fixed. Fog now scales with camera distance
+- Safe areas (notch, home indicator) are measured and fed into the camera insets. The HUD names wrap in portrait. Menus use dvh. The arcade link is hidden on panel screens
+- Touch: document touchmove is prevented (except in scrollable menu lists), gesturestart (pinch) and dblclick are blocked, and fast double-taps on the controls don't zoom. touch-action: manipulation on buttons, pan-y on lists. No callout or selection
+- Audio: unlock retries on touchend/click/pointerup until the context is 'running'. navigator.audioSession.type='playback' (iOS 17+) lets sound play with the silent switch on. Audio suspends and resumes on visibilitychange, and a local game pauses when the tab is hidden
+- Quality: phones and tablets start at tier 2 with a 2.2 MP (phone) or 3.2 MP (tablet) pixel budget and 1536 shadows. With no half-float colour buffer, post-processing is disabled (maxTier 1)
+- Robustness: a visible #fatal banner (with RELOAD) appears for startup errors, scripts that fail to load (25 s), WebGL failure, repeated loop errors, or a black render even at tier 0. Context loss is handled (reloads offline; toast online). Gamepad polling is wrapped in try/catch
+- Not done: a Canvas2D fallback renderer (three r169 needs WebGL2, which iOS 15+ has)
+
 ## Run tests (from repo root, with `python3 -m http.server 8080` running)
     node games/tank-duel/tests/sim.test.js
     NODE_PATH=/workspace/tools/node_modules node games/tank-duel/tests/mp.test.js

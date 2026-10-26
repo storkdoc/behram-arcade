@@ -96,7 +96,7 @@ if (touch) {
   const prevented = await ev(() => { try { const t = new TouchEvent('touchmove', { cancelable: true, bubbles: true }); document.getElementById('gl').dispatchEvent(t); return t.defaultPrevented; } catch (e) { return 'n/a'; } });
   ok(prevented === true || prevented === 'n/a', 'touchmove on the game surface is prevented (no scroll / rubber-band)', prevented);
 } else {
-  await p.keyboard.down('ArrowUp'); await wait(1500); await p.keyboard.up('ArrowUp');
+  await p.keyboard.down('ArrowUp'); await wait(1500); await p.waitForFunction(x0 => Math.abs(TD.game.tanks[0].x - x0) > 0.6, p0[0], { timeout: 6000 }).catch(() => {}); await p.keyboard.up('ArrowUp');
   const f0 = await ev(() => TD.game.tanks[0].firedN); await p.keyboard.press('Space'); await p.waitForFunction(f0 => TD.game.tanks[0].firedN > f0, f0, { timeout: 8000 }).catch(() => {});
   ok(await ev(() => TD.game.tanks[0].firedN) > f0, 'Space fires');
 }
