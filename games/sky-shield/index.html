@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>SKY SHIELD — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.SSFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'SKY SHIELD hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.SS && window.SS.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) SSFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) SSFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!window.SS) SSFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 25000);
+})();
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<a id="home" href="../../">← ARCADE</a>
+
+<!-- ============ LOADING ============ -->
+<div id="loading" class="screen show"><div class="lt">SKY SHIELD</div><div class="lbar"><i id="lprog"></i></div><div class="lsub" id="lmsg">ARMING THE BATTERIES…</div></div>
+
+<!-- ============ TITLE (attract demo plays behind it) ============ -->
+<div id="title" class="screen">
+  <div class="tblock">
+    <div class="tsub">BEHRAM ARCADE PRESENTS</div>
+    <h1 class="tt"><span>SKY</span> <span class="b">SHIELD</span></h1>
+    <div class="ttag">Six cities. Three batteries. Thirty interceptors. Hold the line.</div>
+  </div>
+  <div class="menu" id="tmenu">
+    <button class="btn big" data-act="solo">ONE PLAYER</button>
+    <button class="btn" data-act="host">TWO-PLAYER GAME (ONLINE)</button>
+    <button class="btn" data-act="join">JOIN TWO-PLAYER GAME IN PROGRESS</button>
+    <div class="row2"><button class="btn" data-act="scores">HIGH SCORES</button><button class="btn" data-act="how">HOW TO PLAY</button></div>
+    <button class="btn small" data-act="sound" id="bsound">SOUND: ON</button>
+  </div>
+  <div class="tfoot" id="tfoot">Mouse / trackpad = trackball · Space fires · A S D fire left/center/right · Enter = EMP</div>
+</div>
+
+<!-- ============ WAVE SELECT ============ -->
+<div id="select" class="screen">
+  <div class="panel">
+    <div class="ph"><span>START AT WAVE</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="chips" id="waves"></div>
+    <div class="lbl">AIMING</div>
+    <div class="chips" id="aims"><button class="chip" data-aim="ball">TRACKBALL</button><button class="chip" data-aim="direct">DIRECT POINTER</button></div>
+    <div class="hint" id="aimhint"></div>
+    <button class="btn big" data-act="start">START</button>
+  </div>
+</div>
+
+<!-- ============ HOW TO PLAY ============ -->
+<div id="how" class="screen">
+  <div class="panel wide">
+    <div class="ph"><span>HOW TO PLAY</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="howtxt">
+      <p>Warheads rain down on your six cities. Put the crosshair <b>where they are going to be</b> and fire: your interceptor flies there and bursts into a fireball. Anything that touches the fireball explodes, and its explosion can catch others — <b>chain them</b>.</p>
+      <p><b>MIRVs</b> split into several warheads. <b>Bombers</b> and <b>satellites</b> drop bombs (100 pts). Diamond <b>smart bombs</b> dodge your blasts (125 pts) — box them in. The center battery's interceptors are twice as fast; the outer ones have the same 10 each.</p>
+      <p>After each wave every unused interceptor and surviving city scores, times the wave multiplier. A bonus city every 10,000 points. Lose every city and it's THE END.</p>
+      <p><b>EMP</b> (Enter / ⚡) wipes out everything in a huge radius. You start with 2 and earn one every third wave (max 3).</p>
+      <table class="keys">
+        <tr><td>Mouse / trackpad</td><td>spin the trackball (click the field to capture the pointer, Esc to release)</td></tr>
+        <tr><td>Click / Space</td><td>fire from the best battery</td></tr>
+        <tr><td>A S D &nbsp;or&nbsp; Z X C</td><td>fire the left / center / right battery</td></tr>
+        <tr><td>Arrows</td><td>move the crosshair</td></tr>
+        <tr><td>Enter</td><td>EMP super weapon</td></tr>
+        <tr><td>P / Esc</td><td>pause</td></tr>
+        <tr><td>Gamepad</td><td>stick aims · X / A / B fire left / center / right · RB fires best · Y EMP · Start pauses</td></tr>
+        <tr><td>Touch</td><td>swipe anywhere on the sky like a trackball, tap L / C / R to fire, ⚡ for EMP</td></tr>
+      </table>
+      <p><b>Online two-player:</b> both of you play the same waves on your own screens. Every two chain kills sends an extra warhead to your buddy. Last one with cities standing wins.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HIGH SCORES ============ -->
+<div id="scores" class="screen">
+  <div class="panel">
+    <div class="ph"><span>HIGH SCORES</span><button class="btn x" data-act="back">✕</button></div>
+    <ol id="hitable"></ol>
+  </div>
+</div>
+
+<!-- ============ ONLINE (HOST) ============ -->
+<div id="online" class="screen">
+  <div class="panel">
+    <div class="ph"><span>TWO-PLAYER (ONLINE)</span><button class="btn x" data-act="cancelhost">✕</button></div>
+    <p class="call" id="callmsg">Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.</p>
+    <div class="ostat" id="ostat">OPENING THE LINE…</div>
+    <div class="ocode" id="ocode"></div>
+    <p class="hint">On their device they pick <b>JOIN TWO-PLAYER GAME IN PROGRESS</b>. Play some solo waves while you wait — the match starts fresh when they arrive.</p>
+    <button class="btn big" data-act="practice">PLAY SOLO WHILE WAITING</button>
+  </div>
+</div>
+
+<!-- ============ JOIN ============ -->
+<div id="join" class="screen">
+  <div class="panel">
+    <div class="ph"><span>JOIN GAME IN PROGRESS</span><button class="btn x" data-j="cancel">✕</button></div>
+    <div class="ostat" id="jstat">LOOKING FOR A GAME IN PROGRESS…</div>
+    <div class="lbl">OR TYPE THE BACKUP CODE</div>
+    <div class="jrow"><input id="jcode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE"><button class="btn" data-j="code">JOIN</button></div>
+    <button class="btn" data-j="retry">SEARCH AGAIN</button>
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div class="hs"><div class="k">SCORE</div><div class="v" id="hscore">0</div></div>
+  <div class="hs mid"><div class="k" id="hwave">WAVE 1</div><div class="v sm" id="hmult">×1</div></div>
+  <div class="hs"><div class="k">HIGH</div><div class="v" id="hhigh">0</div></div>
+  <div class="hs emp"><div class="k">EMP</div><div class="pips" id="hemp"></div></div>
+  <div id="opp" class="hidden"><span class="on">BUDDY</span> <span id="ocities"></span> <span id="oscore">0</span> <span id="owave"></span></div>
+  <div id="link"></div>
+  <button class="btn x" id="bpause" aria-label="pause">II</button>
+</div>
+<div id="waitban" class="hidden"></div>
+<div id="baselbl"><span id="bl0"></span><span id="bl1"></span><span id="bl2"></span></div>
+<div id="banner"></div>
+<div id="tally" class="hidden"><div class="tt2">WAVE <span id="tw"></span> CLEARED</div><div class="trow"><span>INTERCEPTORS</span><span id="tammo"></span></div><div class="trow"><span>CITIES</span><span id="tcity"></span></div><div class="trow tot"><span>BONUS ×<span id="tmult"></span></span><span id="tpts"></span></div></div>
+<div id="theend" class="hidden"><div class="te">THE END</div></div>
+<div id="toast"></div>
+
+<!-- ============ TOUCH CONTROLS ============ -->
+<div id="touch" class="hidden">
+  <div id="tpad"><div id="tball"></div></div>
+  <div id="tbtns">
+    <button class="tb" data-b="0">L</button><button class="tb c" data-b="1">C</button><button class="tb" data-b="2">R</button><button class="tb emp" data-b="emp">⚡<i id="tempn"></i></button>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen ov">
+  <div class="panel">
+    <div class="ph"><span>PAUSED</span></div>
+    <button class="btn big" data-p="resume">RESUME</button>
+    <button class="btn" data-p="aim" id="paim">AIM: TRACKBALL</button>
+    <button class="btn" data-p="sound" id="psound">SOUND: ON</button>
+    <button class="btn" data-p="quit">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<!-- ============ INITIALS ============ -->
+<div id="initials" class="screen ov">
+  <div class="panel">
+    <div class="ph"><span>NEW HIGH SCORE!</span></div>
+    <div class="bigscore" id="iscore">0</div>
+    <div class="wheel" id="wheel"><div class="ch" data-i="0">A</div><div class="ch" data-i="1">A</div><div class="ch" data-i="2">A</div></div>
+    <div class="hint">↑ ↓ change letter · ← → move · or just type · Enter to save</div>
+    <div class="wbtns"><button class="btn" data-w="up">▲</button><button class="btn" data-w="down">▼</button><button class="btn" data-w="next">NEXT ▶</button><button class="btn big" data-w="ok">SAVE</button></div>
+  </div>
+</div>
+
+<!-- ============ GAME OVER / VERSUS END ============ -->
+<div id="endp" class="screen ov">
+  <div class="panel">
+    <div class="ph"><span id="etitle">GAME OVER</span></div>
+    <div class="bigscore" id="escore">0</div>
+    <div class="esub" id="esub"></div>
+    <div class="menu" id="emenu">
+      <button class="btn big" data-e="again">PLAY AGAIN</button>
+      <button class="btn" data-e="scores">HIGH SCORES</button>
+      <button class="btn" data-e="title">TITLE</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/auto.js"></script>
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

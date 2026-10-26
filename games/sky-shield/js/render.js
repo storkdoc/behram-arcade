@@ -515,7 +515,7 @@ export class Renderer {
     const upp = Math.max(fw / aw, fh / ah); this.upp = upp;
     const tanV = Math.tan(this.cam.fov * Math.PI / 360), D = (h * upp / 2) / tanV;
     const fcx = (FIELD.x0 + FIELD.x1) / 2, fcy = (FIELD.y0 + FIELD.y1) / 2;
-    const cxp = I.left + aw / 2, cyp = I.top + ah / 2;
+    const extra = Math.max(0, ah - fh / upp); const cxp = I.left + aw / 2, cyp = I.top + ah - extra * 0.12 - (fh / upp) / 2;
     // the field fills the inset area; when the screen is taller than the field, keep the ground at the field's bottom edge
     this.camBase.set(fcx - (cxp - w / 2) * upp, fcy + (cyp - h / 2) * upp, D);
     this.cam.aspect = w / h; this.cam.near = Math.max(1, D * 0.05); this.cam.far = D + 3500; this.cam.updateProjectionMatrix();

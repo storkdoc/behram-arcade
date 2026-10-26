@@ -1,14 +1,15 @@
-# SKY SHIELD — working notes
+# SKY SHIELD — status notes
 
-Status: IN PROGRESS (agent build, 2026-10-26)
+## Status (2026-10-26)
+- DONE: sim.js (deterministic seeded logic), auto.js (autopilot/attract), net.js (PeerJS, ns behram-ss-v1), render.js (three.js + custom bloom post, tiers, selfCheck), audio.js (WebAudio synth), index.html/style.css, main.js (menus, input, loop, HUD, tally, high scores, initials, pause, versus).
+- Game playable in Chromium + WebKit, desktop / iPhone portrait / landscape / iPad.
 
-Done
-- js/sim.js — deterministic seeded game rules (waves, MIRV, bombers/satellites, smart bombs, chains, tally, bonus city, EMP, THE END, versus attack queue)
-- js/auto.js — autopilot gunner (attract demo + tests)
-- js/net.js — PeerJS slot matchmaking (namespace behram-ss-v1-), from tank-duel
-- js/render.js — three.js renderer, 8-bit bloom chain (no MSAA / no float RTs), tiers 0-3, self-check
-- tools/rtest.html — renderer dev harness (auto-play)
+## Remaining
+- tests/sim.test.js, tests/mp.test.js (fakepeer + broker), tests/page.test.mjs
+- thumb.png (960x600) + games.js entry
+- tools/rtest.html is a dev harness (render-only), safe to keep.
 
-Remaining
-- js/audio.js, js/main.js (UI, input: trackball/direct/keys/gamepad/touch, versus), index.html, css
-- tests: sim.test.js, mp.test.js, page.test.mjs; tools/thumb.mjs + thumb.png; games.js entry
+## Dev
+- serve repo root: python3 -m http.server 8080 → /games/sky-shield/
+- URL params: ?q=0..3 lock quality tier, ?msaa=1, ?touch=1/0
+- window.SS exposes app, g, R, newGame, fireBase, fireEmp for tests.
