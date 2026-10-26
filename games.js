@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'by-dawns-early-light',
+    title: "BY DAWN'S EARLY LIGHT",
+    tagline: 'A rogue launch. A missing head of state. One aircraft, one night, and a hotline. Bring the bombers home before dawn.',
+    description: "A cinematic command-crisis strategy game inspired by the premise of the 1990 TV film, with an original story, blocs and characters. A renegade brigade has fired, the answer has gone out, and the head of state is missing. You are the senior official aboard LANTERN, an airborne command post, and from 01:00 to dawn (about half an hour of play, with 2x and 4x speed) you have to stop the war. Work three stations: the COMMAND POST, where you authenticate orders against your code card, fend off a rival claimant to command, call tankers before the fuel runs out, descend to reach the submarines and counter-jam the radio; the HOTLINE to an original rival Premier, where trust, bluffs, verification and timed answers decide whether her hawks win; and a photoreal night-Earth STRATEGIC MAP with a moving dawn terminator, where wings cross their fail-safe lines unless you recall, hold or divert them. Sometimes you fly a bomber's last minutes yourself: low through dark valleys, flares against fighters, a climb to catch the relay and the crew's choice whether to trust the recall. False radar, forged orders, jamming, fighter attacks and a spreading escalation ladder push back. It ends in a ceasefire at dawn, a partial exchange, catastrophe or being relieved of command, followed by an after-action report with a grade. Letterboxed in-engine cinematics (cold open, chapter intros, the hotline, the bomber crew, an ending for each outcome) and somber, realistic nuclear detonations seen from aircraft windows and from orbit. Easy, Normal and Hard, five chapters to replay, and a two-player online mode where each of you commands one bloc and talks over the hotline. All sound is synthesized.",
+    thumb: 'games/by-dawns-early-light/thumb.png',
+    added: '2026-10-26',
+    genre: 'STRATEGY',
+    year: '1990 FILM-INSPIRED',
+    controls: 'mouse on every button · SPACE confirms the focused or first pending choice (and skips cinematics) · ENTER transmits RECALL to the selected wing, or to every wing beyond the line · 1 / 2 / 3 switch Command Post, Hotline, Strategic Map · arrows or TAB move between buttons · Q / E cycle wings · F changes speed · drag and wheel turn and zoom the globe, click a wing to select it · P or ESC pauses · cockpit: arrows or WASD fly, SPACE fires flares · gamepad: d-pad/stick move, A confirms, X transmits recall, LB/RB switch stations, right stick turns the globe, START pauses; left stick flies in the cockpit',
+    touch: 'tap every button; the station panel becomes a bottom sheet in portrait · drag to turn the globe, pinch to zoom, tap a wing to select it · tap anywhere to skip a cinematic · cockpit: on-screen stick plus a FLARE button · works on iPhone and iPad in portrait and landscape',
+    accent: '#ffb35a'
+  },
+  {
     slug: 'sky-shield',
     title: 'SKY SHIELD',
     tagline: 'Six cities, three batteries, thirty interceptors. Hold the line, alone or against a buddy online.',

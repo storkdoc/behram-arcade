@@ -667,9 +667,9 @@ export class Stage {
     const panel = new THREE.CanvasTexture(pc); panel.colorSpace = THREE.SRGBColorSpace; panel.wrapS = panel.wrapT = THREE.RepeatWrapping; panel.repeat.set(10, 3);
     const fus = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 18, 48, 1, true), new THREE.MeshStandardMaterial({ map: panel, color: 0x9aa0a8, roughness: 0.75, metalness: 0.05, emissive: 0x0d0f13, side: THREE.BackSide }));
     fus.rotation.x = Math.PI / 2; sc.add(fus);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 18), mat(0x1a1c1f, 0.9, 0.2)); floor.rotation.x = -Math.PI / 2; floor.position.y = -1.25; sc.add(floor);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 18), mat(0x2a2c31, 0.9, 0.2)); floor.rotation.x = -Math.PI / 2; floor.position.y = -1.25; sc.add(floor);
     for (const z of [-6.2, 7.5]) { const bh = new THREE.Mesh(new THREE.CircleGeometry(2.4, 40), new THREE.MeshStandardMaterial({ map: panel, color: 0x6e747c, roughness: 0.8, metalness: 0.05, emissive: 0x0b0c10 })); bh.position.z = z; if (z > 0) bh.rotation.y = Math.PI; sc.add(bh); }
-    sc.add(new THREE.HemisphereLight(0x8494b0, 0x2a2018, 2.0)); sc.add(new THREE.AmbientLight(0x3a3038, 1.4));
+    sc.add(new THREE.HemisphereLight(0x8494b0, 0x2a2018, 2.0)); sc.add(new THREE.AmbientLight(0x3a3440, 2.2));
     this.cabLights = [];
     for (const z of [-4.5, -1.5, 1.5, 4.5]) { const l = new THREE.PointLight(0xff3020, 3.2, 7, 1.6); l.position.set(0, 1.7, z); sc.add(l); this.cabLights.push(l);
       const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.25, 0.15) })); strip.position.set(0, 2.05, z); sc.add(strip); }

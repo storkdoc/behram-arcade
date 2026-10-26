@@ -39,7 +39,7 @@ function toast(text, bad) { const d = document.createElement('div'); d.textConte
 
 /* ------------------------------ game control ------------------------------ */
 function startSP(chapter, o = {}) {
-  leaveOnline(); AU.init(); AU.setOn(app.sound);
+  if (!o.keepOnline) leaveOnline(); AU.init(); AU.setOn(app.sound);
   newGame({ seed: (Math.random() * 1e9) | 0, chapter, diff: app.diff, two: false }, 0, 'sp', o);
 }
 function newGame(cfg, side, role, o = {}) {
@@ -85,6 +85,7 @@ function loop(now) {
     const g = app.game, inPlay = app.screen === 'play';
     const hold = app.role === 'sp' && (app.busy || app.cp || app.paused);
     if (g && inPlay && !g.over && !hold) { g.step(dt * RATE * app.speed); pump(); }
+    else if (g && g.over && !app.endShown && app.role !== 'guest') { pump(); if (!app.endShown && g.ending) onEnd(g.ending); }
     if (app.role === 'host' && g) hostSend(dt);
     let ui, V = app.view;
     if (cin && cin.active) { cin.update(dt); ui = Object.assign(baseUI(), { mode: 'cabin' }, cin.ui); }
@@ -274,7 +275,7 @@ $('screens').addEventListener('click', e => {
   else if (a === 'cine') { app.cineOn = !app.cineOn; store.set('cine', app.cineOn); renderTitle(); }
   else if (a === 'host') hostOnline();
   else if (a === 'join') joinOnline();
-  else if (a === 'solo') { const o = app.online; startSP('campaign'); app.online = o; app.waitingSolo = true; toast('Playing solo while your buddy is on the way'); }
+  else if (a === 'solo') { startSP('campaign', { keepOnline: true }); app.waitingSolo = true; toast('Playing solo while your buddy is on the way'); }
   else if (a === 'ocancel') toTitle();
   else if (a === 'oretry') { onlineSearching(); Net.joinAny(); }
   else if (a === 'ocodeask') { $('oentry').classList.add('show'); $('omsg').textContent = 'Type the backup code shown on your buddy’s screen.'; $('ocodein').focus(); }
