@@ -442,7 +442,7 @@ function steer(t, i) {
 }
 function onSnapshot(s) {
   if (!g || app.online !== 'guest') return;
-  if (s.T <= gs.lastSnapT) return; gs.lastSnapT = s.T;
+  if (s.T <= gs.lastSnapT) return; gs.lastSnapT = s.T; gs.lastRaw = s;
   const nowS = performance.now() / 1000, off = nowS - s.T; gs.off = gs.off == null || off < gs.off ? off : gs.off + (off - gs.off) * 0.02;
   const prevPhase = g.phase;
   g.phase = s.ph; g.timeLeft = s.tl; g.overtime = !!s.ot; g.winner = s.w; g.t = s.T;
@@ -568,5 +568,5 @@ async function boot() {
 // test / debug surface
 window.TD = { app, S, Net, AU, get R() { return R; }, get game() { return g; }, get attract() { return attract; }, get screen() { return app.screen; }, get fps() { return fps; }, gs,
   start(variant, opts = {}) { app.variant = variant; if (opts.round) app.round = opts.round; if (opts.level != null) app.level = opts.level; app.online = null; startLocal(); },
-  input: inp, keys, show, toTitle };
+  input: inp, keys, show, toTitle, newOnlineMatch: () => newOnlineMatch() };
 boot();

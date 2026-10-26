@@ -347,7 +347,7 @@ export class Renderer {
   }
   setMood(v) {
     const night = v.night, rain = v.weather === 'rain', snow = v.weather === 'snow';
-    this.night = night; this.baseHemi = night ? 0.35 : rain ? 1.15 : snow ? 1.1 : 0.85;
+    this.night = night; this.baseHemi = night ? 0.5 : rain ? 1.15 : snow ? 1.1 : 0.85;
     this.hemi.intensity = this.baseHemi;
     this.hemi.color.set(night ? 0x6f86c8 : rain ? 0xa9b4c4 : 0xbfd8ff); this.hemi.groundColor.set(night ? 0x141824 : 0x5a4a38);
     this.sun.intensity = night ? 0.55 : rain ? 1.0 : snow ? 2.4 : 3.0; this.sun.color.set(night ? 0x8fa8ff : snow ? 0xeef4ff : 0xfff1dc);
