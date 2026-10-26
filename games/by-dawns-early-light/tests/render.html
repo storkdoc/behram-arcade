@@ -1,9 +1,12 @@
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#05080f;overflow:hidden}canvas{position:fixed;left:0;top:0}</style></head><body>
 <canvas id="c"></canvas><canvas id="l"></canvas>
+<style>#cin{position:fixed;inset:0;pointer-events:none;color:#eee;font:16px Georgia,serif}#cin .csub{position:absolute;left:10%;right:10%;bottom:14%;text-align:center;opacity:0;transition:opacity .4s}#cin .csub.on{opacity:1}#cin .ctitle{position:absolute;top:40%;width:100%;text-align:center;font-size:40px;letter-spacing:.3em;opacity:0;transition:opacity 1.5s}#cin .ctitle.on{opacity:1}#cin:before,#cin:after{content:'';position:absolute;left:0;right:0;height:11vh;background:#030305}#cin:before{top:0}#cin:after{bottom:0}#cin .cfade{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .5s}</style>
+<div id="cin" hidden><div class="cfade"></div><div class="ctitle"></div><div class="csub"></div></div>
 <script src="../js/sim.js"></script>
 <script type="module">
 import * as THREE from '../vendor/three/three.module.min.js';
 import { Stage } from '../js/render.js';
+import { Cinema } from '../js/cinema.js';
 const q = new URLSearchParams(location.search), mode = q.get('m') || 'globe';
 const st = new Stage(document.getElementById('c'), document.getElementById('l'), { base: '../' });
 window.__errs = []; window.addEventListener('error', e => __errs.push(String(e.message)));
@@ -13,7 +16,10 @@ let V = sim.viewFor(0); const ui = { mode, SIDES: BDSim.SIDES, LADDER: BDSim.LAD
 if (mode === 'sky') { st.place('post', new THREE.Vector3(0, 9500, 0), 0.3); st.skyCam = { pos: new THREE.Vector3(-120, 9520, 160), look: new THREE.Vector3(30000, 2000, -30000), fov: 50 }; if (!q.has('nonuke')) { const d = st.skyNuke(new THREE.Vector3(30000, 300, -30000)); window.__nt = +(q.get('nt') || 0); d.t = Math.max(0, __nt - 2.5); } }
 if (mode === 'globe') st.focus(55, -40, 2.6);
 if (mode === 'cabin') st.cabView(q.get('v') || 'post');
+let cin = null; const sp = +(q.get('sp') || 1);
+if (mode === 'cine') { const R = document.getElementById('cin'); cin = new Cinema(st, null, { root: R, title: R.querySelector('.ctitle'), sub: R.querySelector('.csub'), fade: R.querySelector('.cfade') }); window.cin = cin;
+  cin.play(q.get('film') || 'coldopen', { name: 'HOUR OF THE WOLF', sub: 'Hold the line.', dawn: +(q.get('dawn') || 0), result: q.get('res') || 'turned', from: +(q.get('from') || 0) }).then(() => (window.__cineDone = 1)); }
 let last = performance.now(); window.__frames = 0;
-function loop(){ const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now; st.frame(dt, V, ui); __frames++; requestAnimationFrame(loop); }
+function loop(){ const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now; if (cin) { for (let i = 0; i < sp; i++) cin.update(dt); Object.assign(ui, { cover: undefined, cabDim: 0, alert: false, arcs: null }, cin.active ? cin.ui : { mode: 'globe' }); } st.frame(dt, V, ui); __frames++; requestAnimationFrame(loop); }
 loop();
 </script></body></html>

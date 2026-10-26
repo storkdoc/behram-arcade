@@ -354,7 +354,7 @@ export function terrainH(x, z) {
 /* ---------- aircraft (procedural, generic silhouettes) ---------- */
 function mat(c, r = 0.6, m = 0.4, e) { return new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, emissive: e || 0x000000 }); }
 function wingGeo(span, root, tip, sweep, thick) {
-  const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(span, -sweep); s.lineTo(span, -sweep - tip); s.lineTo(0, -root); s.closePath();
+  const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(span, sweep); s.lineTo(span, sweep + tip); s.lineTo(0, root); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false }); g.rotateX(Math.PI / 2); return g;
 }
 export function makeAircraft(kind) {
@@ -364,20 +364,20 @@ export function makeAircraft(kind) {
   if (kind === 'post') { const hump = new THREE.Mesh(new THREE.CapsuleGeometry(R * 0.7, 14, 6, 12), skin); hump.rotation.x = Math.PI / 2; hump.position.set(0, R * 0.8, -L * 0.3); G.add(hump); }
   const span = kind === 'post' ? 32 : 28, sw = kind === 'post' ? 14 : 18;
   for (const sd of [-1, 1]) {
-    const w = new THREE.Mesh(wingGeo(span, kind === 'post' ? 16 : 14, 4, sw, 0.8), skin); w.scale.x = sd; w.position.set(0, -R * 0.3, kind === 'post' ? 2 : 4); G.add(w);
-    const hs = new THREE.Mesh(wingGeo(span * 0.35, 7, 2.5, 6, 0.4), skin); hs.scale.x = sd; hs.position.set(0, 0.4, L / 2 - 4); G.add(hs);
+    const w = new THREE.Mesh(wingGeo(span, kind === 'post' ? 16 : 14, 4, sw, 0.8), skin); w.scale.x = sd; w.position.set(0, -R * 0.3, kind === 'post' ? -4 : 0); G.add(w);
+    const hs = new THREE.Mesh(wingGeo(span * 0.35, 7, 2.5, 6, 0.4), skin); hs.scale.x = sd; hs.position.set(0, 0.4, L / 2 - 8); G.add(hs);
     const ne = kind === 'post' ? [9, 18] : [6, 11];
-    for (const x of ne) { const eng = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.1, 6, 12), dark); eng.rotation.x = Math.PI / 2; eng.position.set(sd * x, -R * 0.3 - 1.7, 2 - x * (sw / span) * 0.9); G.add(eng); }
+    for (const x of ne) { const eng = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.1, 6, 12), dark); eng.rotation.x = Math.PI / 2; eng.position.set(sd * x, -R * 0.3 - 1.7, (kind === 'post' ? 2 : 4) + x * (sw / span) - 2.5); G.add(eng); }
   }
-  const fin = new THREE.Mesh(wingGeo(kind === 'post' ? 12 : 9, 9, 3, 7, 0.5), skin); fin.rotation.z = Math.PI / 2; fin.position.set(0, R * 0.6, L / 2 - 5); G.add(fin);
-  G.userData = { L, span, lights: [[-span, 0, 2 + sw * 0.95, 1, 0.1, 0.08], [span, 0, 2 + sw * 0.95, 0.1, 1, 0.2], [0, R + (kind === 'post' ? 11 : 8), L / 2 - 3, 1.5, 1.5, 1.5]], engines: kind === 'post' ? [-18, -9, 9, 18] : [-11, -6, 6, 11] };
+  const fin = new THREE.Mesh(wingGeo(kind === 'post' ? 12 : 9, 9, 3, 7, 0.5), skin); fin.rotation.z = Math.PI / 2; fin.position.set(0, R * 0.6, L / 2 - 10); G.add(fin);
+  G.userData = { L, span, sw, lights: [[-span, -R * 0.3, (kind === 'post' ? -4 : 0) + sw + 2, 1, 0.1, 0.08], [span, -R * 0.3, (kind === 'post' ? -4 : 0) + sw + 2, 0.1, 1, 0.2], [0, R + (kind === 'post' ? 11 : 8), L / 2 - 3, 1.5, 1.5, 1.5]], engines: kind === 'post' ? [-18, -9, 9, 18] : [-11, -6, 6, 11] };
   return G;
 }
 /* ---------- a nuclear detonation, seen from far away (visual only) ---------- */
 class Detonation {
   constructor(stage, pos, opt = {}) {
     this.s = stage; this.p = pos.clone(); this.t = 0; this.life = opt.life || 95; this.lite = !!opt.lite; this.scale = opt.scale || 1; this.air = !!opt.air;
-    let sd = (pos.x * 13 + pos.z * 7) | 0; const rnd = () => (sd = (sd * 16807 + 11) % 2147483647) / 2147483647; this.rnd = rnd;
+    let sd = (Math.abs(Math.round(pos.x * 13 + pos.z * 7)) % 2147483000) + 7; const rnd = () => (sd = (sd * 16807 + 11) % 2147483647) / 2147483647; this.rnd = rnd;
     const k = this.lite ? 0.45 : 1; this.parts = [];
     for (let i = 0; i < 300 * k; i++) this.parts.push({ k: 'cap', a: rnd() * 6.283, b: rnd() * 6.283, r: Math.sqrt(rnd()), sz: 0.7 + rnd() * 0.8, rot: rnd() * 6.28, sp: (rnd() - 0.5) });
     for (let i = 0; i < 110 * k; i++) this.parts.push({ k: 'stem', h: Math.pow(rnd(), 0.8), a: rnd() * 6.283, r: rnd(), sz: 0.7 + rnd() * 0.6, rot: rnd() * 6.28, sp: (rnd() - 0.5) });
@@ -385,17 +385,17 @@ class Detonation {
     this.fire = new THREE.Mesh(stage.fireGeo, new THREE.ShaderMaterial({ uniforms: { time: { value: 0 }, temp: { value: 1 }, alpha: { value: 1 }, camPos: { value: stage.scam.position } }, vertexShader: FIRE_VS, fragmentShader: FIRE_FS, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor }));
     this.wil = new THREE.Mesh(stage.fireGeo, new THREE.ShaderMaterial({ uniforms: { a: { value: 0 }, camPos: { value: stage.scam.position } }, vertexShader: WILSON_VS, fragmentShader: WILSON_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     this.fire.renderOrder = 8; this.wil.renderOrder = 9; stage.sky.add(this.fire, this.wil);
-    this.heard = false; this.dist = pos.distanceTo(stage.scam.position);
+    this.heard = false; this.dist = pos.distanceTo(stage.scam.position); this.ts = opt.tscale || 1;
   }
   get flash() { const t = this.t; return t < 0.05 ? t / 0.05 : Math.exp(-(t - 0.05) * 3.2) * 0.9 + Math.exp(-(t - 0.05) * 0.45) * 0.1; }
   update(dt, B, G) {
-    const t = (this.t += dt), S = this.scale, wind = new THREE.Vector3(14 * t, 0, -6 * t);
+    const t = (this.t += dt * (this.ts || 1)), S = this.scale, wind = new THREE.Vector3(14 * t, 0, -6 * t);
     const H = (500 + 7600 * (1 - Math.exp(-t / 20))) * S, Rc = (350 + 2600 * (1 - Math.exp(-t / 17))) * S, rc = Rc * 0.46, fade = t < this.life - 30 ? 1 : Math.max(0, (this.life - t) / 30);
     const temp = Math.exp(-t / 4.5), base = this.p;
     // fireball: rises, swells, cools from white to orange to dark red, then is swallowed by the cap
     const fr = (650 * (1 - Math.exp(-t / 0.5)) + 120 * t * 0.2) * S, fy = base.y + Math.min(H * 0.92, (fr * 0.8 + 900 * t * 0.25 * S));
     this.fire.position.set(base.x, fy, base.z).add(wind); this.fire.scale.setScalar(fr * (t > 10 ? Math.max(0.35, 1 - (t - 10) / 25) : 1));
-    const fu = this.fire.material.uniforms; fu.time.value = t; fu.temp.value = Math.min(1.1, temp * 1.15); fu.alpha.value = Math.max(0, Math.min(1, t * 20)) * (t < 22 ? 1 : Math.max(0, 1 - (t - 22) / 14)); this.fire.visible = fu.alpha.value > 0.01;
+    const fu = this.fire.material.uniforms; fu.time.value = t; fu.temp.value = Math.min(1.1, temp * 1.15); fu.alpha.value = Math.max(0, Math.min(1, t * 20)) * (t < 9 ? 1 : Math.max(0, 1 - (t - 9) / 12)); this.fire.visible = fu.alpha.value > 0.01;
     // condensation shell (Wilson cloud): a brief veil racing outward
     const wa = t < 0.7 ? 0 : t < 1.4 ? (t - 0.7) / 0.7 : Math.max(0, 1 - (t - 1.4) / 3.2);
     this.wil.visible = wa > 0.01 && !this.lite; this.wil.position.copy(base).add(new THREE.Vector3(0, fr * 0.6, 0)); this.wil.scale.set(1, 0.7, 1).multiplyScalar((1200 + 1500 * t) * S); this.wil.material.uniforms.a.value = wa * 0.55;
@@ -414,8 +414,10 @@ class Detonation {
       else { const rr = (500 + 3800 * (1 - Math.exp(-t / 6))) * S * q.r; const ang = q.a + t * 0.03 * q.sp;
         tmp.set(base.x + Math.cos(ang) * rr, base.y + 60 + q.h * 280 * S * Math.min(1, t / 8), base.z + Math.sin(ang) * rr); sz = (380 + t * 18) * S * q.sz; a = this.air ? 0 : 0.34 * Math.min(1, t / 2) * Math.max(0.15, 1 - t / 80); ht = temp * 0.35; }
       tmp.add(wind); a *= fade; if (a < 0.01) continue;
-      const shade = 0.025 + sh * 0.24, br = 0.5 + 0.5 * Math.min(1, (tmp.y - base.y) / (H + rc));
-      B.add(tmp.clone(), sz, q.rot + t * q.sp * 0.05, a, Math.min(1.2, ht), shade * br * 1.05, shade * br, shade * br * 0.95);
+      const shade = 0.05 + sh * 0.3, br = 0.45 + 0.55 * Math.min(1, (tmp.y - base.y) / (H + rc));
+      // inner glow: the cooling fireball lights the cloud around it from inside for a long time (what makes it read at night)
+      const dF = tmp.distanceTo(this.fire.position) / (fr * 2.2 + rc * 1.2), gk = (0.1 + temp * 1.6) * Math.exp(-dF * dF * 1.5) * Math.exp(-t / 60) * (0.7 + 0.3 * this.flash);
+      B.add(tmp.clone(), sz, q.rot + t * q.sp * 0.05, a, Math.min(1.2, ht), shade * br * 1.05 + gk * 0.55, shade * br + gk * 0.24, shade * br * 0.95 + gk * 0.1);
     }
     // core glow and dazzle
     if (this.flash > 0.02) { G.add(this.fire.position, fr * 7 * (0.4 + this.flash), 0, Math.min(1, this.flash * 1.4), 0, 6, 5.6, 5); }
@@ -490,8 +492,8 @@ export class Stage {
     this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, seg[0], seg[1]), new THREE.ShaderMaterial({ uniforms: U, vertexShader: EARTH_VS, fragmentShader: EARTH_FS })); sc.add(this.earth);
     this.clouds = new THREE.Mesh(new THREE.SphereGeometry(1.006, 160, 80), new THREE.ShaderMaterial({ uniforms: U, vertexShader: EARTH_VS, fragmentShader: CLOUD_FS, transparent: true, depthWrite: false })); sc.add(this.clouds);
     this.atmo = new THREE.Mesh(new THREE.SphereGeometry(1.045, 128, 64), new THREE.ShaderMaterial({ uniforms: U, vertexShader: ATMO_VS, fragmentShader: ATMO_FS, side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sc.add(this.atmo);
-    this.makeStars();
-    this.atlas = iconAtlas(); this.smoke = smokeTex(); const dprU = this.dprU = { value: this.dpr };
+    const dprU = this.dprU = { value: this.dpr }; this.makeStars();
+    this.atlas = iconAtlas(); this.smoke = smokeTex();
     const mk = (fs, extra, blend) => new THREE.ShaderMaterial({ uniforms: Object.assign({ dpr: dprU }, extra), vertexShader: PTS_VS, fragmentShader: fs, transparent: true, depthWrite: false, blending: blend || THREE.NormalBlending });
     this.icons = new PointBuf(600, mk(ICON_FS, { atlas: { value: this.atlas.tex } })); this.icons.obj.renderOrder = 5;
     this.glows = new PointBuf(2500, mk(GLOW_FS, {}, THREE.AdditiveBlending)); this.glows.obj.renderOrder = 6;
@@ -614,6 +616,11 @@ export class Stage {
         if (w.state === 'inbound') { c.setRGB(1.6, 0.25, 0.15); G.add(tmp, c, 34 + 6 * Math.sin(this.time * 6), 0, 0, 0.35); } }
       for (const g of V.them.ghosts || []) { llv(g[0], g[1], 1.008, tmp); c.setRGB(1, 0.6, 0.3); I.add(tmp, c, 20, 10, 0, 0.35 + 0.35 * Math.abs(Math.sin(this.time * 2 + g[1]))); }
     }
+    // cinematic ballistic arcs: ribbon with a white-hot head
+    for (const a of ui.arcs || []) { const A = llv(a.from[0], a.from[1], 1).normalize(), B = llv(a.to[0], a.to[1], 1).normalize(), d = Math.acos(Math.max(-1, Math.min(1, A.dot(B)))), alt = 0.05 + 0.2 * d / Math.PI, u = Math.max(0, Math.min(1, a.u)), pts = [];
+      for (let k = 0; k <= 48; k++) { const f = u * k / 48; pts.push(slerpV(A, B, f, new THREE.Vector3()).multiplyScalar(1.001 + alt * Math.sin(Math.PI * f))); }
+      const col = new THREE.Color(a.col || '#ffffff'); R.strip(pts, f => { const h = Math.pow(f, 3); return [col.r * 0.8 + h * 2.4, col.g * 0.8 + h * 2, col.b * 0.8 + h * 1.4, 0.1 + 0.8 * Math.pow(f, 1.3)]; }, 2.2);
+      if (u < 1) { const hd = pts[pts.length - 1]; c.setRGB(3.5, 2.8, 2); G.add(hd, c, 12 + 3 * Math.sin(this.time * 30), 0, 0, 1); } }
     // effects
     for (const e of this.fx.embers) { e.t += dt; const p = llv(e.lat, e.lon, 1.0012); const k = Math.max(0, 1 - e.t / 400) * (0.7 + 0.3 * Math.sin(this.time * 7 + e.seed * 40)); if (k <= 0) continue; c.setRGB(2.2, 0.6, 0.12); G.add(p, c, 11, 0, 0, k * 0.8); }
     const smokeList = [], L = U.sunDir.value;
@@ -662,7 +669,7 @@ export class Stage {
     fus.rotation.x = Math.PI / 2; sc.add(fus);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 18), mat(0x1a1c1f, 0.9, 0.2)); floor.rotation.x = -Math.PI / 2; floor.position.y = -1.25; sc.add(floor);
     for (const z of [-6.2, 7.5]) { const bh = new THREE.Mesh(new THREE.CircleGeometry(2.4, 40), new THREE.MeshStandardMaterial({ map: panel, color: 0x6e747c, roughness: 0.8, metalness: 0.3 })); bh.position.z = z; if (z > 0) bh.rotation.y = Math.PI; sc.add(bh); }
-    sc.add(new THREE.HemisphereLight(0x8090a8, 0x201814, 1.1));
+    sc.add(new THREE.HemisphereLight(0x8090a8, 0x201814, 1.1)); sc.add(new THREE.AmbientLight(0x2a2228, 0.9));
     this.cabLights = [];
     for (const z of [-4.5, -1.5, 1.5, 4.5]) { const l = new THREE.PointLight(0xff3020, 3.2, 7, 1.6); l.position.set(0, 1.7, z); sc.add(l); this.cabLights.push(l);
       const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.25, 0.15) })); strip.position.set(0, 2.05, z); sc.add(strip); }
@@ -706,7 +713,7 @@ export class Stage {
     if (this.shake > 0) cam.position.add(new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)).multiplyScalar(this.shake * 0.05));
     cam.up.set(Math.sin(t * 0.31) * 0.012, 1, 0); cam.lookAt(C.look);
     // battle lights pulse when the ladder is high or an alert is up
-    const alert = ui.alert ? 0.5 + 0.5 * Math.sin(t * 7) : 0; for (const l of this.cabLights) l.intensity = 2.4 + (V ? V.ladder : 2) * 0.25 + alert * 4;
+    const alert = ui.alert ? 0.5 + 0.5 * Math.sin(t * 7) : 0; for (const l of this.cabLights) l.intensity = (2.4 + (V ? V.ladder : 2) * 0.25 + alert * 4) * (1 - (ui.cabDim || 0));
     const M = this.motes; M.begin(); for (const p of this.moteP) { p.y += dt * 0.02; p.x += Math.sin(t * 0.3 + p.z) * dt * 0.01; if (p.y > 1.3) p.y = -1.2; M.add(p, 0.012, 0, 0.5, 0, 0.7, 0.55, 0.5); } M.end();
     for (const m of this.portMats) m.color.setScalar(1.0 + this.dawn * 1.5 + this.flash * 8);
     this.screenT -= dt; if (this.screenT <= 0 && V) { this.screenT = 0.25; this.drawScreens(V, ui); }
@@ -789,7 +796,7 @@ export class Stage {
     for (const k in this.planes) { const p = this.planes[k]; if (!p.visible) continue; const u = p.userData, blink = (this.time * 1.2 + k.length) % 1 < 0.08 ? 1 : 0, tmp = new THREE.Vector3();
       for (const l of u.lights) { tmp.set(l[0], l[1], l[2]).applyMatrix4(p.matrixWorld); G.add(tmp, 5 * p.scale.x, 0, 0.9, 0, l[3] * 1.3, l[4] * 1.3, l[5] * 1.3); }
       tmp.set(0, -2, 0).applyMatrix4(p.matrixWorld); if (blink) G.add(tmp, 9 * p.scale.x, 0, 1, 0, 1.6, 1.6, 1.6);
-      for (const x of u.engines) { tmp.set(x, -3, u.L * 0.05 + 6).applyMatrix4(p.matrixWorld); G.add(tmp, 6 * p.scale.x, 0, 0.6, 0, 2.5, 1.1, 0.5); } }
+      for (const x of u.engines) { tmp.set(x, -3, Math.abs(x) * (u.sw / u.span) + 1.5).applyMatrix4(p.matrixWorld); G.add(tmp, 6 * p.scale.x, 0, 0.6, 0, 2.5, 1.1, 0.5); } }
     for (const f of ui.skyFx || []) G.add(f.p, f.s, 0, f.a, 0, f.c[0], f.c[1], f.c[2]);
     G.end(); SU.flash.value = fl * 0.6;
     // exposure blowout + lens flare from the brightest source on screen
@@ -822,7 +829,7 @@ export class Stage {
     const gl = this.r.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(4); let n = 0, black = 0;
     for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++) { const X = Math.round((i + 0.5) / 6 * W), Y = Math.round((0.2 + 0.6 * (j + 0.5) / 5) * H); gl.readPixels(X, Y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); n++; if (px[0] + px[1] + px[2] < 3) black++; }
     this.selfChecks++; this.lastSelf = { n, black, tier: this.tier, mode: this.mode };
-    if (black >= Math.max(3, n * 0.15)) { this.blackHoles++; console.warn('[by-dawns-early-light] black regions at quality tier ' + this.tier + ' (' + this.mode + '); stepping down'); this.maxTier = Math.max(1, this.tier - 1); this.setTier(Math.min(this.tier - 1, this.maxTier)); }
+    if (black >= Math.max(3, n * 0.15) && this.tier >= 2) { this.blackHoles++; console.warn('[by-dawns-early-light] black regions at quality tier ' + this.tier + ' (' + this.mode + '); stepping down'); this.maxTier = Math.max(1, this.tier - 1); this.setTier(Math.min(this.tier - 1, this.maxTier)); }
   }
   adapt(dt) {
     if (this.lockTier) return; this.ft.push(dt); if (this.ft.length < 90 && this.ft.reduce((a, b) => a + b, 0) < 2.5) return;
