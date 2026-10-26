@@ -1,15 +1,18 @@
 # SKY SHIELD — status notes
 
-## Status (2026-10-26)
-- DONE: sim.js (deterministic seeded logic), auto.js (autopilot/attract), net.js (PeerJS, ns behram-ss-v1), render.js (three.js + custom bloom post, tiers, selfCheck), audio.js (WebAudio synth), index.html/style.css, main.js (menus, input, loop, HUD, tally, high scores, initials, pause, versus).
-- Game playable in Chromium + WebKit, desktop / iPhone portrait / landscape / iPad.
+## Status (2026-10-26): COMPLETE, live
+- sim.js: deterministic seeded 60 Hz rules (MIRVs, bombers, satellites, smart bombs, EMP, chains, tally, bonus city, THE END).
+- auto.js: autopilot (attract demo + tests). net.js: PeerJS slots, namespace behram-ss-v1-.
+- render.js: three.js r169, custom 8-bit bloom (no MSAA unless ?msaa=1, no float RTs), tiers 0-3, adaptive drop, pixel-readback selfCheck.
+- audio.js: synthesized WebAudio. main.js: menus, input (trackball inertia / direct), touch, gamepad, HUD, high scores, versus.
+- thumb.png from tools/thumb.mjs; games.js entry added.
 
-## Remaining
-- tests/sim.test.js, tests/mp.test.js (fakepeer + broker), tests/page.test.mjs
-- thumb.png (960x600) + games.js entry
-- tools/rtest.html is a dev harness (render-only), safe to keep.
+## Tests (server at repo root: python3 -m http.server 8080)
+- node tests/sim.test.js            (15 rules tests)
+- node tests/page.test.mjs all      (Chromium + WebKit × desktop / iPhone / iPhone landscape / iPad: black regions, touch, multi-touch, keys)
+- node tests/mp.test.mjs chromium|webkit   (two pages over the fake PeerJS broker)
 
-## Dev
-- serve repo root: python3 -m http.server 8080 → /games/sky-shield/
-- URL params: ?q=0..3 lock quality tier, ?msaa=1, ?touch=1/0
-- window.SS exposes app, g, R, newGame, fireBase, fireEmp for tests.
+## Ideas / known gaps
+- Real-device perf only estimated (headless uses SwiftShader); adaptive tiering handles slow GPUs.
+- Versus targets can differ slightly between screens (warheads aim at whatever is still standing).
+- tools/rtest.html is a render-only dev harness (?w= wave).

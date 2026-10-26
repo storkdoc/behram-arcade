@@ -71,7 +71,7 @@ function relayout() {
   document.body.classList.toggle('port', touchDev && port); document.body.classList.toggle('land', touchDev && !port);
   const sa = safeAreas(), playing = app.screen === 'play' || app.screen === 'pause';
   const I = { top: (g && playing ? 50 : 8) + sa.t, bottom: 6 + sa.b, left: 4 + sa.l, right: 4 + sa.r };
-  if (touchDev && playing) { if (port) I.bottom = 92 + 10 + sa.b + 10; else I.right = 176 + 12 + sa.r + 10; }
+  if (touchDev && playing) { if (port) I.bottom = 92 + 10 + sa.b + 10; else I.right = 204 + 12 + sa.r + 10; }
   if (playing && app.online && touchDev && port) I.top += 20;
   R.setInsets(I); R.resize();
 }

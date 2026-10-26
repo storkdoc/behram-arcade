@@ -30,7 +30,7 @@ export const SKIES = [
   { name: 'AURORA', top: '#020814', mid: '#05202e', hor: '#164c5e', glow: '#2affa0', sunX: -0.3, stars: 1, moon: 0, clouds: 0.15, cloudCol: '#1a3a40', aur: 1, light: '#9affd8', hemi: ['#1a5050', '#0a1414'], mount: '#04121a', accent: '#5affc0' },
   { name: 'STORM', top: '#06070e', mid: '#1a1a30', hor: '#4e4060', glow: '#9a80ff', sunX: 0.1, stars: 0.1, moon: 0, clouds: 1, cloudCol: '#2a2a40', aur: 0, light: '#b0a8ff', hemi: ['#3a3a5a', '#121218'], mount: '#0c0c16', accent: '#b8a0ff', storm: 1 },
   { name: 'BLUE HOUR', top: '#030b22', mid: '#0d2c5e', hor: '#5482b8', glow: '#ffd2a2', sunX: 0.7, stars: 0.6, moon: 0.7, moonCol: '#fff4e0', clouds: 0.4, cloudCol: '#3a5a8a', aur: 0, light: '#c8d8ff', hemi: ['#3a5a8a', '#141a24'], mount: '#0a1630', accent: '#ffd28a' },
-  { name: 'TOXIC DAWN', top: '#060b04', mid: '#1c2c0a', hor: '#7a8a24', glow: '#d2ff48', sunX: -0.7, stars: 0.2, moon: 0, clouds: 0.75, cloudCol: '#3a4a14', aur: 0, light: '#e0ff9a', hemi: ['#3a4a1a', '#141808'], mount: '#0e1606', accent: '#c8ff40' },
+  { name: 'ROSE DAWN', top: '#04061a', mid: '#221640', hor: '#94385e', glow: '#ff8a6a', sunX: -0.7, stars: 0.3, moon: 0.5, moonCol: '#f4f0ff', clouds: 0.5, cloudCol: '#3e1e44', aur: 0, light: '#ffc8d8', hemi: ['#5a3a6a', '#1a1018'], mount: '#140c22', accent: '#ff8ab0' },
   { name: 'BLOOD MOON', top: '#0b0206', mid: '#2c0612', hor: '#621426', glow: '#ff3a3a', sunX: -0.2, stars: 0.75, moon: 1.3, moonCol: '#ff5a3a', clouds: 0.35, cloudCol: '#3a0a14', aur: 0, light: '#ff8a7a', hemi: ['#4a1420', '#14060a'], mount: '#14040a', accent: '#ff5050' },
 ];
 export const skyFor = wave => SKIES[(wave - 1) % SKIES.length];
@@ -161,11 +161,15 @@ const BLUR_FS = `uniform sampler2D tDiffuse; uniform vec2 dir; varying vec2 vUv;
 void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
   c += (texture2D(tDiffuse, vUv + dir * 1.3846153846).rgb + texture2D(tDiffuse, vUv - dir * 1.3846153846).rgb) * 0.3162162162;
   c += (texture2D(tDiffuse, vUv + dir * 3.2307692308).rgb + texture2D(tDiffuse, vUv - dir * 3.2307692308).rgb) * 0.0702702703;
-  gl_FragColor = vec4(c, 1.0); }`;
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  gl_FragColor = vec4(c + (n - 0.5) / 255.0, 1.0); }`;
 const COMP_FS = `uniform sampler2D tScene; uniform sampler2D b0; uniform sampler2D b1; uniform sampler2D b2; uniform sampler2D b3; uniform float str; uniform float flash; uniform vec3 flashCol; uniform float vig; uniform float time; uniform float grain;
+uniform vec2 t1; uniform vec2 t2; uniform vec2 t3;
 varying vec2 vUv;
+// soft 5-tap tent upsample: hides the bilinear "boxes" of the coarse bloom levels
+vec3 up(sampler2D s, vec2 t){ vec2 o = t * 0.85; return texture2D(s, vUv).rgb * 0.36 + (texture2D(s, vUv + vec2(o.x, o.y)).rgb + texture2D(s, vUv + vec2(-o.x, o.y)).rgb + texture2D(s, vUv + vec2(o.x, -o.y)).rgb + texture2D(s, vUv - o).rgb) * 0.16; }
 void main(){ vec3 c = texture2D(tScene, vUv).rgb;
-  vec3 b = texture2D(b0, vUv).rgb * 0.8 + texture2D(b1, vUv).rgb * 0.9 + texture2D(b2, vUv).rgb * 1.0 + texture2D(b3, vUv).rgb * 1.2;
+  vec3 b = texture2D(b0, vUv).rgb * 0.8 + up(b1, t1) * 0.9 + up(b2, t2) * 1.0 + up(b3, t3) * 1.2;
   c += b * str;
   c = c / (1.0 + max(vec3(0.0), c - 0.85) * 0.9);
   vec2 d = vUv - 0.5; c *= 1.0 - vig * dot(d, d) * 1.8;
@@ -183,12 +187,13 @@ class Post {
     const M = (u, fs) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: QUAD_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
     this.mBright = M({ tDiffuse: { value: null }, th: { value: 0.7 } }, BRIGHT_FS);
     this.mBlur = M({ tDiffuse: { value: null }, dir: { value: new THREE.Vector2() } }, BLUR_FS);
-    this.mComp = M({ tScene: { value: this.scene.texture }, b0: { value: null }, b1: { value: null }, b2: { value: null }, b3: { value: null }, str: { value: 0.9 }, flash: { value: 0 }, flashCol: { value: new THREE.Color(1, 1, 1) }, vig: { value: 0.35 }, time: { value: 0 }, grain: { value: 0.012 } }, COMP_FS);
+    this.mComp = M({ tScene: { value: this.scene.texture }, b0: { value: null }, b1: { value: null }, b2: { value: null }, b3: { value: null }, str: { value: 0.9 }, flash: { value: 0 }, flashCol: { value: new THREE.Color(1, 1, 1) }, vig: { value: 0.35 }, time: { value: 0 }, grain: { value: 0.012 }, t1: { value: new THREE.Vector2() }, t2: { value: new THREE.Vector2() }, t3: { value: new THREE.Vector2() } }, COMP_FS);
     for (let i = 0; i < 4; i++) this.mComp.uniforms['b' + i].value = this.lv[i][1].texture;
   }
   setSize(w, h, first) {
     this.scene.setSize(w, h);
     let d = first; for (const [a, b] of this.lv) { const lw = Math.max(2, Math.round(w / d)), lh = Math.max(2, Math.round(h / d)); a.setSize(lw, lh); b.setSize(lw, lh); d *= 2; }
+    for (let i = 1; i < 4; i++) this.mComp.uniforms['t' + i].value.set(1 / this.lv[i][0].width, 1 / this.lv[i][0].height);
   }
   pass(mat, target) { this.quad.material = mat; this.r.setRenderTarget(target); this.r.render(this.qs, this.cam); }
   render(scene, camera) {

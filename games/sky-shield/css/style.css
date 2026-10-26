@@ -90,7 +90,7 @@ body.playing #home { display: none; }
 .tb.on { transform: scale(.94); filter: brightness(1.6); }
 .tb.dim { opacity: .35; }
 /* landscape: right-hand cluster */
-body.land #tbtns { right: calc(12px + var(--sr)); bottom: calc(12px + var(--sb)); width: 176px; grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 150px 64px; grid-template-areas: "l c r" "e e e"; }
+body.land #tbtns { right: calc(12px + var(--sr)); bottom: calc(12px + var(--sb)); width: 204px; grid-template-columns: 1fr 1.1fr 1fr; grid-template-rows: 150px 64px; grid-template-areas: "l c r" "e e e"; }
 body.land .tb[data-b="0"] { grid-area: l; } body.land .tb[data-b="2"] { grid-area: r; } body.land .tb.c { grid-area: c; } body.land .tb.emp { grid-area: e; }
 /* portrait: bottom panel */
 body.port #tbtns { left: calc(10px + var(--sl)); right: calc(10px + var(--sr)); bottom: calc(10px + var(--sb)); height: 92px; grid-template-columns: 1fr 1.25fr 1fr .8fr; }

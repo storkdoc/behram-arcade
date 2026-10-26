@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'sky-shield',
+    title: 'SKY SHIELD',
+    tagline: 'Six cities, three batteries, thirty interceptors. Hold the line, alone or against a buddy online.',
+    description: 'A missile-defense arcade game in the spirit of the 1980 trackball classic, rebuilt with modern 3D graphics: lit skyline cities with flickering windows, three missile batteries that show their remaining interceptors, mountains, clouds, a moon and a different dusk or night sky every wave (dusk, midnight, crimson, aurora, storm with lightning, blue hour, rose dawn, blood moon). Warheads leave glowing smoke trails, interceptors bloom into fireballs with shockwave rings, and hits throw debris, start city fires and shake the screen. Waves bring splitting MIRVs, bombers and satellites that drop bombs, and smart bombs that dodge your blasts. Speed rises every wave and points are multiplied up to x6. Each wave ends with a tally of unused interceptors and surviving cities, a bonus city every 10,000 points, and when the last city falls, THE END. Start on any odd wave from 1 to 15, save your initials to the high-score table, and use your limited EMP charges when the sky is full. Two-player is online: you each defend your own cities against the same waves, every two chain kills send an extra warhead to your buddy, and the last player with cities standing wins. All sound is synthesized.',
+    thumb: 'games/sky-shield/thumb.png',
+    added: '2026-10-26',
+    genre: 'ARCADE',
+    year: '1980 REMIX',
+    controls: 'mouse or trackpad spins a heavy trackball crosshair (click the field to capture the pointer, ESC releases), or switch to direct pointer aiming · arrow keys also roll the crosshair · SPACE fires from the best battery · A / S / D (or Z / X / C) fire the left / center / right battery · ENTER fires the EMP (limited charges) · P or ESC pauses · gamepad: left stick or d-pad aims, X / A / B fire left / center / right, RB or RT fires from the best battery, Y or LB fires the EMP, START pauses',
+    touch: 'swipe the sky like a trackball (flick to send the crosshair flying, rest your finger to stop it) or switch to direct aiming in the menu · L / C / R buttons fire each battery and ⚡ fires the EMP, with multi-touch so you can swipe and fire at once · works on iPhone and iPad in portrait and landscape',
+    accent: '#5affc0'
+  },
+  {
     slug: 'tank-duel',
     title: 'TANK DUEL',
     tagline: 'Two tanks, one arena, 26 classic-style variations. Play the CPU or a buddy online.',
