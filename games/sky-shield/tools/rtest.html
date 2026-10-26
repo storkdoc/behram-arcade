@@ -1,0 +1,13 @@
+<!doctype html><html><head><style>html,body{margin:0;background:#000;overflow:hidden}</style></head><body><canvas id="gl"></canvas>
+<script src="../js/sim.js"></script><script src="../js/auto.js"></script>
+<script type="module">
+import { Renderer } from '../js/render.js';
+const q = new URLSearchParams(location.search);
+const R = new Renderer(document.getElementById('gl'), { q: q.get('q') });
+const S = SSSim; let g = S.createGame({ seed: 5, startWave: +(q.get('w') || 3) }); const A = SSAuto.createAuto(+(q.get('skill') || 0.6), 3);
+R.reset(g); R.resize(); addEventListener('resize', () => R.resize());
+let acc = 0, last = performance.now(); window.__steps = 0;
+window.__adv = n => { for (let i = 0; i < n; i++) { const inp = A.think(g, { cx: g.cx, cy: g.cy }); S.step(g, inp); R.fx(g.events, g); } };
+function loop(t) { const dt = (t - last) / 1000; last = t; acc += Math.min(0.1, dt); while (acc >= S.DT) { acc -= S.DT; if (!window.__hold) window.__adv(1); } R.frame(dt, g, {}); window.__stats = R.stats(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop); window.R = R; window.G = () => g;
+</script></body></html>
