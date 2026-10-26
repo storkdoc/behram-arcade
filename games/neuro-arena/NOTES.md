@@ -60,6 +60,13 @@ one gen-0 brain, one lifetime, accuracy on the frozen benchmark, all characters 
 Evolution (Lamarckian) carries learned synapses across generations, so in the browser champions keep improving
 beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Turbo.
 
+## Evolution (headless Turbo, `node tests/evochoice.mjs <contest> 10 4 1 30`: 4 arenas, Lamarckian, 30-s duels)
+- Addition: champion benchmark 24% (gen 4) → 26% (gen 12–40); chance 11%; 40 generations in 2 min wall.
+- Subtraction: 19% (gen 4) → 38% (gen 8–40); chance 17%.
+- In both runs THE REAPER reaped no challenger in 40 generations: the gains came from the champion's own
+  learning kept by elitism, and challengers (best 40% vs 38%) never cleared margin + sign test. Copy errors
+  mostly hurt (Lab: mean effect per gene is negative). Strict judging stops drift, but it also slows progress.
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and
