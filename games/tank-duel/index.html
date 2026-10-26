@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>TANK DUEL — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<a id="home" href="../../">← ARCADE</a>
+
+<!-- ============ LOADING ============ -->
+<div id="loading" class="screen show"><div class="lt">TANK DUEL</div><div class="lbar"><i id="lprog"></i></div><div class="lsub" id="lmsg">FUELING THE TANKS…</div></div>
+
+<!-- ============ TITLE ============ -->
+<div id="title" class="screen">
+  <div class="tblock">
+    <div class="tsub">BEHRAM ARCADE PRESENTS</div>
+    <h1 class="tt"><span class="g">TANK</span> <span class="o">DUEL</span></h1>
+    <div class="ttag">Two tanks. One shell each. 26 ways to settle it.</div>
+  </div>
+  <div class="menu" id="tmenu">
+    <button class="btn big" data-act="cpu">ONE PLAYER — VS CPU</button>
+    <button class="btn" data-act="host">TWO-PLAYER GAME (ONLINE)</button>
+    <button class="btn" data-act="join">JOIN TWO-PLAYER GAME IN PROGRESS</button>
+    <button class="btn" data-act="how">HOW TO PLAY</button>
+    <button class="btn small" data-act="sound" id="bsound">SOUND: ON</button>
+  </div>
+  <div class="tfoot" id="tfoot">Arrows / WASD drive · Space fires · Enter special · Gamepad &amp; touch supported</div>
+</div>
+
+<!-- ============ GAME SELECT ============ -->
+<div id="select" class="screen">
+  <div class="panel wide">
+    <div class="ph"><span id="seltitle">SELECT GAME</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="cards" id="cards"></div>
+    <div class="seldesc"><div id="vname"></div><div id="vdesc"></div><div id="vtags"></div></div>
+    <div class="selrow"><div class="row-label">ROUND</div><div class="chips" id="rounds"></div></div>
+    <div class="selrow" id="diffrow"><div class="row-label">CPU</div><div class="chips" id="diffs"></div></div>
+    <div class="selfoot"><div class="hint" id="selhint">←↑↓→ choose · R round · L CPU level · ENTER start · ESC back</div><button class="btn go" data-act="start" id="bstart">START ▶</button></div>
+  </div>
+</div>
+
+<!-- ============ HOW TO PLAY ============ -->
+<div id="how" class="screen">
+  <div class="panel">
+    <div class="ph"><span>HOW TO PLAY</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="howbody">
+      <p><b>Hit the other tank.</b> Every hit is a point. The tank that gets hit spins out and is knocked back, then flickers for a moment while it recovers.</p>
+      <p><b>One shell in the air at a time</b>, just like the original. Most rounds run <b>2:16</b>; when time runs out, the higher score wins. If it's a tie, the round goes to overtime and the next hit wins. You can also pick first-to-5, 10 or 15.</p>
+      <p><b>Variations:</b> guided missiles (turn while they fly), ricochets (bounce shots off walls; your own rebound can hit you), invisible tanks (they appear when they fire, bump or get hit), night, weather, moving walls, destructible brick, wormholes, mines, power-ups and more.</p>
+      <table class="keys">
+        <tr><td>Drive</td><td>Arrows / WASD · left stick (points where to go) · touch stick</td></tr>
+        <tr><td>Fire</td><td>Space · gamepad A / RT · FIRE button</td></tr>
+        <tr><td>Special</td><td>Enter (mines, nitro, mega shell) · gamepad B / X · SPECIAL button</td></tr>
+        <tr><td>Pause</td><td>Esc / P · gamepad Start</td></tr>
+      </table>
+      <p><b>Two players</b> play online on two devices. Player 1 picks TWO-PLAYER GAME and can practice against the CPU while waiting. Player 2 picks JOIN TWO-PLAYER GAME IN PROGRESS and takes over the CPU's tank.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ONLINE: HOST WAITING ============ -->
+<div id="online" class="screen">
+  <div class="panel">
+    <div class="ph"><span>TWO-PLAYER GAME</span></div>
+    <div id="omsg" class="omsg">Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.</div>
+    <div id="ovar" class="ovar"></div>
+    <div id="ostat" class="ostat">OPENING THE LINE…</div>
+    <div id="ocode" class="ocode"></div>
+    <div class="ofoot"><button class="btn go" data-o="practice">PRACTICE VS CPU WHILE YOU WAIT</button><button class="btn" data-o="cancel">CANCEL</button></div>
+  </div>
+</div>
+
+<!-- ============ ONLINE: JOIN ============ -->
+<div id="join" class="screen">
+  <div class="panel">
+    <div class="ph"><span>JOIN TWO-PLAYER GAME</span></div>
+    <div id="jstat" class="ostat">LOOKING FOR A GAME IN PROGRESS…</div>
+    <div class="jrow"><input id="jcode" maxlength="5" placeholder="BACKUP CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn" data-j="code">JOIN BY CODE</button></div>
+    <div class="ofoot"><button class="btn go" data-j="retry">SEARCH AGAIN</button><button class="btn" data-j="cancel">BACK</button></div>
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div class="sc s0"><span class="who" id="who0">YOU</span><span class="num" id="sc0">0</span></div>
+  <div class="mid"><div id="timer">2:16</div><div id="glabel"></div></div>
+  <div class="sc s1"><span class="num" id="sc1">0</span><span class="who" id="who1">CPU</span></div>
+  <div id="pstat"></div>
+  <div id="link"></div>
+  <button id="bpause" class="btn x" aria-label="pause">❚❚</button>
+</div>
+<div id="waitban" class="hidden"></div>
+<div id="banner"></div>
+<div id="toast"></div>
+
+<!-- ============ TOUCH ============ -->
+<div id="touch" class="hidden">
+  <div id="tzone"></div>
+  <div id="stick"><i></i></div>
+  <button id="tfire">FIRE</button>
+  <button id="tspec">SPECIAL</button>
+</div>
+
+<!-- ============ PAUSE / END ============ -->
+<div id="pause" class="screen">
+  <div class="panel small"><div class="ph"><span>PAUSED</span></div>
+    <div class="menu" id="pmenu"><button class="btn go" data-p="resume">RESUME</button><button class="btn" data-p="restart" id="prestart">RESTART ROUND</button><button class="btn" data-p="select" id="pselect">CHANGE GAME</button><button class="btn small" data-p="sound" id="psound">SOUND: ON</button><button class="btn" data-p="quit">QUIT TO TITLE</button></div></div>
+</div>
+<div id="endp" class="screen">
+  <div class="panel small"><div class="ph"><span id="etitle">VICTORY</span></div>
+    <div id="escore" class="escore"></div><div id="esub" class="esub"></div>
+    <div class="menu" id="emenu"><button class="btn go" data-e="again">REMATCH</button><button class="btn" data-e="select" id="eselect">CHANGE GAME</button><button class="btn" data-e="title">TITLE</button></div></div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
