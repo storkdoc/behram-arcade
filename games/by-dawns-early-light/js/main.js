@@ -24,7 +24,7 @@ async function boot() {
   addEventListener('resize', () => { st._sized = false; });
   last = performance.now(); requestAnimationFrame(loop);
   // keep the loading screen until the renderer has proven itself (self-check ran)
-  const t0 = performance.now(); while ((st.time < 1.2 || st.selfChecks < 1) && performance.now() - t0 < 9000) await new Promise(r => setTimeout(r, 100));
+  const t0 = performance.now(); while ((st.time < 1.2 || st.selfChecks < 1) && performance.now() - t0 < 6000) await new Promise(r => setTimeout(r, 100));
   $('bootbar').style.width = '100%'; AU.setOn(app.sound);
   if (Q.get('auto') === 'chapter') return startSP(Q.get('ch') || 'ch1', { skipIntro: true });
   go('title');
@@ -55,8 +55,8 @@ function newGame(cfg, side, role, o = {}) {
   for (const h of (app.game ? app.game.history : [])) if (h.t < 0) app.timeline.push({ clock: S.clock(h.t), text: h.text });
 }
 function playFilm(key, ctx = {}) {
-  if (!cin) return Promise.resolve(); app.busy = true; AU.init();
-  return cin.play(key, Object.assign({ side: app.side, dawn: dawnK() }, ctx)).then(() => { app.busy = false; AU.klaxon(false); AU.setMode(stationMode()); setStation(app.station); });
+  if (!cin) return Promise.resolve(); app.busy = true; AU.init(); document.body.classList.add('cine');
+  return cin.play(key, Object.assign({ side: app.side, dawn: dawnK() }, ctx)).then(() => { app.busy = false; document.body.classList.remove('cine'); AU.klaxon(false); AU.setMode(stationMode()); setStation(app.station); });
 }
 function dawnK() { const t = app.view ? app.view.t : 0; return Math.max(0, Math.min(1, (t - 200) / 100)); }
 function stationMode() { return app.station === 'map' ? 'globe' : 'cabin'; }
@@ -75,6 +75,7 @@ function cmd(c) {
 
 /* ------------------------------ loop ------------------------------ */
 let last = 0, uiT = 0, demo = null, titleLon = -80;
+function viewShift() { const P = $('panel'); if (!P || P.hidden || !P.offsetWidth) return {}; const r = P.getBoundingClientRect(); if (r.width < innerWidth * 0.8) return { shiftX: (r.left > innerWidth / 2 ? 1 : -1) * r.width / innerWidth / 2 }; return { shiftY: (r.top > innerHeight / 3 ? 1 : 0) * (innerHeight - r.top) / innerHeight / 2 * 0.8 }; }
 function baseUI() { const t = app.view ? app.view.t : 20; return { SIDES: S.SIDES, LADDER: S.LADDER, sunLon: 75 - t / 4, dawn: dawnK(), tac: 1 }; }
 function loop(now) {
   requestAnimationFrame(loop);
@@ -88,7 +89,7 @@ function loop(now) {
     let ui, V = app.view;
     if (cin && cin.active) { cin.update(dt); ui = Object.assign(baseUI(), { mode: 'cabin' }, cin.ui); }
     else if (app.cp) { app.cp.update(dt, cpInput()); ui = Object.assign(baseUI(), { mode: 'sky', skyFx: app.cp.fx, cover: 0.3 }); }
-    else if (V && (inPlay || app.screen === 'pause' || app.screen === 'end')) ui = Object.assign(baseUI(), { mode: stationMode(), alert: V.me.inbox.some(i => i.kind === 'auth' || (i.left !== null && i.left < 1.2)) && V.ladder >= 4 });
+    else if (V && (inPlay || app.screen === 'pause' || app.screen === 'end')) ui = Object.assign(baseUI(), viewShift(), { mode: stationMode(), alert: V.me.inbox.some(i => i.kind === 'auth' || (i.left !== null && i.left < 1.2)) && V.ladder >= 4 });
     else { if (!demo) demo = new S.Sim({ seed: 11 }).viewFor(0); V = demo; titleLon += dt * 2.2; st.focus(42, titleLon, 3.3); ui = Object.assign(baseUI(), { mode: 'globe', noLabels: true, tac: 0.35, sunLon: titleLon + 70 }); }
     st.frame(dt, V, ui);
     uiT -= dt; if (uiT <= 0) { uiT = 0.25; if (app.screen === 'play' || app.screen === 'pause') renderAll(); onlineTick(); }
@@ -425,4 +426,5 @@ Net.onMessage = m => {
 };
 
 window.addEventListener('pagehide', () => leaveOnline());
+window.BDEL_T = { setStation, startCockpit, playFilm, recallCritical, onEnd, cmd, renderAll, hostOnline, joinOnline, toTitle, startSP };
 boot().catch(e => { console.error(e); showErr(e); });

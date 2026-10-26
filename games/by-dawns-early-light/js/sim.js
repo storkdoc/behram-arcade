@@ -32,8 +32,8 @@ const SIDES = [
     subs: [ { name: 'GRAYLING', pos: [55, -38] }, { name: 'MORAY', pos: [47, -162] } ] },
 ];
 const DIFF = [
-  { name: 'EASY',   timeMul: 1.3, intercept: 0.006, hard: 0.7, forge: 0.25, trust: 12, fuel: 230, termsAt: 125 },
-  { name: 'NORMAL', timeMul: 1.0, intercept: 0.010, hard: 1.0, forge: 0.4,  trust: 0,  fuel: 200, termsAt: 170 },
+  { name: 'EASY',   timeMul: 1.3, intercept: 0.006, hard: 0.7, forge: 0.25, catch: 0.6, trust: 12, fuel: 230, termsAt: 125 },
+  { name: 'NORMAL', timeMul: 1.0, intercept: 0.010, hard: 1.0, forge: 0.4,  catch: 0.15, trust: 0,  fuel: 200, termsAt: 170 },
   { name: 'HARD',   timeMul: 0.8, intercept: 0.015, hard: 1.3, forge: 0.5,  trust: -8, fuel: 180, termsAt: 195 },
 ];
 // Chapters: arcade level select. Each is a slice of the night with a goal; 'campaign' is the whole night.
@@ -277,7 +277,7 @@ class Sim {
     if (e.susp) s.susp = clamp(s.susp + e.susp, 0, 100);
     if (e.hard) o.hard = clamp(o.hard + e.hard * (e.hard > 0 ? this.D.hard : 1), 0, 100);
     if (e.legit) s.legit = clamp(s.legit + e.legit, 0, 100);
-    if (e.promise) { s.promise = Object.assign({}, e.promise, { until: this.t + e.promise.until * this.D.timeMul, from: this.t }); this.say(side, 'You made a promise on the hotline. It is being watched.', 'warn'); }
+    if (e.promise) { s.promise = Object.assign({}, e.promise, { until: this.t + e.promise.until, from: this.t }); this.say(side, 'You made a promise on the hotline. It is being watched.', 'warn'); }
     if (e.recallOne) { const w = s.wings.filter(w => w.state === 'orbit' || w.state === 'outbound').sort((p, q) => q.prog - p.prog)[0]; if (w) this.order(side, w, 'recall', true); }
     if (e.prop) { // the agreed matching strike lands on us
       this.at(this.t + 8, () => { const cas = 0.25 * e.prop; s.cas += cas; this.strikes.push({ t: this.t, by: 1 - side, tgt: e.prop < 0.5 ? 'an evacuated airfield' : 'a forward airbase', pos: SIDES[side].wings[2].base, agreed: 1 });
@@ -361,7 +361,7 @@ class Sim {
     const s = this.sides[side], S = SIDES[side];
     switch (it.type) {
       case 'cog': if (it.genuine && s.succession === 'contested') { s.succession = 'self'; s.legit = clamp(s.legit + 10, 0, 100); } break;
-      case 'forge_go': { const ws = s.wings.filter(w => w.state === 'orbit'); for (const w of ws) { w.state = 'penetrate'; w.go = true; w.by = 'forged order'; } this.setLadder(this.ladder + 1, 'a forged execute order was relayed'); this.eff(side, { susp: 30, hard: 15 }); s.legit = clamp(s.legit - 8, 0, 100); break; }
+      case 'forge_go': { if (this.D.catch && this.r() < this.D.catch) { s.legit = clamp(s.legit - 4, 0, 100); this.say(side, 'Your duty officer catches the code mismatch before the order leaves the aircraft. That one was forged. Check the card.', 'warn'); break; } const ws = s.wings.filter(w => w.state === 'orbit'); for (const w of ws) { w.state = 'penetrate'; w.go = true; w.by = 'forged order'; } this.setLadder(this.ladder + 1, 'a forged execute order was relayed'); this.eff(side, { susp: 30, hard: 15 }); s.legit = clamp(s.legit - 8, 0, 100); break; }
       case 'forge_sub': { const sb = s.subs[it.sub]; sb.fireOrder = true; this.say(side, `Fire order queued for ${sb.name} at next contact.`, 'bad'); s.legit = clamp(s.legit - 8, 0, 100); break; }
       case 'forge_land': if (it.genuine) { s.legit = clamp(s.legit - 15, 0, 100); this.say(side, 'You acknowledge but stay airborne. The order was genuine. Your authority suffers.', 'bad'); } else { this.end('relieved', side, `${S.post} landed on a forged order and was taken over on the ground.`); } break;
       case 'chancellor': if (it.genuine) { if (side === 0) { s.succession = 'chancellor'; s.legit = clamp(s.legit + 25, 0, 100); s.claimantQuiet = this.t + 999; this.eff(side, { trust: 8, hard: -6 }); this.emit(side, 'story', { text: 'The Chancellor is alive. Her one instruction: hold command and bring them home. GRANITE goes silent.' }); } else { s.legit = clamp(s.legit + 12, 0, 100); s.hard = clamp(s.hard - 10, 0, 100); } } else { s.legit = clamp(s.legit - 22, 0, 100); this.emit(side, 'story', { text: 'The message was a hoax. GRANITE uses it against you.', lvl: 'bad' }); } break;

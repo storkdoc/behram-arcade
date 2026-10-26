@@ -138,3 +138,5 @@ h2{font-family:Georgia,serif;font-weight:normal;letter-spacing:.2em;margin:0}
   #tabs{top:calc(44px + var(--sat))}#panel{top:calc(84px + var(--sat))}.tab{padding:5px 3px;min-height:30px;font-size:10px}
   #ticker div:nth-child(n+3){display:none}.cp-prompt{bottom:calc(16px + var(--sab))}#cpstick{width:110px;height:110px}
 }
+
+body.cine #hud,body.cine #toast{visibility:hidden}

@@ -28,6 +28,7 @@ function botAct(g, side, R, skill = 0.9, mem = {}) {
   if (me.relay === 'HF' && !me.satDown) { g.cmd(side, { t: 'relay', v: 'SATCOM' }); return; }
   if (me.escort === 0 && v.ladder >= 4) { g.cmd(side, { t: 'escort' }); return; }
   if (!v.cease.agreed && me.hlIn === 0 && v.rel.trust >= 55 && !two && R() < 0.3) { g.cmd(side, { t: 'hl', a: 'ceasefire' }); return; }
+  if (two && !v.cease.agreed && v.t > 30 && R() < 0.02 && !(mem.cfT > v.t - 20)) { mem.cfT = v.t; g.cmd(side, { t: 'hl', a: 'ceasefire' }); return; }
   if (!v.cease.agreed && me.hlIn === 0 && !two && R() < 0.05 && v.t > 60) { g.cmd(side, { t: 'hl', a: 'intel' }); return; }
 }
 function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
