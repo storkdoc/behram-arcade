@@ -14,7 +14,7 @@ export class Cockpit {
     const card = (opt.card || 'ALPHA 7').toUpperCase(); const fake = card.replace(/\d/, d => String((+d + 3) % 10)).replace(/[A-Z]+/, w => (w === 'ALPHA' ? 'ECHO' : 'ALPHA'));
     this.msgs = [{ k: 'recall', text: 'RECALL. ' + opt.name + ' RETURN TO BASE. DO NOT PROCEED.', code: card }, { k: 'proceed', text: 'DISREGARD ALL RECALLS. ' + opt.name + ' PROCEED TO TARGET.', code: fake }];
     if (opt.spoofFirst ?? Math.random() < 0.5) this.msgs.reverse();
-    this.say('01:00 · ' + opt.name + ' is past the fail-safe line with a damaged radio. Stay low — under 150 m — to stay off their radar.', 'info');
+    this.say((opt.clock ? opt.clock + ' · ' : '') + opt.name + ' is past the fail-safe line with a damaged radio. Stay low — under 150 m — to stay off their radar.', 'info');
     this.A && this.A.setMode('cockpit');
     this.paint();
   }
