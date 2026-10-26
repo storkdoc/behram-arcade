@@ -1,6 +1,6 @@
 # NEURO ARENA
 
-Two spiking brains compete in a carousel of contests: Pong, Addition, Subtraction, Bigger number, Even or odd and Text completion (see NOTES.md for THE REAPER judge, the brain sizes, the Lab and measured learning). In every contest the winner spawns a copy of itself, with small copy errors, and the copy replaces the loser. Over the generations the champion lineage gets better at returning the ball. You can watch it live, run turbo evolution in Web Workers, or play the champion yourself.
+Two spiking brains compete in a carousel of contests: Pong, Addition, Subtraction, Bigger number, Even or odd and Text completion Every quiz trial runs PRESENT → THINKING (300 ms) → ANSWER → JUDGED, with dopamine only after the verdict; Addition and Subtraction climb a curriculum (0–2 up to 0–9), Even or odd uses numbers up to 999 (see NOTES.md for THE REAPER judge, the brain sizes, the Lab and measured learning). In every contest the winner spawns a copy of itself, with small copy errors, and the copy replaces the loser. Over the generations the champion lineage gets better at returning the ball. You can watch it live, run turbo evolution in Web Workers, or play the champion yourself.
 
 ## Brain (per player, 2,800 conductance-based integrate-and-fire neurons, 80/20 E/I, Dale's law)
 | area | E | I |

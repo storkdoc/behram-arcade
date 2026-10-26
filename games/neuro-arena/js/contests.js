@@ -66,7 +66,7 @@ export function itemsAt(C, lv = 0) {
 export const chanceAt = (C, lv = 0) => C.kind !== 'choice' ? 0 : C.levels ? 1 / new Set(itemsAt(C, lv).map(it => it[2])).size : C.chance;
 export const levelName = (C, lv = 0) => C.levels ? `level ${(lv | 0) + 1}/${C.levels.length} · ${C.levelName(C.levels[Math.min(lv | 0, C.levels.length - 1)])}` : '';
 /* lifetime curriculum: advance a level when the rolling accuracy of the last `win` trials reaches `thr` */
-export const CURR = { thr: 0.8, win: 40 };
+export const CURR = { thr: 0.9, win: 60 };
 export class Curriculum {
   constructor(C, level = 0) { this.C = C; this.level = level | 0; this.h = []; this.ups = []; }
   get items() { return itemsAt(this.C, this.level); }
@@ -95,9 +95,10 @@ export const DEC = { k: 1 };
 // (Poisson noise of the counts), scaled by the decoder-gain gene; below it the brain abstains
 export const marginOf = (g, gs) => Math.max(3, Math.round(DEC.k * Math.sqrt(gs) * 1.5 / g.kDec));
 export const confNeed = (b, v1, v2, f = 1) => f * Math.max(b.margin, DEC.k * 1.5 / b.g.kDec * Math.sqrt(v1 + v2));
-// while LEARNING (practice duels) the brain answers on a weaker lead (it guesses more, which is how it explores);
-// the frozen benchmark and Play use the full threshold
-export const PRACTICE = { conf: 0, test: 1 };
+// the confidence threshold (abstain when the lead is too small) is applied only against a human (Play).
+// In practice duels a brain must commit (it learns only from answers it gave, so abstaining starved learning:
+// ~70% abstains, no dopamine signal), and the frozen benchmark is a forced choice too (test = 0).
+export const PRACTICE = { conf: 0, test: 0 };
 
 /* THE REAPER: character-level judging. +1 per correct character, -2 per incorrect character, 0 for abstaining
    (or for characters left unanswered). Positions are compared left to right ("12" vs "13": +1 - 2 = -1). */
@@ -149,7 +150,7 @@ export class ChoiceMatch {
   acceptBrain(k) {
     const b = this.P[k].brain, gc = b.gcnt; let i1 = 0, v1 = -1, v2 = -1;
     for (let q = 0; q < gc.length; q++) { const v = gc[q]; if (v > v1) { v2 = v1; v1 = v; i1 = q; } else if (v > v2) v2 = v; }
-    this.out[k].cnt = Array.from(gc); this.out[k].conf = v1 - v2; this.out[k].need = confNeed(b, v1, v2, this.learn && b.g.eta > 0 && !this.hasHuman ? PRACTICE.conf : PRACTICE.test);
+    this.out[k].cnt = Array.from(gc); this.out[k].conf = v1 - v2; this.out[k].need = confNeed(b, v1, v2, this.hasHuman ? 1 : this.learn && b.g.eta > 0 ? PRACTICE.conf : PRACTICE.test);
     this.decide(k, v1 - v2 >= this.out[k].need ? i1 : -1);
   }
   endTrial() {

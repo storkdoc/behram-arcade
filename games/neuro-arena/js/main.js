@@ -239,7 +239,7 @@ async function startTurbo() {
 function onGenerations(out, child) {
   trackWeights(out); save(); drawChart(); renderLog(); renderGenome(); updateStatus(); updateNames();
   const nc = out.find(e => e.newChamp), lu = out.find(e => e.levelUp);
-  if (lu && C.levels) toast(`Curriculum: the champion passed 80% → ${levelName(C, lu.levelUp)}`);
+  if (lu && C.levels) toast(`Curriculum: the champion passed 90% → ${levelName(C, lu.levelUp)}`);
   if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
   if (ui.mode === 'turbo') {
     $('tGen').textContent = evo.gen; $('tRate').textContent = ui.gps.toFixed(2);

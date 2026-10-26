@@ -32,7 +32,7 @@ export class Stage {
     x.textAlign = 'center'; x.textBaseline = 'middle';
     x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM;
     const chance = f.chance ?? C.chance;
-    x.fillText(`${C.icon} ${C.name.toUpperCase()}${C.levels ? ' · level ' + ((f.level || 0) + 1) + '/' + C.levels.length + ': ' + f.levelName : ''} · chance ${Math.round(chance * 100)}%`, w / 2, fs * 0.36);
+    x.fillText(`${C.icon} ${C.name.toUpperCase()}${C.levels ? ' · ' + f.levelName : ''} · chance ${Math.round(chance * 100)}%`, w / 2, fs * 0.36);
     this.timeline(f, w, fs);
     x.font = `800 ${fs}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillStyle = live ? '#fff' : 'rgba(255,255,255,.45)';
     const prompt = item ? (C.race ? item[3] : item[3]) : '…';
@@ -53,7 +53,7 @@ export class Stage {
       x.font = `800 ${af}px ui-monospace, "SF Mono", Menlo, monospace`;
       const ay = top + af * 0.85;
       const thinking = f.phase === 'present' || f.phase === 'think';
-      if (given == null) { x.fillStyle = 'rgba(160,170,200,.55)'; x.fillText(live ? (k === 1 && !br ? '?' : thinking ? 'thinking…' : '…') : 'abstain', cx, ay); }
+      if (given == null) { x.fillStyle = 'rgba(160,170,200,.55)'; const tl = live ? (k === 1 && !br ? '?' : thinking ? 'thinking…' : '…') : 'abstain'; if (tl.length > 1) x.font = `700 ${Math.max(11, Math.min(af * 0.42, colW * 0.8 / tl.length * 1.6))}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillText(tl, cx, ay); }
       else if (live) { x.fillStyle = '#fff'; x.fillText(given, cx, ay); }
       else {
         const showJ = true; const cw = x.measureText('0').width; const sx = cx - (given.length - 1) * cw / 2;
@@ -69,9 +69,9 @@ export class Stage {
           x.fillStyle = q === i1 && gc[q] > 0 ? col : 'rgba(150,170,220,.35)'; x.fillRect(bx + q * gw + 1, by + bh * (1 - v), gw - 2, bh * v);
           x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; x.fillText(C.labels[q], bx + q * gw + gw / 2, by + bh + 8);
         }
-        // threshold: the leader must be this many spikes ahead of the runner-up
+        // confidence threshold (Play only): the leader must be this many spikes ahead of the runner-up or the brain abstains
         const sorted = [...gc].sort((a, b) => b - a), thr = (sorted[1] || 0) + Math.max(br.margin, (br.kconf || 0) * Math.sqrt((sorted[0] || 0) + (sorted[1] || 0)));
-        x.strokeStyle = 'rgba(255,210,90,.7)'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(bx, by + bh * (1 - Math.min(1, thr / mx))); x.lineTo(bx + bw, by + bh * (1 - Math.min(1, thr / mx))); x.stroke(); x.setLineDash([]);
+        if (!f.br[1]) { x.strokeStyle = 'rgba(255,210,90,.7)'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(bx, by + bh * (1 - Math.min(1, thr / mx))); x.lineTo(bx + bw, by + bh * (1 - Math.min(1, thr / mx))); x.stroke(); x.setLineDash([]); }
       } else if (k === 1) { x.font = `600 12px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText('tap or type your answer', cx, by + bh / 2); }
       // running Reaper score this duel
       const sy = by + bh + 20, sc = st.score[k], n = Math.max(1, st.trials), maxS = Math.max(4, n * Math.max(1, (want || 'x').length));
