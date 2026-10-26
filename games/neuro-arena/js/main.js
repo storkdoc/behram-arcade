@@ -251,7 +251,7 @@ let lastFrame = null, lastTickT = performance.now();
 function onLive(e) {
   const f = e.data, lv = ui.live;
   if (!lv || f.t !== 'frame') return;
-  if ((f.kind === 'choice') !== isChoice() || (lv.contest && lv.contest !== C.id)) return; // a frame from a match of the previous contest
+  if ((f.kind === 'choice') !== isChoice() || (lv.contest && lv.contest !== C.id) || (f.contest && f.contest !== C.id)) return; // a frame from a match of the previous contest
   ui.lastLiveMsg = performance.now(); lv.pending = false; lastFrame = f; ui.frame = { time: f.time, pad: f.pad, bx: f.bx, by: f.by, stats: f.stats, hold: f.hold, kind: f.kind, phase: f.phase };
   labCollect(f);
   if (f.kind === 'choice') {

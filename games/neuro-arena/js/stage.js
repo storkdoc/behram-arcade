@@ -26,7 +26,7 @@ export class Stage {
     // panel
     x.fillStyle = 'rgba(4,8,22,.86)'; rr(x, 0.5, 0.5, w - 1, h - 1, 12); x.fill(); x.strokeStyle = 'rgba(110,160,255,.55)'; x.lineWidth = 1; x.stroke();
     const live = f.phase === 'stim', item = live ? f.item : (this.last ? this.last.item : f.item);
-    const want = item ? C.labels[item[2]] : '';
+    const want = (item && C.labels[item[2]]) || '';
     // stimulus
     const fs = Math.max(16, Math.min(54, big * 0.085));
     x.textAlign = 'center'; x.textBaseline = 'middle';
@@ -44,8 +44,8 @@ export class Stage {
       this.flash[k] *= Math.exp(-dt / 0.35);
       // answer (current trial while it runs, the last trial in the gap)
       let given = null, judged = null, tms = null;
-      if (live && f.out && f.out[k] && f.out[k].c >= 0) { given = C.labels[f.out[k].c]; tms = f.out[k].t; judged = f.out[k].j; }
-      else if (!live && this.last) { const o = this.last.res[k]; if (o) { given = o.c >= 0 ? C.labels[o.c] : null; judged = o; tms = o.t; } }
+      if (live && f.out && f.out[k] && f.out[k].c >= 0) { given = C.labels[f.out[k].c] ?? null; tms = f.out[k].t; judged = f.out[k].j; }
+      else if (!live && this.last) { const o = this.last.res[k]; if (o) { given = o.c >= 0 ? (C.labels[o.c] ?? null) : null; judged = o; tms = o.t; } }
       const af = Math.max(18, Math.min(64, big * 0.1));
       x.font = `700 ${Math.max(9, af * 0.22)}px -apple-system, system-ui, sans-serif`; x.fillStyle = col; x.fillText(this.names[k], cx, top + af * 0.15);
       x.font = `800 ${af}px ui-monospace, "SF Mono", Menlo, monospace`;

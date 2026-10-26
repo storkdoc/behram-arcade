@@ -47,7 +47,7 @@ function choiceFrame(withPol) {
     return { gr: Array.from(b.grate), gc: Array.from(b.gcnt), margin: b.margin, rpe: b.rpe, da: b.da, daPulse: dl, areas: choiceAreas(b, live.aPrev[k]), pol: withPol ? Array.from(b.policy()) : null, G: b.L.G, N: b.N };
   });
   const ev = match.events.slice(live.evN); live.evN = match.events.length; if (live.evN > 48) { match.events.splice(0, 32); live.evN = match.events.length; }
-  return { t: 'frame', kind: 'choice', time: match.t, phase: match.phase, pt: match.pt, item: match.item, out: match.out, stats: match.stats(), ev, br, spk };
+  return { t: 'frame', kind: 'choice', contest: live.C.id, time: match.t, phase: match.phase, pt: match.pt, item: match.item, out: match.out, stats: match.stats(), ev, br, spk };
 }
 function startLive(m) {
   if (m.job.contest && m.job.contest !== 'pong') return startChoiceLive(m);

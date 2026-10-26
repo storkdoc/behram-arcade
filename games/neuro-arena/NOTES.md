@@ -4,7 +4,11 @@
 - **Carousel** of contests (arrows, swipe, click a card, `[`/`]` or ←/→). Each contest has its own evolution,
   champion, Hall of Fame and history (localStorage `neuroArena.v3.<contest>`; the v2 Pong save migrates).
 - Visible contests: Pong, Addition (0..4 + 0..4), Subtraction (a − b, 0 ≤ b ≤ a ≤ 5), Bigger number (L/R),
-  Even or odd (E/O), Text completion (3-letter words, guess the last letter).
+  Even or odd (E/O), Text completion (3-letter words, guess the last letter), Rock paper scissors (answer the move
+  that beats theirs), Echo (repeat a letter A–H), Count the dots (1–6), Pattern completion (a, a+d, a+2d, ?),
+  Simon (repeat a two-colour sequence; a 2-character answer scored per character).
+- Not built: Odd one out (needs three input slots), Matching pennies (adversarial, no fixed right answer for the
+  Reaper's frozen benchmark), Air hockey (a Pong variant; Pong already covers it).
 - Hidden (built, not learning well enough yet): Addition to 12 (`add7`), Subtraction to 8 (`sub9`),
   Addition small (`add5`), Tug-of-war reflex (`tug`). Reach them with `?contest=<id>`.
 
@@ -45,6 +49,11 @@ one gen-0 brain, one lifetime, accuracy on the frozen benchmark, all characters 
 | Text completion | 10% | 3% | 25–31% after 1,000–2,000 | 1 |
 | Addition 0..4 | 11% | 0–6% | 14–30% after 2,000 (train acc 20–25%) | 3 |
 | Subtraction 0..5 | 17% | 7–24% | 21–33% after 2,000 (train acc 27–32%) | 3 |
+| Rock paper scissors | 33% | 17–50% | 83–100% after 1,500 | 3 |
+| Count the dots | 17% | 0–8% | 58–67% after 1,500 (75% peak) | 3 |
+| Echo | 12.5% | 6–13% | 25–56% after 1,500 (69% peak) | 3 |
+| Pattern completion | 12.5% | 10–15% | 25–50% after 1,500 | 3 |
+| Simon | 11% | 0–6% | 39–44% after 1,500 | 2 |
 | Addition to 12 (hidden) | 7.7% | — | 2.5–12.5% after 3,000: not above chance | 3 |
 | Subtraction to 8 (hidden) | 11% | 9% | 16–20% after 3,000 | 3 |
 | Tug-of-war (hidden) | 50% | 25% | 25% (abstains ~70%) | 1 |
