@@ -15,10 +15,13 @@ const TPLF = new Float32Array(TPL.flat());
 const gaussR = r => { let u = 0; for (let k = 0; k < 6; k++) u += r(); return (u - 3) * 1.4142; };
 export const BASE = [['TH_E', 320, 0], ['TH_I', 80, 1], ['S_E', 640, 0], ['S_I', 160, 1], ['A_E', 960, 0], ['A_I', 240, 1], ['M_E', 320, 0], ['M_I', 80, 1]];
 // tunables of the choice-brain template (not genes): background drive onto association cells (Hz)
-export const CB = { aBg: 0, snap: 1, wSA: 0.5, thG: 1.3, gw: 0.32, lr: 6, homeo: 0, preNorm: 0, fullBase: 1 };
+export const CB = { aBg: 0, snap: 1, wSA: 0.5, thG: 1.3, gw: 0.32, lr: 6, homeo: 0, preNorm: 0, fullBase: 1,
+  // explicit-trial learning: the eligibility trace spans the whole thinking window (tauTrial ms) and the dopamine
+  // pulse is delivered once, AFTER the answer is accepted and judged (see accept()). alpha = step size per trial
+  tauTrial: 1500, chosenOnly: 1, xThr: 0.25, margW: 2, alpha: 150, eMin: 2, mRecN: 6, ouTau: 300, ouX: 1.36, mRecW: 0.012, wtaX: 1, aInh: 1, rfX: 1, aBias: -2, pAMx: 4 };
 export const CAREAS = BASE.map(a => a[0]);
 
-export function cLayout(size, K) {
+export function cLayout(size, K, marg = 0) {
   const s = Math.max(0.5, size / 2800), L = { def: [] };
   let o = 0;
   for (const [k, n0, t] of BASE) {
@@ -27,7 +30,7 @@ export function cLayout(size, K) {
     if (k === 'M_E') { const gs = Math.max(8, Math.round(n / K)); n = gs * K; L.gs = gs; }
     L[k] = { s: o, n, e: o + n, t }; L.def.push([k, n, t]); o += n;
   }
-  L.N = o; L.K = K; L.scale = s; L.G = Math.floor(Math.sqrt(L.A_E.n));
+  L.N = o; L.K = K; L.scale = s; L.nMarg = Math.round(marg * L.A_E.n); L.G = Math.floor(Math.sqrt(L.A_E.n - L.nMarg));
   return L;
 }
 
@@ -36,7 +39,7 @@ export class ChoiceBrain {
      weights: null or { W: Float32Array, seed, pAM, size } (synapses inherited from a parent) */
   constructor(genome, spec, weights = null) {
     this.g = { ...genome }; this.spec = spec;
-    const L = this.L = cLayout(spec.size || 2800, spec.K), N = this.N = L.N;
+    const L = this.L = cLayout(spec.size || 2800, spec.K, spec.marg || 0), N = this.N = L.N;
     this.K = spec.K; this.NA = L.A_E.n; this.NM = L.M_E.n; this.M0 = L.M_E.s;
     this.type = new Uint8Array(N); this.area = new Uint8Array(N); this.ch = new Int8Array(N).fill(-1); this.c1 = new Float32Array(N); this.c2 = new Float32Array(N);
     L.def.forEach(([k, n, t], ai) => { for (let i = L[k].s; i < L[k].e; i++) { this.type[i] = t; this.area[i] = ai; } });
@@ -50,9 +53,11 @@ export class ChoiceBrain {
     this.drive = new Float32Array(L.TH_E.n).fill(3);
     this.Iext = new Float32Array(N);
     this.build(); this.initPlastic(weights);
+    // a hyperpolarising bias on the association cells: one matching slot alone stays below threshold (a sharper AND)
+    for (let i = L.A_E.s; i < L.A_E.e; i++) this.Iext[i] = CB.aBias * ((this.c1[i] < 0 || this.c2[i] < 0) ? 0 : 1);
     this.xPre = new Float32Array(this.NA); this.yPost = new Float32Array(this.NM);
     this.rateM = new Float32Array(this.NM); this.rExp = new Float32Array(this.NM); this.cntM = new Uint16Array(this.NM);
-    this.gcnt = new Float32Array(this.K); this.grate = new Float32Array(this.K); this.ou = new Float32Array(this.K); this.bias = new Float32Array(this.K);
+    this.gcnt = new Float32Array(this.K); this.tcnt = new Float32Array(this.K); this.cntA = new Uint16Array(this.NA); this.grate = new Float32Array(this.K); this.ou = new Float32Array(this.K); this.bias = new Float32Array(this.K);
     this.reset();
   }
   label() {
@@ -66,6 +71,9 @@ export class ChoiceBrain {
       else { this.c1[i] = rnd(); this.c2[i] = rnd(); }
       // snap each association cell to the centre of its symbol tile: a pure conjunction of one symbol per slot
       if (CB.snap) { const n0 = this.spec.n[0], n1 = this.spec.n[1]; this.c1[i] = (Math.min(n0 - 1, Math.floor(this.c1[i] * n0)) + 0.5) / n0; this.c2[i] = (Math.min(n1 - 1, Math.floor(this.c2[i] * n1)) + 0.5) / n1; }
+      // single-slot ("marginal") cells: tuned to one symbol of one slot only (-1 = deaf to the other slot)
+      const km = k - (L.A_E.n - L.nMarg);
+      if (km >= 0) { const sl = km % 2, n = this.spec.n[sl], v = ((Math.floor(km / 2) % n) + 0.5) / n; this.c1[i] = sl === 0 ? v : -1; this.c2[i] = sl === 1 ? v : -1; }
     }
   }
   build() {
@@ -99,17 +107,17 @@ export class ChoiceBrain {
     const pf = [0, 1].map(c => { const e = g.pSA * 2.5066 * gw[c] * hs, T = g.pSA * 2.5066 * g.gfW * 224, f = Math.min(0.95 / g.pSA, T / e); return { f, wm: T / (e * f) }; });
     for (let i = L.A_E.s; i < L.A_E.e; i++) {
       for (let c = 0; c < 2; c++) {
-        const ctr = c === 0 ? c1[i] : c2[i], gwc = gw[c], so = L.S_E.s + c * hs, win = Math.ceil(4 * gwc * hs) + 1, cc = ctr * hs, P = g.pSA * pf[c].f, wt = g.wSA * CB.wSA * pf[c].wm;
+        const ctr = c === 0 ? c1[i] : c2[i]; if (ctr < 0) continue; const mw = (c1[i] < 0 || c2[i] < 0) ? CB.margW : 1, gwc = gw[c], so = L.S_E.s + c * hs, win = Math.ceil(4 * gwc * hs) + 1, cc = ctr * hs, P = g.pSA * pf[c].f, wt = g.wSA * CB.wSA * pf[c].wm * mw;
         for (let r = Math.max(0, Math.floor(cc - win)); r < Math.min(hs, Math.ceil(cc + win)); r++) { const j = so + r, d = c1[j] - ctr; if (rnd() < P * Math.exp(-d * d / (2 * gwc * gwc))) add(j, i, wt, 4); }
       }
       if (g.sRec >= 0.5) for (let t = 0; t < 12; t++) { const j = L.A_E.s + Math.floor(rnd() * this.NA); if (j !== i && Math.abs(c1[j] - c1[i]) < 0.6 / n0 && Math.abs(c2[j] - c2[i]) < 0.6 / n1) add(j, i, g.wEE, 2); }
-      randIn('A_I', i, 0.2, g.wIE, 2);
+      randIn('A_I', i, 0.2, g.wIE * CB.aInh, 2);
     }
     for (let i = L.A_I.s; i < L.A_I.e; i++) { randIn('S_E', i, 0.06, g.wEI, 3); randIn('A_E', i, 0.05, g.wEI, 2); randIn('A_I', i, 0.1, g.wIE * 0.8, 2); }
     // motor: K choice populations share interneurons (winner-take-all)
     for (let i = L.M_E.s; i < L.M_E.e; i++) {
-      randIn('M_I', i, 0.5, g.wta, 2);
-      if (g.sMRec >= 0.5) { const gi = this.grp[i - L.M_E.s], s0 = L.M_E.s + gi * L.gs; for (let t = 0; t < 6; t++) { const j = s0 + Math.floor(rnd() * L.gs); if (j !== i) add(j, i, 0.012, 2); } }
+      randIn('M_I', i, 0.5, g.wta * CB.wtaX, 2);
+      if (g.sMRec >= 0.5) { const gi = this.grp[i - L.M_E.s], s0 = L.M_E.s + gi * L.gs; for (let t = 0; t < CB.mRecN; t++) { const j = s0 + Math.floor(rnd() * L.gs); if (j !== i) add(j, i, CB.mRecW, 2); } }
     }
     for (let i = L.M_I.s; i < L.M_I.e; i++) randIn('M_E', i, 0.25, 0.018, 2);
     const Mn = pre.length; this.nSyn = Mn;
@@ -124,7 +132,7 @@ export class ChoiceBrain {
   initPlastic(weights) {
     const g = this.g, NA = this.NA, NM = this.NM, rnd = mulberry32((g.seed | 0) * 7 + 3), size = this.spec.size || 2800;
     // plastic fan-in per motor cell is kept constant across sizes (p thinned by the scale)
-    const p = g.pAM / this.L.scale;
+    const p = Math.min(1, g.pAM * CB.pAMx / this.L.scale);
     const ks = [], ws = [], rowS = new Int32Array(NA + 1), cnt = new Int32Array(NM);
     for (let a = 0; a < NA; a++) {
       for (let m = 0; m < NM; m++) { const keep = rnd() < p, z = rnd(); if (!keep) continue; ks.push(a * NM + m); ws.push(Math.min(g.wMax, g.wAM0 * Math.exp(0.3 * (z * 3.46 - 1.73)))); cnt[m]++; }
@@ -134,7 +142,7 @@ export class ChoiceBrain {
     if (weights && weights.W && (weights.size || 2800) === size && weights.K === this.K) {
       if (weights.seed === (g.seed | 0) && weights.pAM === g.pAM && weights.W.length === n) { for (let s = 0; s < n; s++) this.W[s] = Math.min(g.wMax, weights.W[s]); }
       else {   // a copy error changed the wiring seed or the connection probability: carry over the synapses that still exist
-        const src = plasticMaskP(weights.seed, weights.pAM / this.L.scale, NA, NM), W2 = weights.W;
+        const src = plasticMaskP(weights.seed, Math.min(1, weights.pAM * CB.pAMx / this.L.scale), NA, NM), W2 = weights.W;
         if (src.length === W2.length) for (let s = 0, q = 0; s < n && q < src.length;) { if (src[q] === this.syn[s]) { this.W[s] = Math.min(g.wMax, W2[q]); s++; q++; } else if (src[q] < this.syn[s]) q++; else s++; }
       }
     }
@@ -157,7 +165,7 @@ export class ChoiceBrain {
   // present symbols (indices into each slot's alphabet; -1 = nothing). Drive in Hz per relay cell.
   sense(x0, x1) {
     const g = this.g, L = this.L, sp = this.spec, d = this.drive, h = L.TH_E.n / 2, gain = g.thGain * CB.thG;
-    const rs = (sp.rf || [0.35, 0.35]).map((r, c) => r / sp.n[c] * (g.rfW / 0.14));
+    const rs = (sp.rf || [0.35, 0.35]).map((r, c) => r * CB.rfX / sp.n[c] * (g.rfW / 0.14));
     const v = [x0, x1];
     for (let k = 0; k < L.TH_E.n; k++) {
       const c = k < h ? 0 : 1, x = v[c]; if (x == null || x < 0) { d[k] = 3; continue; }
@@ -170,7 +178,8 @@ export class ChoiceBrain {
   commit(q, amp) { this.bias.fill(q < 0 ? 0 : -amp); if (q >= 0) this.bias[q] = amp; }
   // phasic dopamine = reward prediction error at the moment of the answer: r minus the running mean of this brain's
   // answer rewards. (A tonic baseline, as in the Pong brain, would act on all eligibility between trials.)
-  reward(r) { const d = r - (CB.fullBase ? this.rBar : Math.max(0, this.rBar)); this.rBar += (r - this.rBar) * 0.05; this.da += d; this.daLog += d; }
+  reward(r) { return this.accept(r); }
+  rewardOld(r) { const d = r - (CB.fullBase ? this.rBar : Math.max(0, this.rBar)); this.rBar += (r - this.rBar) * 0.05; this.da += d; this.daLog += d; }
   run(nSteps) {
     const L = this.L, N = this.N, NA = this.NA, NM = this.NM, K = this.K;
     const V = this.V, gE = this.gE, gI = this.gI, gA = this.gA, th = this.th, th0 = this.th0, last = this.last, type = this.type;
@@ -181,8 +190,8 @@ export class ChoiceBrain {
     const T0 = TYPES[0], T1 = TYPES[1];
     const dTh0 = Math.exp(-DT / T0.tauTh), dTh1 = Math.exp(-DT / T1.tauTh), dA0 = Math.exp(-DT / T0.tauAHP), dA1 = Math.exp(-DT / T1.tauAHP);
     const gL0 = T0.gL, gL1 = T1.gL, jTh0 = T0.dTh, jTh1 = T1.dTh, jA0 = T0.gAHP, jA1 = T1.gAHP, abs0 = ABS[0], abs1 = ABS[1], tpl = TPLF;
-    const colQ = this.colQ, cntM = this.cntM, Iext = this.Iext, gs = L.gs;
-    const ouA = Math.exp(-DT / 60), ouB = Math.sqrt(1 - ouA * ouA) * g.explore;
+    const colQ = this.colQ, cntM = this.cntM, cntA = this.cntA, tcnt = this.tcnt, Iext = this.Iext, gs = L.gs;
+    const ouA = Math.exp(-DT / CB.ouTau), ouB = Math.sqrt(1 - ouA * ouA) * g.explore * CB.ouX;
     const fr = Math.exp(-DT / 25), dTr = Math.exp(-DT / 20), nAmp = 1.0 * g.noise * Math.sqrt(DT) * 3.46;
     const gIn = 0.1, gBg = 0.02, pDT = DT * 1e-3;
     const ltd = g.ltd, A0 = L.A_E.s, A1 = L.A_E.e, Ms = L.M_E.s, Me = L.M_E.e, T0s = L.TH_E.s;
@@ -218,11 +227,11 @@ export class ChoiceBrain {
           if (i >= A0 && i < A1) {
             const a = i - A0; let sl = slot + 4; if (sl >= D) sl -= D; const rb = sl * N + Ms;
             for (let s = rowS[a], e = rowS[a + 1]; s < e; s++) { const m = rowM[s]; ringE[rb + m] += W[s]; Eg[s] -= ltd * yPost[m]; }
-            xPre[a] += 1;
+            xPre[a] += 1; cntA[a]++;
           } else if (i >= Ms && i < Me) {
             const m = i - Ms;
             for (let s = colS[m], e = colS[m + 1]; s < e; s++) Eg[colQ[s]] += xPre[colA[s]];
-            yPost[m] += 1; cntM[m]++; const q = grp[m]; gcnt[q] += 1; grate[q] += 1;
+            yPost[m] += 1; cntM[m]++; const q = grp[m]; gcnt[q] += 1; tcnt[q] += 1; grate[q] += 1;
           }
           continue;
         }
@@ -230,23 +239,41 @@ export class ChoiceBrain {
       }
       this.step_++; this.t += DT; this.slot = slot + 1 === D ? 0 : slot + 1;
       for (let q = 0; q < K; q++) grate[q] *= fr;
-      if ((this.step_ % 20) === 0) this.learn(10);
+      if ((this.step_ % 20) === 0) this.learn(10);   // (the dopamine display decays; weights change only in accept())
       if ((this.step_ % 200) === 0) this.homeostasis(100);
     }
     this.rs = rs; this.gsz = gs;
   }
-  learn(ms) {
-    const g = this.g, W = this.W, Eg = this.E, wMax = g.wMax;
-    this.rpe = this.da;
-    const de = Math.exp(-ms / g.tauElig), lr = Math.abs(this.da) < 1e-4 ? 0 : g.eta * CB.lr * this.rpe * wMax;
-    const xPre = this.xPre, rowS = this.rowS, rowM = this.rowM, rE = this.rExp, rateM = this.rateM, k = ms * 1e-3;
-    for (let m = 0; m < rE.length; m++) rE[m] = rateM[m] * k;
-    if (lr === 0) { for (let a = 0; a < xPre.length; a++) { const x = xPre[a]; for (let s = rowS[a], e1 = rowS[a + 1]; s < e1; s++) Eg[s] = (Eg[s] - x * rE[rowM[s]]) * de; } }
-    else for (let a = 0; a < xPre.length; a++) {
-      const x = xPre[a];
-      for (let s = rowS[a], e1 = rowS[a + 1]; s < e1; s++) { const e = Eg[s] - x * rE[rowM[s]]; const w = W[s] + lr * e; W[s] = w < 0 ? 0 : w > wMax ? wMax : w; Eg[s] = e * de; }
-    }
-    this.da *= Math.exp(-ms / g.tauDA);
+  // eligibility bookkeeping every 10 ms: E(a->m) = sum of pre-before-post coincidences minus the chance level
+  // (pre trace x expected post rate). It decays with tauTrial (>> the thinking window), so at acceptance it still
+  // holds the full record of which association cells drove which answer population during the trial.
+  learn(ms) { this.da *= Math.exp(-ms / this.g.tauDA); this.rpe = this.da; }
+  /* the dopamine pulse after acceptance. The eligibility of synapse a -> m is the trial-long (PRESENT + THINKING +
+     ANSWER) record of the presynaptic association cell's spikes times its answer population's spikes relative to
+     the mean answer population: E = x_a * (n_q(m) - mean_q n_q), both normalised. So credit lands on the cells that
+     were active for THIS problem and on the answer that won, against the answers that lost. Every plastic synapse
+     then moves by alpha * eta * RPE * wMax * E (RPE = reward - running mean reward); the counts are cleared
+     afterwards so nothing carries over to the next trial. */
+  accept(r, abstained = false, chosen = -1) {
+    // an abstention is not an answer: it gets a small fixed nudge and does not move the expected-reward baseline
+    const g = this.g, W = this.W, wMax = g.wMax, d = abstained ? r : r - this.rBar, K = this.K, tc = this.tcnt, cA = this.cntA, grp = this.grp, rowS = this.rowS, rowM = this.rowM;
+    if (!abstained) this.rBar += (r - this.rBar) * 0.05; this.da = d; this.rpe = d; this.daLog += d;
+    let mean = 0; for (let q = 0; q < K; q++) mean += tc[q]; mean /= K;
+    const dev = this.dev || (this.dev = new Float32Array(K)); let dn = 1; for (let q = 0; q < K; q++) { dev[q] = tc[q] - mean; dn = Math.max(dn, Math.abs(dev[q])); }
+    if (CB.chosenOnly) { let c = chosen; if (c < 0) { c = 0; for (let q = 1; q < K; q++) if (tc[q] > tc[c]) c = q; } dev.fill(0); dev[c] = 1; dn = 1; }
+    let mx = 1; for (let a = 0; a < cA.length; a++) if (cA[a] > mx) mx = cA[a];
+    const k = g.eta * CB.alpha * d * wMax;
+    if (k !== 0) for (let a = 0; a < cA.length; a++) { const x = (cA[a] / mx - CB.xThr) / (1 - CB.xThr); if (x <= 0) continue; const kx = k * x / dn;
+      for (let s = rowS[a], e = rowS[a + 1]; s < e; s++) { const w = W[s] + kx * dev[grp[rowM[s]]]; W[s] = w < 0 ? 0 : w > wMax ? wMax : w; } }
+    this.E.fill(0); cA.fill(0); tc.fill(0);
+    return d;
+  }
+  // inter-trial reset: all fast state (membranes, conductances, spikes in flight, adaptation, traces) back to rest
+  quiesce() {
+    const N = this.N; let rs = this.rs;
+    for (let i = 0; i < N; i++) { rs ^= rs << 13; rs ^= rs >>> 17; rs ^= rs << 5; this.V[i] = -70 + ((rs >>> 0) * 2.3283064e-10 - 0.5) * 4; this.th[i] = this.th0[i]; this.last[i] = -1e6; }
+    this.rs = rs; this.gE.fill(0); this.gI.fill(0); this.gA.fill(0); this.ringE.fill(0); this.ringI.fill(0);
+    this.xPre.fill(0); this.yPost.fill(0); this.E.fill(0); this.gcnt.fill(0); this.grate.fill(0); this.ou.fill(0); this.bias.fill(0); this.cntA.fill(0); this.tcnt.fill(0);
   }
   // synaptic scaling toward the motor layer's MEAN rate (not a fixed target): under winner-take-all most populations
   // are silent most of the time, so a fixed target would inflate every weight; this only evens out the populations

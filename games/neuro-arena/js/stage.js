@@ -25,19 +25,21 @@ export class Stage {
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
     // panel
     x.fillStyle = 'rgba(4,8,22,.86)'; rr(x, 0.5, 0.5, w - 1, h - 1, 12); x.fill(); x.strokeStyle = 'rgba(110,160,255,.55)'; x.lineWidth = 1; x.stroke();
-    const live = f.phase === 'stim', item = live ? f.item : (this.last ? this.last.item : f.item);
+    const live = f.phase === 'present' || f.phase === 'think' || f.phase === 'answer', item = live ? f.item : (this.last ? this.last.item : f.item);
     const want = (item && C.labels[item[2]]) || '';
     // stimulus
     const fs = Math.max(16, Math.min(54, big * 0.085));
     x.textAlign = 'center'; x.textBaseline = 'middle';
     x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM;
-    x.fillText(`${C.icon} ${C.name.toUpperCase()} · ${C.K} possible answers · chance ${Math.round(C.chance * 100)}%`, w / 2, fs * 0.36);
+    const chance = f.chance ?? C.chance;
+    x.fillText(`${C.icon} ${C.name.toUpperCase()}${C.levels ? ' · level ' + ((f.level || 0) + 1) + '/' + C.levels.length + ': ' + f.levelName : ''} · chance ${Math.round(chance * 100)}%`, w / 2, fs * 0.36);
+    this.timeline(f, w, fs);
     x.font = `800 ${fs}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillStyle = live ? '#fff' : 'rgba(255,255,255,.45)';
     const prompt = item ? (C.race ? item[3] : item[3]) : '…';
-    x.fillText(prompt, w / 2, fs * 1.18);
-    if (!live && this.last && item) { x.font = `600 ${fs * 0.34}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 1.85); }
+    x.fillText(prompt, w / 2, fs * 1.42);
+    if (!live && this.last && item) { x.font = `600 ${fs * 0.34}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 2.08); }
     // two answer columns
-    const top = fs * 2.15, colW = w / 2, st = f.stats;
+    const top = fs * 2.38, colW = w / 2, st = f.stats;
     const tiny = h < 220, pl = 10, ph = Math.max(28, Math.min(54, h * 0.13)), py = h - ph - 8, pw = w - 2 * pl, floorY = C.race ? h - 80 : tiny ? h - 2 : py - 4;
     for (let k = 0; k < 2; k++) {
       const cx = colW * k + colW / 2, col = k ? CB_ : CA, br = f.br[k];
@@ -50,12 +52,13 @@ export class Stage {
       x.font = `700 ${Math.max(9, af * 0.22)}px -apple-system, system-ui, sans-serif`; x.fillStyle = col; x.fillText(this.names[k], cx, top + af * 0.15);
       x.font = `800 ${af}px ui-monospace, "SF Mono", Menlo, monospace`;
       const ay = top + af * 0.85;
-      if (given == null) { x.fillStyle = 'rgba(160,170,200,.55)'; x.fillText(live ? (k === 1 && !br ? '?' : '…') : 'abstain', cx, ay); }
+      const thinking = f.phase === 'present' || f.phase === 'think';
+      if (given == null) { x.fillStyle = 'rgba(160,170,200,.55)'; x.fillText(live ? (k === 1 && !br ? '?' : thinking ? 'thinking…' : '…') : 'abstain', cx, ay); }
+      else if (live) { x.fillStyle = '#fff'; x.fillText(given, cx, ay); }
       else {
-        const showJ = !live || judged; const cw = x.measureText('0').width; const sx = cx - (given.length - 1) * cw / 2;
+        const showJ = true; const cw = x.measureText('0').width; const sx = cx - (given.length - 1) * cw / 2;
         for (let i = 0; i < given.length; i++) { const okc = given[i] === want[i]; x.fillStyle = okc ? OK : BAD; x.fillText(given[i], sx + i * cw, ay); }
-        if (showJ && judged) { x.font = `600 ${Math.max(9, af * 0.2)}px -apple-system, system-ui, sans-serif`; x.fillStyle = judged.s > 0 ? OK : judged.s < 0 ? BAD : DIM; x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${tms != null ? ' · ' + tms + ' ms' : ''}`, cx, ay + af * 0.62); }
-        else if (tms != null) { x.font = `600 ${Math.max(9, af * 0.2)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(tms + ' ms', cx, ay + af * 0.62); }
+        if (showJ && judged) { x.font = `600 ${Math.max(9, af * 0.2)}px -apple-system, system-ui, sans-serif`; x.fillStyle = judged.s > 0 ? OK : judged.s < 0 ? BAD : DIM; x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.62); }
       }
       // the race: spike counts of each choice population this trial (bar = population; the margin line = the answer threshold)
       const by = ay + af * 0.95, bh = Math.max(12, Math.min(90, floorY - by - 50)), bw = Math.min(colW * 0.86, C.K * 30), bx = cx - bw / 2, gw = bw / C.K;
@@ -67,7 +70,7 @@ export class Stage {
           x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; x.fillText(C.labels[q], bx + q * gw + gw / 2, by + bh + 8);
         }
         // threshold: the leader must be this many spikes ahead of the runner-up
-        const sorted = [...gc].sort((a, b) => b - a), thr = (sorted[1] || 0) + br.margin;
+        const sorted = [...gc].sort((a, b) => b - a), thr = (sorted[1] || 0) + Math.max(br.margin, (br.kconf || 0) * Math.sqrt((sorted[0] || 0) + (sorted[1] || 0)));
         x.strokeStyle = 'rgba(255,210,90,.7)'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(bx, by + bh * (1 - Math.min(1, thr / mx))); x.lineTo(bx + bw, by + bh * (1 - Math.min(1, thr / mx))); x.stroke(); x.setLineDash([]);
       } else if (k === 1) { x.font = `600 12px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText('tap or type your answer', cx, by + bh / 2); }
       // running Reaper score this duel
@@ -91,8 +94,8 @@ export class Stage {
     if (!C.race && !tiny) {
       x.strokeStyle = 'rgba(120,160,255,.15)'; x.strokeRect(pl, py, pw, ph);
       const Y = v => py + (1 - v) * ph;
-      x.setLineDash([4, 3]); x.strokeStyle = 'rgba(180,190,200,.75)'; x.beginPath(); x.moveTo(pl, Y(C.chance)); x.lineTo(pl + pw, Y(C.chance)); x.stroke(); x.setLineDash([]);
-      x.textAlign = 'left'; x.font = '600 9.5px -apple-system, system-ui, sans-serif'; x.fillStyle = DIM; x.fillText(`live accuracy (rolling 20 trials) · dashed = chance ${Math.round(C.chance * 100)}%`, pl + 4, py + 8);
+      x.setLineDash([4, 3]); x.strokeStyle = 'rgba(180,190,200,.75)'; x.beginPath(); x.moveTo(pl, Y(chance)); x.lineTo(pl + pw, Y(chance)); x.stroke(); x.setLineDash([]);
+      x.textAlign = 'left'; x.font = '600 9.5px -apple-system, system-ui, sans-serif'; x.fillStyle = DIM; x.fillText(`live accuracy (rolling 20 trials) · dashed = chance ${Math.round(chance * 100)}%`, pl + 4, py + 8);
       [CA, CB_].forEach((col, k) => {
         const hs = this.hist[k]; if (hs.length < 2) return; const N = Math.min(hs.length, 200), s0 = hs.length - N;
         x.strokeStyle = col; x.lineWidth = 1.6; x.beginPath(); let acc = 0; const q = [];
@@ -103,4 +106,19 @@ export class Stage {
     }
   }
 }
+// PRESENT → THINKING → ANSWER → JUDGED: the fixed trial loop every brain runs, with a cursor at the current moment
+Stage.prototype.timeline = function (f, w, fs) {
+  const x = this.x, T = f.T; if (!T) return;
+  const seg = [['PRESENT', T.presentMs, 'present'], ['THINKING', T.thinkMs, 'think'], ['ANSWER', Math.max(T.commitMs, 1), 'answer'], ['JUDGED', Math.max(60, T.iti), 'iti']];
+  const tot = seg.reduce((a, s) => a + s[1], 0), bw = Math.min(w * 0.8, 520), bx = (w - bw) / 2, by = fs * 0.36 + Math.max(7, fs * 0.2), bh = Math.max(9, Math.min(14, fs * 0.24));
+  let ox = bx, pos = 0, acc = 0;
+  for (const [name, d, ph] of seg) {
+    const sw = bw * Math.max(0.14, d / tot) / seg.reduce((a, s) => a + Math.max(0.14, s[1] / tot), 0), on = f.phase === ph;
+    x.fillStyle = on ? (ph === 'iti' ? 'rgba(92,255,157,.55)' : ph === 'answer' ? 'rgba(255,210,90,.6)' : 'rgba(46,230,255,.5)') : 'rgba(255,255,255,.08)'; x.fillRect(ox + 1, by, sw - 2, bh);
+    x.font = `700 ${Math.max(7, bh * 0.62)}px -apple-system, system-ui, sans-serif`; x.fillStyle = on ? '#fff' : DIM; x.textAlign = 'center'; x.fillText(name + (ph === 'think' ? ' ' + T.thinkMs + 'ms' : ''), ox + sw / 2, by + bh / 2 + 0.5);
+    if (on) { const p = ph === 'iti' ? Math.min(1, f.pt / Math.max(1, T.iti)) : Math.min(1, Math.max(0, (f.pt - acc) / Math.max(1, d))); pos = ox + p * sw; }
+    ox += sw; acc += d;
+  }
+  if (pos) { x.fillStyle = '#fff'; x.fillRect(pos - 1, by - 2, 2, bh + 4); }
+};
 function rr(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }

@@ -23,3 +23,7 @@ console.log('active A cells per item', m(act), 'cos same answer', m(sameAns), 'c
   console.log('frac A spikes inside combo tile', (inT / tot).toFixed(3), 'rate in tile Hz', (rIn / nIn / 0.15).toFixed(1), 'rate outside Hz', (rOut / nOut / 0.15).toFixed(1), 'cells in tile', (nIn / pats.length).toFixed(1));
   // slot-only cells: matching one coordinate
 }
+{ const cat = { tile: 0, row: 0, col: 0, near: 0, far: 0 }, nc = { tile: 0, row: 0, col: 0, near: 0, far: 0 };
+  for (const p of pats) { const [x0, x1] = p.it; for (let a = 0; a < p.A.length; a++) { const i = L.A_E.s + a; if (b.c1[i] < 0 || b.c2[i] < 0) continue; const t0 = Math.floor(b.c1[i] * C.n[0]), t1 = Math.floor(b.c2[i] * C.n[1]);
+    const k = t0 === x0 && t1 === x1 ? 'tile' : t0 === x0 ? 'row' : t1 === x1 ? 'col' : Math.abs(t0 - x0) <= 1 && Math.abs(t1 - x1) <= 1 ? 'near' : 'far'; cat[k] += p.A[a]; nc[k]++; } }
+  const tot = Object.values(cat).reduce((x, y) => x + y, 0); console.log('spike share', Object.fromEntries(Object.entries(cat).map(([k, v]) => [k, +(v / tot).toFixed(3)])), 'Hz/cell', Object.fromEntries(Object.entries(cat).map(([k, v]) => [k, +(v / Math.max(1, nc[k]) / 0.15).toFixed(2)]))); }

@@ -1,6 +1,6 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
 import { Evolution, quantW, dequantW, BENCH_N } from './evo.js';
-import { CONTESTS, CONTEST, benchSet } from './contests.js';
+import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName } from './contests.js';
 import { cLayout } from './cbrain.js';
 import { Stage } from './stage.js';
 import * as LAB from './lab.js';
@@ -55,7 +55,7 @@ function load(id) {
 function save(force) {
   const now = performance.now(); if (!force && now - ui.lastSave < 8000) return; ui.lastSave = now;
   const id = evo.opts.contest, k = KEY + '.' + id;
-  meta.sum[id] = { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size }; meta.cur = C.id; saveMeta();
+  meta.sum[id] = { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size, level: evo.level || 0 }; meta.cur = C.id; saveMeta();
   try { localStorage.setItem(k, JSON.stringify(evo.serialize(true))); if (id === 'pong') localStorage.removeItem(KEY_V2); }
   catch (e) { try { localStorage.setItem(k, JSON.stringify(evo.serialize(false))); } catch (e2) { /* storage full or disabled */ } }
   renderCarousel();
@@ -63,7 +63,10 @@ function save(force) {
 const isChoice = () => C.kind === 'choice';
 // the champion's benchmark accuracy (Pong: hit rate) - the number the charts and cards show
 function champAcc(e) { const b = e.champ.bench; return b ? (b.acc ?? e.champ.fit) : 0; }
-const chanceOf = c => c.kind === 'choice' ? c.chance : RANDOM_HIT;
+const lvOf = c => c === C ? (evo.level || 0) : ((meta.sum[c.id] && meta.sum[c.id].level) || 0);
+const chanceOf = (c, lv) => c.kind === 'choice' ? chanceAt(c, lv ?? lvOf(c)) : RANDOM_HIT;
+const benchSet = c => benchSet_(c, lvOf(c));
+const lvTxt = c => c.levels ? ' · ' + levelName(c, lvOf(c)) : '';
 const neuronsOf = (c, size) => c.kind === 'choice' ? cLayout(size, c.K).N : N;
 
 // ------------------------------------------------------------------ renderer + layout
@@ -235,12 +238,13 @@ async function startTurbo() {
 }
 function onGenerations(out, child) {
   trackWeights(out); save(); drawChart(); renderLog(); renderGenome(); updateStatus(); updateNames();
-  const nc = out.find(e => e.newChamp);
+  const nc = out.find(e => e.newChamp), lu = out.find(e => e.levelUp);
+  if (lu && C.levels) toast(`Curriculum: the champion passed 80% → ${levelName(C, lu.levelUp)}`);
   if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
   if (ui.mode === 'turbo') {
     $('tGen').textContent = evo.gen; $('tRate').textContent = ui.gps.toFixed(2);
     const v = out[out.length - 1] && out[out.length - 1].reaper;
-    $('tChamp').innerHTML = `${C.icon} ${C.name} · champion #${evo.champ.id} · benchmark ${pct(champAcc(evo))} right · chance ${pct(chanceOf(C))}` +
+    $('tChamp').innerHTML = `${C.icon} ${C.name} · champion #${evo.champ.id}${lvTxt(C)} · benchmark ${pct(champAcc(evo))} right · chance ${pct(chanceOf(C))}` +
       (v ? `<br>THE REAPER, last verdict: #${v.childId} ${v.score[1]} vs #${v.champId} ${v.score[0]} pts → ${v.reaped ? '<b style="color:#5cff9d">reaped</b>' : 'champion stays'}` : '');
     if (!isChoice()) { ui.polMaps = [evo.champ.weights ? polFromWeights(evo.champ.weights) : null, null]; drawMaps(); }
   } else if (out.length) showVerdict(out[0]);
@@ -285,7 +289,7 @@ async function benchWatch(lv, r) {
   const job = lv.job, ev0 = evo, lam = !!job.lamarck; lv.benching = true;
   $('clock').textContent = `THE REAPER is judging: ${isChoice() ? benchSet(C).length + ' frozen items' : BENCH_N + ' benchmark serves'}…`;
   ensurePool(Math.max(2, pool.length));
-  const bm = w => ({ t: 'bench', g: w === r.wA ? job.gA : job.gB, w, contest: job.contest, size: job.size });
+  const bm = w => ({ t: 'bench', g: w === r.wA ? job.gA : job.gB, w, contest: job.contest, size: job.size, level: job.level || 0 });
   const [bA, bB] = await Promise.all([runOn(pool[0], bm(r.wA)), runOn(pool[1], bm(r.wB))]);
   if (evo !== ev0 || lv.ep !== ui.epoch || ui.mode !== 'watch') return;
   const out = evo.record([lv.child], [job], [{ stats: r.stats, wA: lam ? r.wA : null, wB: lam ? r.wB : null, bench: [bA, bB] }]);
@@ -388,7 +392,7 @@ function updateMeters(f) {
       const d = $('da' + s), v = Math.max(-1, Math.min(1, b.rpe * 0.8));
       d.style.width = Math.abs(v) * 50 + '%'; d.style.left = v < 0 ? (50 + v * 50) + '%' : '50%'; d.classList.toggle('neg', v < 0);
       const st = f.stats, n = Math.max(1, st.trials);
-      $('hr' + s).textContent = `✓${st.ok[k]} ✗${st.bad[k]} –${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right (chance ${pct(C.chance)})`;
+      $('hr' + s).textContent = `✓${st.ok[k]} ✗${st.bad[k]} –${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right (chance ${pct(chanceOf(C))})`;
     });
     return;
   }
@@ -408,7 +412,7 @@ function updateStatus() {
   const c = evo.champ, h = evo.history, nb = h.filter(e => e.beneficial).length, nc = h.filter(e => e.newChamp).length, b = c.bench;
   const nn = neuronsOf(C, evo.opts.size).toLocaleString();
   const bl = isChoice()
-    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items · best ever ${pct(evo.bestAcc || 0)} · chance ${pct(C.chance)}`
+    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items · best ever ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
     : `Benchmark ${pct(c.fit)} of ${BENCH_N} standard serves · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}<br>Mean rally (20 duels) ${recentRally().toFixed(1)} hits`;
   $('stat').innerHTML = `<b>${C.icon} ${C.name} · generation ${evo.gen}</b><br>${nn} neurons per brain<br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>` +
     `${bl}<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
@@ -518,7 +522,7 @@ function drawLife() {
   if (!H.length) { x.fillText('waiting for the first duel…', pl, pt + ih / 2); return; }
   const S = Math.max(...H.map(e => e.seg.length)), acc = [0, 1].map(() => Array.from({ length: S }, () => [0, 0]));
   for (const e of H) e.seg.forEach((sg, i) => { const cs = e.cs ?? 0; for (const [r, side] of [[0, cs], [1, 1 - cs]]) { if (sg.length === 2) { acc[r][i][0] += sg[side]; acc[r][i][1] += 1; } else { acc[r][i][0] += sg[side * 2]; acc[r][i][1] += sg[side * 2] + sg[side * 2 + 1]; } } });
-  if (isChoice()) { const yc = pt + (1 - C.chance) * ih; x.setLineDash([3, 3]); x.strokeStyle = 'rgba(140,170,170,.7)'; x.beginPath(); x.moveTo(pl, yc); x.lineTo(w - pr, yc); x.stroke(); x.setLineDash([]); }
+  if (isChoice()) { const yc = pt + (1 - chanceOf(C)) * ih; x.setLineDash([3, 3]); x.strokeStyle = 'rgba(140,170,170,.7)'; x.beginPath(); x.moveTo(pl, yc); x.lineTo(w - pr, yc); x.stroke(); x.setLineDash([]); }
   const X = i => pl + (S > 1 ? i / (S - 1) : 0.5) * iw, Y = v => pt + (1 - v) * ih;
   [['#ffd25a', 0], ['rgba(185,139,255,.95)', 1]].forEach(([col, r]) => { x.strokeStyle = col; x.fillStyle = col; x.lineWidth = 1.8; x.beginPath(); let first = true;
     acc[r].forEach(([hh, n], i) => { if (!n) return; const v = hh / n; if (first) { x.moveTo(X(i), Y(v)); first = false; } else x.lineTo(X(i), Y(v)); }); x.stroke(); });
@@ -610,9 +614,9 @@ function renderCarousel() {
   }
   const idx = VISIBLE.findIndex(c => c.id === C.id);
   [...tr.children].forEach((b, i) => {
-    const c = VISIBLE[i], sm = c.id === C.id ? { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size } : meta.sum[c.id];
+    const c = VISIBLE[i], sm = c.id === C.id ? { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size, level: evo.level || 0 } : meta.sum[c.id];
     b.classList.toggle('on', i === idx);
-    b.querySelector('.cs').textContent = sm && sm.gen ? `gen ${sm.gen} · ${pct(sm.acc || 0)} · chance ${pct(chanceOf(c))}` : `chance ${pct(chanceOf(c))} · new`;
+    b.querySelector('.cs').textContent = sm && sm.gen ? `gen ${sm.gen}${c.levels ? ' · L' + ((sm.level || 0) + 1) : ''} · ${pct(sm.acc || 0)} · chance ${pct(chanceOf(c))}` : `chance ${pct(chanceOf(c))} · new`;
   });
   const view = $('cView'), cw = tr.children[0] ? tr.children[0].offsetWidth + 8 : 168;
   tr.style.transform = `translateX(${Math.round(view.clientWidth / 2 - cw * idx - (cw - 8) / 2)}px)`;
@@ -644,7 +648,7 @@ $('cPrev').onclick = () => stepContest(-1); $('cNext').onclick = () => stepConte
 function chartLegend() {
   if (isChoice()) {
     $('chTitle').textContent = `${C.name}: benchmark accuracy over generations`;
-    $('chLegend').innerHTML = `<i class="l1"></i>champion <i class="l5"></i>best ever <i class="l2"></i>challenger <i class="l3"></i>chance ${pct(C.chance)} <i class="l4">◆</i>copy error → reaped`;
+    $('chLegend').innerHTML = `<i class="l1"></i>champion <i class="l5"></i>best ever <i class="l2"></i>challenger <i class="l3"></i>chance ${pct(chanceOf(C))} <i class="l4">◆</i>copy error → reaped`;
   } else {
     $('chTitle').textContent = 'Benchmark score over generations';
     $('chLegend').innerHTML = '<i class="l1"></i>champion <i class="l5"></i>best ever <i class="l2"></i>challenger <i class="l6"></i>rally length (right axis) <i class="l3"></i>random paddle <i class="l4">◆</i>beneficial copy error → new champion';

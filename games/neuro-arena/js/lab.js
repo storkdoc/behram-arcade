@@ -29,6 +29,10 @@ export function drawCurve(c, H, chance, isPong) {
   let prev = null; x.lineWidth = 2;
   H.forEach(e => { const v = e.champAccNow ?? e.champFit; x.strokeStyle = e.lam === false ? CA : GOLD; x.beginPath(); x.moveTo(X(e.gen - 1), Y(prev ?? v)); x.lineTo(X(e.gen), Y(prev ?? v)); x.lineTo(X(e.gen), Y(v)); x.stroke(); prev = v; });
   x.lineWidth = 1; x.fillStyle = DIM; x.fillText('0', pl, h - 3); x.fillText(String(G), w - pr - 18, h - 3);
+  // curriculum level-ups (the benchmark gets harder there, so the curve steps down and climbs again)
+  x.strokeStyle = 'rgba(92,255,157,.55)'; x.setLineDash([2, 3]);
+  for (const e of H) if (e.levelUp) { x.beginPath(); x.moveTo(X(e.gen), pt); x.lineTo(X(e.gen), pt + ih); x.stroke(); x.fillStyle = '#5cff9d'; x.fillText('L' + (e.levelUp + 1), X(e.gen) + 2, pt + 9); }
+  x.setLineDash([]);
 }
 // rolling accuracy of both brains in the running duel
 export function drawLive(c, hist, chance) {

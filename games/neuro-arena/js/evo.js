@@ -4,9 +4,10 @@
 import { Brain, mulberry32 } from './brain.js';
 import { Match, COURT } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
-import { CONTEST, runChoiceDuel, reaper } from './contests.js';
+import { CONTEST, runChoiceDuel, reaper, CURR } from './contests.js';
 
 export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800 };
+export const TRIAL_LOOP = 2;   // choice-contest saves from an older trial loop / layout are not restored
 export const STORE_V = 3;   // v3: one evolution per contest (v2 Pong saves are migrated)
 
 /* The standardized benchmark: a fixed set of BENCH_N serves (heights, angles, speeds, distances) that every
@@ -68,7 +69,7 @@ export class Evolution {
   }
   job(child) {
     const c = this.champ, side = this.rnd() < 0.5 ? 0 : 1;   // random sides: no court bias
-    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800 };
+    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800, level: this.level || 0 };
     if (side === 0) Object.assign(j, { gA: c.genome, wA: c.weights, gB: child.genome, wB: child.weights });
     else Object.assign(j, { gA: child.genome, wA: child.weights, gB: c.genome, wB: c.weights });
     return j;
@@ -125,6 +126,15 @@ export class Evolution {
       this.history.push(e); this.log.unshift(e);
     }
     if (this.log.length > 40) this.log.length = 40;
+    // curriculum: when the champion passes CURR.thr on the current level's frozen benchmark, the next generation
+    // trains and is judged on the next level (the old benchmark score no longer applies, so it is re-earned)
+    const C = CONTEST[o.contest];
+    if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= CURR.thr && (this.level || 0) < C.levels.length - 1) {
+      this.level = (this.level || 0) + 1; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = [];
+      const last = out[out.length - 1]; if (last) last.levelUp = this.level;
+      (this.levelUps = this.levelUps || []).push({ gen: this.gen, level: this.level });
+    }
+    for (const e of out) e.level = this.level || 0;
     return out;
   }
   toHof(c) {
@@ -137,12 +147,13 @@ export class Evolution {
   // too, so they can still be re-challenged in Lamarckian mode after a reload)
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
-    return { v: STORE_V, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      bestAcc: this.bestAcc || 0, lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+    return { v: STORE_V, tl: TRIAL_LOOP, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
+      bestAcc: this.bestAcc || 0, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {
-    if (!s || (s.v !== STORE_V && s.v !== 2)) return null;   // v2 = a Pong-only save of the same format   // older saves came from the buggy learner: start fresh
+    if (!s || (s.v !== STORE_V && s.v !== 2)) return null;
+    if (s.opts && s.opts.contest && s.opts.contest !== 'pong' && s.tl !== TRIAL_LOOP) return null;   // choice brains from before the explicit trial loop / curriculum: start fresh   // v2 = a Pong-only save of the same format   // older saves came from the buggy learner: start fresh
     const st = { ...s, champ: { ...s.champ, weights: s.champ.weights ? dequantW(s.champ.weights) : null }, log: (s.history || []).slice(-40).reverse(),
       hof: (s.hof || []).map(h => ({ ...h, weights: h.weights ? dequantW(h.weights) : null })) };
     // weights lost in storage (quota): the stored benchmark no longer describes the champion, so re-earn it
