@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'tank-duel',
+    title: 'TANK DUEL',
+    tagline: 'Two tanks, one arena, 26 classic-style variations. Play the CPU or a buddy online.',
+    description: 'A top-down tank duel in the spirit of the 1977 cartridge classics, rebuilt with modern 3D graphics: shaded tanks with tread marks, shadows, dust, muzzle flash, smoke, sparks, debris explosions, screen shake, bloom and weather. Each hit scores a point and sends the target spinning. Play timed 2:16 rounds or first to 5, 10 or 15. Pick from 26 numbered games, including straight shells, guided missiles, ricochet, pinball, bank shots, invisible tanks, destructible bricks, moving walls, night patrol, turbo, power-ups, minefields, blizzard ice, monsoon, wormholes, seekers, king of the hill, mega shells and chaos. Play solo against a CPU tank with four difficulty levels; it pathfinds, leads its shots and uses bank shots. Or host online, and your buddy can join a game already in progress.',
+    thumb: 'games/tank-duel/thumb.png',
+    added: '2026-10-25',
+    genre: 'ACTION',
+    year: '1977 REMIX',
+    controls: 'arrows or WASD drive and turn · SPACE fires · ENTER fires the special (nitro, mine, mega shell) · P or ESC pauses, M toggles sound · mouse or arrows in menus; R and L change round type and CPU level on the select screen · gamepad: left stick or d-pad drives, A/RB/RT fire, B/X/LB/LT special, START pauses',
+    touch: 'drag anywhere in the left zone to steer with the floating stick (the tank drives where you point) · FIRE and SPECIAL buttons on the right · tap through the menus · works on iPhone and iPad in portrait and landscape',
+    accent: '#ffb347'
+  },
+  {
     slug: 'mushroom-cloud',
     title: 'MUSHROOM CLOUD',
     tagline: 'A real-time strategy game of nuclear brinkmanship. Nobody wins. Somebody scores.',
