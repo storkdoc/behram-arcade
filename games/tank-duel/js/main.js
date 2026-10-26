@@ -174,11 +174,11 @@ function menuKey(code) {
 }
 // touch: floating stick in the left zone, FIRE and SPECIAL buttons
 const tz = $('tzone'), stickEl = $('stick'), knob = stickEl.querySelector('i');
-tz.addEventListener('pointerdown', e => { e.preventDefault(); AU.unlock(); stick.on = true; stick.id = e.pointerId; stick.cx = e.clientX; stick.cy = e.clientY; stick.x = stick.y = 0; tz.setPointerCapture(e.pointerId); stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.classList.add('on'); knob.style.transform = ''; });
+tz.addEventListener('pointerdown', e => { e.preventDefault(); AU.unlock(); stick.on = true; stick.id = e.pointerId; stick.cx = e.clientX; stick.cy = e.clientY; stick.x = stick.y = 0; try { tz.setPointerCapture(e.pointerId); } catch (_) {} stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.classList.add('on'); knob.style.transform = ''; });
 tz.addEventListener('pointermove', e => { if (!stick.on || e.pointerId !== stick.id) return; const R0 = 56; let dx = e.clientX - stick.cx, dy = e.clientY - stick.cy; const m = Math.hypot(dx, dy); if (m > R0) { dx *= R0 / m; dy *= R0 / m; } stick.x = dx / R0; stick.y = dy / R0; knob.style.transform = `translate(${dx}px,${dy}px)`; });
 const stickEnd = e => { if (e.pointerId !== stick.id) return; stick.on = false; stick.x = stick.y = 0; stickEl.classList.remove('on'); knob.style.transform = ''; stickEl.style.left = ''; stickEl.style.top = ''; };
 tz.addEventListener('pointerup', stickEnd); tz.addEventListener('pointercancel', stickEnd);
-const holdBtn = (el, down, up) => { el.addEventListener('pointerdown', e => { e.preventDefault(); AU.unlock(); el.setPointerCapture(e.pointerId); el.classList.add('on'); down(); }); const end = () => { el.classList.remove('on'); up && up(); }; el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('contextmenu', e => e.preventDefault()); };
+const holdBtn = (el, down, up) => { el.addEventListener('pointerdown', e => { e.preventDefault(); AU.unlock(); try { el.setPointerCapture(e.pointerId); } catch (_) {} el.classList.add('on'); down(); }); const end = () => { el.classList.remove('on'); up && up(); }; el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('contextmenu', e => e.preventDefault()); };
 holdBtn($('tfire'), () => { inp.fireN++; tFire = true; }, () => { tFire = false; });
 holdBtn($('tspec'), () => { inp.specN++; });
 // gamepad
