@@ -2,7 +2,7 @@
   --font: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: #000; color: var(--ink); font-family: var(--font); overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-font-smoothing: antialiased; }
-#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#gl { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; }
 #home { position: fixed; top: calc(8px + var(--st)); left: calc(10px + var(--sl)); z-index: 30; color: var(--dim); text-decoration: none; font-size: 12px; letter-spacing: .12em; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,.35); }
 body.playing #home { display: none; }
 .hidden { display: none !important; }
@@ -90,3 +90,15 @@ body.portrait #glabel { font-size: 9px; } body.portrait #link { top: calc(56px +
 body.touch #pstat { bottom: calc(150px + var(--sb)); }
 body.touch .tfoot, body.touch #selhint { display: none; }
 @media (max-height: 480px) { .cards { max-height: 38vh; } .panel.wide { gap: 6px; padding: 10px 12px; } .seldesc { min-height: 40px; } #vdesc { font-size: 12px; } .tt { font-size: 52px; } .tblock { margin-top: 0; } .btn { padding: 9px 12px; font-size: 13px; } .btn.big { padding: 11px; font-size: 15px; } .menu { gap: 6px; } }
+/* iOS / iPhone hardening */
+html, body { -webkit-touch-callout: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; position: fixed; inset: 0; width: 100%; }
+button, .btn, .chip, .card { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.panel, .cards, .howbody { touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.cards { max-height: 46dvh; }
+@media (max-height: 480px) { .cards { max-height: 38dvh; } }
+.screen { height: 100%; }
+body.portrait #hud .sc { min-width: 0; gap: 6px; } body.portrait #hud .sc .who { font-size: 9px; letter-spacing: .1em; max-width: 72px; line-height: 1.15; white-space: normal; text-align: center; }
+body.portrait #hud .mid { min-width: 0; flex: 0 1 auto; } body.portrait #glabel { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+body[data-screen=select] #home, body[data-screen=how] #home, body[data-screen=online] #home, body[data-screen=join] #home { display: none; }
+#fatal { position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 999; background: #2a0d0d; border: 1px solid #ff6a5a; color: #ffe2dc; font: 13px/1.45 ui-monospace, Menlo, monospace; padding: 12px 14px; border-radius: 10px; white-space: pre-wrap; }
+#fatal button { margin-top: 8px; font: inherit; font-weight: 800; padding: 8px 14px; border-radius: 8px; border: 1px solid #ff6a5a; background: #000; color: #fff; }

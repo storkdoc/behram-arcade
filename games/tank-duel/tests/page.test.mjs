@@ -61,14 +61,40 @@ ok(lay.label.includes('GAME 12'), 'HUD shows the game label', lay.label);
 if (touch) ok(lay.touchShown, 'touch controls shown');
 if (dev === 'iphone') ok(lay.rotated, 'phone portrait: arena rotated to fit the tall screen');
 // drive
+let cdp = null, cx = 0, cy = 0;
 const p0 = await ev(() => [TD.game.tanks[0].x, TD.game.tanks[0].y]);
 if (touch) {
-  const z = await (await p.$('#tzone')).boundingBox(); const cx = z.x + z.width * 0.5, cy = z.y + z.height * 0.6;
-  const cdp = eng === 'chromium' ? await p.context().newCDPSession(p) : null;
+  const z = await (await p.$('#tzone')).boundingBox(); cx = z.x + z.width * 0.5; cy = z.y + z.height * 0.6;
+  cdp = eng === 'chromium' ? await p.context().newCDPSession(p) : null;
   if (cdp) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] }); for (let i = 1; i <= 6; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + i * 8, y: cy - i * 4, id: 1 }] }); await wait(30); } await wait(1600); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); }
   else { await ev(() => { const z = document.getElementById('tzone'), r = z.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height * 0.6; const P = (t, X, Y) => z.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: X, clientY: Y, bubbles: true, pointerType: 'touch' })); P('pointerdown', x, y); P('pointermove', x + 50, y - 25); setTimeout(() => P('pointerup', x + 50, y - 25), 1600); }); await wait(1800); }
   const f0 = await ev(() => TD.game.tanks[0].firedN); await tapSel('#tfire'); await p.waitForFunction(f0 => TD.game.tanks[0].firedN > f0, f0, { timeout: 8000 }).catch(() => {});
   ok(await ev(() => TD.game.tanks[0].firedN) > f0, 'FIRE button fires');
+  // multi-touch: hold the stick and press FIRE at the same time (two simultaneous touch pointers)
+  await p.waitForFunction(() => TD.game.shells.every(sh => sh.owner !== 0), null, { timeout: 8000 }).catch(() => {});
+  const fb = await (await p.$('#tfire')).boundingBox(), fx = fb.x + fb.width / 2, fy = fb.y + fb.height / 2;
+  const m0 = await ev(() => ({ x: TD.game.tanks[0].x, y: TD.game.tanks[0].y, f: TD.game.tanks[0].firedN }));
+  if (cdp) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 11 }] });
+    for (let i = 1; i <= 5; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx, y: cy - i * 9, id: 11 }] }); await wait(25); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy - 45, id: 11 }, { x: fx, y: fy, id: 12 }] });
+    await wait(900);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ x: cx, y: cy - 45, id: 11 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await ev(([fx, fy]) => { const z = document.getElementById('tzone'), f = document.getElementById('tfire'), r = z.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height * 0.6;
+      const P = (el, t, id, X, Y) => el.dispatchEvent(new PointerEvent(t, { pointerId: id, clientX: X, clientY: Y, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: id === 21 }));
+      P(z, 'pointerdown', 21, x, y); P(z, 'pointermove', 21, x, y - 45); P(f, 'pointerdown', 22, fx, fy);
+      setTimeout(() => { P(f, 'pointerup', 22, fx, fy); P(z, 'pointerup', 21, x, y - 45); }, 900); }, [fx, fy]);
+    await wait(1100);
+  }
+  await p.waitForFunction(f => TD.game.tanks[0].firedN > f, m0.f, { timeout: 6000 }).catch(() => {});
+  const m1 = await ev(() => ({ x: TD.game.tanks[0].x, y: TD.game.tanks[0].y, f: TD.game.tanks[0].firedN, stickOff: !document.getElementById('stick').classList.contains('on') }));
+  ok(m1.f > m0.f && Math.hypot(m1.x - m0.x, m1.y - m0.y) > 0.3, 'multi-touch: steer with the stick and FIRE at the same time', { m0, m1 });
+  ok(m1.stickOff, 'stick releases after the touch ends');
+  // the page must not scroll / zoom on touch drags during play
+  const prevented = await ev(() => { try { const t = new TouchEvent('touchmove', { cancelable: true, bubbles: true }); document.getElementById('gl').dispatchEvent(t); return t.defaultPrevented; } catch (e) { return 'n/a'; } });
+  ok(prevented === true || prevented === 'n/a', 'touchmove on the game surface is prevented (no scroll / rubber-band)', prevented);
 } else {
   await p.keyboard.down('ArrowUp'); await wait(1500); await p.keyboard.up('ArrowUp');
   const f0 = await ev(() => TD.game.tanks[0].firedN); await p.keyboard.press('Space'); await p.waitForFunction(f0 => TD.game.tanks[0].firedN > f0, f0, { timeout: 8000 }).catch(() => {});

@@ -28,6 +28,7 @@ function show(name) {
   for (const s of SCREENS) $(s).classList.toggle('show', s === name || (name === 'pause' && false));
   const inGame = name === 'play' || name === 'pause' || name === 'endp';
   $('hud').classList.toggle('hidden', !inGame);
+  document.body.dataset.screen = name;
   $('touch').classList.toggle('hidden', !(touchDev && name === 'play'));
   document.body.classList.toggle('playing', inGame);
   $('waitban').classList.toggle('hidden', !(inGame && app.online === 'host' && !app.guestOn));
@@ -184,7 +185,7 @@ holdBtn($('tspec'), () => { inp.specN++; });
 // gamepad
 const pad = { prev: [], navT: 0, axPrev: 0 };
 function pollPad(dt) {
-  const gp = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(p => p && p.connected); padStick = null; padFire = false;
+  let gp = null; try { gp = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(p => p && p.connected); } catch (e) {} padStick = null; padFire = false;
   if (!gp) return null;
   const b = i => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5)), edge = i => b(i) && !pad.prev[i];
   const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, mag = Math.hypot(ax, ay);
@@ -226,12 +227,33 @@ function layout() {
   if (!R || !R.ready) return;
   const inGame = app.screen === 'play' || app.screen === 'pause' || app.screen === 'endp';
   const hudH = inGame ? (portrait ? 64 : 54) : 0;
-  const ins = { top: hudH, bottom: 0, left: 0, right: 0 };
-  if (inGame && touchDev) { if (portrait) ins.bottom = Math.min(260, h * 0.3); else if (w / h > 1.75) { ins.left = ins.right = Math.min(150, w * 0.1); ins.bottom = 10; } }
+  const sa = safeArea();
+  const ins = { top: hudH + sa.t, bottom: sa.b, left: sa.l, right: sa.r };
+  if (inGame && touchDev) { if (portrait) ins.bottom = Math.min(190, h * 0.22) + sa.b; else if (w / h > 1.75) { ins.left = Math.min(150, w * 0.1) + sa.l; ins.right = Math.min(150, w * 0.1) + sa.r; ins.bottom = 10 + sa.b; } }
   if (!inGame) { ins.top = 0; }
   R.insets = ins; R._sized = false;
 }
-addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 200));
+addEventListener('resize', layout);
+// notch / home-indicator insets (env(safe-area-inset-*)) measured through a probe element
+let saProbe = null;
+function safeArea() {
+  try {
+    if (!saProbe) { saProbe = document.createElement('div'); saProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.appendChild(saProbe); }
+    const cs = getComputedStyle(saProbe); return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  } catch (e) { return { t: 0, r: 0, b: 0, l: 0 }; }
+}
+// iOS reports stale sizes right after rotation / toolbar changes: re-layout a few times
+const relayout = () => { layout(); [120, 400, 900].forEach(t => setTimeout(layout, t)); };
+addEventListener('orientationchange', relayout); try { if (window.visualViewport) visualViewport.addEventListener('resize', relayout); } catch (e) {}
+// iOS Safari: block page scroll, rubber-banding, pinch and double-tap zoom (it ignores user-scalable=no),
+// but let real scroll containers (game list, help text) scroll in menus
+const scroller = el => el && el.closest && el.closest('.cards, .panel, .howbody');
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 || app.screen === 'play' || !scroller(e.target)) e.preventDefault(); }, { passive: false });
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+let lastTouchEnd = 0; document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTouchEnd < 320 && e.target && e.target.closest && e.target.closest('#touch')) e.preventDefault(); lastTouchEnd = n; }, { passive: false });
+document.addEventListener('contextmenu', e => { if (!(e.target && e.target.tagName === 'INPUT')) e.preventDefault(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && app.screen === 'play' && !app.online) pause(); });
 
 /* ---------------- game lifecycle ---------------- */
 function newSeed() { return (Math.random() * 1e9) >>> 0; }
@@ -529,8 +551,12 @@ function netWatch() {
 
 /* ---------------- main loop ---------------- */
 let last = performance.now(), fpsA = 0, fpsN = 0, fps = 60;
+let loopErrs = 0;
 function loop(now) {
   requestAnimationFrame(loop);
+  try { loopBody(now); } catch (e) { console.error(e); if (++loopErrs === 30 && window.TDFatal) TDFatal('runtime: ' + (e && e.message || e)); }
+}
+function loopBody(now) {
   let dt = (now - last) / 1000; last = now; if (!(dt > 0)) dt = 0; dt = Math.min(dt, 0.25);
   fpsA += dt; fpsN++; if (fpsA > 1) { fps = Math.round(fpsN / fpsA); fpsA = 0; fpsN = 0; }
   const dpad = pollPad(dt);
@@ -558,10 +584,14 @@ function loop(now) {
 async function boot() {
   const canvas = $('gl');
   try {
-    R = new Renderer(canvas, { msaa: Q.get('msaa') === '1', q: Q.has('q') ? +Q.get('q') : null, onThunder: d => AU.thunder(d) });
+    R = new Renderer(canvas, { msaa: Q.get('msaa') === '1', q: Q.has('q') ? +Q.get('q') : null, onThunder: d => AU.thunder(d),
+      onFatal: m => window.TDFatal && TDFatal(m),
+      onLost: () => toast('GRAPHICS RESET…'),
+      onRestored: () => { if (!app.online) location.reload(); else toast('GRAPHICS RESTORED — RELOAD IF THE VIEW LOOKS WRONG'); } });
     await R.init(f => { $('lprog').style.width = Math.round(f * 100) + '%'; });
-  } catch (e) { console.error(e); $('lmsg').textContent = 'WEBGL UNAVAILABLE ON THIS DEVICE: ' + (e.message || e); return; }
-  layout(); startAttract(); show('title');
+  } catch (e) { console.error(e); $('lmsg').textContent = 'WEBGL UNAVAILABLE ON THIS DEVICE: ' + (e.message || e); window.TDFatal && TDFatal('3D graphics (WebGL 2) could not start: ' + (e.message || e)); return; }
+  try { layout(); startAttract(); show('title'); } catch (e) { console.error(e); window.TDFatal && TDFatal('startup: ' + (e.message || e)); }
+  window.TD.booted = true;
   requestAnimationFrame(t => { last = t; loop(t); });
   if (Q.has('v')) { app.variant = Math.max(0, Math.min(S.VARIANTS.length - 1, +Q.get('v') - 1)); if (Q.has('l')) app.level = +Q.get('l'); startLocal(); }
 }

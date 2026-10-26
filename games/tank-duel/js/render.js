@@ -159,10 +159,19 @@ export class Renderer {
   constructor(canvas, opts = {}) {
     this.canvas = canvas; this.opts = opts; this.msaa = !!opts.msaa;
     this.r = new THREE.WebGLRenderer({ canvas, antialias: this.msaa, alpha: false, stencil: false, powerPreference: 'high-performance' });
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.lost = true; opts.onLost && opts.onLost(); }, false);
+    canvas.addEventListener('webglcontextrestored', () => { this.lost = false; opts.onRestored && opts.onRestored(); }, false);
+    { // post FX needs a renderable half-float target (bloom uses HalfFloat internally). Without it: no composer -> never black
+      const gl = this.r.getContext(); this.hfOK = !!(gl.getExtension('EXT_color_buffer_half_float') || gl.getExtension('EXT_color_buffer_float'));
+      if (!this.hfOK) console.info('[tank-duel] no half-float color buffers; post effects off'); }
     this.r.outputColorSpace = THREE.SRGBColorSpace; this.r.toneMapping = THREE.ACESFilmicToneMapping; this.r.toneMappingExposure = 1.0;
     this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene(); this.cam = new THREE.PerspectiveCamera(32, 1, 0.5, 200);
-    this.tier = opts.q != null ? +opts.q : 3; this.maxTier = 3; this.lockTier = opts.q != null; this.ft = []; this.time = 0; this.lastCheck = 0; this.selfChecks = 0; this.blackHoles = 0; this.lastSelf = null;
+    // phones/tablets (incl. iPadOS, which reports as Mac) start one tier lower with a smaller pixel budget
+    this.mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    this.phone = this.mobile && Math.min(screen.width, screen.height) < 600;
+    this.tier = opts.q != null ? +opts.q : (this.mobile ? 2 : 3); this.maxTier = 3;
+    if (!this.hfOK) { this.maxTier = 1; this.tier = Math.min(this.tier, 1); } this.lockTier = opts.q != null; this.ft = []; this.time = 0; this.lastCheck = 0; this.selfChecks = 0; this.blackHoles = 0; this.lastSelf = null;
     this.shake = 0; this.flash = 0; this.insets = { top: 0, bottom: 0, left: 0, right: 0 }; this.rotated = false; this.viewer = 0; this.ready = false; this.attract = false; this._tmpPts = []; this.fowPts = [];
   }
   async init(progress) {
@@ -254,13 +263,13 @@ export class Renderer {
   resize() {
     const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight), dpr = Math.min(devicePixelRatio || 1, 3);
     const cap = this.tier >= 3 ? 2 : this.tier >= 1 ? 1.5 : 1;
-    let pr = Math.min(dpr, cap); const maxPx = 5.2e6; if (w * h * pr * pr > maxPx) pr = Math.sqrt(maxPx / (w * h));
+    let pr = Math.min(dpr, cap); const maxPx = this.phone ? 2.2e6 : this.mobile ? 3.2e6 : 5.2e6; if (w * h * pr * pr > maxPx) pr = Math.sqrt(maxPx / (w * h));
     this.pr = pr; this.W = w; this.H = h;
     this.r.setPixelRatio(pr); this.r.setSize(w, h, false); this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
     this.composer.setPixelRatio(pr); this.composer.setSize(w, h); this.fxaa.uniforms.res.value.set(w * pr, h * pr);
     const shadowOn = this.tier >= 1;
     if (this.r.shadowMap.enabled !== shadowOn) { this.r.shadowMap.enabled = shadowOn; this.scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); }); }
-    const sm = this.tier >= 2 ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== sm) { this.sun.shadow.mapSize.set(sm, sm); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
+    const sm = this.tier >= 3 && !this.phone ? 2048 : this.tier >= 2 ? 1536 : 1024; if (this.sun.shadow.mapSize.x !== sm) { this.sun.shadow.mapSize.set(sm, sm); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
     this.fitCamera(); this._sized = true;
   }
   fitCamera() {
@@ -353,7 +362,7 @@ export class Renderer {
     this.sun.intensity = night ? 0.55 : rain ? 1.0 : snow ? 2.4 : 3.0; this.sun.color.set(night ? 0x8fa8ff : snow ? 0xeef4ff : 0xfff1dc);
     this.scene.environmentIntensity = night ? 0.15 : rain ? 0.55 : 0.8;
     const bg = night ? 0x05070d : rain ? 0x40464e : snow ? 0xc8d2de : 0xb9a37f;
-    this.scene.background = new THREE.Color(bg); this.scene.fog = new THREE.Fog(bg, night ? 30 : 45, night ? 60 : 110);
+    this.scene.background = new THREE.Color(bg); this.scene.fog = new THREE.Fog(bg, night ? 30 : 45, night ? 60 : 110); this.fogBase = [this.scene.fog.near, this.scene.fog.far];
     this.smokeMat.uniforms.light.value.setRGB(night ? 0.28 : rain ? 0.7 : 1, night ? 0.3 : rain ? 0.72 : 1, night ? 0.38 : rain ? 0.76 : 1);
     this.rain.visible = rain; this.snow.mesh.visible = snow; this.snow.clear();
     this.fow.visible = night; this.fowU.dark.value = 0.93;
@@ -445,7 +454,7 @@ export class Renderer {
 
   /* ---------- per frame ---------- */
   frame(dt, g, viewer, opts = {}) {
-    if (!this.ready || !g) return;
+    if (!this.ready || !g || this.lost) return;
     if (g !== this.g) this.build(g, viewer);
     this.viewer = viewer; dt = Math.min(dt, 0.1); this.time += dt; const T = this.time, v = g.v;
     this.adapt(dt);
@@ -453,6 +462,7 @@ export class Renderer {
     if (g.tilesVer !== this.tilesVer) { this.tilesVer = g.tilesVer; this.syncBricks(g); }
     // camera
     const tilt = 0.36 + (opts.attract ? Math.sin(T * 0.13) * 0.08 : 0), d = this.dist || 40;
+    if (this.fogBase && this.scene.fog) { const k = Math.max(1, d / 40); this.scene.fog.near = this.fogBase[0] * k; this.scene.fog.far = this.fogBase[1] * k; } // far portrait camera must not drown in fog
     const sh = this.shake * this.shake * 0.9; this.shake = Math.max(0, this.shake - dt * 1.6);
     const ox = (Math.random() - 0.5) * sh, oz = (Math.random() - 0.5) * sh;
     const sway = opts.attract ? Math.sin(T * 0.21) * 1.5 : 0;
@@ -587,6 +597,7 @@ export class Renderer {
     const px = new Uint8Array(4); let black = 0, n = 0;
     for (const [x, y] of cand) { const p = this.project(x, y, 0); if (p.x < 2 || p.y < 2 || p.x > this.W - 2 || p.y > this.H - 2) continue; gl.readPixels(Math.round(p.x * pr), Math.round(H - p.y * pr), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); n++; if (px[0] + px[1] + px[2] < 6) black++; }
     this.lastSelf = { n, black, tier: this.tier };
+    if (n >= 6 && black / n >= 0.2 && this.tier === 0 && !this.night) { this.blackHoles++; if (this.blackHoles === 3 && this.opts.onFatal) this.opts.onFatal('The 3D view renders black on this GPU even at the lowest quality.'); }
     if (n >= 6 && black / n >= 0.2 && this.tier > 0) { console.warn(`[tank-duel] black regions detected (${black}/${n}) at quality ${this.tier}; stepping effects down`); this.maxTier = this.tier - 1; this.setTier(this.maxTier); this.selfChecks = 0; }
   }
   stats() { return { tier: this.tier, maxTier: this.maxTier, lastSelf: this.lastSelf, rotated: this.rotated, pr: this.pr }; }

@@ -8,6 +8,27 @@
 <title>TANK DUEL — Behram Arcade</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.TDFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'TANK DUEL hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.TD && window.TD.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) TDFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) TDFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!window.TD) TDFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 25000);
+})();
+</script>
+
 </head>
 <body>
 <canvas id="gl"></canvas>

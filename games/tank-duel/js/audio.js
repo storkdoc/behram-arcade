@@ -17,12 +17,22 @@
     const n = ctx.sampleRate * 2; noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
     return ctx;
   }
+  // iOS: the context may only start inside a real gesture (touchend / click, not touchstart), and it can be
+  // 'interrupted' by calls or backgrounding. Keep trying on every gesture until it is running.
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // iOS 17+: play even with the silent switch on
   function unlock() {
-    if (!ensure()) return;
-    if (ctx.state !== 'running') ctx.resume();
-    if (!unlocked) { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); unlocked = true; }
+    try {
+      if (!ensure()) return;
+      if (ctx.state !== 'running') { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+      if (!unlocked || ctx.state !== 'running') { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); }
+      unlocked = ctx.state === 'running';
+    } catch (e) {}
   }
-  ['pointerdown', 'touchend', 'keydown', 'mousedown'].forEach(e => root.addEventListener && root.addEventListener(e, unlock, { capture: true, passive: true }));
+  ['touchend', 'click', 'pointerup', 'pointerdown', 'keydown', 'mousedown'].forEach(e => root.addEventListener && root.addEventListener(e, unlock, { capture: true, passive: true }));
+  if (root.document) root.document.addEventListener('visibilitychange', () => {
+    if (!ctx) return;
+    try { if (document.hidden) ctx.suspend(); else { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } } catch (e) {}
+  });
   const ok = () => ctx && ctx.state === 'running' && !muted;
   const now = () => ctx.currentTime;
   function panner(p) { const s = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain(); if (s.pan) s.pan.value = Math.max(-1, Math.min(1, p || 0)); s.connect(sfx); return s; }
