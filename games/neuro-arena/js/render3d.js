@@ -180,7 +180,7 @@ export class Render3D {
     for (let i = 0; i < N; i++) if (spk[off + i]) act[i] = 1;
     const scale = Math.min(1, 40 / Math.max(1, f.simMs || 16));
     const send = (src, pick, prob, col, dur, cap) => {
-      let n = 0; for (let i = src.s; i < src.e && n < cap; i++) if (spk[off + i] && Math.random() < prob * scale) { const j = pick(i); if (j < 0) continue; this.nWorld(k, i, a); if (j >= 1e6) { this.courtWorld(COURT.padX[k], f.pad[k], e); } else this.nWorld(k, j, e); this.emit(a.x, a.y, a.z, e.x, e.y, e.z, col, dur); n++; }
+      let n = 0; for (let i = src.s; i < src.e && n < cap; i++) if (spk[off + i] && Math.random() < prob * scale) { const j = pick(i); if (j < 0) continue; this.nWorld(k, i, a); if (j >= 1e6) { this.courtWorld(f.pad ? COURT.padX[k] : COURT.W * (k ? 0.62 : 0.38), f.pad ? f.pad[k] : 0.5, e); } else this.nWorld(k, j, e); this.emit(a.x, a.y, a.z, e.x, e.y, e.z, col, dur); n++; }
     };
     const rI = (s) => s.s + Math.floor(Math.random() * s.n);
     send(L.TH_E, i => { const r = (i - L.TH_E.s); return L.S_E.s + Math.min(L.S_E.n - 1, r * 2 + (Math.random() < 0.5 ? 0 : 1)); }, 0.25, [1, 0.7, 0.3], 0.35, 40);
@@ -255,7 +255,8 @@ export class Render3D {
       b.aAct.needsUpdate = true;
       const d = this.dopa[b.side]; b.shellU.uDA.value += (Math.max(-1, Math.min(1, d)) - b.shellU.uDA.value) * Math.min(1, dt * 8);
     }
-    if (f) {
+    const choice = !!(f && f.kind === 'choice'); this.court.visible = !choice;   // choice contests are drawn on the 2D stage
+    if (f && !choice) {
       for (let p = 0; p < 2; p++) this.pads[p].position.set(COURT.padX[p] * S - CW / 2 + (p ? 0.02 : -0.02), f.pad[p] * S - CH / 2, 0.02);
       const bx = f.bx * S - CW / 2, by = f.by * S - CH / 2; this.ball.position.set(bx, by, 0.03);
       this.trail.copyWithin(3, 0, (this.trailN - 1) * 3); this.trail[0] = bx; this.trail[1] = by; this.trail[2] = 0.03;

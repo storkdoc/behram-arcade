@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#03050b">
-<meta name="description" content="Neuro Arena: two spiking-neuron brains learn Pong by reward-modulated STDP and evolve: the winner spawns the next challenger with DNA-like copy errors.">
+<meta name="description" content="Neuro Arena: two spiking-neuron brains compete in Pong, addition, subtraction, text completion and more, learn by reward-modulated STDP, and evolve: THE REAPER judges every challenger.">
 <title>Neuro Arena: evolving spiking brains</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
@@ -15,6 +15,7 @@
 <body>
 <canvas id="gl" aria-label="Two 3D spiking brains playing Pong"></canvas>
 <div id="labels" aria-hidden="true"></div>
+<canvas id="stage" class="hidden" aria-label="Contest stage: the question and both brains' answers"></canvas>
 
 <header id="top">
   <a id="home" href="../../index.html" title="Back to the arcade">← Arcade</a>
@@ -22,20 +23,28 @@
   <nav id="modes" role="tablist">
     <button id="mWatch" class="mode on" data-mode="watch" title="Watch the champion duel its newest spawn (1)">Watch</button>
     <button id="mTurbo" class="mode" data-mode="turbo" title="Evolve headlessly in parallel workers (2)">Turbo</button>
-    <button id="mPlay" class="mode" data-mode="play" title="Play Pong against the champion (3)">Play</button>
+    <button id="mPlay" class="mode" data-mode="play" title="Play against the champion yourself (3)">Play</button>
   </nav>
   <div id="dock">
     <button id="bCtl" class="ib" title="Controls" aria-label="Controls">☰</button>
+    <button id="bLab" class="ib lab" title="Lab: learning instruments (L)" aria-label="Lab">LAB</button>
     <button id="bInfo" class="ib" title="How it works (I)" aria-label="Info">i</button>
   </div>
 </header>
 
+<nav id="carousel" aria-label="Contests">
+  <button id="cPrev" class="cnav" aria-label="Previous contest">‹</button>
+  <div id="cView"><div id="cTrack"></div></div>
+  <button id="cNext" class="cnav" aria-label="Next contest">›</button>
+</nav>
 <div id="score">
   <div class="side a"><span class="nm" id="nmA">CHAMPION</span><b id="scA">0</b></div>
   <div class="mid"><div id="genLbl">GENERATION 0</div><div id="benchLbl">champion not yet benchmarked</div><div id="clock">0.0 s</div></div>
   <div class="side b"><b id="scB">0</b><span class="nm" id="nmB">CHALLENGER</span></div>
 </div>
 <div id="serveHint" class="hidden">Press <b>Space</b> or tap to serve</div>
+<div id="answers" class="hidden" aria-label="Your answer"></div>
+<div id="reaper" class="hidden" aria-live="polite"></div>
 
 <div id="turboBox" class="hidden">
   <div class="tt">TURBO EVOLUTION</div>
@@ -46,15 +55,15 @@
 
 <aside class="meters" id="metA">
   <div class="mh"><i class="sw a"></i><span id="mtA">Brain A</span></div>
-  <div class="mrow"><label>Motor UP</label><div class="bar"><i id="upA"></i></div></div>
-  <div class="mrow"><label>Motor DOWN</label><div class="bar dn"><i id="dnA"></i></div></div>
+  <div class="mrow"><label id="luA">Motor UP</label><div class="bar"><i id="upA"></i></div></div>
+  <div class="mrow"><label id="ldA">Motor DOWN</label><div class="bar dn"><i id="dnA"></i></div></div>
   <div class="mrow"><label>Dopamine</label><div class="bar da"><i id="daA"></i><em></em></div></div>
   <div class="mrow small"><span id="hrA">hit rate –</span></div>
 </aside>
 <aside class="meters" id="metB">
   <div class="mh"><i class="sw b"></i><span id="mtB">Brain B</span></div>
-  <div class="mrow"><label>Motor UP</label><div class="bar"><i id="upB"></i></div></div>
-  <div class="mrow"><label>Motor DOWN</label><div class="bar dn"><i id="dnB"></i></div></div>
+  <div class="mrow"><label id="luB">Motor UP</label><div class="bar"><i id="upB"></i></div></div>
+  <div class="mrow"><label id="ldB">Motor DOWN</label><div class="bar dn"><i id="dnB"></i></div></div>
   <div class="mrow"><label>Dopamine</label><div class="bar da"><i id="daB"></i><em></em></div></div>
   <div class="mrow small"><span id="hrB">hit rate –</span></div>
 </aside>
@@ -62,7 +71,7 @@
 <section id="panel">
   <div id="tabs"><button data-tab="chart" class="on">Fitness</button><button data-tab="log">Mutations</button><button data-tab="genome">Genome</button></div>
   <div class="card" id="cardChart" data-card="chart">
-    <div class="ch">Benchmark score over generations <span class="lg"><i class="l1"></i>champion <i class="l5"></i>best ever <i class="l2"></i>challenger <i class="l6"></i>rally length (right axis) <i class="l3"></i>random paddle <i class="l4">◆</i>beneficial copy error → new champion</span></div>
+    <div class="ch"><span id="chTitle">Benchmark score over generations</span> <span class="lg" id="chLegend"><i class="l1"></i>champion <i class="l5"></i>best ever <i class="l2"></i>challenger <i class="l6"></i>rally length (right axis) <i class="l3"></i>random paddle <i class="l4">◆</i>beneficial copy error → new champion</span></div>
     <div class="chrow"><canvas id="chart"></canvas><canvas id="life"></canvas></div>
     <div id="tip" class="hidden"></div>
   </div>
@@ -72,12 +81,15 @@
   </div>
   <div class="card" id="cardGenome" data-card="genome">
     <div class="ch">Genome · champion <span class="cA">A</span> vs challenger <span class="cB">B</span> <span class="lg">amber = copy error</span></div>
-    <div id="maps"><figure><canvas id="polA" width="56" height="56"></canvas><figcaption>A learned motor map</figcaption></figure><figure><canvas id="polB" width="56" height="56"></canvas><figcaption>B learned motor map</figcaption></figure><p class="mapnote">Each pixel is one association cell (ball relative to paddle ↑ vs paddle height →). Green drives UP, orange drives DOWN. A good player learns a horizontal split: green above the middle, orange below.</p></div>
+    <div id="maps"><figure><canvas id="polA" width="56" height="56"></canvas><figcaption>A learned motor map</figcaption></figure><figure><canvas id="polB" width="56" height="56"></canvas><figcaption>B learned motor map</figcaption></figure><p class="mapnote" id="mapNote">Each pixel is one association cell (ball relative to paddle ↑ vs paddle height →). Green drives UP, orange drives DOWN. A good player learns a horizontal split: green above the middle, orange below.</p></div>
     <div id="genome"></div>
   </div>
 </section>
 
 <aside id="ctl">
+  <div class="ct">Brain</div>
+  <label class="sl">Brain size <b id="vSize">2,800</b><input id="sSize" type="range" min="0" max="5" step="1" value="1"></label>
+  <p class="note" id="sizeNote"></p>
   <div class="ct">Evolution</div>
   <label class="sl">Copy error rate <b id="vRate">2.0%</b><input id="sRate" type="range" min="0" max="30" step="0.5" value="2"></label>
   <p class="note">Chance that each gene (and each inherited synapse) is miscopied per spawn: mostly small errors, sometimes a large point error, rarely a structural change.</p>
@@ -96,12 +108,31 @@
   <div class="box">
     <button class="x" id="infoX" aria-label="Close">×</button>
     <h2>How Neuro Arena works</h2>
-    <p><b>Two brains, one game.</b> Each paddle is driven by its own brain of 2,800 spiking neurons, with the same physiology as Neuro Storm. Cells are conductance-based integrate-and-fire neurons. They rest at −70 mV, fire past about −55 mV, spike to +35 mV, and undershoot to about −79 mV, with a 2 ms absolute refractory period and a relative one. AMPA EPSPs reverse at 0 mV and GABA-A IPSPs at −80 mV. 80% of cells are excitatory and 20% inhibitory, and Dale's law holds.</p>
+    <p><b>A carousel of contests.</b> Pick the game at the top (arrows, swipe, click, or the [ and ] keys): Pong, Addition, Subtraction, Bigger number, Even or odd, and Text completion. Every contest has its own evolution, champion, Hall of Fame and history, saved in this browser. In the quiz contests the problem is shown to both brains at once through symbol input neurons (one tile per symbol, read by a gain-field association layer), and each possible answer has its own motor population. The populations race; winner-take-all inhibition picks one, and a brain that does not get a clear lead in time abstains.</p>
+    <p><b>THE REAPER.</b> Selection is decided by a judge, not by the live duel. After each duel the champion and its spawn sit the same frozen benchmark (learning off, the same items in the same order). Each answer is scored per character: +1 for a right character, −2 for a wrong one, 0 for abstaining, so guessing costs more than staying silent. The challenger reaps the champion only if it leads by a clear margin (5% of the maximum, at least 3 points; Pong: 2 serves) and wins on more items than it loses (a paired sign test). Ties go to fewer errors, then to faster answers. The verdict appears on screen and in the Lab.</p>
+    <p><b>Two brains, one game.</b> Each player is its own brain of spiking neurons: 2,800 in Pong; in the quiz contests the Brain size slider sets 1,400 to 22,400 (default 2,800), with the same physiology as Neuro Storm. Cells are conductance-based integrate-and-fire neurons. They rest at −70 mV, fire past about −55 mV, spike to +35 mV, and undershoot to about −79 mV, with a 2 ms absolute refractory period and a relative one. AMPA EPSPs reverse at 0 mV and GABA-A IPSPs at −80 mV. 80% of cells are excitatory and 20% inhibitory, and Dale's law holds.</p>
     <p><b>Sensing → acting.</b> Receptors encode where the ball is relative to the paddle (a foveal code, magnified near the paddle, like an eye fixating it), the paddle's height, the ball's distance and its vertical velocity as population codes, sending Poisson spikes into a <b>thalamic relay</b> with TRN inhibition. From there activity goes to <b>sensory cortex</b>, then to an E/I-balanced <b>association cortex</b>, where gain-field cells respond to particular (ball − paddle) × paddle-height combinations, and then to <b>motor layer 5</b>, which has an UP group and a DOWN group. Lateral inhibition makes the two groups compete, and the paddle moves according to the UP vs DOWN firing rate. Nothing else moves the paddle.</p>
     <p><b>Learning within a lifetime.</b> Association → motor synapses learn by reward-modulated STDP, a three-factor rule. Pre/post spike timing marks each synapse with an eligibility trace, and dopamine turns those traces into weight changes. Only pre/post activity above each motor cell's baseline counts, so random firing does not drift the weights. A hit or a point gives a dopamine burst, and a miss gives a dip, but those arrive too late to credit the movement that caused them; an innate critic (moving toward the ball → a small burst every 5 ms, moving away → a dip) is what does most of the teaching. Homeostatic synaptic scaling keeps motor firing near a target rate.</p>
     <p><b>Evolution across lifetimes.</b> The genome holds 49 genes: connection probabilities and weights, E/I balance, learning rates, time constants, receptive-field width, motion anticipation, innate motor biases, and structural switches. The reigning champion duels its newest spawns. The duel is the show and a lifetime of learning; then both brains, with learning frozen, take the same fixed <b>benchmark</b> of 50 standard serves. A spawn takes the throne only if it is clearly better there (by 2+ serves and a paired sign test), so lucky duels do not count. The champion keeps its best-scoring synapses, so its benchmark never goes down. The winner reproduces. Each spawn is a copy with a small <b>copy-error rate</b>, like DNA replication errors. Most errors are small, some are large point errors, and a few are structural. <b>Darwinian</b> inheritance passes on genes only, so every child relearns from scratch. <b>Lamarckian</b> inheritance also passes on the learned synapses, with copy errors. The Hall of Fame keeps the best champions, and an old champion can return for a rematch.</p>
     <p><b>Modes.</b> <i>Watch</i> shows each generation's duel live. <i>Turbo</i> runs many duels (and benchmarks) at once in background workers. <i>Play</i> lets you face the current champion; it keeps learning while you play.</p>
-    <p class="keys"><b>Mac:</b> W/S or ↑/↓ move · Space serves · mouse over the court also steers · 1/2/3 modes · I info · gamepad left stick. <b>iPhone/iPad:</b> drag on the court to move your paddle · tap to serve · ☰ for controls.</p>
+    <p><b>The Lab</b> (LAB button or L) is for studying how the brains teach themselves: benchmark accuracy against chance over generations, live accuracy in the current duel, the dopamine (reward prediction error) trace, the champion's synapse histogram and how far its synapses drift each generation, a spike raster with firing rates per area, the lineage with the effect of each kind of copy error, every Reaper verdict, and Lamarckian vs Darwinian results. Export CSV or JSON for your own analysis.</p>
+    <p class="keys"><b>Mac:</b> ← / → or [ / ] change contest · 1/2/3 Watch/Turbo/Play · L Lab · I info. Pong: W/S or ↑/↓ move, Space serves, the mouse over the court also steers, gamepad left stick. Quiz contests in Play: type the answer (digits, letters, or E/O, L/R) or click the answer buttons. <b>iPhone/iPad:</b> swipe the carousel or tap a card · Pong: drag on the court, tap to serve · quiz: tap an answer button · ☰ for controls.</p>
+  </div>
+</div>
+<div id="lab" class="hidden" role="dialog" aria-modal="true" aria-label="Lab">
+  <div class="lbox">
+    <div class="lhead"><b>LAB</b> <span id="labTitle"></span>
+      <span class="lbtns"><button id="labCSV" class="btn">Export CSV</button><button id="labJSON" class="btn">Export JSON</button><button class="x" id="labX" aria-label="Close">×</button></span></div>
+    <div class="lgrid">
+      <figure class="w2"><canvas id="lCurve"></canvas></figure>
+      <figure><canvas id="lLive"></canvas></figure>
+      <figure><canvas id="lDA"></canvas></figure>
+      <figure class="w2"><canvas id="lW"></canvas></figure>
+      <figure class="w2 tall"><canvas id="lRas"></canvas></figure>
+      <section class="w2"><div class="lt">THE REAPER · verdicts (frozen benchmark, same items for both: +1 per right character, −2 per wrong one, 0 for abstaining)</div><div id="lReaper" class="tbl"></div></section>
+      <section><div class="lt">Lineage · throne changes</div><div id="lLine" class="tbl"></div></section>
+      <section><div class="lt">Lamarck vs Darwin (this contest)</div><div id="lLD" class="tbl"></div></section>
+    </div>
   </div>
 </div>
 <div id="toast" class="hidden"></div>

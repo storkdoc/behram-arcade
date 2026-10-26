@@ -62,7 +62,9 @@ export class Render2D {
     x.setTransform(pr, 0, 0, pr, 0, 0); x.globalCompositeOperation = 'source-over';
     const g = x.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, Math.max(this.W, this.H) * 0.7);
     g.addColorStop(0, '#0b0f26'); g.addColorStop(1, '#020309'); x.fillStyle = g; x.fillRect(0, 0, this.W, this.H);
-    // court
+    // court (choice contests are drawn on the 2D stage overlay instead)
+    const choice = !!(f && f.kind === 'choice');
+    if (!choice) {
     const c0 = this.courtAnchor(0, 1), c1 = this.courtAnchor(COURT.W, 0), cw = c1.x - c0.x, ch = c1.y - c0.y;
     x.fillStyle = 'rgba(4,8,22,.92)'; x.fillRect(c0.x, c0.y, cw, ch);
     x.strokeStyle = 'rgba(40,70,170,.35)'; x.lineWidth = 1; x.beginPath();
@@ -70,6 +72,7 @@ export class Render2D {
     for (let p = 0; p < 2; p++) { this.flash[p] *= Math.exp(-dt / 0.25); if (this.flash[p] > 0.02) { const gg = x.createLinearGradient(p ? c1.x : c0.x, 0, p ? c1.x - cw * 0.35 : c0.x + cw * 0.35, 0); const col = p ? '200,0,170' : '0,170,200'; gg.addColorStop(0, `rgba(${col},${0.7 * this.flash[p]})`); gg.addColorStop(1, `rgba(${col},0)`); x.fillStyle = gg; x.fillRect(c0.x, c0.y, cw, ch); } }
     x.strokeStyle = 'rgba(110,160,255,.85)'; x.lineWidth = 1.5; x.strokeRect(c0.x, c0.y, cw, ch);
     x.setLineDash([0.06 * u, 0.06 * u]); x.strokeStyle = 'rgba(90,110,240,.6)'; x.beginPath(); x.moveTo(c0.x + cw / 2, c0.y); x.lineTo(c0.x + cw / 2, c1.y); x.stroke(); x.setLineDash([]);
+    }
     // brains: shells, then dim neurons, then spiking neurons (additive)
     for (const b of this.brains) {
       const k = b.side, o = this.anchor(k, -0.02, 0, 0), rx = 1.05 * this.bs * u, ry = 0.95 * this.bs * u;
@@ -94,7 +97,7 @@ export class Render2D {
     }
     x.globalAlpha = 1;
     // paddles, ball + trail, hit rings
-    if (f) {
+    if (f && !choice) {
       const ph = COURT.padH * S * u, pw = Math.max(3, 0.035 * u);
       ['rgba(60,230,255,1)', 'rgba(255,70,220,1)'].forEach((col, p) => { const q = this.courtAnchor(COURT.padX[p] + (p ? 0.01 : -0.01), f.pad[p]); x.fillStyle = col; x.fillRect(q.x - pw / 2, q.y - ph / 2, pw, ph); x.fillStyle = col.replace(',1)', ',.18)'); x.fillRect(q.x - pw * 2, q.y - ph / 2 - pw, pw * 4, ph + pw * 2); });
       const bq = this.courtAnchor(f.bx, f.by);

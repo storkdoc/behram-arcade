@@ -1,6 +1,6 @@
 # NEURO ARENA
 
-Two spiking brains play Pong against each other. The winner spawns a copy of itself, with small copy errors, and the copy replaces the loser. Over the generations the champion lineage gets better at returning the ball. You can watch it live, run turbo evolution in Web Workers, or play the champion yourself.
+Two spiking brains compete in a carousel of contests: Pong, Addition, Subtraction, Bigger number, Even or odd and Text completion (see NOTES.md for THE REAPER judge, the brain sizes, the Lab and measured learning). In every contest the winner spawns a copy of itself, with small copy errors, and the copy replaces the loser. Over the generations the champion lineage gets better at returning the ball. You can watch it live, run turbo evolution in Web Workers, or play the champion yourself.
 
 ## Brain (per player, 2,800 conductance-based integrate-and-fire neurons, 80/20 E/I, Dale's law)
 | area | E | I |
@@ -35,7 +35,7 @@ Two spiking brains play Pong against each other. The winner spawns a copy of its
 - **Mac:** W/S or ↑/↓ moves your paddle in Play mode. Space serves. A gamepad works too.
 - **iPhone/iPad:** drag on the court to move, and tap to serve. Use the ☰ drawer for controls and the tabs for panels.
 - **Modes:** Watch (live duel per generation), Turbo (parallel workers), Play (you vs the champion, first to 11).
-- **Saving:** progress auto-saves to localStorage (`neuroArena.v2`; older saves from the buggy learner are discarded). You can export or import the champion as JSON.
+- **Saving:** progress auto-saves to localStorage (`neuroArena.v3.<contest>`; the v2 Pong save is migrated). You can export or import the champion as JSON.
 
 ## Tests
 - `node tests/audit.mjs [--quick]` is the learning audit: sensing (mirroring, own paddle, vy sign), motor direction and speed, ideal-wiring capacity, STDP sign/timing, dopamine sign, RPE, covariance baseline, lifetime learning with/without the critic, weight persistence/clamping, homeostasis, 8-bit storage, every selection/elitism/HoF/Darwinian path, save/restore, and fitness noise.

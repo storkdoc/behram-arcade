@@ -4,9 +4,10 @@
 import { Brain, mulberry32 } from './brain.js';
 import { Match, COURT } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
+import { CONTEST, runChoiceDuel, reaper } from './contests.js';
 
-export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true };
-export const STORE_V = 2;
+export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800 };
+export const STORE_V = 3;   // v3: one evolution per contest (v2 Pong saves are migrated)
 
 /* The standardized benchmark: a fixed set of BENCH_N serves (heights, angles, speeds, distances) that every
    brain faces in the same order (common random numbers). Plasticity is frozen while it is measured, so a
@@ -24,7 +25,8 @@ export function benchmark(genome, weights, serves = BENCH, player = null) {
     const t0 = m.t; while (!ev && m.t - t0 < 5000) m.stepMs(1);
     if (ev && ev.t === 'hit') { vec[i] = 1; hits++; }
   });
-  return { hit: hits / serves.length, hits, n: serves.length, vec: Array.from(vec).join('') };
+  // Reaper fields: a returned serve is a correct answer, a missed one an incorrect answer (Pong has no abstaining)
+  return { hit: hits / serves.length, hits, n: serves.length, vec: Array.from(vec).join(''), fit: hits / serves.length, score: hits, correct: hits, wrong: serves.length - hits, abstain: 0, max: serves.length, acc: hits / serves.length, lat: null };
 }
 // paired comparison on the same serves: b = serves only the challenger returned, c = only the champion
 export function paired(vc, vk) { let b = 0, c = 0; for (let i = 0; i < vc.length; i++) { if (vk[i] === '1' && vc[i] !== '1') b++; if (vc[i] === '1' && vk[i] !== '1') c++; } return { b, c }; }
@@ -34,6 +36,7 @@ export function clearlyBetter(champ, child) { const { b, c } = paired(champ.vec,
 // run one complete duel headlessly, then benchmark both brains with their post-duel synapses.
 // gA/gB genomes, wA/wB dense weights or null
 export function runDuel(job) {
+  if (job.contest && job.contest !== 'pong') return runChoiceDuel(job);
   const A = new Brain(job.gA, job.wA), B = new Brain(job.gB, job.wB);
   const m = new Match([{ brain: A }, { brain: B }], mulberry32(job.seed));
   m.stepMs(Math.round(job.matchSec * 1000));
@@ -57,15 +60,15 @@ export class Evolution {
     const o = this.opts, c = this.champ;
     const hof = this.hof[0];
     if (hof && this.gen - (this.lastRM || 0) >= 25 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck) && (this.lastRM = this.gen) >= 0)
-      return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? new Float32Array(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
+      return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? cloneW(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
     const { genome, errors } = copyGenome(c.genome, o.rate, this.rnd);   // copy errors go into the CHILD's copy only
     let weights = null, wErrors = 0;
-    if (o.lamarck && c.weights) { const r = copyWeights(c.weights, o.rate, this.rnd, genome.wMax); weights = r.w; wErrors = r.n; }
+    if (o.lamarck && c.weights) { const isObj = !!c.weights.W, r = copyWeights(isObj ? c.weights.W : c.weights, o.rate, this.rnd, genome.wMax); weights = isObj ? { ...c.weights, W: r.w } : r.w; wErrors = r.n; }
     return { id: this.nextId++, genome, weights, errors, wErrors, parent: c.id, born: this.gen + 1 };
   }
   job(child) {
     const c = this.champ, side = this.rnd() < 0.5 ? 0 : 1;   // random sides: no court bias
-    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck };
+    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800 };
     if (side === 0) Object.assign(j, { gA: c.genome, wA: c.weights, gB: child.genome, wB: child.weights });
     else Object.assign(j, { gA: child.genome, wA: child.weights, gB: c.genome, wB: c.weights });
     return j;
@@ -85,37 +88,40 @@ export class Evolution {
     let ref = c.bench && o.lamarck ? { bench: c.bench, w: c.weights } : null;
     children.forEach((child, k) => {
       const cs = jobs[k].side, b = results[k].bench[cs];
-      c.scores = (c.scores || []).concat(b.hit).slice(-8);
-      if (o.lamarck && (!ref || b.hits > ref.bench.hits)) ref = { bench: b, w: cs === 0 ? results[k].wA : results[k].wB };
-      if (!o.lamarck && (!ref || b.hits > ref.bench.hits)) ref = { bench: b, w: null };
+      c.scores = (c.scores || []).concat(F(b)).slice(-8);
+      if (o.lamarck && (!ref || S(b) > S(ref.bench))) ref = { bench: b, w: cs === 0 ? results[k].wA : results[k].wB };
+      if (!o.lamarck && (!ref || S(b) > S(ref.bench))) ref = { bench: b, w: null };
     });
     c.n++;
-    if (o.lamarck) { c.weights = ref.w; c.bench = ref.bench; c.fit = ref.bench.hit; }
+    if (o.lamarck) { c.weights = ref.w; c.bench = ref.bench; c.fit = F(ref.bench); }
     else { c.bench = ref.bench; c.weights = null; c.fit = c.scores.reduce((a, x) => a + x, 0) / c.scores.length; }
     // 2. challengers
-    let bestK = -1, bestH = -1;
+    let bestK = -1, bestH = -Infinity;
     children.forEach((child, k) => {
       const st = results[k].stats, cs = jobs[k].side, ks = 1 - cs, bk = results[k].bench[ks], bc = results[k].bench[cs];
       this.gen++;
       // Lamarckian: compare with the champion's kept synapses (deterministic score); Darwinian: with the champion copy in the same duel
       const cmp = o.lamarck ? c.bench : bc;
       // Darwinian lifetimes are stochastic: picking the luckiest of K lives would crown noise, so also demand a 3-serve margin over the champion's mean
-      const clear = clearlyBetter(cmp, bk) && (o.lamarck || bk.hit >= c.fit + 0.06);
-      const e = { gen: this.gen, champBench: c.fit, childBench: bk.hit, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]],
+      const v = reaper(cmp, bk, o.contest || 'pong');
+      const clear = v.reaped && (o.lamarck || F(bk) >= c.fit + 0.06);
+      v.reaped = clear; v.champId = c.id; v.childId = child.id;
+      const e = { gen: this.gen, champBench: c.fit, childBench: F(bk), reaper: v, contest: o.contest || 'pong', childAcc: bk.acc, champAcc: cmp.acc, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]],
         childWon: winnerOf(st) === ks, clear, champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false, seg: st.seg, cs, prevBench };
-      if (clear && bk.hits > bestH) { bestH = bk.hits; bestK = k; }
+      if (clear && S(bk) > bestH) { bestH = S(bk); bestK = k; }
       out.push(e);
     });
     if (bestK >= 0) {
       const child = children[bestK], ks = 1 - jobs[bestK].side, bk = results[bestK].bench[ks];
       this.toHof(c);
       const nc = { id: child.id, genome: child.genome, weights: o.lamarck ? (ks === 0 ? results[bestK].wA : results[bestK].wB) : null, born: child.born ?? this.gen,
-        n: 0, bench: bk, fit: bk.hit, scores: [bk.hit], parent: child.parent, errors: child.errors };
+        n: 0, bench: bk, fit: F(bk), scores: [F(bk)], parent: child.parent, errors: child.errors };
       this.champ = nc; out[bestK].newChamp = true; out[bestK].beneficial = child.errors.length > 0 || child.wErrors > 0;
     }
     if (!this.best || this.champ.fit > this.best.fit) this.best = { id: this.champ.id, fit: this.champ.fit, gen: this.gen, genome: { ...this.champ.genome } };
     for (const e of out) {
-      e.champFit = this.champ.fit; e.bestFit = this.best.fit;
+      e.champFit = this.champ.fit; e.bestFit = this.best.fit; e.lam = !!o.lamarck;
+      e.champAccNow = this.champ.bench ? (this.champ.bench.acc ?? this.champ.fit) : 0; e.bestAcc = Math.max(e.champAccNow, this.bestAcc || 0); this.bestAcc = e.bestAcc;
       this.history.push(e); this.log.unshift(e);
     }
     if (this.log.length > 40) this.log.length = 40;
@@ -130,21 +136,26 @@ export class Evolution {
   // compact, JSON-safe snapshot (weights quantised to 8 bits; the synapses of the top 2 Hall-of-Fame entries are kept
   // too, so they can still be re-challenged in Lamarckian mode after a reload)
   serialize(withWeights = true) {
-    const q = c => c && c.weights && withWeights ? quant(c.weights, c.genome.wMax) : null;
+    const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
     return { v: STORE_V, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
-      history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6) })) };
+      bestAcc: this.bestAcc || 0, lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+      history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {
-    if (!s || s.v !== STORE_V) return null;   // older saves came from the buggy learner: start fresh
-    const st = { ...s, champ: { ...s.champ, weights: s.champ.weights ? dequant(s.champ.weights) : null }, log: (s.history || []).slice(-40).reverse(),
-      hof: (s.hof || []).map(h => ({ ...h, weights: h.weights ? dequant(h.weights) : null })) };
+    if (!s || (s.v !== STORE_V && s.v !== 2)) return null;   // v2 = a Pong-only save of the same format   // older saves came from the buggy learner: start fresh
+    const st = { ...s, champ: { ...s.champ, weights: s.champ.weights ? dequantW(s.champ.weights) : null }, log: (s.history || []).slice(-40).reverse(),
+      hof: (s.hof || []).map(h => ({ ...h, weights: h.weights ? dequantW(h.weights) : null })) };
     // weights lost in storage (quota): the stored benchmark no longer describes the champion, so re-earn it
     if (s.opts.lamarck && !st.champ.weights && s.champ.bench) { st.champ.bench = null; st.champ.fit = 0; }
     delete st.opts; delete st.v;
     return new Evolution(s.opts, st);
   }
 }
+const S = b => b.score ?? b.hits, F = b => b.fit ?? b.hit;
+const cloneW = w => w.W ? { ...w, W: new Float32Array(w.W) } : new Float32Array(w);
+// choice-brain weights are { W, seed, pAM, size, K }: quantise W, keep the metadata
+export function quantW(w, wMax) { return w.W ? { meta: { seed: w.seed, pAM: w.pAM, size: w.size, K: w.K }, q: quant(w.W, wMax) } : quant(w, wMax); }
+export function dequantW(q) { return q.meta ? { ...q.meta, W: dequant(q.q) } : dequant(q); }
 // 8-bit weight quantisation for storage (absent synapses = 255)
 export function quant(w, wMax) {
   const b = new Uint8Array(w.length); for (let i = 0; i < w.length; i++) b[i] = w[i] < 0 ? 255 : Math.round(Math.min(1, w[i] / wMax) * 254);
