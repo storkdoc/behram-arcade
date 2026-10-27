@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'living-chess',
+    title: 'THE LIVING BOARD',
+    tagline: 'Chess where every piece is alive, afraid and dreaming. Hover over one and it will beg, warn or advise you before you move.',
+    description: "Full, legal chess where all thirty-two pieces are living 3D characters with faces, eyes, mouths and arms. Each one is always thinking about its own survival. The Pawn dreams of reaching the last rank, the Rook dreams of trapping the enemy King, and the Bishop would gladly die to take the enemy Queen. Their feelings come from real analysis: before every move, your army looks several moves ahead for each piece and speaks about the moves and squares it actually foresees. Hover over or tap a piece and you see its terror, pain, pride or thrill. It cowers, points at the square it wants, waves you closer or hides behind its arms, and a dialogue window shows its plea or advice in its own voice. Each piece type has a distinct spoken voice with lip sync and captions. Pick up a piece and the whole army reacts live to the move you are about to make: pieces gasp when you leave the Queen hanging and cheer a good fork, while a ghost path shows where the piece will go. Ask the King for counsel and he names the move he would play and the line he sees after it. Switch between honest counsel and raw emotion, where a frightened piece may plead for something unwise. Urgent callouts warn you of threats before you move. Captures, checks and checkmates play as cinematics, and pieces mourn the fallen. Play one player against a Stockfish engine (with a built-in fallback) at five levels from Squire to Grandmaster, with undo, a move list and optional clocks. Two-player is online: one of you hosts, the other joins a game in progress, each board faces its own player, and each player hears only their own army's thoughts. There are rematches with swapped colours, and if a player drops out, the machine takes over. All sound is synthesized.",
+    thumb: 'games/living-chess/thumb.png',
+    added: '2026-10-26',
+    genre: 'CHESS',
+    year: 'LIVING PIECES',
+    controls: 'mouse: hover over a piece to hear it, click or drag to move it, click a target square to preview the army reaction, click again to play · arrows move the cursor, SPACE selects and moves · ENTER asks the King for counsel · H toggles honest or raw counsel · V toggles voices · U undoes · ESC opens the menu · gamepad: d-pad/stick moves the cursor, A selects and moves, B cancels, X or Y asks for counsel, START opens the menu',
+    touch: 'tap a piece to see and hear it, tap a highlighted square to preview the army reaction, tap again to confirm · drag also moves · the dialogue sits below the board in portrait · works on iPhone and iPad in portrait and landscape',
+    accent: '#e8c27a'
+  },
+  {
     slug: 'star-raider',
     title: 'STAR RAIDER',
     tagline: 'One starfighter, a galaxy under siege. Hunt the Vrell fleets before your starbases fall, or wage a live galactic war against a buddy.',
