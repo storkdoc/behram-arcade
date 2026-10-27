@@ -4,7 +4,7 @@
 import { Brain, mulberry32 } from './brain.js';
 import { Match, COURT } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
-import { CONTEST, runChoiceDuel, reaper, CURR } from './contests.js';
+import { CONTEST, runChoiceDuel, reaper, CURR, levelThr } from './contests.js';
 
 export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800 };
 export const TRIAL_LOOP = 2;   // choice-contest saves from an older trial loop / layout are not restored
@@ -70,6 +70,10 @@ export class Evolution {
   job(child) {
     const c = this.champ, side = this.rnd() < 0.5 ? 0 : 1;   // random sides: no court bias
     const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800, level: this.level || 0 };
+    // every 10 generations (and right after a new champion or a level-up) one duel also benchmarks the champion on the
+    // full task (the last curriculum level), so the chart can show real progress across level changes
+    const C = CONTEST[j.contest], last = C && C.levels ? C.levels.length - 1 : 0;
+    if (C && C.levels && j.level < last && this.gen - (this.lastProbe ?? -99) >= 10) { this.lastProbe = this.gen; j.probe = last; }
     if (side === 0) Object.assign(j, { gA: c.genome, wA: c.weights, gB: child.genome, wB: child.weights });
     else Object.assign(j, { gA: child.genome, wA: child.weights, gB: c.genome, wB: c.weights });
     return j;
@@ -126,15 +130,19 @@ export class Evolution {
       this.history.push(e); this.log.unshift(e);
     }
     if (this.log.length > 40) this.log.length = 40;
-    // curriculum: when the champion passes CURR.thr on the current level's frozen benchmark, the next generation
+    // curriculum: when the champion passes levelThr (C.currThr[level], else CURR.thr) on the current level's frozen benchmark, the next generation
     // trains and is judged on the next level (the old benchmark score no longer applies, so it is re-earned)
     const C = CONTEST[o.contest];
-    if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= CURR.thr && (this.level || 0) < C.levels.length - 1) {
-      this.level = (this.level || 0) + 1; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = [];
-      const last = out[out.length - 1]; if (last) last.levelUp = this.level;
+    const lv0 = this.level || 0;   // the level these duels were played and benchmarked at
+    const pr = results.find(r => r && r.probe); if (pr) this.fullAcc = pr.probe.acc;
+    if (out.some(e => e.newChamp)) this.lastProbe = -99;
+    if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= levelThr(C, this.level || 0) && (this.level || 0) < C.levels.length - 1) {
+      const passed = this.champ.bench.acc;
+      this.level = (this.level || 0) + 1; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = []; this.lastProbe = -99; this.bestAcc = 0;   // 'best ever' is per level
+      const last = out[out.length - 1]; if (last) { last.levelUp = this.level; last.passed = passed; }
       (this.levelUps = this.levelUps || []).push({ gen: this.gen, level: this.level });
     }
-    for (const e of out) e.level = this.level || 0;
+    for (const e of out) { e.level = lv0; if (C && C.levels) e.fullAcc = lv0 === C.levels.length - 1 ? e.champAccNow : this.fullAcc ?? null; }
     return out;
   }
   toHof(c) {
@@ -148,7 +156,7 @@ export class Evolution {
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
     return { v: STORE_V, tl: TRIAL_LOOP, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      bestAcc: this.bestAcc || 0, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+      bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {
@@ -165,7 +173,7 @@ export class Evolution {
 const S = b => b.score ?? b.hits, F = b => b.fit ?? b.hit;
 const cloneW = w => w.W ? { ...w, W: new Float32Array(w.W) } : new Float32Array(w);
 // choice-brain weights are { W, seed, pAM, size, K }: quantise W, keep the metadata
-export function quantW(w, wMax) { return w.W ? { meta: { seed: w.seed, pAM: w.pAM, size: w.size, K: w.K }, q: quant(w.W, wMax) } : quant(w, wMax); }
+export function quantW(w, wMax) { return w.W ? { meta: { seed: w.seed, pAM: w.pAM, size: w.size, K: w.K, rBar: w.rBar }, q: quant(w.W, wMax) } : quant(w, wMax); }
 export function dequantW(q) { return q.meta ? { ...q.meta, W: dequant(q.q) } : dequant(q); }
 // 8-bit weight quantisation for storage (absent synapses = 255)
 export function quant(w, wMax) {

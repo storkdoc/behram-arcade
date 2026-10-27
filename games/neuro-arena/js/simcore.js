@@ -3,7 +3,7 @@
 import { Brain, mulberry32, L, N, AREA_DEF } from './brain.js';
 import { Match } from './arena.js';
 import { runDuel, benchmark } from './evo.js';
-import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, itemsAt, chanceAt, levelName, DEC } from './contests.js';
+import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, itemsAt, chanceAt, baseAt, levelName, DEC, drawItem } from './contests.js';
 
 // choice brains can be larger than the 2,800-cell display: map every real cell onto the display cell of its area
 // (a display cell lights if any of the real cells it stands for spiked)
@@ -32,8 +32,7 @@ function startChoiceLive(m) {
   const job = m.job, C = CONTEST[job.contest], size = job.size || 2800;
   const A = makeBrain(C, job.gA, job.wA, size), B = m.mode === 'play' ? null : makeBrain(C, job.gB, job.wB, size);
   let rs = job.seed >>> 0 || 7; const rnd = () => { rs ^= rs << 13; rs ^= rs >>> 17; rs ^= rs << 5; return (rs >>> 0) / 4294967296; };
-  const items = itemsAt(C, job.level);
-  const match = new ChoiceMatch(C, m.mode === 'play' ? [{ brain: A }, { human: true }] : [{ brain: A }, { brain: B }], () => items[Math.floor(rnd() * items.length)],
+    const match = new ChoiceMatch(C, m.mode === 'play' ? [{ brain: A }, { human: true }] : [{ brain: A }, { brain: B }], () => drawItem(C, job.level, rnd),
     m.mode === 'play' ? { humanMs: 3000, iti: 900 } : { iti: Math.round(TRIAL_VIEW_ITI * (m.slow || 1)) });
   live = { m, job, A, B, match, choice: true, C, lastPol: -1e9, done: false, limit: m.mode === 'play' ? Infinity : job.matchSec * 1000, aPrev: [new Uint32Array(8), new Uint32Array(8)], maps: [dispMap(A), B ? dispMap(B) : null], evN: 0 };
 }
@@ -49,7 +48,7 @@ function choiceFrame(withPol) {
   });
   const ev = match.events.slice(live.evN); live.evN = match.events.length; if (live.evN > 48) { match.events.splice(0, 32); live.evN = match.events.length; }
   const lv = live.job.level || 0;
-  return { t: 'frame', kind: 'choice', contest: live.C.id, time: match.t, phase: match.phase, pt: match.pt, T: match.T, level: lv, levelName: levelName(live.C, lv), chance: chanceAt(live.C, lv), item: match.item, out: match.out, stats: match.stats(), ev, br, spk };
+  return { t: 'frame', kind: 'choice', contest: live.C.id, time: match.t, phase: match.phase, pt: match.pt, T: match.T, level: lv, levelName: levelName(live.C, lv), chance: chanceAt(live.C, lv), base: live.C.baseOf ? baseAt(live.C, lv) : null, item: match.item, out: match.out, stats: match.stats(), ev, br, spk };
 }
 function startLive(m) {
   if (m.job.contest && m.job.contest !== 'pong') return startChoiceLive(m);

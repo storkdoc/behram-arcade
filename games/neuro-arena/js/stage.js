@@ -17,6 +17,9 @@ export class Stage {
       this.last = e; e.at = performance.now();
       e.res.forEach((o, k) => { const right = !o.bad && !o.abst; if (right) this.tally[k][o.alt ? 1 : 0]++; this.hist[k].push(o.abst ? 0.5 * 0 : right ? 1 : 0); if (this.hist[k].length > 400) this.hist[k].shift(); if (this.C.race && e.first === k) this.rope += k ? 1 : -1; });
       if (e.first >= 0) this.flash[e.first] = 1;
+      // Simon: the answers given so far in the current sequence (both players), shown under the lights
+      if (this.C.seq && e.item) { const it = e.item; if (it[0] === 0 || !this.sq || this.sq.idx !== it[7] - it[0]) this.sq = { idx: it[7] - it[0], a: [[], []] };
+        e.res.forEach((o, k) => { this.sq.a[k][it[0]] = { c: o.c, ok: !o.bad && !o.abst }; }); }
     }
   }
   draw(dt) {
@@ -32,16 +35,18 @@ export class Stage {
     x.textAlign = 'center'; x.textBaseline = 'middle';
     x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM;
     const chance = f.chance ?? C.chance;
-    x.fillText(`${C.icon} ${C.name.toUpperCase()}${C.levels ? ' · ' + f.levelName : ''} · chance ${Math.round(chance * 100)}%`, w / 2, fs * 0.36);
+    const base = C.baseOf && item ? f.base : null;
+    x.fillText(`${C.icon} ${C.name.toUpperCase()}${C.levels ? ' · ' + f.levelName : ''} · chance ${Math.round(chance * 100)}%${base ? ` · always “${C.labels[0]}” ${Math.round(base * 100)}%` : ''}`, w / 2, fs * 0.36, w - 8);
     this.timeline(f, w, fs);
     x.font = `800 ${fs}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillStyle = live ? '#fff' : 'rgba(255,255,255,.45)';
     const prompt = item ? (C.race ? item[3] : item[3]) : '…';
-    let wb = fs * 1.9; if (C.valid && item) wb = this.word(item, live, w, fs);
+    let wb = fs * 1.9; if (C.valid && item) wb = this.word(item, live, w, fs); else if (C.seq && item) wb = this.lights(item, live, w, fs);
     else x.fillText(prompt, w / 2, fs * 1.42);
-    if (C.valid && !live && this.last && item) { const alts = item[C.valid].split('').filter(l => l !== want); x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${item[4]}${alts.length ? ' · also valid: ' + alts.join(' ') : ''}`, w / 2, Math.max(fs * 2.12, wb + Math.max(7, fs * 0.2)), w - 16); }
-    else if (!live && this.last && item) { x.font = `600 ${fs * 0.34}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 2.08); }
+    if (C.seq && !live && this.last && item) { x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`light ${item[0] + 1} of ${item[6]} was ${SMN[want] || want}`, w / 2, Math.max(fs * 2.12, wb + Math.max(8, fs * 0.22)), w - 16); }
+    else if (C.valid && !live && this.last && item) { const alts = item[C.valid].split('').filter(l => l !== want); x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${item[4]}${alts.length ? ' · also valid: ' + alts.join(' ') : ''}`, w / 2, Math.max(fs * 2.12, wb + Math.max(7, fs * 0.2)), w - 16); }
+    else if (!live && this.last && item) { x.font = `600 ${Math.max(10, fs * 0.34)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(C.explain ? `answer: ${want} · ${C.explain(item)}` : `answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 2.08, w - 12); }
     // two answer columns
-    const top = fs * 2.38, colW = w / 2, st = f.stats;
+    const top = C.seq ? Math.max(fs * 2.38, wb + Math.max(8, fs * 0.22) + Math.max(12, fs * 0.45)) : fs * 2.38, colW = w / 2, st = f.stats;
     const tiny = h < 220, pl = 10, ph = Math.max(28, Math.min(54, h * 0.13)), py = h - ph - 8, pw = w - 2 * pl, floorY = C.race ? h - 80 : tiny ? h - 2 : py - 4;
     for (let k = 0; k < 2; k++) {
       const cx = colW * k + colW / 2, col = k ? CB_ : CA, br = f.br[k];
@@ -65,26 +70,32 @@ export class Stage {
           x.font = `600 ${Math.max(8, Math.min(af * 0.18, colW / 18))}px -apple-system, system-ui, sans-serif`; x.fillStyle = good ? OK : judged.s < 0 ? BAD : DIM;
           x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.86, colW - 8); }
       }
+      else if (C.whole) {   // one answer token (e.g. Smallest divisor "37+"): right or wrong as a whole
+        const good = judged && judged.s > 0; x.fillStyle = good ? OK : BAD;
+        if (given.length > 2) x.font = `800 ${Math.min(af, colW * 0.9 / given.length * 1.6)}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillText(given, cx, ay);
+        if (judged) { x.font = `600 ${Math.max(9, Math.min(af * 0.2, colW / 16))}px -apple-system, system-ui, sans-serif`; x.fillStyle = good ? OK : judged.s < 0 ? BAD : DIM;
+          x.fillText(`${good ? '✓' : '✗ it is ' + want} · ${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.62, colW - 8); }
+      }
       else {
         const showJ = true; const cw = x.measureText('0').width; const sx = cx - (given.length - 1) * cw / 2;
         for (let i = 0; i < given.length; i++) { const okc = given[i] === want[i]; x.fillStyle = okc ? OK : BAD; x.fillText(given[i], sx + i * cw, ay); }
         if (showJ && judged) { x.font = `600 ${Math.max(9, af * 0.2)}px -apple-system, system-ui, sans-serif`; x.fillStyle = judged.s > 0 ? OK : judged.s < 0 ? BAD : DIM; x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.62); }
       }
       // the race: spike counts of each choice population this trial (bar = population; the margin line = the answer threshold)
-      const by = ay + af * (C.valid ? 1.08 : 0.95), bh = Math.max(12, Math.min(90, floorY - by - 50)), bw = Math.min(colW * 0.86, C.K * 30), bx = cx - bw / 2, gw = bw / C.K;
+      const by = ay + af * (C.valid || C.whole ? 1.08 : 0.95), bh = Math.max(12, Math.min(90, floorY - by - 50)), bw = Math.min(colW * 0.86, C.K * 30), bx = cx - bw / 2, gw = bw / C.K;
       if (br) {
         const gc = br.gc, mx = Math.max(br.margin * 2, ...gc); let i1 = 0; gc.forEach((v, i) => { if (v > gc[i1]) i1 = i; });
         for (let q = 0; q < C.K; q++) {
           const v = gc[q] / mx, isW = item && q === item[2] && !live;
           x.fillStyle = q === i1 && gc[q] > 0 ? col : 'rgba(150,170,220,.35)'; x.fillRect(bx + q * gw + 1, by + bh * (1 - v), gw - 2, bh * v);
-          x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; if (gw >= 9 || q === i1 || isW) x.fillText(C.labels[q], bx + q * gw + gw / 2, by + bh + 8);
+          const lb = C.labels[q], stg = lb.length > 1 && gw * 1.7 < 8 * lb.length ? (q % 2) * 9 : 0; x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; if (gw >= 9 || q === i1 || isW) x.fillText(lb, bx + q * gw + gw / 2, by + bh + 8 + stg);
         }
         // confidence threshold (Play only): the leader must be this many spikes ahead of the runner-up or the brain abstains
         const sorted = [...gc].sort((a, b) => b - a), thr = (sorted[1] || 0) + Math.max(br.margin, (br.kconf || 0) * Math.sqrt((sorted[0] || 0) + (sorted[1] || 0)));
         if (!f.br[1]) { x.strokeStyle = 'rgba(255,210,90,.7)'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(bx, by + bh * (1 - Math.min(1, thr / mx))); x.lineTo(bx + bw, by + bh * (1 - Math.min(1, thr / mx))); x.stroke(); x.setLineDash([]); }
       } else if (k === 1) { x.font = `600 12px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText('tap or type your answer', cx, by + bh / 2); }
       // running Reaper score this duel
-      const sy = by + bh + 20, sc = st.score[k], n = Math.max(1, st.trials), maxS = Math.max(4, n * Math.max(1, (want || 'x').length));
+      const sy = by + bh + 20 + (C.K > 8 && C.labels.some(l => l.length > 1) ? 8 : 0), sc = st.score[k], n = Math.max(1, st.trials), maxS = Math.max(4, n * (C.whole ? 1 : Math.max(1, (want || 'x').length)));
       x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(cx - colW * 0.42, sy, colW * 0.84, 8);
       const fr = Math.max(-1, Math.min(1, sc / maxS)), mid = cx;
       x.fillStyle = fr >= 0 ? OK : BAD; x.fillRect(fr >= 0 ? mid : mid + fr * colW * 0.42, sy, Math.abs(fr) * colW * 0.42, 8);
@@ -144,3 +155,25 @@ Stage.prototype.timeline = function (f, w, fs) {
   if (pos) { x.fillStyle = '#fff'; x.fillRect(pos - 1, by - 2, 2, bh + 4); }
 };
 function rr(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
+
+// Simon: the L lights of the sequence (the working-memory buffer), the step being played back outlined, and under
+// each light the colours each brain has played so far in this sequence (✓/✗)
+const SMC = { R: '#ff4d5e', G: '#3ee07a', B: '#4d8dff', Y: '#ffd23e' }, SMN = { R: 'red', G: 'green', B: 'blue', Y: 'yellow' };
+Stage.prototype.lights = function (item, live, w, fs) {
+  const x = this.x, L = item[6], str = item[4], p = item[0], tl = fs * 0.36 + Math.max(7, fs * 0.2) + Math.max(9, Math.min(14, fs * 0.24)) + 4;
+  const cw = Math.min(fs * 1.35, 64, (w - 40) / (L + 0.5)), gap = cw * 0.14, tw = L * cw + (L - 1) * gap, x0 = (w - tw) / 2, bh = cw * 0.62, y = tl + bh / 2;
+  const sq = this.sq && this.sq.idx === item[7] - p ? this.sq : null, mr = Math.max(4.5, cw * 0.12);
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  for (let i = 0; i < L; i++) { const bx = x0 + i * (cw + gap), cur = i === p, col = SMC[str[i]];
+    x.globalAlpha = cur ? 1 : 0.55; x.fillStyle = col; rr(x, bx, y - bh / 2, cw, bh, 6); x.fill(); x.globalAlpha = 1;
+    if (cur) { x.strokeStyle = live ? '#2ee6ff' : '#fff'; x.lineWidth = 3; rr(x, bx - 2, y - bh / 2 - 2, cw + 4, bh + 4, 8); x.stroke(); x.lineWidth = 1; }
+    x.font = `800 ${cw * 0.42}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillStyle = 'rgba(0,0,0,.6)'; x.fillText(String(i + 1), bx + cw / 2, y + 1);
+    // the two players' answers for this light (once judged)
+    for (let k = 0; k < 2; k++) { const a = sq && sq.a[k][i]; const cy = y + bh / 2 + mr * 1.6 + k * mr * 2.5, cx = bx + cw / 2 - mr * 1.2;
+      if (!a) { x.fillStyle = 'rgba(150,170,220,.25)'; x.beginPath(); x.arc(cx, cy, mr * 0.6, 0, 7); x.fill(); continue; }
+      x.fillStyle = a.c >= 0 ? SMC[this.C.labels[a.c]] : '#555'; x.beginPath(); x.arc(cx, cy, mr, 0, 7); x.fill();
+      x.font = `800 ${mr * 2}px -apple-system, system-ui, sans-serif`; x.fillStyle = a.ok ? '#5cff9d' : '#ff5c7a'; x.fillText(a.ok ? '✓' : '✗', cx + mr * 2.3, cy + 1); } }
+  x.font = `700 ${Math.max(8, mr * 1.5)}px -apple-system, system-ui, sans-serif`; x.fillStyle = '#7f93b8'; x.textAlign = 'right';
+  x.fillText('A', x0 - 4, y + bh / 2 + mr * 1.6); x.fillText('B', x0 - 4, y + bh / 2 + mr * 4.1); x.textAlign = 'center';
+  return y + bh / 2 + mr * 5.2;
+};

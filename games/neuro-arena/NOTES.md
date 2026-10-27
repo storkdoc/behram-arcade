@@ -4,12 +4,12 @@
 - **Carousel** of contests (arrows, swipe, click a card, `[`/`]` or ←/→). Each contest has its own evolution,
   champion, Hall of Fame and history (localStorage `neuroArena.v3.<contest>`; the v2 Pong save migrates).
 - Visible contests: Pong, Addition (curriculum 0–2 + 0–2 … 0–9 + 0–9), Subtraction (curriculum, 0 ≤ b ≤ a ≤ 2 … 9),
-  Bigger number (L/R), Even or odd (E/O, numbers 0–9 → 0–99 → 0–999), Word completion (5-letter words, any one letter missing; see below), Rock paper scissors (answer the move
+  Bigger number (L/R), Smallest divisor (2–99 → 99,999; see below), Word completion (5-letter words, any one letter missing; see below), Rock paper scissors (answer the move
   that beats theirs), Echo (repeat a letter A–H), Count the dots (1–6), Pattern completion (a, a+d, a+2d, ?),
-  Simon (repeat a two-colour sequence; a 2-character answer scored per character).
+  Simon (4 colours, 3 → 6 lights played back one light per trial; see below).
 - Not built: Odd one out (needs three input slots), Matching pennies (adversarial, no fixed right answer for the
   Reaper's frozen benchmark), Air hockey (a Pong variant; Pong already covers it).
-- Hidden: the old 3-letter Text completion (`text3`), Addition small (`add5`, fixed 0..4 + 0..4), Tug-of-war reflex (`tug`). (`add7`/`sub9` were replaced
+- Hidden: Even or odd (`evenodd`, replaced by Smallest divisor), the 2-colour Simon (`simon2`), the old 3-letter Text completion (`text3`), Addition small (`add5`, fixed 0..4 + 0..4), Tug-of-war reflex (`tug`). (`add7`/`sub9` were replaced
   by the curricula.) Reach them with `?contest=<id>`.
 
 ## THE REAPER (js/contests.js `judge`, `reaper`)
@@ -121,8 +121,9 @@ beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Tu
   curve) split correct answers into intended + alternate; the champion benchmark reports `alt` too.
 - **Chance** under that rule = mean(#valid letters)/26 = 7.6% (shown everywhere). A stronger baseline: always guessing
   the most common valid letter for the blank's position (S, R, A, E, E) gets **25.3%** on the full set.
-- **Curriculum** (`TXL`, thresholds `currThr` over the last 60 practice trials): L1 25 words, last letter missing
-  (≥80%) → L2 25 words, any position (≥50%) → L3 80 words (≥40%) → L4 200 words (≥35%) → L5 all 643, any position.
+- **Curriculum** (Oct 27 rework, `TXL`; save key bumped to 6 so old saves restart): L1 25 words, blank in the last
+  letter (≥80%) → L2 25 words, blank in the last 2 letters (≥60%) → L3 25 words, any position (≥42%) → L4 80 words
+  (≥38%) → L5 200 words (≥33%) → L6 all 643. Every level mixes in 25% puzzles of the level below (`mixOld`).
 - **Input coding** (new discrete mode in cbrain.js, `spec.tiles`): slot 0 = the blank's position (5 symbols, 20% of
   the thalamic/sensory cells, `split`), slot 1 = (position, letter) of the 4 known letters (130 symbols, multi-hot:
   4 on at once). Association cells are conjunction tiles [blank position, (position, letter)]: the 468 pairs that
@@ -146,6 +147,67 @@ beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Tu
   → 45–51% after 3,500 trials (baseline 27%). Trained directly on the full level (no curriculum, seeds 1–3):
   8/3/11% → 24/22/12% after 4,000–5,000 trials.
 
+## Why Word completion "lost" its proficiency (diagnosed Oct 27 2026)
+- **It never forgot.** Evolution (`evo.js record`) promoted on the global `CURR.thr` = 90% and ignored the
+  contest's `currThr`. At gen ~165 the champion passed 90% on L1 (25 words, last letter missing) and was moved to
+  L2 (the same 25 words, blank at ANY position). Its benchmark was reset and re-measured on the harder test, whose
+  spiking ceiling is ~45–51%, so the chart fell from ~90% to ~30% in one step and the 90% bar could never be reached
+  again, i.e. it was stuck at L2 for good. "Slow recovery" = it was already near the ceiling of the new test.
+- **Downward lifetime curve:** within one duel the brain keeps learning (plasticity + exploration noise), which
+  degrades a tuned network a little, plus regression to the mean (the champion's weights are its best benchmark
+  snapshot). `tests/lifetime.mjs` (old 80-word level): learning on ≈25% vs the same weights frozen ≈29%; carrying
+  the reward baseline `rBar` across generations made no difference (kept, harmless).
+- **Fixes:** promotion uses `levelThr(C, level)` (the per-level `currThr`), smaller steps (new L2), 25% old-level
+  puzzles, "best ever" is per level. The generations chart now shows a dashed marker + "LEVEL n: name" label at
+  each level change, colours the champion line per level, draws a cyan **full-task** line (the champion probed on
+  the final level every 10 gens, `j.probe`) so real progress is visible across levels, and a 7-s toast at
+  level-up: "Harder test: a score drop is expected (the brain did not forget)".
+
+## Think time (Oct 27 2026)
+- THINKING is now per contest (`contest.trial.thinkMs`, `trialOf(C)`): Word completion 700 ms (was 300), Smallest
+  divisor 500, Simon 400; shown in the stage phase bar ("THINKING 700ms") and the Lab caption.
+- Measured, full 643-word level trained directly, 300-item seeded probe (`T_thinkMs=… PROBE=5 PROBEN=300 node
+  tests/learn.mjs text 5000 1 2800 1000`), seeds 1/2/3:
+  | think | 1k | 2k | 3k | 4k | 5k trials | mean at 4k–5k |
+  |---|---|---|---|---|---|---|
+  | 300 ms | 14 / 18 / 16% | 19 / 16 / 17% | 26 / 26 / 22% | 23 / 22 / 21% | 24 / 19 / 24% | 22.3% |
+  | 700 ms | 19 / 19 / 18% | 20 / 20 / 20% | 25 / 23 / 22% | 27 / 22 / 25% | 26 / 23 / 26% | 24.7% |
+  ≈ +2–3 points and faster early learning, but still level with the 25.3% position-frequency baseline (chance
+  7.6%). The hand-wired ideal ceiling barely moves with think time (300 ms 36%, 700 ms 34%, 1,200 ms 37%; 5,600
+  neurons 34%): the limit is systematic cross-talk noise in the association tiles, not spike-count (Poisson) noise.
+  Cost: longer trials → fewer trials per 30-s duel and slower benchmarks.
+
+## Smallest divisor (Oct 27 2026; contest id `divisor`, replaces Even/odd which is hidden as `evenodd`)
+- **Task:** N from 2 to 99,999; answer its smallest divisor > 1: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, "37+"
+  (a composite whose smallest prime factor is ≥ 37) or P (N is prime). 13 answers, chance 1/13 = 7.7%. THE REAPER
+  scores the whole token (+1 / −2). The stage shows the factorization ("9,991 = 97 × 103 · smallest divisor 97").
+- **Curriculum:** 2–99 → ≤999 → ≤9,999 → ≤99,999 (thresholds 85 / 75 / 72%, 25% old-level mix).
+- **Input = disclosed preprocessing** (the brain cannot do long division in 0.5 s): slot 0 = last digit; slot 1
+  (multi-hot) = tens digit, digit sum mod 3, alternating digit sum mod 11. Tiles = last digit × each feature (240).
+  So 2, 5 (last digit), 3 (digit sum) and 11 (alternating sum) are learnable; 7, 13 … 31, 37+ and prime-vs-37+
+  are NOT learnable from these features (it can only guess the commonest remaining class, mostly P).
+- **Baselines:** "always 2" ≈ 48–51% (shown in the header as `always “2”`, orange line on the chart); we also report
+  balanced accuracy (mean per-class recall; always-2 = 7.7%). Ideal hand-wired spiking ceiling: L1 98%, L2 82%,
+  L3 86%, L4 73% (balanced 26%); Bayes optimum with all features jointly ≈ 85%.
+- **Learning** (`S0=s PROBE=3 PROBEN=300 node tests/learn.mjs divisor 4000 1 2800 500`, 300-item probe on the full
+  99,999 level, always-2 = 47.7% on that set): L4 reached at trial 470 / 522 / 593 (seeds 1/2/3); full-task probe
+  at 4,000 trials **72 / 74 / 70%** (balanced 25 / 30 / 24%), i.e. ≈ the 73% ideal and +22–26 points over always-2.
+
+## Simon (Oct 27 2026; 4 colours, up to 6 lights; the old 2-colour one is hidden as `simon2`)
+- A sequence of L lights (R, G, B, Y) is shown; the brain plays it back one light per trial, in order (the duel
+  continues the sequence, then draws a new one). Curriculum 3 → 4 → 5 → 6 lights (≥80%, 25% old-level mix); the
+  top level is the full 6-item sequence. THE REAPER: +1 right colour in that position, −2 wrong. Save key 2.
+- **Working memory is modelled, not learned:** slot 1 = position slots (position q, colour c), multi-hot, held on
+  through the replay; slot 0 = the step clock (which light is being played). Tiles step × (q, c) = 144. Think 400 ms.
+- The stage draws all L lights as coloured boxes with the current step outlined and each player's ✓/✗ dots.
+- Ideal hand-wired ceiling at 6 lights: 61% per light (whole sequence ≈ 0.61⁶ ≈ 5%); 3 lights 91%.
+- **Learning** (`S0=s PROBE=3 PROBEN=300 node tests/learn.mjs simon 4000 1 2800 1000`, probe = 50 whole 6-light
+  sequences): per light **53 / 57 / 50%** at 4,000 trials (chance 25%), whole sequence 2 / 2 / 2% (chance
+  1/4096 = 0.024%; the probe has 50 sequences so 2% = 1 sequence). Per position (seed 2): 56, 60, 54, 64, 52, 58%.
+  Levels reached: 6 lights at trial 1,568 / 1,617 / 3,591.
+- Bug fixed on the way: `runTrial` (tests) now plays exactly the given item (`fixed: true`); before, it jumped to
+  the sequence start so tests only ever trained light 1.
+
 ## Evolution (headless Turbo, `node tests/evochoice.mjs <contest> 10 4 1 30`: 4 arenas, Lamarckian, 30-s duels)
 - Addition: champion benchmark 24% (gen 4) → 26% (gen 12–40); chance 11%; 40 generations in 2 min wall.
 - Subtraction: 19% (gen 4) → 38% (gen 8–40); chance 17%.
@@ -161,8 +223,10 @@ copy-error effects by gene, every Reaper verdict, Lamarck vs Darwin per contest,
 ## Known weaknesses
 - Addition at 0–7 + 0–7 and beyond gets ~60–70% on that level's benchmark in 3,000 trials; reaching 0–9 + 0–9
   well needs a longer lifetime or several generations (evolution carries the curriculum level and the weights).
-- Even or odd only wires the ones and tens digits (the hundreds digit is shown but has no input tile).
+- Smallest divisor: 7 … 31, 37+ and prime-vs-37+ cannot be learned from the disclosed features.
+- Simon's working memory is a modelled buffer; the brain learns the readout, not the memorising.
+- The full-task probe costs one extra benchmark every 10 generations.
 - Big brains are slower than real time.
 - Word completion at the full 643-word level plateaus around the position-frequency baseline (≈20–25% vs 25%):
   the brain clearly learns words in the small levels (25 words: 2–8% → 50–88%) but at full size its 2 cells per
-  conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much.
+  conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much (700 ms think: ≈25%).

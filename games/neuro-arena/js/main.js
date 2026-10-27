@@ -1,6 +1,6 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
 import { Evolution, quantW, dequantW, BENCH_N } from './evo.js';
-import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName } from './contests.js';
+import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt } from './contests.js';
 import { cLayout } from './cbrain.js';
 import { Stage } from './stage.js';
 import * as LAB from './lab.js';
@@ -45,7 +45,7 @@ function newEvo(id) { return new Evolution({ lamarck: true, contest: id, size: i
 function getEvo(id) { if (!evos[id]) { evos[id] = load(id) || newEvo(id); evos[id].opts.contest = id; if (id === 'pong') evos[id].opts.size = 2800; } return evos[id]; }
 const ui = { mode: 'watch', speed: 1, K: Math.max(1, Math.min(coarse ? 3 : 6, HC - 1)), epoch: 0, live: null, lastSave: 0, turboGen0: 0, turboT0: 0, gps: 0, tip: null, tab: 'chart', polMaps: [null, null] };
 let evo = getEvo(meta.cur), C = CONTEST[meta.cur];
-window.NA = { get evo() { return evo; }, get contest() { return C; }, select: id => selectContest(id), evos, ui, errs, get R() { return R; }, get noWorkers() { return noWorkers; }, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
+window.NA = { get evo() { return evo; }, get contest() { return C; }, select: id => selectContest(id), evos, ui, errs, get R() { return R; }, get noWorkers() { return noWorkers; }, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, redraw: () => { drawChart(); updateStatus(); }, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
 
 // a contest whose task changed (save: n) keeps its evolution under a new key, so an old save (other answer set) is ignored
 function skey(id) { return KEY + '.' + id + (CONTEST[id] && CONTEST[id].save ? '.s' + CONTEST[id].save : ''); }
@@ -242,7 +242,7 @@ async function startTurbo() {
 function onGenerations(out, child) {
   trackWeights(out); save(); drawChart(); renderLog(); renderGenome(); updateStatus(); updateNames();
   const nc = out.find(e => e.newChamp), lu = out.find(e => e.levelUp);
-  if (lu && C.levels) toast(`Curriculum: the champion passed 90% → ${levelName(C, lu.levelUp)}`);
+  if (lu && C.levels) toast(`Curriculum: the champion passed ${pct(lu.passed ?? 0.9)} → LEVEL ${lu.levelUp + 1}: ${C.levelName(C.levels[lu.levelUp])}. Harder test: a score drop is expected (the brain did not forget).`, 7000);
   if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
   if (ui.mode === 'turbo') {
     $('tGen').textContent = evo.gen; $('tRate').textContent = ui.gps.toFixed(2);
@@ -415,7 +415,7 @@ function updateStatus() {
   const c = evo.champ, h = evo.history, nb = h.filter(e => e.beneficial).length, nc = h.filter(e => e.newChamp).length, b = c.bench;
   const nn = neuronsOf(C, evo.opts.size).toLocaleString();
   const bl = isChoice()
-    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct}${C.valid && b.alt != null ? `, ${b.alt} via an alternate valid word` : ''} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items · best ever ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
+    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct}${C.valid && b.alt != null ? `, ${b.alt} via an alternate valid word` : ''} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items${b && b.seqAcc != null ? ` · whole sequences ${pct(b.seqAcc)}` : ''}${b && b.bal != null ? ` · balanced ${pct(b.bal)} · always “${C.labels[0]}” ${pct(b.base)}` : ''}${C.levels && evo.fullAcc != null && (evo.level || 0) < C.levels.length - 1 ? ` · full task ${pct(evo.fullAcc)}` : ''} · best ever${C.levels ? ' (this level)' : ''} ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
     : `Benchmark ${pct(c.fit)} of ${BENCH_N} standard serves · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}<br>Mean rally (20 duels) ${recentRally().toFixed(1)} hits`;
   $('stat').innerHTML = `<b>${C.icon} ${C.name} · generation ${evo.gen}</b><br>${nn} neurons per brain<br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>` +
     `${bl}<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
@@ -484,6 +484,7 @@ function drawMaps() {
 
 // ------------------------------------------------------------------ fitness chart (2D canvas at native DPR)
 const chart = $('chart');
+const LVC = ['#ffd25a', '#ff9f5a', '#ff6b9d', '#c77dff', '#7d9bff', '#5cff9d', '#e6ff5a', '#ffb3e6'];   // one colour per curriculum level
 function drawChart() {
   const dpr = Math.min(3, devicePixelRatio || 1), w = chart.clientWidth, h = chart.clientHeight; if (!w || !h) { drawLife(); return; }
   if (chart.width !== Math.round(w * dpr) || chart.height !== Math.round(h * dpr)) { chart.width = Math.round(w * dpr); chart.height = Math.round(h * dpr); }
@@ -495,9 +496,24 @@ function drawChart() {
   x.font = '10px -apple-system, system-ui, sans-serif'; x.fillStyle = '#7f93b8'; x.strokeStyle = 'rgba(120,160,255,.12)'; x.lineWidth = 1;
   for (let v = 0; v <= 1.001; v += 0.25) { x.beginPath(); x.moveTo(pl, Y(v)); x.lineTo(w - pr, Y(v)); x.stroke(); x.fillText(Math.round(v * 100) + '%', 2, Y(v) + 3); }
   if (!ch) { x.fillStyle = 'rgba(80,220,255,.75)'; x.fillText(String(RM), w - pr + 3, Y(1) + 3); x.fillText('0', w - pr + 3, Y(0) + 3); } x.fillStyle = '#7f93b8';
-  const step = Math.pow(10, Math.floor(Math.log10(G / 4))), st = G / step > 8 ? step * 2 : step;
+  const maxT = Math.max(2, Math.floor(iw / 30)), step = Math.pow(10, Math.floor(Math.log10(G / 4))), st = [1, 2, 5, 10, 20, 50].map(k => k * step).find(v => G / v <= maxT) || step * 100;
   for (let g = 0; g <= G; g += st) x.fillText(String(g), X(g) - 6, h - 3);
-  x.setLineDash([3, 3]); x.strokeStyle = 'rgba(140,170,170,.7)'; x.beginPath(); x.moveTo(pl, Y(chanceOf(C))); x.lineTo(w - pr, Y(chanceOf(C))); x.stroke(); x.setLineDash([]);
+  // chance: per curriculum level (each level is a different test with its own chance score)
+  const lvs = ch && C.levels;
+  x.setLineDash([3, 3]); x.strokeStyle = 'rgba(140,170,170,.7)'; x.beginPath();
+  if (lvs && H.length) { let g0 = 0, lv = H[0].level ?? 0; const seg = (g1, l) => { const y = Y(chanceAt(C, l)); x.moveTo(X(g0), y); x.lineTo(X(g1), y); };
+    for (const e of H) if ((e.level ?? 0) !== lv) { seg(e.gen, lv); g0 = e.gen; lv = e.level ?? 0; } seg(G, lv); }
+  else { x.moveTo(pl, Y(chanceOf(C))); x.lineTo(w - pr, Y(chanceOf(C))); } x.stroke(); x.setLineDash([]);
+  if (lvs && C.baseOf && H.length) {   // the 'always give the most common answer' baseline (always 2 for Smallest divisor)
+    x.setLineDash([6, 3]); x.strokeStyle = 'rgba(255,160,90,.6)'; x.beginPath(); let g0 = 0, lv = H[0].level ?? 0; const seg = (g1, l) => { const y = Y(baseAt(C, l)); x.moveTo(X(g0), y); x.lineTo(X(g1), y); };
+    for (const e of H) if ((e.level ?? 0) !== lv) { seg(e.gen, lv); g0 = e.gen; lv = e.level ?? 0; } seg(G, lv); x.stroke(); x.setLineDash([]);
+    x.fillStyle = 'rgba(255,160,90,.8)'; x.fillText(`always “${C.labels[0]}”`, pl + 2, Y(baseAt(C, lv)) - 3); x.fillStyle = '#7f93b8'; }
+  // level changes: a vertical marker with the new level's name (the benchmark restarts on a harder test there)
+  if (lvs) { let row = 0, lastX = -1e9; for (const e of H) if (e.levelUp) { const px = X(e.gen), col = LVC[e.levelUp % LVC.length];
+    x.strokeStyle = col; x.globalAlpha = 0.8; x.setLineDash([2, 2]); x.beginPath(); x.moveTo(px, pt); x.lineTo(px, pt + ih); x.stroke(); x.setLineDash([]); x.globalAlpha = 1;
+    row = px - lastX < 120 ? (row + 1) % 3 : 0; lastX = px;
+    const t = `LEVEL ${e.levelUp + 1}: ${C.levelName(C.levels[e.levelUp])}`, tw = x.measureText(t).width, tx = Math.min(px + 3, w - pr - tw - 2);
+    x.fillStyle = 'rgba(8,12,24,.75)'; x.fillRect(tx - 1, pt + 2 + row * 12, tw + 2, 11); x.fillStyle = col; x.fillText(t, tx, pt + 11 + row * 12); } }
   const dotR = H.length > 400 ? 1 : 1.6;
   x.fillStyle = 'rgba(185,139,255,.5)'; for (const e of H) { x.beginPath(); x.arc(X(e.gen), Y(kid(e)), dotR, 0, 7); x.fill(); }
   // mean rally length in the duels (right axis), rolling mean
@@ -507,7 +523,18 @@ function drawChart() {
   // best ever (thin) and the champion's benchmark score (bold step line)
   const stepLine = (key, style, lw, glow) => { x.strokeStyle = style; x.lineWidth = lw; x.shadowColor = style; x.shadowBlur = glow; x.beginPath(); let prev = null;
     H.forEach((e, i) => { const v = e[key] ?? (key === 'champAccNow' ? e.champFit : key === 'bestAcc' ? e.bestFit : 0); if (i === 0) x.moveTo(X(e.gen - 1), Y(v)); else x.lineTo(X(e.gen), Y(prev)); x.lineTo(X(e.gen), Y(v)); prev = v; }); x.stroke(); x.shadowBlur = 0; };
-  if (H.length) { x.setLineDash([4, 3]); stepLine(KB, 'rgba(255,255,255,.55)', 1, 0); x.setLineDash([]); stepLine(KC, '#ffd25a', 2.2, 6); }
+  if (H.length) { x.setLineDash([4, 3]); stepLine(KB, 'rgba(255,255,255,.55)', 1, 0); x.setLineDash([]);
+    if (!lvs) stepLine(KC, '#ffd25a', 2.2, 6);
+    else {   // the champion's benchmark, coloured by level (a new colour = a new, harder test)
+      x.lineWidth = 2.2; let prev = null, pg = null, pl_ = null;
+      H.forEach(e => { const v = e[KC] ?? 0, lv = e.level ?? 0, col = LVC[lv % LVC.length]; x.strokeStyle = col; x.shadowColor = col; x.shadowBlur = 6; x.beginPath();
+        if (prev == null || lv !== pl_) x.moveTo(X(e.gen - 1), Y(v)); else { x.moveTo(X(pg), Y(prev)); x.lineTo(X(e.gen), Y(prev)); } x.lineTo(X(e.gen), Y(v)); x.stroke(); prev = v; pg = e.gen; pl_ = lv; });
+      x.shadowBlur = 0;
+      // the same champion on the FULL task (the last level), measured every ~10 generations: the real progress
+      x.strokeStyle = '#50dcff'; x.lineWidth = 1.6; x.beginPath(); let on = false, pv = null;
+      for (const e of H) { const v = e.fullAcc; if (v == null) continue; if (!on) { x.moveTo(X(e.gen - 1), Y(v)); on = true; } else x.lineTo(X(e.gen), Y(pv)); x.lineTo(X(e.gen), Y(v)); pv = v; } x.stroke();
+      x.font = '9px -apple-system, system-ui, sans-serif'; const lg = 'level benchmark (colour = level) · cyan = full task'; x.fillStyle = 'rgba(8,12,24,.75)'; x.fillRect(w - pr - x.measureText(lg).width - 4, pt + ih - 12, x.measureText(lg).width + 4, 12);
+      x.fillStyle = '#9fb3d8'; x.fillText(lg, w - pr - x.measureText(lg).width - 2, pt + ih - 3); x.font = '10px -apple-system, system-ui, sans-serif'; } }
   ui.marks = [];
   for (const e of H) if (e.newChamp && e.beneficial) { const px = X(e.gen), py = Y(e[KC] ?? e.champFit); ui.marks.push({ px, py, e }); x.fillStyle = '#5cff9d'; x.beginPath(); x.moveTo(px, py - 4.5); x.lineTo(px + 3.5, py); x.lineTo(px, py + 4.5); x.lineTo(px - 3.5, py); x.closePath(); x.fill(); }
   else if (e.newChamp && e.hof) { x.fillStyle = '#ffd25a'; x.fillText('♛', X(e.gen) - 4, Y(e[KC] ?? e.champFit) + 4); }
@@ -542,7 +569,7 @@ function chartTip(e) {
 chart.addEventListener('pointermove', chartTip); chart.addEventListener('pointerdown', chartTip); chart.addEventListener('pointerleave', () => $('tip').classList.add('hidden'));
 
 // ------------------------------------------------------------------ controls
-function toast(t) { const el = $('toast'); el.textContent = t; el.classList.remove('hidden'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('hidden'), 2600); }
+function toast(t, ms = 2600) { const el = $('toast'); el.textContent = t; el.classList.remove('hidden'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('hidden'), ms); }
 function toggleInfo(v) { $('info').classList.toggle('hidden', v === undefined ? !$('info').classList.contains('hidden') ? true : false : !v); }
 document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 $('bInfo').onclick = () => toggleInfo(true); $('infoX').onclick = () => toggleInfo(false);
@@ -720,7 +747,13 @@ function drawLab(full) {
   LAB.drawLive($('lLive'), isChoice() ? stage.hist : [[], []], chanceOf(C));
   // Word completion: correct answers split into the intended letter and an alternate letter that also makes a valid word
   const la = $('lAlt'); if (la) { const b = evo.champ.bench, t = stage.tally || [[0, 0], [0, 0]];
-    la.textContent = C.valid ? `correct = intended + alternate valid word · live A ${t[0][0]}+${t[0][1]} alt · B ${t[1][0]}+${t[1][1]} alt${b && b.alt != null ? ` · champion benchmark ${b.correct - b.alt}+${b.alt} alt of ${b.n}` : ''}` : ''; la.style.display = C.valid ? '' : 'none'; }
+    const lu = (evo.levelUps || []).slice(-1)[0], parts = [];
+    if (isChoice()) parts.push(`THINKING window ${trialOf(C).thinkMs} ms (simulated)`);
+    if (C.valid) parts.push(`correct = intended + alternate valid word · live A ${t[0][0]}+${t[0][1]} alt · B ${t[1][0]}+${t[1][1]} alt${b && b.alt != null ? ` · champion benchmark ${b.correct - b.alt}+${b.alt} alt of ${b.n}` : ''}`);
+    if (C.seq && b && b.posAcc) { const L = C.levels[Math.min(b.level ?? 0, C.levels.length - 1)]; parts.push(`champion benchmark per light ${b.posAcc.map(v => Math.round(v * 100)).join(' / ')}% · whole sequence ${pct(b.seqAcc)} (chance 25% per light, ${(100 * 0.25 ** L).toPrecision(2)}% for all ${L})`); }
+    if (C.baseOf && b && b.bal != null) parts.push(`champion benchmark ${pct(b.acc)} right · balanced (mean per answer) ${pct(b.bal)} · always “${C.labels[0]}” ${pct(b.base)}`);
+    if (lu && C.levels && evo.gen - lu.gen < 40) parts.push(`gen ${lu.gen}: LEVEL ${lu.level + 1} (${C.levelName(C.levels[lu.level])}). Harder test: a score drop is expected`);
+    la.textContent = parts.join(' · '); la.style.display = parts.length ? '' : 'none'; }
   LAB.drawDA($('lDA'), lab.tr); LAB.drawRaster($('lRas'), lab.ras, lab.rates);
 }
 $('bLab').onclick = () => toggleLab(true); $('labX').onclick = () => toggleLab(false);

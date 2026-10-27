@@ -59,6 +59,9 @@ export class ChoiceBrain {
     this.rateM = new Float32Array(this.NM); this.rExp = new Float32Array(this.NM); this.cntM = new Uint16Array(this.NM);
     this.gcnt = new Float32Array(this.K); this.tcnt = new Float32Array(this.K); this.cntA = new Uint16Array(this.NA); this.grate = new Float32Array(this.K); this.ou = new Float32Array(this.K); this.bias = new Float32Array(this.K);
     this.reset();
+    // the expected reward is part of what a brain has learned: inherited synapses come with it, otherwise every new
+    // lifetime starts at rBar = 0 and its first ~20 answers on a hard level give a falsely negative dopamine signal
+    if (weights && weights.rBar != null) this.rBar = weights.rBar;
   }
   label() {
     if (this.disc) return this.labelDisc();
@@ -186,7 +189,7 @@ export class ChoiceBrain {
     const f = this.colS.slice(0, NM);
     for (let s = 0; s < n; s++) { const m = ks[s] % NM, q = f[m]++; this.colA[q] = (ks[s] / NM) | 0; this.colQ[q] = s; }
   }
-  exportWeights() { return { W: new Float32Array(this.W), seed: this.g.seed | 0, pAM: this.g.pAM, size: this.spec.size || 2800, K: this.K }; }
+  exportWeights() { return { W: new Float32Array(this.W), seed: this.g.seed | 0, pAM: this.g.pAM, size: this.spec.size || 2800, K: this.K, rBar: this.rBar }; }
   reset() {
     const rnd = mulberry32((this.g.seed | 0) + 99), N = this.N;
     this.step_ = 0; this.slot = 0; this.t = 0;
