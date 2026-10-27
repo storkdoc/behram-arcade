@@ -83,7 +83,7 @@ body.port #tbtns { right: calc(10px + var(--sr)); bottom: calc(130px + var(--sb)
 body.port .tb.fire { width: 96px; height: 96px; right: calc(14px + var(--sr)); bottom: calc(22px + var(--sb)); }
 body.port #tbtns { right: calc(10px + var(--sr)); }
 @media (max-height: 460px) { .tt { font-size: 44px; } .tblock { margin-top: 0; } .menu { gap: 6px; } .btn { padding: 9px 12px; font-size: 13px; } .btn.big { padding: 11px; font-size: 15px; } .ttag { display: none; }
-  #tstick { width: 118px; height: 118px; } #tthr { left: calc(146px + var(--sl)); height: 118px; } #tbtns { grid-auto-rows: 36px; grid-template-columns: repeat(3, 52px); gap: 6px; right: calc(122px + var(--sr)); } .tb.fire { width: 90px; height: 90px; } }
+  #tstick { width: 118px; height: 118px; } #tthr { left: calc(146px + var(--sl)); height: 118px; } #tbtns { grid-auto-rows: 42px; grid-template-columns: repeat(3, 54px); gap: 5px; right: calc(122px + var(--sr)); } .tb.fire { width: 90px; height: 90px; } }
 /* galactic war chart bar */
 #warbar { position: fixed; left: 50%; transform: translateX(-50%); z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; width: min(760px, 98vw); }
 #wartop { font-size: 11px; letter-spacing: .12em; color: #cfefff; text-shadow: 0 1px 2px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 98vw; }
@@ -95,3 +95,6 @@ body.port #tbtns { right: calc(10px + var(--sr)); }
 .chip.hid, .lbl.hid { display: none; }
 .vrow { display: flex; gap: 10px; align-items: center; } .vrow .btn { flex: 0 0 auto; min-width: 120px; }
 .vvol { flex: 1; accent-color: var(--a); height: 28px; touch-action: manipulation; }
+
+/* galactic chart open on touch: the chart is tapped directly, so the stick, throttle and FIRE step aside */
+body.chartv #tstick, body.chartv #tthr, body.chartv #tfire { visibility: hidden; }

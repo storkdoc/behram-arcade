@@ -1,5 +1,5 @@
 // Node side of fakepeer.js. latency: one-way ms (+ uniform jitter); unordered ("reliable:false") channels may reorder.
-module.exports = function makeBroker({ lat = 40, jit = 10 } = {}) {
+module.exports = function makeBroker({ lat = 40, jit = 10, tap = null } = {}) {
   const ids = new Map(), keys = new Map(), conns = new Map(), pages = new Map(); const log = [];
   const to = (page, m, delay = 0) => setTimeout(() => { if (!page.isClosed()) page.evaluate(s => window.__fromBroker(s), JSON.stringify(m)).catch(() => {}); }, delay);
   const d1 = () => lat + Math.random() * jit;
@@ -18,6 +18,7 @@ module.exports = function makeBroker({ lat = 40, jit = 10 } = {}) {
       setTimeout(() => { to(t.page, { op: 'copen', cid: rcid }); to(page, { op: 'copen', cid: m.cid }); }, 60 + 2 * lat); // ICE + DTLS ~ a round trip
     } else if (m.op === 'send') {
       const c = conns.get(m.cid); if (!c) return;
+      if (tap) try { tap(page, c.page, m.d); } catch (e) {}
       let at = Date.now() + d1();
       if (m.rel) { at = Math.max(at, c.last + 0.1); c.last = at; }
       to(c.page, { op: 'data', cid: c.cid, d: m.d }, at - Date.now());

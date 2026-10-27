@@ -19,7 +19,12 @@ document.addEventListener('touchmove', e => { if (!e.target.closest || !e.target
 for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
 document.addEventListener('contextmenu', e => { if (!e.target.closest || !e.target.closest('input')) e.preventDefault(); });
 let lastTouchEnd = 0;
-document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTouchEnd < 320 && !(e.target.closest && e.target.closest('input'))) e.preventDefault(); lastTouchEnd = n; }, { passive: false });
+// a quick second tap would zoom on iOS: block it, but still deliver it as a click so fast menu taps are never lost
+document.addEventListener('touchend', e => {
+  const n = Date.now(), t = e.target, cl = t.closest ? t : t.parentElement;
+  if (n - lastTouchEnd < 320 && !(cl && cl.closest('input'))) { e.preventDefault(); const b = cl && cl.closest('button, .chip, [data-act], [data-e], [data-p], [data-j]'); if (b && !(cl.closest('#touch'))) b.click(); }
+  lastTouchEnd = n;
+}, { passive: false });
 
 /* ---------------- persistent settings ---------------- */
 const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
@@ -271,7 +276,7 @@ function onEvents(list, p) {
   for (const e of list) {
     if (e.sk != null && e.sk !== sk && e.e !== 'pdead') continue;
     switch (e.e) {
-      case 'torp': if (mine(e)) AU.torp(e.side); fxl.push(e); break;
+      case 'torp': if (mine(e)) { AU.torp(e.side); sess.fired = (sess.fired || 0) + 1; } fxl.push(e); break;
       case 'dry': if (mine(e)) { AU.dry(); say('Photons destroyed', { gap: 8 }); } break;
       case 'boom': { fxl.push(e); AU.boom(V.dist(e.pos, p.pos), e.size);
         if (e.by === p.idx) { const K = S.KIND[e.kind]; hud.pop(e.pos, '+' + (K ? K.pts : 10), e.kind === 'hive' ? '#ff9af0' : '#ffd25a'); if (sess.role === 'local') sess.hitStop = e.kind === 'hive' ? 0.11 : 0.06; } break; }
@@ -288,7 +293,7 @@ function onEvents(list, p) {
       case 'redalert': if (mine(e)) { hud.alertT = 2.4; AU.klaxon(); say('Red alert', { key: 'red', gap: 6, urgent: true }); } break;
       case 'lock': if (mine(e)) AU.lock(); break;
       case 'trackflip': if (mine(e)) AU.trackflip(); break;
-      case 'warp': if (mine(e)) { AU.warpSpool(); say('Hyperwarp engaged', { gap: 2 }); } break;
+      case 'warp': if (mine(e)) { AU.warpSpool(); say('Hyperwarp engaged', { gap: 2 }); if (p.view !== 'fore') { p.view = 'fore'; ctl.view = 'fore'; } } break;
       case 'arrive': if (mine(e)) { fxl.push(e); arrived(p); } break;
       case 'respawn': if (mine(e)) { fxl.push(e); AU.start(); say('New ship ready', { gap: 2 }); } break;
       case 'orbit': if (mine(e)) { AU.orbit(); say('Orbit established', { gap: 4 }); } break;
@@ -602,7 +607,7 @@ function simGuest(dtR) {
   const one = {};
   if (inp.fire && p.alive && !p.warp) { if (p.dmg.P >= 2) AU.dry(); else { one.fire = inp.fire; one.fireAt = { pos: r3(p.pos), q: r4(p.q), speed: p.speed, view: p.view }; } }
   for (const k of ['shields', 'comp', 'track', 'target', 'view']) if (inp[k] != null) one[k] = inp[k];
-  if (inp.warpTo && p.alive && !p.warp) { const r = S.startWarp(Gd, p, inp.warpTo[0], inp.warpTo[1]); if (r === 'ok') { one.warpStart = inp.warpTo; AU.warpSpool(); say('Hyperwarp engaged', { gap: 2 }); } }
+  if (inp.warpTo && p.alive && !p.warp) { const r = S.startWarp(Gd, p, inp.warpTo[0], inp.warpTo[1]); if (r === 'ok') { one.warpStart = inp.warpTo; AU.warpSpool(); say('Hyperwarp engaged', { gap: 2 }); if (p.view !== 'fore') { p.view = 'fore'; one.view = 'fore'; } } }
   delete inp.warpTo; delete inp.fire; delete inp.target; delete inp.acts;
   const arr0 = p.arrived || 0;
   if (p.alive) { acc += dtR; let first = true; while (acc >= STEP) { acc -= STEP; Gd.t += STEP; S.stepPilot(Gd, p, first ? inp : { yaw: inp.yaw, pitch: inp.pitch }, STEP); first = false; } } else { acc = 0; Gd.t += dtR; }
@@ -646,6 +651,7 @@ function present(dtR, t) {
   const showWb = app.online === 'host' && !app.guestOn && !war, wb = $('waitban');
   if (wb.classList.contains('hidden') === showWb) wb.classList.toggle('hidden', !showWb);
   if (showWb) setText('waitban', Net.st.status === 'error' ? 'ONLINE ERROR: ' + Net.st.error : 'WAITING FOR YOUR BUDDY…' + (Net.st.code ? ' BACKUP CODE ' + Net.st.code : ''));
+  const cv = p.view === 'chart'; if (document.body.classList.contains('chartv') !== cv) document.body.classList.toggle('chartv', cv);
   if (touchDev) {
     const k = p.thr / 9; $('tthrfill').style.height = (k * 100) + '%'; $('tthrknob').style.bottom = `calc(${(k * 100).toFixed(1)}% - ${(k * 14).toFixed(1)}px)`; setText('tthrlbl', String(p.thr));
     lit('shld', p.shields); lit('aft', p.view === 'aft'); lit('chart', p.view === 'chart'); lit('scan', p.view === 'lrs'); lit('dock', sess.base && sess.ownBase && !p.dock || sess.autoDock);

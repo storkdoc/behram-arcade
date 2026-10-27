@@ -200,7 +200,7 @@ export class Hud {
   /* ---------- the Galactic Chart ---------- */
   chartRect() {
     const I = this.I, W = this.W, H = this.H, u = this.u, top = I.t + u * 5 + (this.st && this.st.war ? this.barH : 0), bot = H - I.b - u * (this.st && this.st.touch ? (this.port ? 13 : 3) : 7.5);
-    const left = I.l + u * 1.5 + (this.st && this.st.touch && !this.port ? u * 0 : 0), right = W - I.r - u * 1.5 - (this.st && this.st.touch && !this.port ? Math.min(W * 0.22, 170) : 0);
+    const left = I.l + u * 1.5 + (this.st && this.st.touch && !this.port ? u * 0 : 0), right = W - I.r - u * 1.5 - (this.st && this.st.touch && !this.port ? Math.min(W * 0.38, 300) : 0);
     const cw = Math.min((right - left) / S.W, (bot - top) / S.H), gw = cw * S.W, gh = cw * S.H;
     return { x: left + (right - left - gw) / 2, y: top + (bot - top - gh) / 2, cw, gw, gh };
   }
