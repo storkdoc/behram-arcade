@@ -31,7 +31,7 @@
   const RANK_CAP = [6, 8, 10, 11];
   // per difficulty
   const DCFG = [
-    { fleets: [3, 3, 0], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0 },
+    { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0 },
     { fleets: [3, 4, 1], bases: 4, move: 1.25, need: 3, siege: 75, plasmaV: 82, aimErr: 0.1, fireMul: 1.25, home: 0.1, drift: 0.12, hitE: 120, bareE: 900, bareSys: 3, bareKill: 0.25, hunters: 1 },
     { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.6, hunters: 2 },
     { fleets: [3, 5, 3], bases: 3, move: 0.8, need: 2, siege: 58, plasmaV: 108, aimErr: 0.035, fireMul: 0.8, home: 0.45, drift: 0.38, hitE: 180, bareE: 0, bareSys: 0, bareKill: 1, hunters: 3 },
@@ -156,11 +156,15 @@
     const tr = (p.dmg.E >= 1 ? 1.15 : 1.6) * (p.view === 'aft' ? -1 : 1);
     const yaw = clamp(inp.yaw || 0, -1, 1), pitch = clamp(inp.pitch || 0, -1, 1);
     p.steer = [yaw, pitch];
-    if (yaw || pitch || inp.roll) {
+    // angular momentum: the stick sets a target turn rate, the ship eases into it (~0.12 s) and glides out of it
+    const av = p.av || (p.av = [0, 0]), ka = 1 - Math.exp(-8.5 * dt);
+    av[0] += (yaw - av[0]) * ka; av[1] += (pitch - av[1]) * ka;
+    if (Math.abs(av[0]) < 1e-3 && !yaw) av[0] = 0; if (Math.abs(av[1]) < 1e-3 && !pitch) av[1] = 0;
+    if (av[0] || av[1] || inp.roll) {
       // in aft view the stick is mirrored, as in the original: push right, the aft view swings right
       let q = p.q;
-      q = Q.mul(q, Q.axis([0, 1, 0], -yaw * tr * dt));
-      q = Q.mul(q, Q.axis([1, 0, 0], pitch * tr * dt));
+      q = Q.mul(q, Q.axis([0, 1, 0], -av[0] * tr * dt));
+      q = Q.mul(q, Q.axis([1, 0, 0], av[1] * tr * dt));
       if (inp.roll) q = Q.mul(q, Q.axis([0, 0, 1], -inp.roll * 1.4 * dt));
       p.q = Q.norm(q);
     }
@@ -357,7 +361,7 @@
     // which fleets are engaged (a player is in their sector)
     for (const f of G.fleets) {
       const here = playersIn(G, f.x, f.y).length > 0;
-      if (here && !f.engaged) { const p = playersIn(G, f.x, f.y)[0]; materialize(G, f, p, true); msg(G, 'VRELL FLEET ENTERING SECTOR', 'alert'); ev(G, { e: 'fleetin', x: f.x, y: f.y }); }
+      if (here && !f.engaged) { const p = playersIn(G, f.x, f.y)[0]; f.engT = G.t; materialize(G, f, p, true); msg(G, 'VRELL FLEET ENTERING SECTOR', 'alert'); ev(G, { e: 'fleetin', x: f.x, y: f.y }); }
       if (!here && f.engaged) { f.engaged = false; G.ships = G.ships.filter(s => s.fleet !== f.id); }
       if (here && f.h && !f.called && G.diff >= 1) { f.called = true; callHelp(G, f); }
     }
@@ -378,12 +382,19 @@
     for (const b of G.bases) {
       if (!b.alive) continue;
       const n = siegeCount(G, b), need = needFor(G, b), guarded = playersIn(G, b.x, b.y).length > 0;
+      // starbases radio for help as the Vrell close in
+      if (n > (b.adj || 0) && n < need) msg(G, `STARBASE ${b.x},${b.y}: VRELL FLEET ADJACENT (${n} OF ${need}) · REQUEST ASSISTANCE`, 'warn', -2);
+      b.adj = n;
+      const k0 = b.siege / C.siege;
       if (n >= need && !guarded) {
         if (b.siege === 0 || !b.alerted) { b.alerted = true; msg(G, 'STARBASE SURROUNDED AT ' + b.x + ',' + b.y + ' · DEFEND IT!', 'alert', -2); ev(G, { e: 'siege', x: b.x, y: b.y }); }
         b.siege += dt;
+        const k1 = b.siege / C.siege;
+        if (k0 < 0.5 && k1 >= 0.5) msg(G, `STARBASE ${b.x},${b.y}: SHIELDS AT 50% · ${Math.round(C.siege - b.siege)} SECONDS LEFT`, 'alert', -2);
+        if (k0 < 0.8 && k1 >= 0.8) msg(G, `STARBASE ${b.x},${b.y}: SHIELDS FAILING · MAYDAY`, 'alert', -2);
         if (b.siege >= C.siege) destroyBase(G, b);
       } else if (n >= need && guarded) { /* held off while a player guards it */ }
-      else { b.siege = Math.max(0, b.siege - dt * 2); if (b.siege === 0) b.alerted = false; }
+      else { b.siege = Math.max(0, b.siege - dt * 2); if (b.siege === 0 && b.alerted) { b.alerted = false; G.stats.saves = (G.stats.saves || 0) + 1; msg(G, `STARBASE ${b.x},${b.y}: SIEGE BROKEN · THANK YOU, PILOT`, 'good', -2); } }
     }
     // last stand waves
     if (G.mission === 'laststand') { G.waveT += dt; if (G.fleets.length === 0 && G.ships.length === 0 && G.waveT > 4) spawnWave(G); }
@@ -462,12 +473,25 @@
       let want = toP, spd = K.speed;
       if (s.kind === 'darter') {
         if (s.st === 'attack') {
-          want = V.norm(V.sub(lead, s.pos));
+          // pairs come in as a pincer: each takes an offset line off your wing until close
+          const pin = dist > 70 ? V.mul(rightOf(p.q), s.side * Math.min(40, dist * 0.25)) : [0, 0, 0];
+          want = V.norm(V.sub(V.add(lead, pin), s.pos));
           if (dist < 34) { s.st = 'break'; s.stT = 0; const r = V.norm(V.cross(toP, [R.r(-1, 1), R.r(-1, 1), R.r(-1, 1)])); s.brk = r; }
           if (aimed && !s.jink && R() < dt * (0.6 + G.diff * 0.45)) s.jink = { d: V.norm(V.cross(toP, [R.r(-1, 1), R.r(-1, 1), R.r(-1, 1)])), t: R.r(0.5, 1.0) };
         } else if (s.st === 'break') {
           want = V.norm(V.add(s.brk, V.mul(toP, -0.6))); spd = K.speed * 1.2;
-          if (s.stT > R.r(1.4, 2.4) || dist > 180) { s.st = 'attack'; s.stT = 0; }
+          if (s.stT > R.r(1.4, 2.4) || dist > 180) {
+            // sometimes fall back on a Lancer or Hive to regroup before the next pass
+            const big = G.ships.find(o => o.sk === s.sk && o.kind !== 'darter' && o.hp > 0);
+            s.breaks = (s.breaks || 0) + 1;
+            if (big && s.breaks % 2 === 0 && R() < 0.6 + G.diff * 0.1) { s.st = 'regroup'; s.mate = big.id; } else s.st = 'attack';
+            s.stT = 0;
+          }
+        } else if (s.st === 'regroup') {
+          const big = G.ships.find(o => o.id === s.mate);
+          if (!big) { s.st = 'attack'; s.stT = 0; }
+          else { const spot = V.add(big.pos, V.mul(rightOf(p.q), s.side * 14)), dd = V.dist(spot, s.pos); want = V.norm(V.sub(spot, s.pos)); spd = dd < 30 ? Math.max(big.speed, 20) : K.speed * 1.15;
+            if ((dd < 30 && s.stT > 1.5) || s.stT > 4.5) { s.st = 'attack'; s.stT = 0; } }
         }
         if (s.jink) { want = V.norm(V.add(want, V.mul(s.jink.d, 1.6))); s.jink.t -= dt; if (s.jink.t <= 0) s.jink = null; }
       } else if (s.kind === 'lancer') {
@@ -505,7 +529,7 @@
       // keep up with a fleeing player (fighters and lancers are faster in a pursuit)
       if (dist > 700) s.pos = V.madd(s.pos, toP, (dist - 700) * 0.5 * dt);
       // fire plasma
-      s.fireT -= dt;
+      s.fireT -= dt * (1 + Math.min(0.4, G.t / 1200)); // the Vrell grow bolder as the war drags on
       const facing = V.dot(s.fwd, toP);
       if (s.kind === 'darter' && s.fireT <= 0 && dist < 190 && facing > 0.94) { plasma(G, s, p, 1); s.fireT = R.r(1.6, 3.0) * C.fireMul; }
       if (s.kind === 'lancer') {
@@ -556,7 +580,8 @@
     ev(G, { e: 'boom', pos: s.pos, sk: s.sk, kind: s.kind, size: s.kind === 'hive' ? 3 : s.kind === 'lancer' ? 1.7 : 1, vel: V.mul(s.fwd, s.speed), by });
     const f = G.fleets.find(f => f.id === s.fleet);
     if (f) { if (s.kind === 'darter') f.d = Math.max(0, f.d - 1); else if (s.kind === 'lancer') f.l = Math.max(0, f.l - 1); else f.h = Math.max(0, f.h - 1);
-      if (f.d + f.l + f.h <= 0) { G.fleets = G.fleets.filter(o => o !== f); msg(G, 'VRELL FLEET DESTROYED', 'good'); ev(G, { e: 'fleetdead', x: f.x, y: f.y }); G.galSeq++; } }
+      if (f.d + f.l + f.h <= 0) { G.fleets = G.fleets.filter(o => o !== f); const el = G.t - (f.engT || G.t);
+        if (el > 0 && el < 50) { G.stats.fast = (G.stats.fast || 0) + 1; msg(G, `SECTOR CLEARED IN ${Math.round(el)} S · FAST-CLEAR BONUS`, 'good'); } else msg(G, 'VRELL FLEET DESTROYED · SECTOR CLEARED', 'good'); ev(G, { e: 'fleetdead', x: f.x, y: f.y }); G.galSeq++; } }
     if (by >= 0) { const p = G.players[by]; if (p) p.kills++; G.stats.kills[s.kind]++; G.stats.killPts += K.pts; }
   }
   function hitPlayer(G, p, at, sev) {
@@ -587,7 +612,8 @@
     if (G.over) return;
     const S = G.stats, minutes = G.t / 60;
     const alive = G.bases.filter(b => b.alive).length;
-    let R = S.killPts + (win ? 200 : 0) + alive * 20 - S.basesLost * 40 - S.energyUsed / 200 - minutes * 2 - S.deaths * 60;
+    // efficiency counts: starbases saved, fast sector clears, few warps, little energy, little time
+    let R = S.killPts + (win ? 200 : 0) + alive * 25 + (S.saves || 0) * 25 + (S.fast || 0) * 10 - S.basesLost * 40 - S.energyUsed / 200 - S.warps * 4 - minutes * 2 - S.deaths * 60;
     if (G.mission === 'laststand') R = S.killPts * 1.2 + (G.wave - 1) * 40 - S.deaths * 60;
     R *= [0.8, 1.3, 1.7, 2.1][G.diff];
     R = Math.max(0, R);

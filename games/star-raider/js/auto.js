@@ -10,8 +10,9 @@
     if (z > 0) return { yaw: x >= 0 ? 1 : -1, pitch: y * 2, ang: Math.PI };
     return { yaw: Math.max(-1, Math.min(1, x * 4)), pitch: Math.max(-1, Math.min(1, y * 4)), ang: Math.acos(Math.max(-1, Math.min(1, -z))) };
   }
-  function make() {
-    const st = { fireT: 0, plan: null, chartT: 0 };
+  // skill 1 = sharp pilot; lower = slower hands, sloppier aim, later decisions (used to playtest a novice)
+  function make(skill = 1) {
+    const st = { fireT: 0, plan: null, chartT: 0, wob: 0 };
     return function auto(G, p, dt) {
       const inp = { yaw: 0, pitch: 0, thr: null, fire: 0, shields: true, comp: true, view: 'fore' };
       if (!p || !p.alive) return inp;
@@ -24,8 +25,10 @@
         let t = foes.find(s => s.id === p.targetId) || foes[0];
         for (const s of foes) if (V.dist(s.pos, p.pos) < V.dist(t.pos, p.pos) - 30) t = s;
         const d = V.dist(t.pos, p.pos), s = steerTo(p, t.pos);
-        inp.yaw = s.yaw; inp.pitch = s.pitch; inp.thr = d > 250 ? 6 : d < 60 ? 2 : 4;
-        st.fireT -= dt; if (s.ang < 0.05 && d < 230 && st.fireT <= 0) { inp.fire = 1; st.fireT = 0.3; }
+        st.wob += dt * (1.3 + Math.random());
+        const hand = 0.45 + 0.55 * skill, err = (1 - skill) * 0.5;
+        inp.yaw = Math.max(-1, Math.min(1, s.yaw * hand + Math.sin(st.wob * 2.1) * err)); inp.pitch = Math.max(-1, Math.min(1, s.pitch * hand + Math.cos(st.wob * 1.7) * err)); inp.thr = d > 250 ? 6 : d < 60 ? 2 : 4;
+        st.fireT -= dt; if (s.ang < 0.05 + (1 - skill) * 0.08 && d < 230 && st.fireT <= 0) { inp.fire = 1; st.fireT = 0.3 + (1 - skill) * 0.4; }
         return inp;
       }
       if (base && (needDock || (p.dock && p.dock.phase !== 'done'))) {
@@ -35,7 +38,7 @@
       }
       // plan a hyperwarp
       st.chartT -= dt; if (st.chartT > 0) { inp.thr = 0; return inp; }
-      st.chartT = 1.5;
+      st.chartT = 1.5 + (1 - skill) * 6;
       let tgt = null;
       if (needDock && bases.length) { let bd = 1e9; for (const b of bases) { const dd = Math.hypot(b.x - p.sx, b.y - p.sy); if (dd < bd) { bd = dd; tgt = [b.x, b.y]; } } if (base) tgt = null; }
       if (!tgt && G.fleets.length) {
