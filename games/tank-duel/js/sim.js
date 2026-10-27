@@ -209,7 +209,7 @@
     const g = {
       cfg, v, round, rnd: rng(cfg.seed), tiles: buildTiles(v.map), hp: new Uint8Array(COLS * ROWS), movers: v.movers ? buildMovers(v.map) : [],
       portals: [], hill: null, tanks: [], shells: [], mines: [], pups: [], events: [], t: 0, frame: 0,
-      phase: 'countdown', phaseT: 3.0, timeLeft: round.type === 'time' ? round.secs : 0, overtime: false, winner: -1, puT: 6, nextId: 1, tilesVer: 0,
+      phase: 'countdown', phaseT: 3.0, timeLeft: round.type === 'time' ? round.secs : 0, overtime: false, winner: -1, puT: 6, nextId: 1, tilesVer: 0, cease: 0,
     };
     for (let i = 0; i < g.tiles.length; i++) g.hp[i] = g.tiles[i] === BRICK ? BRICK_HP : 0;
     if (!v.destructible) for (let i = 0; i < g.tiles.length; i++) if (g.tiles[i] === BRICK) g.tiles[i] = WALL;
@@ -223,7 +223,7 @@
   function mkTank(id, x, y, a, v) {
     return { id, x, y, a, vx: 0, vy: 0, sx: x, sy: y, sa: a, score: 0, spin: 0, spinDir: 1, kvx: 0, kvy: 0, inv: 0, reload: 0, visT: 1.5, shield: 0, triple: 0, speedT: 0,
       sp: { type: v.special, n: v.special === 'mine' ? 3 : v.special ? 1 : 0, cd: 0 }, bumpT: 0, moving: 0, tread: [0, 0], firedN: 0, lastFire: -9, fireBuf: 0, specBuf: 0,
-      seenFireN: 0, seenSpecN: 0, hillT: 0, dist: 0, recoil: 0, pcd: 0 };
+      seenFireN: 0, seenSpecN: 0, hillT: 0, dist: 0, recoil: 0, pcd: 0, prot: 0, respawns: 0 };
   }
   function updateMovers(g, t) {
     for (const m of g.movers) {
@@ -250,6 +250,7 @@
       if (res === 'gone') { ev(g, { e: 'thud', x: tmp.x, y: tmp.y, owner: tk.id }); continue; }
       s.x = mx; s.y = my; g.shells.push(s);
     }
+    tk.prot = 0; // firing ends spawn protection early
     tk.lastFire = g.t; tk.reload = mega ? 0.6 : 0.42; tk.visT = Math.max(tk.visT, 0.9); tk.recoil = 1; tk.firedN++;
     if (tk.triple > 0) tk.triple--;
     // recoil nudge
@@ -257,16 +258,82 @@
     ev(g, { e: 'fire', tank: tk.id, x: tk.x + Math.cos(tk.a) * (TANK_R + 0.3), y: tk.y + Math.sin(tk.a) * (TANK_R + 0.3), a: tk.a, mega: !!mega, guided: v.shell === 'guided' });
   }
   function hitTank(g, victim, byId, sx, sy, svx, svy, cause) {
-    if (victim.spin > 0 || victim.inv > 0) return false;
+    if (victim.spin > 0 || victim.inv > 0 || victim.prot > 0) return false;
     if (victim.shield > 0) { victim.shield = 0; victim.inv = 0.5; const l = Math.hypot(svx, svy) || 1; victim.kvx = svx / l * 2.5; victim.kvy = svy / l * 2.5; ev(g, { e: 'shield', tank: victim.id, x: victim.x, y: victim.y }); return true; }
     const scorer = byId === victim.id ? 1 - victim.id : byId;
     const l = Math.hypot(svx, svy) || 1;
     victim.spin = 1.1; victim.spinDir = (svx * Math.sin(victim.a) - svy * Math.cos(victim.a)) > 0 ? 1 : -1;
     victim.kvx = svx / l * 6.5; victim.kvy = svy / l * 6.5; victim.visT = 2.2;
-    if (g.phase === 'play') g.tanks[scorer].score++;
+    if (g.phase === 'play') { g.tanks[scorer].score++; if (!g.cfg.legacySpawn) g.cease = Math.max(g.cease, 0.75); } // brief ceasefire after every kill
     ev(g, { e: 'hit', tank: victim.id, by: scorer, self: byId === victim.id, x: victim.x, y: victim.y, a: Math.atan2(svy, svx), cause: cause || 'shell', score: [g.tanks[0].score, g.tanks[1].score] });
     checkWin(g);
     return true;
+  }
+  /* ---------- respawn: a destroyed tank comes back somewhere safe ----------
+     Candidate spawn points are every open cell the hull fits in (recomputed when bricks fall). Each is scored by
+     maze (BFS) distance from the killer, no straight line of fire from the killer, openness and a little
+     randomness. Points near movers' rails, mines, portals, the hill, shells in flight or the killer are skipped. */
+  const SPAWN_PROT = 2.0;
+  function hullFits(g, x, y, r) {
+    if (solidAt(g, x, y)) return false;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (solidAt(g, x + Math.cos(a) * r, y + Math.sin(a) * r)) return false; }
+    return true;
+  }
+  function spawnCands(g) {
+    if (g._cands && g._candsVer === g.tilesVer) return g._cands;
+    const c = [];
+    for (let ty = 1; ty < ROWS - 1; ty++) for (let tx = 1; tx < COLS - 1; tx++) { const x = tx + 0.5, y = ty + 0.5; if (hullFits(g, x, y, TANK_R + 0.14)) c.push([x, y]); }
+    g._cands = c; g._candsVer = g.tilesVer; return c;
+  }
+  function bfsFrom(g, x, y) {
+    const N = COLS * ROWS, d = new Int16Array(N).fill(-1), q = new Int32Array(N); let h = 0, t = 0;
+    const k0 = clamp(Math.floor(y), 0, ROWS - 1) * COLS + clamp(Math.floor(x), 0, COLS - 1); d[k0] = 0; q[t++] = k0;
+    while (h < t) { const k = q[h++], cx = k % COLS, cy = (k / COLS) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue; const nk = ny * COLS + nx; if (d[nk] >= 0 || g.tiles[nk] !== EMPTY) continue; d[nk] = d[k] + 1; q[t++] = nk; } }
+    return d;
+  }
+  function openRay(g, x, y, a, max) { const c = Math.cos(a), s = Math.sin(a); let r = 0.3; for (; r < max; r += 0.25) { if (solidAt(g, x + c * r, y + s * r) || moverAt(g, x + c * r, y + s * r, 0.2)) break; } return r; }
+  function nearMoverRail(g, x, y, pad) {
+    for (const m of g.movers) { const x0 = Math.min(m.ax, m.bx) - pad, x1 = Math.max(m.ax, m.bx) + m.w + pad, y0 = Math.min(m.ay, m.by) - pad, y1 = Math.max(m.ay, m.by) + m.h + pad; if (x > x0 && x < x1 && y > y0 && y < y1) return true; }
+    return false;
+  }
+  function pickSpawn(g, tk) {
+    const K = g.tanks[1 - tk.id], cands = spawnCands(g), dist = bfsFrom(g, K.x, K.y);
+    let best = null, bs = -1e9;
+    const pass = strict => {
+      for (const [x, y] of cands) {
+        const de = Math.hypot(x - K.x, y - K.y);
+        if (de < (strict ? 7 : 3.5)) continue;
+        if (nearMoverRail(g, x, y, strict ? 0.9 : 0.6) || moverAt(g, x, y, 0.9)) continue;
+        if (g.mines.some(m => Math.hypot(m.x - x, m.y - y) < (strict ? 1.8 : 1.2))) continue;
+        if (g.portals.some(p => Math.hypot(p.x - x, p.y - y) < 1.5)) continue;
+        if (g.hill && Math.hypot(g.hill.x - x, g.hill.y - y) < g.hill.r + 1) continue;
+        if (strict && g.shells.some(s => Math.hypot(s.x - x, s.y - y) < 3)) continue;
+        if (g.pups.some(p => Math.hypot(p.x - x, p.y - y) < 0.9)) continue;
+        const k = Math.floor(y) * COLS + Math.floor(x), bd = dist[k] < 0 ? 30 : dist[k];
+        const sight = los(g, K.x, K.y, x, y);
+        let open = 0; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (!solidAt(g, x + Math.cos(a) * 1.2, y + Math.sin(a) * 1.2)) open++; }
+        const sc = Math.min(bd, 34) + (sight ? 0 : 12) + 0.25 * Math.min(de, 30) + 0.6 * open - 0.12 * Math.hypot(x - tk.sx, y - tk.sy) + g.rnd() * 2.5;
+        if (sc > bs) { bs = sc; best = [x, y]; }
+      }
+    };
+    pass(true); if (!best) pass(false);
+    if (!best) best = [tk.sx, tk.sy];
+    // face the most open direction (ties lean away from the killer)
+    let ba = tk.sa, bl = -1; const away = Math.atan2(best[1] - K.y, best[0] - K.x);
+    for (let i = 0; i < 16; i++) { const a = wrapA(i * Math.PI / 8); const l = openRay(g, best[0], best[1], a, 10) + 0.4 * Math.cos(wrapA(a - away)); if (l > bl) { bl = l; ba = a; } }
+    return { x: best[0], y: best[1], a: ba };
+  }
+  function respawn(g, tk) {
+    const from = [tk.x, tk.y], p = pickSpawn(g, tk), K = g.tanks[1 - tk.id];
+    tk.x = p.x; tk.y = p.y; tk.a = p.a; tk.vx = tk.vy = tk.kvx = tk.kvy = 0; tk.inv = 0; tk.prot = SPAWN_PROT; tk.respawns++; tk.fireBuf = 0; tk.recoil = 0;
+    if (g.v.invisible) tk.visT = 0; // keep invisible tanks hidden: the shimmer is only shown to its owner
+    ev(g, { e: 'respawn', tank: tk.id, x: p.x, y: p.y, a: p.a, fx: from[0], fy: from[1] });
+    // nudge the killer back toward its own side so the duel restarts fairly
+    if (K.spin <= 0) {
+      const hx = K.sx - K.x, hy = K.sy - K.y, dh = Math.hypot(hx, hy);
+      if (dh > 1.5) { const push = Math.min(3, dh * 0.4), v0 = push * 3.9; K.kvx = hx / dh * v0; K.kvy = hy / dh * v0; ev(g, { e: 'nudge', tank: K.id, x: K.x, y: K.y }); }
+    }
   }
   function checkWin(g) {
     const [a, b] = g.tanks;
@@ -294,6 +361,7 @@
         }
       }
     } else if (g.phase === 'over') g.phaseT += DT;
+    g.cease = Math.max(0, g.cease - DT);
     updateMovers(g, g.t);
     const live = g.phase !== 'over';
     for (const tk of g.tanks) stepTank(g, tk, (live && g.phase === 'play') ? inputs[tk.id] || {} : {}, g.phase === 'play');
@@ -307,7 +375,7 @@
   }
   function stepTank(g, tk, inp, active) {
     const v = g.v;
-    tk.visT = Math.max(0, tk.visT - DT); tk.reload = Math.max(0, tk.reload - DT); tk.bumpT -= DT; tk.inv = Math.max(0, tk.inv - DT); tk.recoil = Math.max(0, tk.recoil - DT * 4);
+    tk.visT = Math.max(0, tk.visT - DT); tk.reload = Math.max(0, tk.reload - DT); tk.bumpT -= DT; tk.inv = Math.max(0, tk.inv - DT); tk.prot = Math.max(0, tk.prot - DT); tk.recoil = Math.max(0, tk.recoil - DT * 4);
     tk.speedT = Math.max(0, tk.speedT - DT); tk.pcd = Math.max(0, tk.pcd - DT);
     if (tk.shield > 0) tk.shield = Math.max(0, tk.shield - DT);
     if (tk.sp.cd > 0) { tk.sp.cd -= DT; if (tk.sp.cd <= 0) { tk.sp.cd = 0; if (tk.sp.type === 'mine' && tk.sp.n < 3 && v.special === 'mine') { tk.sp.n++; if (tk.sp.n < 3) tk.sp.cd = 8; } else if (tk.sp.type === 'mega' && v.special === 'mega') tk.sp.n = 1; else if (tk.sp.type === 'nitro' && v.special === 'nitro') tk.sp.n = 1; } }
@@ -328,7 +396,7 @@
       tk.x += tk.kvx * DT; tk.y += tk.kvy * DT; tk.kvx *= Math.pow(0.03, DT); tk.kvy *= Math.pow(0.03, DT);
       tk.vx = 0; tk.vy = 0;
       if (resolveCircle(g, tk, TANK_R)) { tk.kvx *= -0.4; tk.kvy *= -0.4; }
-      if (tk.spin <= 0) { tk.spin = 0; tk.inv = 0.7; }
+      if (tk.spin <= 0) { tk.spin = 0; if (g.cfg.legacySpawn) tk.inv = 0.7; else respawn(g, tk); } // legacySpawn: old in-place recovery (tests only)
       tk.moving = 0; return;
     }
     if (tk.kvx || tk.kvy) { tk.x += tk.kvx * DT; tk.y += tk.kvy * DT; tk.kvx *= Math.pow(0.02, DT); tk.kvy *= Math.pow(0.02, DT); if (Math.abs(tk.kvx) + Math.abs(tk.kvy) < 0.05) tk.kvx = tk.kvy = 0; }
@@ -343,7 +411,8 @@
     if (!active) return;
     // fire: buffered press or held button
     const maxShells = tk.triple > 0 ? 3 : 1;
-    if ((tk.fireBuf > 0 || inp.fire) && tk.reload <= 0 && myShells.length < maxShells && !(tk.triple > 0 && myShells.length > 0)) { fire(g, tk, false); tk.fireBuf = 0; }
+    if (g.cease > 0) { tk.fireBuf = 0; if (tk.specBuf > 0 && tk.sp.type === 'mega') tk.specBuf = 0; }
+    if (g.cease <= 0 && (tk.fireBuf > 0 || inp.fire) && tk.reload <= 0 && myShells.length < maxShells && !(tk.triple > 0 && myShells.length > 0)) { fire(g, tk, false); tk.fireBuf = 0; }
     // special (ENTER)
     if (tk.specBuf > 0 && tk.sp.type && tk.sp.n > 0) {
       tk.specBuf = 0; const t = tk.sp.type;
@@ -388,7 +457,7 @@
       const s = g.shells[i]; s.age += DT; s.life -= DT; s.pcd = Math.max(0, s.pcd - DT);
       if (s.life <= 0) { ev(g, { e: 'fizzle', x: s.x, y: s.y, owner: s.owner }); g.shells.splice(i, 1); continue; }
       if (s.seeker) { // home on the enemy within a forward cone
-        const tgt = g.tanks[1 - s.owner]; if (tgt.spin <= 0 && isVisible(g, tgt)) { const want = Math.atan2(tgt.y - s.y, tgt.x - s.x), d = wrapA(want - s.a);
+        const tgt = g.tanks[1 - s.owner]; if (tgt.spin <= 0 && tgt.prot <= 0 && isVisible(g, tgt)) { const want = Math.atan2(tgt.y - s.y, tgt.x - s.x), d = wrapA(want - s.a);
           if (Math.abs(d) < 1.3 && s.age > 0.15) { const sp = Math.hypot(s.vx, s.vy); s.a = wrapA(s.a + clamp(d, -1.5 * DT, 1.5 * DT)); s.vx = Math.cos(s.a) * sp; s.vy = Math.sin(s.a) * sp; } }
       }
       let gone = false;
@@ -404,7 +473,7 @@
       for (const tk of g.tanks) {
         if (tk.id === s.owner && s.bounce === 0) continue; // your own shell only threatens you after a ricochet
         if (Math.hypot(tk.x - s.x, tk.y - s.y) < TANK_R + SHELL_R) {
-          if (tk.spin > 0 || tk.inv > 0) { if (tk.id !== s.owner) { gone = true; ev(g, { e: 'deflect', x: s.x, y: s.y }); } break; }
+          if (tk.spin > 0 || tk.inv > 0 || tk.prot > 0) { if (tk.id !== s.owner) { gone = true; ev(g, { e: 'deflect', x: s.x, y: s.y }); } break; }
           if (v.bank && s.bounce === 0 && !s.mega) { ev(g, { e: 'deflect', x: s.x, y: s.y, bank: 1 }); gone = true; break; }
           hitTank(g, tk, s.owner, s.x, s.y, s.vx, s.vy, s.mega ? 'mega' : 'shell'); gone = true; break;
         }
@@ -427,7 +496,7 @@
     for (let i = g.mines.length - 1; i >= 0; i--) {
       const m = g.mines[i]; m.arm = Math.max(0, m.arm - DT); if (m.arm > 0) continue;
       for (const tk of g.tanks) {
-        if (tk.spin > 0) continue;
+        if (tk.spin > 0 || tk.prot > 0) continue;
         if (Math.hypot(tk.x - m.x, tk.y - m.y) < TANK_R + 0.3) {
           g.mines.splice(i, 1); ev(g, { e: 'mine', x: m.x, y: m.y, owner: m.owner });
           if (tk.inv <= 0) hitTank(g, tk, m.owner === tk.id ? 1 - tk.id : m.owner, m.x, m.y, tk.x - m.x + 1e-3, tk.y - m.y, 'mine');
@@ -470,7 +539,7 @@
   }
   function stepHill(g) {
     const h = g.hill; if (!h || g.phase !== 'play') return;
-    const inside = g.tanks.filter(t => t.spin <= 0 && Math.hypot(t.x - h.x, t.y - h.y) < h.r);
+    const inside = g.tanks.filter(t => t.spin <= 0 && t.prot <= 0 && Math.hypot(t.x - h.x, t.y - h.y) < h.r);
     if (inside.length === 1) {
       const o = inside[0].id; if (h.owner !== o) { h.owner = o; h.prog = 0; }
       h.prog += DT / 5;
@@ -495,7 +564,7 @@
     return { pts, gone: ended };
   }
 
-  const API = { drive, COLS, ROWS, DT, TANK_R, SHELL_R, EMPTY, WALL, BRICK, MAPS, VARIANTS, ROUNDS, PU_TYPES, createGame, step, restart, tileAt, solidAt, moverAt, resolveCircle, los, moveShell, traceShot, isVisible, wrapA, clamp, rng, hitTank, buildTiles };
+  const API = { respawn, pickSpawn, spawnCands, SPAWN_PROT, drive, COLS, ROWS, DT, TANK_R, SHELL_R, EMPTY, WALL, BRICK, MAPS, VARIANTS, ROUNDS, PU_TYPES, createGame, step, restart, tileAt, solidAt, moverAt, resolveCircle, los, moveShell, traceShot, isVisible, wrapA, clamp, rng, hitTank, buildTiles };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.TDSim = API;
 })(typeof window !== 'undefined' ? window : globalThis);

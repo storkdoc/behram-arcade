@@ -31,7 +31,7 @@ for (const id of Object.keys(S.MAPS)) {
   const g = S.createGame({ variant: vi('OPEN FIELD'), seed: 4 }); toPlay(g);
   S.hitTank(g, g.tanks[1], 0, 29.5, 10, 10, 0, 'shell'); const x0 = g.tanks[1].x;
   run(g, () => [idle(), idle()], 30); check(g.tanks[1].spin > 0 && g.tanks[1].x > x0 - 0.001, 'hit tank spins and is pushed along the shell path');
-  run(g, () => [idle(), idle()], 70); check(g.tanks[1].spin === 0 && g.tanks[1].inv > 0, 'then recovers with a brief invulnerability');
+  run(g, () => [idle(), idle()], 70); check(g.tanks[1].spin === 0 && g.tanks[1].prot > 0, 'then respawns with spawn protection');
 }
 { // walls: plain shell dies on a wall; ricochet shell bounces
   const a = S.createGame({ variant: vi('OPEN FIELD'), seed: 5 }); toPlay(a); a.tanks[0].a = -Math.PI / 2;

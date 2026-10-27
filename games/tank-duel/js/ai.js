@@ -115,6 +115,10 @@
       const K = ai.known && now - ai.known.t < 6 ? ai.known : null;
       ai.mines = g.mines.filter(m => m.owner === id);
       const myShells = g.shells.filter(s => s.owner === id);
+      // fair play: never shoot at a shielded (just respawned) tank or through the post-kill ceasefire, and don't camp its spawn
+      const hold = tgt.prot > 0.15 || g.cease > 0;
+      if (tgt.prot > 0 && !ai.backOff) { ai.backOff = true; ai.thinkT = 0; ai.sol = null; }
+      if (tgt.prot <= 0 && ai.backOff) { ai.backOff = false; ai.thinkT = Math.min(ai.thinkT, 0.1); }
       // ---- dodge incoming shells (theirs, or our own ricochet) ----
       if (ai.dodgeT > 0) ai.dodgeT -= 1 / 60;
       for (const s of g.shells) {
@@ -134,13 +138,17 @@
         const pu = g.pups.length ? g.pups.slice().sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0] : null;
         if (pu && R() < P.greed && Math.hypot(pu.x - me.x, pu.y - me.y) < 11 && (!K || Math.hypot(pu.x - me.x, pu.y - me.y) < Math.hypot(pu.x - K.x, pu.y - K.y) + 2)) { goal = [pu.x, pu.y]; ai.goalIsPU = true; }
         else if (g.hill && (R() < 0.5 + P.greed * 0.4)) goal = [g.hill.x + (R() - 0.5), g.hill.y + (R() - 0.5)];
+        else if (ai.backOff) { // regroup toward our own side instead of rushing the respawn point
+          if (!ai.regroup || Math.hypot(ai.regroup[0] - me.x, ai.regroup[1] - me.y) < 1.5) ai.regroup = [me.sx + (R() - 0.5) * 6, me.sy + (R() - 0.5) * 6];
+          goal = ai.regroup;
+        }
         else if (K) goal = [K.x, K.y];
         else { if (!ai.wander || Math.hypot(ai.wander[0] - me.x, ai.wander[1] - me.y) < 1.5) ai.wander = [2 + R() * (COLS - 4), 2 + R() * (ROWS - 4)]; goal = ai.wander; }
         ai.goal = goal;
         ai.path = astar(g, me.x, me.y, goal[0], goal[1]);
         // the shot search
         const prev = ai.sol;
-        ai.sol = K && (K.spin || 0) <= 0 ? findShot(g, me, K) : null;
+        ai.sol = K && (K.spin || 0) <= 0 && !ai.backOff ? findShot(g, me, K) : null;
         if (ai.sol && (!prev || Math.abs(wrapA(prev.a - ai.sol.a)) > 0.15)) ai.errA = gauss() * P.aimErr * clamp(Math.hypot(K.x - me.x, K.y - me.y) / 9, 0.5, 1.6);
       }
       // ---- guided: steer our missile at the target ----
@@ -149,7 +157,7 @@
         if (S.los(g, s.x, s.y, K.x, K.y)) { inp.turn = clamp(d * 3 * P.guide, -1, 1) * (R() < P.guide ? 1 : 0.3); inp.thrust = 0; return inp; }
       }
       // ---- aim & fire ----
-      const canFire = me.reload <= 0 && myShells.length === 0;
+      const canFire = me.reload <= 0 && myShells.length === 0 && !hold;
       let aiming = false;
       if (ai.sol && K && ai.dodgeT <= 0) {
         const want = ai.sol.a + ai.errA, d = wrapA(want - me.a);
@@ -168,7 +176,7 @@
       // rookie wild shots
       if (!aiming && canFire && K && P.angles === 0 && R() < 0.004) { ai.fireN++; inp.fireN = ai.fireN; }
       // ---- specials ----
-      if (me.sp.type && me.sp.n > 0 && now - ai.lastSpec > 2.5) {
+      if (me.sp.type && me.sp.n > 0 && now - ai.lastSpec > 2.5 && !hold) {
         const t = me.sp.type, dK = K ? Math.hypot(K.x - me.x, K.y - me.y) : 99;
         if (t === 'mine' && K && dK < 9 && R() < 0.02 + P.greed * 0.02) { ai.specN++; ai.lastSpec = now; }
         else if (t === 'nitro' && ai.path.length > 8 && !aiming && R() < 0.02) { ai.specN++; ai.lastSpec = now; }
@@ -187,7 +195,7 @@
       let wp = null; for (let i = Math.min(ai.path.length - 1, 6); i >= 0; i--) if (clearLine(g, me.x, me.y, ai.path[i][0], ai.path[i][1])) { wp = ai.path[i]; break; }
       if (!wp && ai.path.length) wp = ai.path[0];
       // keep a fighting range: no nose-to-nose brawls. With a clear line, hold off, sidestep while reloading, back off if crowded.
-      if (K && !ai.goalIsPU && !g.hill) {
+      if (K && !ai.goalIsPU && !g.hill && !ai.backOff) {
         const dK = Math.hypot(K.x - me.x, K.y - me.y), pd = 5.5 + level * 1.2;
         if (dK < pd && S.los(g, me.x, me.y, K.x, K.y)) {
           const toK = Math.atan2(K.y - me.y, K.x - me.x);
