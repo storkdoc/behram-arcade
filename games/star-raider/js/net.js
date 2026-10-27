@@ -17,15 +17,24 @@
      for the next pair (the direct WebRTC link keeps running). Closing the tab
      frees the ids too.
 
-   GAME PROTOCOL (STAR RAIDER versus: two independent, identically seeded worlds)
-     Each player runs their own SSSim locally (no shared world, so no snapshots).
-     The host picks the seed + start wave; both sims then generate the exact
-     same waves. Only small events cross the wire:
-     host  -> guest : {t:'go', seed, wave}        start / rematch (3 s countdown)
-     both  -> other : {t:'st', c, s, w, e, a}     4 Hz status strip (cities, score, wave, EMP, alive)
-                      {t:'atk', n}                chain-reaction counterattack: n extra warheads
-                      {t:'fin', sw, s}            my match is over (waves survived, score)
-                      {t:'again'} {t:'bye'}       rematch request / leaving
+   GAME PROTOCOL (STAR RAIDER: one host-authoritative world, co-op or WAR)
+     The host runs the only SRSim; the guest flies its OWN ship pose locally
+     (steering, throttle, hyperwarp marker) and the host owns everything else.
+     host  -> guest : {t:'cfg', cfg}               mode (coop | war), difficulty, layout, match length, seed
+                      {t:'reset', sx, sy, pos, q, n} place / respawn the guest ship
+                      {t:'s', T, p, sh, st, b, ...} 20 Hz snapshot of the guest's OWN sector only;
+                                                    b (host pose) only when both ships share a sector
+                                                    every 0.5 s it also carries the guest's chart:
+                                                    w = viewFor(G, 1) in WAR (fog of war, never the host's
+                                                    orders/reserves), g = the shared galaxy in co-op
+                      {t:'e', ev, m}                events + radio messages, fog-filtered per team
+                      {t:'over', o}                 match result
+     guest -> host  : {t:'i', pose}  20 Hz          guest pose (pos, q, speed, view, throttle)
+                      {t:'o', ...}                  one-shot inputs (fire, shields, warp, dock, scan ...)
+                      {t:'a', a}                    WAR chart actions (orders, build, probe, decoy, mines, jam, ECCM)
+     both  -> other : {t:'again'} {t:'bye'}         rematch request / leaving
+     Heartbeat: 9 s silence drops the link (20 s until 40 messages have arrived,
+     so a slow first shader compile does not count as a disconnect).
    ========================================================================== */
 const Net = window.Net = (() => {
   const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
