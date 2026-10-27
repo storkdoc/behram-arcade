@@ -1,6 +1,7 @@
 /* NEURO ARENA Lab: instruments for studying self-learning in one contest. Everything is drawn from data the app
    already has (evolution history, the champion's synapses, live frames), at native device-pixel ratio. */
 import { GENE, fmtGene } from './genome.js';
+import { REFLEX, SUNTZU, unitName, unitClass, classCounts } from './understand.js';
 const CA = '#2ee6ff', CBc = '#ff4fd8', GOLD = '#ffd25a', DIM = '#7f93b8', OK = '#5cff9d', BAD = '#ff5a5a';
 export const AREA_NAMES = ['Thal E', 'Thal I', 'Sens E', 'Sens I', 'Assoc E', 'Assoc I', 'Motor A', 'Motor B', 'Motor I'];
 export const RASTER_ROWS = 24, RASTER_COLS = 240;
@@ -20,14 +21,21 @@ const pct = v => Math.round(v * 100) + '%';
 // learning curve over generations: champion benchmark accuracy (step), challengers (dots), best ever, chance
 export function drawCurve(c, H, chance, isPong) {
   const g = cv(c); if (!g) return; const { x, w, h } = g, pl = 30, pr = 6, pt = 14, pb = 14, iw = w - pl - pr, ih = h - pt - pb;
-  const G = Math.max(10, H.length ? H[H.length - 1].gen : 10), X = v => pl + v / G * iw, Y = v => pt + (1 - Math.max(0, Math.min(1, v))) * ih;
-  axes(x, w, h, pl, pr, pt, pb, 0, 1, pct);
+  // the understanding lines can go below zero (beyond-reflex < 0 = worse than the reflex's guess)
+  const lo = H.some(e => e.beyond != null && e.beyond < 0) ? -0.5 : 0;
+  const G = Math.max(10, H.length ? H[H.length - 1].gen : 10), X = v => pl + v / G * iw, Y = v => pt + (1 - (Math.max(lo, Math.min(1, v)) - lo) / (1 - lo)) * ih;
+  axes(x, w, h, pl, pr, pt, pb, lo, 1, pct); if (lo < 0) { x.strokeStyle = 'rgba(200,210,230,.35)'; x.beginPath(); x.moveTo(pl, Y(0)); x.lineTo(w - pr, Y(0)); x.stroke(); }
   x.fillStyle = '#b9c8ea'; x.fillText(isPong ? 'benchmark hit rate vs generation' : 'benchmark accuracy (all characters right) vs generation', pl, 10);
   x.setLineDash([4, 3]); x.strokeStyle = 'rgba(180,190,200,.8)'; x.beginPath(); x.moveTo(pl, Y(chance)); x.lineTo(w - pr, Y(chance)); x.stroke(); x.setLineDash([]);
   x.fillStyle = DIM; x.fillText('chance ' + pct(chance), w - pr - 64, Y(chance) - 3);
   x.fillStyle = 'rgba(185,139,255,.55)'; for (const e of H) { x.beginPath(); x.arc(X(e.gen), Y(e.childAcc ?? e.childBench), 1.5, 0, 7); x.fill(); }
   let prev = null; x.lineWidth = 2;
   H.forEach(e => { const v = e.champAccNow ?? e.champFit; x.strokeStyle = e.lam === false ? CA : GOLD; x.beginPath(); x.moveTo(X(e.gen - 1), Y(prev ?? v)); x.lineTo(X(e.gen), Y(prev ?? v)); x.lineTo(X(e.gen), Y(v)); x.stroke(); prev = v; });
+  // the Understanding probe (cyan, dashed) and beyond-reflex (orange): full-task accuracy minus the reflex's guess
+  const line = (key, col, dash) => { let on = false; x.strokeStyle = col; x.setLineDash(dash); x.lineWidth = 1.5; x.beginPath();
+    for (const e of H) { const v = e[key]; if (v == null) continue; if (!on) { x.moveTo(X(e.gen), Y(v)); on = true; } else x.lineTo(X(e.gen), Y(v)); } x.stroke(); x.setLineDash([]); return on; };
+  const hasU = line('uAcc', '#7ff6ff', [5, 3]), hasB = line('beyond', '#ff9f43', []);
+  if (hasU || hasB) { x.fillStyle = '#7ff6ff'; x.fillText('- - understanding probe', pl + 4, pt + 10); x.fillStyle = '#ff9f43'; x.fillText('— beyond-reflex', pl + 130, pt + 10); }
   x.lineWidth = 1; x.fillStyle = DIM; x.fillText('0', pl, h - 3); x.fillText(String(G), w - pr - 18, h - 3);
   // curriculum level-ups (the benchmark gets harder there, so the curve steps down and climbs again)
   x.strokeStyle = 'rgba(92,255,157,.55)'; x.setLineDash([2, 3]);
@@ -112,9 +120,64 @@ export function reaperHTML(evo) {
     return `<tr><td>G${e.gen}</td><td>#${v.champId} ${v.score[0]} pts (✓${v.ok[0]} ✗${v.bad[0]} –${v.abst[0]})</td><td>#${v.childId} ${v.score[1]} pts (✓${v.ok[1]} ✗${v.bad[1]} –${v.abst[1]})</td><td>${v.margin >= 0 ? '+' : ''}${v.margin} (${v.need})</td><td>${v.b}:${v.c} ${v.sig ? '✓' : '✗'}</td><td class="${v.reaped ? 'ok' : ''}">${v.reaped ? 'REAPED → new champion' : 'champion stays'}</td></tr>`; }).join('') || '<tr><td colspan=6>no verdicts yet</td></tr>'}</tbody></table>`;
 }
 export function toCSV(evo, contest) {
-  const head = ['contest', 'gen', 'inheritance', 'champ_id', 'child_id', 'champ_acc_now', 'child_acc', 'champ_acc_before', 'champ_fit', 'child_fit', 'reaper_score_champ', 'reaper_score_child', 'ok_champ', 'ok_child', 'bad_champ', 'bad_child', 'abst_champ', 'abst_child', 'margin', 'need', 'sign_b', 'sign_c', 'reaped', 'new_champ', 'gene_errors', 'synapse_errors', 'duel_score_champ', 'duel_score_child'];
+  const head = ['contest', 'gen', 'inheritance', 'champ_id', 'child_id', 'champ_acc_now', 'child_acc', 'champ_acc_before', 'champ_fit', 'child_fit', 'reaper_score_champ', 'reaper_score_child', 'ok_champ', 'ok_child', 'bad_champ', 'bad_child', 'abst_champ', 'abst_child', 'margin', 'need', 'sign_b', 'sign_c', 'reaped', 'new_champ', 'gene_errors', 'synapse_errors', 'duel_score_champ', 'duel_score_child', 'level', 'full_acc', 'probe_acc', 'beyond_reflex', 'units_neighbor', 'units_bigram', 'units_reflex', 'units_self', 'units_enemy', 'units_other', 'pong_open_side', 'pong_duel_winners'];
   const rows = evo.history.map(e => { const v = e.reaper || { score: [], ok: [], bad: [], abst: [] };
     return [contest, e.gen, e.lam === false ? 'darwin' : 'lamarck', e.champId, e.childId, (e.champAccNow ?? '').toString(), e.childAcc ?? e.childBench, e.champAcc ?? e.champBench, e.champFit, e.childBench, v.score[0], v.score[1], v.ok[0], v.ok[1], v.bad[0], v.bad[1], v.abst[0], v.abst[1], v.margin, v.need, v.b, v.c, v.reaped ? 1 : 0, e.newChamp ? 1 : 0,
-      '"' + (e.errors || []).map(x => `${x.key}:${x.from}>${x.to}`).join(' ') + '"', e.wErrors || 0, e.score?.[0], e.score?.[1]].map(x => x == null ? '' : typeof x === 'number' ? +x.toFixed(4) : x).join(','); });
+      '"' + (e.errors || []).map(x => `${x.key}:${x.from}>${x.to}`).join(' ') + '"', e.wErrors || 0, e.score?.[0], e.score?.[1], e.level, e.fullAcc, e.uAcc, e.beyond,
+      ...(c => c ? [c.neighbor || 0, c.bigram || 0, c.reflex || 0, c.self || 0, c.enemy || 0, Object.entries(c).filter(([k]) => !['neighbor', 'bigram', 'reflex', 'self', 'enemy', 'empty'].includes(k)).reduce((s, [, v]) => s + v, 0)] : ['', '', '', '', '', ''])(e.cls), e.openSide, e.duelWinners].map(x => x == null ? '' : typeof x === 'number' ? +x.toFixed(4) : x).join(','); });
   return head.join(',') + '\n' + rows.join('\n') + '\n';
+}
+
+// ----------------------------------------------------------------- the UNDERSTANDING layer
+const UCOL = { 'tracking+': '#2ee6ff', clash: '#55607a', neighbor: '#5cff9d', bigram: '#2ee6ff', reflex: '#ff5a5a', self: '#ffd25a', enemy: '#ff4fd8', far: '#7f93b8', task: '#7f93b8' };
+// unit-class census over generations (neighbour detectors, reflex, self, enemy)
+export function drawUC(c, H, C) {
+  const g = cv(c); if (!g) return; const { x, w, h } = g, pl = 30, pr = 6, pt = 14, pb = 14, iw = w - pl - pr, ih = h - pt - pb;
+  const R = H.filter(e => e.cls); x.fillStyle = '#b9c8ea'; x.fillText('evolved units by kind vs generation (champion)', pl, 10);
+  if (!R.length) { x.fillStyle = DIM; x.fillText('no evolved layer yet (Wiring: Designed, or no generations)', pl, 40); return; }
+  const keys = [...new Set(['self', 'enemy', 'reflex', ...(C.nbrClasses || []), ...R.flatMap(e => Object.keys(e.cls))])].filter(k => k !== 'empty');
+  const mx = Math.max(4, ...R.flatMap(e => keys.map(k => e.cls[k] || 0))), G = Math.max(10, R[R.length - 1].gen), X = v => pl + v / G * iw, Y = v => pt + (1 - v / mx) * ih;
+  axes(x, w, h, pl, pr, pt, pb, 0, mx, v => String(Math.round(v)));
+  let lx = pl + 4; keys.forEach(k => { x.strokeStyle = UCOL[k] || '#9aa'; x.lineWidth = (C.nbrClasses || []).includes(k) ? 2 : 1; x.beginPath(); R.forEach((e, i) => { const y = Y(e.cls[k] || 0); if (i) x.lineTo(X(e.gen), y); else x.moveTo(X(e.gen), y); }); x.stroke();
+    x.fillStyle = UCOL[k] || '#9aa'; x.fillText(k, lx, pt + 10); lx += x.measureText(k).width + 10; });
+  x.lineWidth = 1;
+}
+const pp = v => v == null ? '–' : (v >= 0 ? '' : '−') + Math.abs(Math.round(v * 1000) / 10) + '%';
+const p1 = v => v == null ? '–' : Math.round(v * 1000) / 10 + '%';
+const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+// plain-words hypothesis + the numbers that test it
+export function hypothesisHTML(C, evo) {
+  const g = evo.champ.genome, ux = g.ux, rf = ux ? REFLEX[ux.reflex ?? 1] : 'designed wiring';
+  return `<p class="hyp"><i>“${esc(SUNTZU.replace(' (Sun Tzu)', ''))}”</i> (Sun Tzu)</p>
+<p class="ln"><b>Hypothesis.</b> Intelligence evolves when the reflex is limited. ${esc(C.reflexText || 'The reflex is the cheapest shortcut: answering from one cue alone.')} If that shortcut is weak, a brain can only beat it by <b>understanding</b> the puzzle: evolution has to wire hidden units that detect how the inputs go together (${esc(C.understandText || 'combinations of cues')}), and that <b>know itself</b> (${esc(C.selfText || 'its own last answers, mistakes and streaks')}) and <b>know its enemy</b> (${esc(C.enemyText || 'the opponent\'s last answer and speed')}).</p>
+${C.id === 'pong' ? `<p class="ln"><b>Test.</b> The <b>Understanding probe</b> is ${C._probe ? C._probe.length : 40} frozen serves (${esc(C.probeName)}); a perfect tracker wins ${p1(C._probePrior)} of them by luck of the bounce. ${esc(C.beyondText)} (${p1(C._fullPrior)}). If understanding emerges, the probe and beyond-reflex rise, enemy detectors multiply, and knocking them out hurts. This run: reflex <b>${rf}</b>.</p>` : `<p class="ln"><b>Test.</b> The <b>Understanding probe</b> is ${C._probe ? C._probe.length : 'a set of'} frozen puzzles (${esc(C.probeName || 'held-out items')}) where the reflex's guess scores ${p1(C._probePrior)}. <b>Beyond-reflex</b> = full-task accuracy minus the reflex's own score on the same items (${p1(C._fullPrior)}). If understanding emerges, the probe and beyond-reflex rise, neighbour / self / enemy detectors multiply, and knocking them out hurts. This run: reflex <b>${rf}</b>.</p>`}`;
+}
+export function understandHTML(C, evo) {
+  const H = evo.history, last = [...H].reverse().find(e => e.uAcc != null || e.beyond != null) || {}, ux = evo.champ.genome.ux;
+  const cnt = ux ? classCounts(C, ux) : {}, a = evo.uAbl;
+  if (C.id === 'pong') {   // Pong: winners against the statue, returns to the open side, enemy detectors
+    let t = `<table><tbody><tr><td>Understanding probe: serves won outright vs the statue</td><td><b>${p1(last.uAcc)}</b> (a perfect tracker ${p1(C._probePrior)})</td></tr><tr><td>Returns to the open side (probe)</td><td>${p1(last.openSide)} of returns beat the statue (tracker ${p1(C._fullPrior)}) · hit rate ${p1(last.uHit)}</td></tr><tr><td>Beyond-reflex (aim)</td><td><b>${pp(last.beyond)}</b></td></tr><tr><td>Points won on aimed shots (duels)</td><td>${p1(last.duelWinners)} of the champion's returns were winners</td></tr><tr><td>Serves returned (benchmark vs tracker)</td><td>${p1(last.champFit ?? (evo.champ.bench && evo.champ.bench.hit))}</td></tr>`;
+    if (ux) t += `<tr><td>Evolved units</td><td>${Object.entries(cnt).filter(([k]) => k !== 'empty').sort((p, q) => q[1] - p[1]).map(([k, v]) => `<span style="color:${UCOL[k] || '#ccd'}">${k} ${v}</span>`).join(' · ')}${cnt.empty ? ` · empty ${cnt.empty}` : ''} · ${ux.rec.length} hidden-to-hidden links</td></tr>`;
+    t += '</tbody></table>';
+    if (a) t += `<div class="lt" style="margin-top:6px">Ablation (generation ${a.gen}): silence a kind of unit, re-measure (frozen synapses)</div><table><thead><tr><th>knocked out</th><th>probe winners</th><th>Δ</th><th>serves returned</th><th>Δ</th></tr></thead><tbody>${Object.entries(a).filter(([k]) => k !== 'gen').map(([k, v]) => `<tr><td>${k}</td><td>${p1(v.probe)}</td><td class="${k !== 'none' && v.probe < a.none.probe - 0.05 ? 'bad' : ''}">${k === 'none' ? '' : pp(v.probe - a.none.probe)}</td><td>${p1(v.full)}</td><td class="${k !== 'none' && v.full < a.none.full - 0.05 ? 'bad' : ''}">${k === 'none' ? '' : pp(v.full - a.none.full)}</td></tr>`).join('')}</tbody></table>`;
+    else t += '<p class="ln">No ablation yet: it runs every 100 generations, or press “Run ablation”.</p>';
+    return t;
+  }
+  let t = `<table><tbody><tr><td>Understanding probe (champion)</td><td><b>${p1(last.uAcc)}</b> (reflex guess ${p1(C._probePrior)})</td></tr><tr><td>Full task accuracy</td><td>${p1(last.fullAcc ?? last.champAccNow)} (reflex guess ${p1(C._fullPrior)}, chance ${p1(C.chance)})</td></tr><tr><td>Beyond-reflex</td><td><b>${pp(last.beyond)}</b></td></tr>`;
+  if (ux) t += `<tr><td>Evolved units</td><td>${Object.entries(cnt).filter(([k]) => k !== 'empty').sort((p, q) => q[1] - p[1]).map(([k, v]) => `<span style="color:${UCOL[k] || '#ccd'}">${k} ${v}</span>`).join(' · ')}${cnt.empty ? ` · empty ${cnt.empty}` : ''} · ${ux.rec.length} hidden-to-hidden links</td></tr>`;
+  t += '</tbody></table>';
+  if (a) t += `<div class="lt" style="margin-top:6px">Ablation (generation ${a.gen}): silence a kind of unit, re-measure (frozen synapses)</div><table><thead><tr><th>knocked out</th><th>probe</th><th>Δ probe</th><th>full task</th><th>Δ full</th></tr></thead><tbody>${Object.entries(a).filter(([k]) => k !== 'gen').map(([k, v]) => `<tr><td>${k}</td><td>${p1(v.probe)}</td><td class="${k !== 'none' && v.probe < a.none.probe - 0.03 ? 'bad' : ''}">${k === 'none' ? '' : pp(v.probe - a.none.probe)}</td><td>${p1(v.full)}</td><td class="${k !== 'none' && v.full < a.none.full - 0.03 ? 'bad' : ''}">${k === 'none' ? '' : pp(v.full - a.none.full)}</td></tr>`).join('')}</tbody></table>`;
+  else t += '<p class="ln">No ablation yet: it runs every 100 generations, or press “Run ablation”.</p>';
+  return t;
+}
+// the evolved units: what each detects (its inputs) and, once read out, which answer its learned synapses favour
+export function unitsHTML(C, evo) {
+  const ux = evo.champ.genome.ux; if (!ux) return '<p class="ln">Designed wiring: no evolved units. Switch Wiring to Evolved.</p>';
+  const rd = evo.uRead && evo.uRead.units && evo.uRead.units.length === ux.units.length ? evo.uRead : null;
+  let rows = ux.units.map((u, i) => ({ u, i, cls: unitClass(C, u), r: rd && rd.readout[i] })).filter(o => o.cls !== 'empty');
+  if (rd) rows.sort((p, q) => (q.r ? q.r[1] - q.r[2] : 0) - (p.r ? p.r[1] - p.r[2] : 0));
+  else { const ord = ['neighbor', 'bigram', 'self', 'enemy', 'reflex']; rows.sort((p, q) => (ord.indexOf(p.cls) + 1 || 9) - (ord.indexOf(q.cls) + 1 || 9)); }
+  const ex = {}; for (const o of rows) (ex[o.cls] = ex[o.cls] || []).length < 3 && ex[o.cls].push(o);
+  const head = `<p class="ln">${rd ? `Read out at generation ${evo.uRead.gen}: sorted by how selective each unit's learned synapses are.` : 'Not read out yet (press “Run ablation”): showing wiring only.'} Examples: ${Object.entries(ex).map(([k, v]) => `<b style="color:${UCOL[k] || '#ccd'}">${k}</b> ${v.map(o => '“detects ' + esc(unitName(C, o.u)) + '”').join(', ')}`).join(' · ')}</p>`;
+  return head + `<table><thead><tr><th>#</th><th>detects</th><th>kind</th><th>→ favours</th><th>selectivity</th></tr></thead><tbody>${rows.slice(0, 40).map(o => `<tr><td>${o.i}</td><td>${esc(unitName(C, o.u))}${o.u.o ? '' : ' (output off)'}</td><td style="color:${UCOL[o.cls] || '#ccd'}">${o.cls}</td><td>${o.r ? esc(C.labels[o.r[0]]) : '–'}</td><td>${o.r ? (o.r[1] - o.r[2]).toFixed(3) : '–'}</td></tr>`).join('')}</tbody></table>`;
 }

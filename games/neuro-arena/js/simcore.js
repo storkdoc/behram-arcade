@@ -2,8 +2,8 @@
    Used by worker.js inside a Web Worker, or directly on the main thread when workers are unavailable. */
 import { Brain, mulberry32, L, N, AREA_DEF } from './brain.js';
 import { Match } from './arena.js';
-import { runDuel, benchmark } from './evo.js';
-import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, itemsAt, chanceAt, baseAt, levelName, DEC, drawItem } from './contests.js';
+import { runDuel, benchmark, pongUnderstanding } from './evo.js';
+import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, understandingReport, itemsAt, chanceAt, baseAt, levelName, DEC, drawItem } from './contests.js';
 
 // choice brains can be larger than the 2,800-cell display: map every real cell onto the display cell of its area
 // (a display cell lights if any of the real cells it stands for spiked)
@@ -44,7 +44,7 @@ function choiceFrame(withPol) {
     if (!b) return null;
     const mp = live.maps[k], o = k * N; for (let i = 0; i < b.N; i++) if (b.spk[i]) spk[o + mp[i]] = 1; b.spk.fill(0);
     const dl = b.daLog; b.daLog = 0;
-    return { gr: Array.from(b.grate), gc: Array.from(b.gcnt), margin: b.margin, kconf: DEC.k * 1.5 / b.g.kDec, rpe: b.rpe, da: b.da, daPulse: dl, areas: choiceAreas(b, live.aPrev[k]), pol: withPol ? Array.from(b.policy()) : null, G: b.L.G, N: b.N };
+    return { gr: Array.from(b.grate), gc: Array.from(b.gcnt), margin: b.margin, kconf: DEC.k * 1.5 / b.g.kDec, rpe: b.rpe, da: b.da, daPulse: dl, areas: choiceAreas(b, live.aPrev[k]), pol: withPol && b.L.G ? Array.from(b.policy()) : null, G: b.L.G, N: b.N };
   });
   const ev = match.events.slice(live.evN); live.evN = match.events.length; if (live.evN > 48) { match.events.splice(0, 32); live.evN = match.events.length; }
   const lv = live.job.level || 0;
@@ -84,6 +84,9 @@ return e => {
     postMessage({ t: 'duel', rid: m.rid, res }, tr);
   } else if (m.t === 'bench') {
     postMessage({ t: 'bench', rid: m.rid, res: m.contest && m.contest !== 'pong' ? choiceBenchmark(CONTEST[m.contest], m.g, m.w, m.size, m.level || 0) : benchmark(m.g, m.w) });
+  } else if (m.t === 'ablate') {   // the Understanding probe + knock-outs, and what each evolved unit has learned to drive
+    const C = CONTEST[m.contest];
+    postMessage({ t: 'ablate', rid: m.rid, res: !m.contest || m.contest === 'pong' ? pongUnderstanding(m.g, m.w, true) : understandingReport(C, m.g, m.w, m.size, true) });
   } else if (m.t === 'live') {
     startLive(m);
     postMessage(live.choice ? choiceFrame(true) : frame(true));

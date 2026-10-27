@@ -36,18 +36,44 @@ const GF = [28, 28];            // gain-field grid: 28 ball-y x 28 paddle-y = 78
 const CTX = [16, 11];           // context grid: 16 ball-y x 11 vy = 176 cells
 
 import { NGB, NGV } from './genome.js';
+import { UX_SRC } from './understand.js';
+/* THE UNDERSTANDING LAYER in Pong (genome.ux, see understand.js). With it, the thalamus is re-split so the brain
+   can also sense KNOW YOURSELF / KNOW YOUR ENEMY context (64 relay cells, 4 per symbol: own paddle velocity, who won
+   the last point, the ENEMY's paddle height (6 bands) and velocity), and the 176-cell context grid of the
+   association area is replaced by 88 evolvable units (2 cells each) wired by the genome. The REFLEX is tracking:
+   the designed gain field (ball - paddle x paddle y) and units driven by ball - paddle alone. Aiming is possible:
+   the contact point on the paddle sets the return angle (pong.js), so the paddle must sit off-centre. */
+const TH_SPLIT_U = [96, 64, 48, 48], NCTX_P = 16, CXC = 4;   // TH cells per channel, context symbols, cells/symbol
+const UCH = { 0: 0, 1: 1, 3: 2, 4: 3 };   // unit input source -> sensory channel (src 2 = context)
+export const PONG_UX = {
+  id: 'pong', labels: ['UP', 'DOWN'], uN: 88, n: { 0: 8, 1: 8, 3: 6, 4: 6 }, srcs: [[0, 8, 0.25], [1, 8, 0.15], [3, 6, 0.2], [4, 6, 0.1]], ctxW: 0.3, reflexSrc: [0], reflexInit: 0.08,
+  ctx_: [['my paddle moving up', 'self'], ['my paddle still', 'self'], ['my paddle moving down', 'self'], ['I won the last point', 'self'], ['I lost the last point', 'self'], ['I hit the ball last', 'self'],
+    ...[0, 1, 2, 3, 4, 5].map(k => [`enemy paddle in band ${k + 1}/6 (${k < 2 ? 'low' : k < 4 ? 'middle' : 'high'})`, 'enemy']), ['enemy moving up', 'enemy'], ['enemy still', 'enemy'], ['enemy moving down', 'enemy'], ['enemy hit the ball last', 'enemy']].map(([name, grp]) => ({ name, grp })),
+  symName: (src, b) => { const n = PONG_UX.n[src], lo = Math.round(100 * b / n), hi = Math.round(100 * (b + 1) / n);
+    return src === 0 ? `ball ${b < n / 2 ? 'below' : 'above'} my paddle (${['far', 'well', 'just', 'just'][Math.min(3, Math.abs(b - (n - 1) / 2) > 2.5 ? 0 : Math.abs(b - (n - 1) / 2) > 1.5 ? 1 : 2)]}, bin ${b + 1}/${n})` : src === 1 ? `my paddle at ${lo}-${hi}% height` : src === 3 ? `ball ${b >= n - 2 ? 'near me' : b < 2 ? 'far away' : 'mid-court'} (${b + 1}/${n})` : `ball moving ${b < n / 2 ? 'down' : 'up'} (${b + 1}/${n})`; },
+  uClass: u => { const s = u.i.map(c => Math.floor(c / UX_SRC)).filter(x => x !== 2); return new Set(s).size < s.length ? 'clash' : s.includes(0) ? 'tracking+' : 'task'; },
+  uLocal: (code, r) => { const src = Math.floor(code / UX_SRC), b = code % UX_SRC; if (src === 2) return null; const n = PONG_UX.n[src], b2 = b + (r() < 0.5 ? -1 : 1); return b2 < 0 || b2 >= n ? null : src * UX_SRC + b2; },
+  nbrClasses: ['enemy'],
+  reflexText: 'In Pong the reflex is tracking: move the paddle to where the ball is. It returns the ball, but only to wherever the bounce happens to send it.',
+  understandText: 'where the enemy paddle sits and where it is going, combined with where the ball is on my own paddle',
+  selfText: 'its own paddle\'s height and motion, who won the last point, who hit last', enemyText: 'where the enemy paddle sits, which way it moves, whether it just hit',
+  probeName: 'the enemy is a statue parked high (or low), so a return aimed at the open side always wins',
+  beyondText: 'Beyond-reflex = the share of the brain\'s returns that beat the statue, minus the share a perfect tracker\'s returns do',
+};
+const UXQ = { w: 1.2, bias: -3, bias3: -4.5, pIn: 0.5, wRec: 0.03 };
+const REFLEX_CAP_P = [1, 0.2, 0], REFLEX_DECAY_P = [1, 0.998, 0];   // decay per 100 ms (Limited: half-life ~35 s of play)
 // piecewise-linear interpolation of band genes over x in [-1, 1]
 function band(g, pre, n, x) { const f = Math.max(0, Math.min(n - 1, (x + 1) / 2 * n - 0.5)), k = Math.min(n - 2, Math.floor(f)), t = f - k; return g[pre + k] * (1 - t) + g[pre + (k + 1)] * t; }
 export function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const gaussR = r => { let u = 0; for (let k = 0; k < 6; k++) u += r(); return (u - 3) * 1.4142; };
 
 export class Brain {
-  constructor(genome, weights = null) {
-    this.g = { ...genome };
+  constructor(genome, weights = null, opts = {}) {
+    this.g = { ...genome }; this.ux = genome.ux || null; this.opts = opts;
     this.type = new Uint8Array(N); this.ch = new Int8Array(N).fill(-1); this.c1 = new Float32Array(N); this.c2 = new Float32Array(N);
     this.area = new Uint8Array(N);
     AREA_DEF.forEach(([k, n, t], ai) => { for (let i = L[k].s; i < L[k].e; i++) { this.type[i] = t; this.area[i] = ai; } });
-    this.labelFeatures();
+    this.labelFeatures(); if (this.ux) this.labelUX();
     this.D = 16;   // delay ring (8 ms)
     this.V = new Float32Array(N); this.gE = new Float32Array(N); this.gI = new Float32Array(N); this.gA = new Float32Array(N);
     this.th = new Float32Array(N); this.th0 = new Float32Array(N); this.last = new Int32Array(N);
@@ -56,7 +82,7 @@ export class Brain {
     this.spk = new Uint8Array(N);              // spiked since last render read
     this.drive = new Float32Array(L.TH_E.n);   // receptor rate (Hz) for each relay cell
     this.Iext = new Float32Array(N);           // injected current (uA/cm2): shared exploratory drive to the motor groups
-    this.build();
+    this.build(); if (this.ux) for (let i = L.A_E.s; i < L.A_E.e; i++) if (this.ch[i] === 9) this.Iext[i] = this.uBias[i];
     // plastic Assoc -> Motor weights: dense NA x NM matrix with a structural mask
         this.initPlastic(weights);
     this.xPre = new Float32Array(NA); this.yPost = new Float32Array(NM);
@@ -74,6 +100,17 @@ export class Brain {
     for (let k = L.M_UP.s; k < L.M_UP.e; k++) this.ch[k] = 6;
     for (let k = L.M_DN.s; k < L.M_DN.e; k++) this.ch[k] = 7;
   }
+  // the evolved-layer relabelling: thalamus/sensory re-split + context cells (ch 8), units in the old context grid (ch 9)
+  labelUX() {
+    const sym = this.sym = new Int16Array(N).fill(-1), un = this.unitOf = new Int16Array(N).fill(-1);
+    for (const [A, f] of [['TH_E', 1], ['S_E', 2]]) { let i = L[A].s;
+      TH_SPLIT_U.forEach((n, c) => { for (let k = 0; k < n * f; k++, i++) { this.ch[i] = c; this.c1[i] = (k + 0.5) / (n * f); } });
+      for (let k = 0; k < NCTX_P * CXC * f; k++, i++) { this.ch[i] = 8; sym[i] = Math.floor(k / (CXC * f)); this.c1[i] = (sym[i] + 0.5) / NCTX_P; } }
+    const a0 = L.A_E.s + GF[0] * GF[1]; for (let i = a0; i < L.A_E.e; i++) { this.ch[i] = 9; un[i] = Math.floor((i - a0) / 2); this.c1[i] = 0.5; this.c2[i] = 0.5; }
+    this.nTask = TH_SPLIT_U.reduce((a, b) => a + b, 0);
+  }
+  isReflexU(u) { const unit = this.ux.units[u]; return unit && unit.i.length === 1 && Math.floor(unit.i[0] / UX_SRC) === 0; }
+  silenced(u) { return !!(this.opts.silence && this.opts.silence(u)); }
   build() {
     const g = this.g, rnd = mulberry32(g.seed | 0), ch = this.ch, c1 = this.c1, c2 = this.c2;
     const pre = [], post = [], w = [], del = [];
@@ -87,6 +124,7 @@ export class Brain {
     if (g.sTRN >= 0.5) for (let i = L.TH_E.s; i < L.TH_E.e; i++) randIn("TH_I", i, 0.15, 0.025, 2);
     // sensory cortex: topographic thalamocortical input, local E/I
     for (let i = L.S_E.s; i < L.S_E.e; i++) {
+      if (ch[i] === 8) { for (let j = L.TH_E.s; j < L.TH_E.e; j++) if (ch[j] === 8 && this.sym[j] === this.sym[i] && rnd() < 0.8) add(j, i, g.wTS, 4); randIn('S_I', i, 0.2, g.wIE, 2); continue; }
       for (let j = L.TH_E.s; j < L.TH_E.e; j++) if (ch[j] === ch[i]) { const d = c1[j] - c1[i]; const p = g.pTS * Math.exp(-d * d / (2 * sig * sig)); if (rnd() < p) add(j, i, g.wTS, 4); }
       for (let j = L.S_E.s; j < L.S_E.e; j++) if (j !== i && ch[j] === ch[i]) { const d = c1[j] - c1[i]; if (Math.abs(d) < 0.06 && rnd() < 0.15) add(j, i, g.wEE, 2); }
       randIn('S_I', i, 0.2, g.wIE, 2);
@@ -94,18 +132,33 @@ export class Brain {
     for (let i = L.S_I.s; i < L.S_I.e; i++) { randIn('S_E', i, 0.08, g.wEI, 2); randIn('S_I', i, 0.1, g.wIE * 0.8, 2); }
     // association: conjunctive gain-field cells (ball y x paddle y) and context cells (ball y x vy)
     const gw = g.gfW, sE = rng('S_E');
+    const ux = this.ux, unitIn = ux ? ux.units.map(u => u.i) : null;
+    if (ux) this.uBias = new Float32Array(N);
     for (let i = L.A_E.s; i < L.A_E.e; i++) {
+      if (ch[i] === 9) {   // an evolved unit: an AND of its genome-specified inputs
+        const u = this.unitOf[i], ins = unitIn[u] || [];
+        if (!ins.length || this.silenced(u)) { this.uBias[i] = -40; randIn('A_I', i, 0.2, g.wIE, 2); continue; }
+        this.uBias[i] = ins.length === 1 ? 0 : ins.length === 2 ? UXQ.bias : UXQ.bias3;
+        for (const code of ins) { const src = Math.floor(code / UX_SRC), b = code % UX_SRC, list = [];
+          if (src === 2) { for (let j = sE[0]; j < sE[1]; j++) if (ch[j] === 8 && this.sym[j] === b) list.push(j); }
+          else { const c = UCH[src], n = PONG_UX.n[src]; for (let j = sE[0]; j < sE[1]; j++) if (ch[j] === c && c1[j] >= b / n && c1[j] < (b + 1) / n && rnd() < UXQ.pIn) list.push(j); }
+          const wt = g.wSA * UXQ.w * 12 / Math.max(1, list.length) * (ins.length === 1 ? 1.2 : ins.length === 3 ? 0.8 : 1);
+          for (const j of list) add(j, i, wt, 4); }
+        randIn('A_I', i, 0.2, g.wIE, 2); continue;
+      }
       const conj = ch[i] === 4, chB = conj ? 1 : 3;
       for (let j = sE[0]; j < sE[1]; j++) {
         let d;
         if (ch[j] === 0) d = c1[j] - c1[i]; else if (ch[j] === chB) d = c1[j] - c2[i]; else if (ch[j] === 2) { if (rnd() < 0.01) add(j, i, g.wSA * 0.5, 4); continue; } else continue;
         const p = g.pSA * Math.exp(-d * d / (2 * gw * gw)); if (rnd() < p) add(j, i, g.wSA, 4);
       }
-      if (g.sRec >= 0.5) for (let t = 0; t < 12; t++) { const j = L.A_E.s + Math.floor(rnd() * NA); if (j !== i && ch[j] === ch[i] && Math.abs(c1[j] - c1[i]) + Math.abs(c2[j] - c2[i]) < 0.25) add(j, i, g.wEE, 2); }
+      if (g.sRec >= 0.5) for (let t = 0; t < 12; t++) { const j = L.A_E.s + Math.floor(rnd() * NA); if (j !== i && ch[j] === ch[i] && ch[i] !== 9 && Math.abs(c1[j] - c1[i]) + Math.abs(c2[j] - c2[i]) < 0.25) add(j, i, g.wEE, 2); }
       randIn('A_I', i, 0.2, g.wIE, 2);
     }
     for (let i = L.A_I.s; i < L.A_I.e; i++) { randIn('S_E', i, 0.06, g.wEI, 3); randIn('A_E', i, 0.05, g.wEI, 2);   // feedforward + feedback inhibition: an AND-threshold for gain fields
       randIn('A_I', i, 0.1, g.wIE * 0.8, 2); }
+    // hidden-to-hidden links of the evolved layer (genome.ux.rec): every cell of unit a -> every cell of unit b
+    if (ux) { const a0 = L.A_E.s + GF[0] * GF[1]; for (const [a, b] of ux.rec) if (a < 88 && b < 88) for (let x = 0; x < 2; x++) for (let y = 0; y < 2; y++) add(a0 + 2 * a + x, a0 + 2 * b + y, UXQ.wRec, 3); }
     // motor: UP/DOWN pyramidal groups compete through shared interneurons
     for (let i = L.M_UP.s; i < L.M_DN.e; i++) {
       randIn('M_I', i, 0.5, g.wta, 2);
@@ -129,7 +182,7 @@ export class Brain {
     for (let a = 0; a < NA; a++) {
       const i = L.A_E.s + a;
       // innate guidance cue: + when the ball is above the paddle (gain-field cells) or moving up (context cells)
-      const bias = this.ch[i] === 4 ? band(g, 'gb', NGB, this.c1[i] * 2 - 1) : band(g, 'gv', NGV, this.c2[i] * 2 - 1);
+      const bias = this.ch[i] === 4 ? band(g, 'gb', NGB, this.c1[i] * 2 - 1) : this.ch[i] === 9 ? 0 : band(g, 'gv', NGV, this.c2[i] * 2 - 1);
       for (let m = 0; m < NM; m++) {
         if (rnd() >= g.pAM) continue;
         const k = a * NM + m, up = m < L.M_UP.n ? 1 : -1, w0 = Math.max(0, g.wAM0 * (1 + up * bias) * Math.exp(0.3 * gaussR(rnd)));
@@ -138,6 +191,14 @@ export class Brain {
       rowS[a + 1] = ks.length;
     }
     const n = ks.length;
+    // understanding layer: per-row caps. The REFLEX (tracking: the gain field + units on ball - paddle alone) is
+    // Full / Limited (capped at 20% and decaying) / None; empty, switched-off and silenced units have no output.
+    this.rowCap = new Float32Array(NA).fill(1); this.reflexRows = [];
+    if (this.ux) { const rf = this.ux.reflex ?? 1;
+      for (let a = 0; a < NA; a++) { const i = L.A_E.s + a, u = this.unitOf[i];
+        if (this.ch[i] === 4) { this.rowCap[a] = REFLEX_CAP_P[rf]; this.reflexRows.push(a); }
+        else if (u >= 0) { const unit = this.ux.units[u]; if (!unit || !unit.i.length || !unit.o || this.silenced(u)) this.rowCap[a] = 0; else if (this.isReflexU(u)) { this.rowCap[a] = REFLEX_CAP_P[rf]; this.reflexRows.push(a); } } }
+      for (let a = 0; a < NA; a++) if (this.rowCap[a] < 1) { const cap = g.wMax * this.rowCap[a]; for (let s = rowS[a]; s < rowS[a + 1]; s++) if (ws[s] > cap) ws[s] = cap; } }
     this.syn = Int32Array.from(ks); this.W = Float32Array.from(ws); this.E = new Float32Array(n);
     this.rowS = rowS; this.rowM = new Uint16Array(n); for (let s = 0; s < n; s++) this.rowM[s] = ks[s] % NM;
     this.colS = new Int32Array(NM + 1); for (let m = 0; m < NM; m++) this.colS[m + 1] = this.colS[m] + cnt[m];
@@ -158,8 +219,10 @@ export class Brain {
   // set receptor drive from the egocentric game state (all in 0..1)
   sense(by, py, bx, vy) {
     const g = this.g, w2 = 2 * g.rfW * g.rfW, x = [fovea(by - py), py, bx, vy], d = this.drive;
-    for (let k = 0; k < L.TH_E.n; k++) { const i = L.TH_E.s + k, v = x[this.ch[i]] - this.c1[i]; d[k] = 3 + g.thGain * Math.exp(-v * v / w2); }
+    for (let k = 0, n = this.nTask || L.TH_E.n; k < n; k++) { const i = L.TH_E.s + k, v = x[this.ch[i]] - this.c1[i]; d[k] = 3 + g.thGain * Math.exp(-v * v / w2); }
   }
+  // KNOW YOURSELF / KNOW YOUR ENEMY: the context symbols on right now (indices into PONG_UX.ctx_)
+  senseCtx(on) { if (!this.ux) return; const d = this.drive, n0 = this.nTask, gain = this.g.thGain; for (let k = n0; k < L.TH_E.n; k++) d[k] = 3 + (on[Math.floor((k - n0) / CXC)] ? gain : 0); }
   reward(r) { this.da += r; this.daLog += r; }
   // advance n steps of DT
   run(nSteps) {
@@ -247,9 +310,10 @@ export class Brain {
     // pre/post co-activity above baseline is credited (no common-mode drift of all weights)
     const xPre = this.xPre, rowS = this.rowS, rowM = this.rowM, rE = this.rExp, rateM = this.rateM, k = ms * 1e-3 * (this.g.base ?? 1);
     for (let m = 0; m < rE.length; m++) rE[m] = rateM[m] * k;
+    const cap = this.rowCap;
     for (let a = 0, NA_ = xPre.length; a < NA_; a++) {
-      const x = xPre[a];
-      for (let s = rowS[a], e1 = rowS[a + 1]; s < e1; s++) { const e = Eg[s] - x * rE[rowM[s]]; const w = W[s] + lr * e; W[s] = w < 0 ? 0 : w > wMax ? wMax : w; Eg[s] = e * de; }
+      const x = xPre[a], wm = wMax * cap[a];
+      for (let s = rowS[a], e1 = rowS[a + 1]; s < e1; s++) { const e = Eg[s] - x * rE[rowM[s]]; const w = W[s] + lr * e; W[s] = w < 0 ? 0 : w > wm ? wm : w; Eg[s] = e * de; }
     }
     this.da *= Math.exp(-ms / g.tauDA);
   }
@@ -260,8 +324,17 @@ export class Brain {
       this.rateM[m] += (r - this.rateM[m]) * 0.2;
       const f = Math.exp(g.homeo * Math.max(-1, Math.min(1, (g.rateT - this.rateM[m]) / g.rateT)) * ms * 1e-3);
       if (Math.abs(f - 1) < 1e-5) continue;
-      for (let s = colS[m], e = colS[m + 1]; s < e; s++) { const q = colQ[s]; const w = W[q] * f; W[q] = w > wMax ? wMax : w; }
+      for (let s = colS[m], e = colS[m + 1]; s < e; s++) { const q = colQ[s], wm = wMax * this.rowCap[this.colA[s]]; const w = W[q] * f; W[q] = w > wm ? wm : w; }
     }
+    // the metabolic cost of a Limited reflex: its synapses decay a little every 100 ms of play
+    if (this.reflexRows.length && g.eta > 0) { const dc = REFLEX_DECAY_P[this.ux.reflex ?? 1]; if (dc < 1) for (const a of this.reflexRows) for (let s = this.rowS[a]; s < this.rowS[a + 1]; s++) W[s] *= dc; }
+  }
+  // per evolved unit: [0 = favours UP / 1 = DOWN, mean weight onto that group, mean onto both] (fractions of wMax)
+  unitReadout() {
+    if (!this.ux) return null; const out = [], a0 = GF[0] * GF[1], nUp = L.M_UP.n, wm = this.g.wMax;
+    for (let u = 0; u < 88; u++) { let su = 0, nu = 0, sd = 0, nd = 0; for (let x = 0; x < 2; x++) { const a = a0 + 2 * u + x; for (let s = this.rowS[a]; s < this.rowS[a + 1]; s++) if (this.rowM[s] < nUp) { su += this.W[s]; nu++; } else { sd += this.W[s]; nd++; } }
+      const mu = nu ? su / nu : 0, md = nd ? sd / nd : 0; out.push([mu >= md ? 0 : 1, +(Math.max(mu, md) / wm).toFixed(3), +((su + sd) / Math.max(1, nu + nd) / wm).toFixed(3)]); }
+    return out;
   }
   exportWeights() { const d = new Float32Array(NA * NM).fill(-1), syn = this.syn, W = this.W; for (let s = 0; s < syn.length; s++) d[syn[s]] = W[s]; return d; }
   // mean plastic weight onto UP vs DOWN from each gain-field cell, as a (ball-y x paddle-y) map: + = drives UP

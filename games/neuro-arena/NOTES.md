@@ -215,6 +215,36 @@ beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Tu
   learning kept by elitism, and challengers (best 40% vs 38%) never cleared margin + sign test. Copy errors
   mostly hurt (Lab: mean effect per gene is negative). Strict judging stops drift, but it also slows progress.
 
+## THE UNDERSTANDING LAYER: know yourself, know your enemy (Oct 27 2026; js/understand.js)
+Hypothesis (owner): intelligence evolves when reflexive pathways are limited; to beat a weak reflex the brain has to
+"understand" the task. Sun Tzu: "Know yourself and know your enemy and you will always be victorious."
+- **Genome `ux`** (one shared module, understand.js): `units[]` (each an AND of 1-3 input codes `src*4096+sym`;
+  src 0/1 = task slots, src 2 = context, Pong 0/1/3/4 = ball−paddle, paddle y, ball x, ball vy), `rec[]`
+  (hidden→hidden links), `o` per unit (output on/off), `reflex` 0 Full / 1 Limited / 2 None. `mutateUX`:
+  rewire an input, add/drop an input, shift to a neighbouring bin, duplicate, delete, toggle output, add/drop
+  recurrence. Seeded random+sparse from `uxSeed` (per experiment). Kept with Lamarckian/Darwinian and the Reaper.
+- **Context sub-layers.** KNOW YOURSELF: own last answer, right/wrong, streak, confidence (choice) / own paddle
+  motion, last point won/lost, hit last (Pong). KNOW YOUR ENEMY: opponent's last answer, who answered first
+  (choice) / enemy paddle band 0-5, enemy motion, enemy hit last (Pong). Relay cells `ch 2` (choice) / `ch 8` (Pong).
+- **The reflex** = units on the blank position alone (Word: S,R,A,E,E = 25.3%) / the Pong gain field + units on
+  ball−paddle alone (tracking). Limited: row cap 20% of wMax and decay (choice ×0.99 per trial, Pong ×0.998 per
+  100 ms); None: no output. `preNorm` skips capped rows so the cost is real. Lab select Reflex Full/Limited/None
+  and Wiring Evolved/Designed (both restart the contest's evolution). Default Limited + Evolved.
+- **Measures.** Frozen Understanding probe (Word: 60 items where the frequency guess is wrong and the neighbours
+  imply the answer, e.g. Q_ICK→U, N_WLY→E, reflex 0%). Beyond-reflex = full-task accuracy − 25.3%. Ablations
+  (none / all units / self / enemy / self+enemy / reflex / neighbour detectors) every 100 generations or on
+  "Run ablation". Unit readout: which answer each unit's learned synapses favour, sorted by selectivity.
+  Charts: probe (dashed aqua) and beyond (orange) on the generations chart; unit-class census in the Lab.
+  CSV/JSON export carry them (probe_acc, beyond_reflex, units_*, pong_open_side, pong_duel_winners).
+- **Pong** (brain.js `PONG_UX`, only when genome.ux exists; save key bumped to .s3, the old Pong save is left in
+  localStorage untouched): thalamus re-split [96,64,48,48]+64 context; the 176-cell context grid of Assoc becomes
+  88 evolved units ×2 cells. Aiming is possible because the contact point sets the return angle (pong.js).
+  Probe (`pongProbe`): 40 frozen serves while the enemy is a statue at 80% / 20% height; acc = serves won
+  outright; a perfect tracker wins 65% (bounce luck). Beyond-reflex = share of the brain's returns that beat the
+  statue − 65%. Duel stat `duelWinners` = share of the champion's returns its opponent then missed. The benchmark
+  vs the tracker is unchanged (the tracker never misses, so winners there are always 0).
+- Headless: `ABL=<every> node tests/evochoice.mjs <contest|pong> rounds K lamarck matchSec size seed reflex wiring`.
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and

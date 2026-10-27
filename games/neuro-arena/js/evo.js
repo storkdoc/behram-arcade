@@ -1,13 +1,16 @@
 /* NEURO ARENA: evolution. The reigning champion spawns challengers with copy errors; each pair duels (the show,
    and lifetime learning), then both are scored on a fixed benchmark. The better one keeps (or takes) the throne
    and the loser is replaced by the winner's next spawn. */
-import { Brain, mulberry32 } from './brain.js';
+import { Brain, mulberry32, PONG_UX, GRID, PLASTIC } from './brain.js';
 import { Match, COURT } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
-import { CONTEST, runChoiceDuel, reaper, CURR, levelThr } from './contests.js';
+import { CONTEST, runChoiceDuel, reaper, CURR, levelThr, initGenomeUX, priorAcc, benchSet, probeSet } from './contests.js';
+import { mutateUX, classCounts, unitKey, unitClass } from './understand.js';
+// the contest descriptor the understanding layer uses (Pong has its own)
+export const uxC = id => !id || id === 'pong' ? PONG_UX : CONTEST[id];
 
 export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800 };
-export const TRIAL_LOOP = 2;   // choice-contest saves from an older trial loop / layout are not restored
+export const TRIAL_LOOP = 3;   // 3: + the understanding layer (genome.ux); choice-contest saves from an older trial loop / layout are not restored
 export const STORE_V = 3;   // v3: one evolution per contest (v2 Pong saves are migrated)
 
 /* The standardized benchmark: a fixed set of BENCH_N serves (heights, angles, speeds, distances) that every
@@ -16,18 +19,40 @@ export const STORE_V = 3;   // v3: one evolution per contest (v2 Pong saves are 
    on exactly the same balls. */
 export const BENCH_N = 50, BENCH_SEED = 4242;
 export const BENCH = (() => { const r = mulberry32(BENCH_SEED); return Array.from({ length: BENCH_N }, () => ({ x: COURT.W * (0.35 + 0.55 * r()), y: 0.1 + 0.8 * r(), a: (r() - 0.5) * 1.5, sp: COURT.v0 * (1 + 0.5 * r()) })); })();
-export function benchmark(genome, weights, serves = BENCH, player = null) {
-  const b = player ? null : new Brain({ ...genome, eta: 0, homeo: 0 }, weights);
-  const m = new Match([player || { brain: b }, { track: true }], mulberry32(77)), pg = m.pong;
-  let ev = null; m.onEvent = e => { if (e.p === 0) ev = e; };
-  const vec = new Uint8Array(serves.length); let hits = 0;
+/* With the evolved understanding layer (genome.ux) the benchmark also scores AIM: after a return, play on until the
+   tracking opponent answers; if it misses, the return was a WINNER (vec digit 2, +1 extra point). */
+export function benchmark(genome, weights, serves = BENCH, player = null, opts = {}) {
+  const b = player ? null : new Brain({ ...genome, eta: 0, homeo: 0 }, weights, opts), aim = !!opts.aim;
+  const m = new Match([player || { brain: b }, opts.enemy || { track: true }], mulberry32(77)), pg = m.pong;
+  let ev = null, ev1 = null; m.onEvent = e => { if (e.p === 0) ev = e; else ev1 = e; };
+  const vec = new Uint8Array(serves.length); let hits = 0, wins = 0;
   serves.forEach((s, i) => {
-    pg.bx = s.x; pg.by = s.y; pg.vx = -s.sp * Math.cos(s.a); pg.vy = s.sp * Math.sin(s.a); pg.wait = 120; ev = null;
+    pg.bx = s.x; pg.by = s.y; pg.vx = -s.sp * Math.cos(s.a); pg.vy = s.sp * Math.sin(s.a); pg.wait = 120; ev = null; ev1 = null;
+    if (opts.enemyY) { pg.pad[1] = opts.enemyY(i); opts.enemy.fixed = pg.pad[1]; }
     const t0 = m.t; while (!ev && m.t - t0 < 5000) m.stepMs(1);
-    if (ev && ev.t === 'hit') { vec[i] = 1; hits++; }
+    if (ev && ev.t === 'hit') { vec[i] = 1; hits++;
+      if (aim) { const t1 = m.t; while (!ev1 && m.t - t1 < 5000) m.stepMs(1); if (ev1 && ev1.t === 'miss') { vec[i] = 2; wins++; } } }
   });
   // Reaper fields: a returned serve is a correct answer, a missed one an incorrect answer (Pong has no abstaining)
-  return { hit: hits / serves.length, hits, n: serves.length, vec: Array.from(vec).join(''), fit: hits / serves.length, score: hits, correct: hits, wrong: serves.length - hits, abstain: 0, max: serves.length, acc: hits / serves.length, lat: null };
+  const n = serves.length;
+  return { hit: hits / n, hits, n, vec: Array.from(vec).join(''), fit: hits / n, score: hits + wins, correct: hits, wrong: n - hits, abstain: 0, max: aim ? 2 * n : n, acc: hits / n, lat: null, wins: aim ? wins : undefined, winRate: aim ? wins / n : undefined };
+}
+/* Pong's Understanding probe: 40 serves to the brain while the enemy is a statue sitting HIGH (odd serves: LOW).
+   Tracking returns the ball near the middle, where the statue often blocks it; a brain that knows its enemy aims
+   for the open side. acc = share of serves won outright; openSide = share of returns that beat the statue. */
+export const PROBE_P = BENCH.slice(0, 40);
+export function pongProbe(genome, weights, opts = {}, player = null) {
+  const enemy = { fixed: 0.8 }, r = benchmark(genome, weights, PROBE_P, player, { ...opts, aim: true, enemy, enemyY: i => i % 2 ? 0.2 : 0.8 });
+  return { acc: r.wins / r.n, n: r.n, hits: r.hits, won: r.wins, openSide: r.hits ? r.wins / r.hits : 0, hit: r.hit };
+}
+let PRIOR_P = null;
+export const pongPrior = () => PRIOR_P || (PRIOR_P = { probe: pongProbe(null, null, {}, { track: true }), bench: benchmark(null, null, BENCH, { track: true }, { aim: true }) });
+export function pongUnderstanding(g, w, ablate = false) {
+  const pr = pongPrior(), p = pongProbe(g, w), out = { acc: p.acc, n: p.n, prior: pr.probe.acc, openSide: p.openSide, hit: p.hit, fullPrior: pr.probe.openSide };
+  if (ablate && g.ux) { const cls = g.ux.units.map(u => unitClass(PONG_UX, u)), kos = { 'none': () => false, 'all units': () => true, 'self': u => cls[u] === 'self', 'enemy': u => cls[u] === 'enemy', 'self+enemy': u => cls[u] === 'self' || cls[u] === 'enemy', 'reflex': u => cls[u] === 'reflex' };
+    out.ablate = {}; for (const [k, f] of Object.entries(kos)) { const o = { silence: f }, q = pongProbe(g, w, o), b = benchmark(g, w, BENCH, null, o); out.ablate[k] = { probe: q.acc, full: b.hit, win: b.winRate }; }
+    out.units = g.ux.units; out.readout = new Brain({ ...g, eta: 0 }, w).unitReadout(); }
+  return out;
 }
 // paired comparison on the same serves: b = serves only the challenger returned, c = only the champion
 export function paired(vc, vk) { let b = 0, c = 0; for (let i = 0; i < vc.length; i++) { if (vk[i] === '1' && vc[i] !== '1') b++; if (vc[i] === '1' && vk[i] !== '1') c++; } return { b, c }; }
@@ -43,7 +68,8 @@ export function runDuel(job) {
   m.stepMs(Math.round(job.matchSec * 1000));
   const st = m.stats(), wA = A.exportWeights(), wB = B.exportWeights();
   const bench = job.bench === false ? null : [benchmark(job.gA, wA), benchmark(job.gB, wB)];
-  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench };
+  const cg = job.side === 0 ? job.gA : job.gB, up = job.uprobe && cg.ux ? pongUnderstanding(cg, job.side === 0 ? wA : wB, job.ablate) : null;
+  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, up, aim: [m.aim[0], m.aim[1]] };
 }
 export const winnerOf = st => st.score[0] !== st.score[1] ? (st.score[0] > st.score[1] ? 0 : 1) : st.hitRate[0] !== st.hitRate[1] ? (st.hitRate[0] > st.hitRate[1] ? 0 : 1) : 0;
 
@@ -52,7 +78,8 @@ export class Evolution {
     this.opts = { ...DEFAULTS, ...opts };
     if (state) { Object.assign(this, state); this.rnd = mulberry32((this.seedCounter = (this.seedCounter || 1) + 1) * 977); return; }
     this.gen = 0; this.seedCounter = 1; this.nextId = 2;
-    this.champ = { id: 1, genome: gen0Genome(), weights: null, born: 0, n: 0, fit: 0, bench: null, scores: [] };
+    this.champ = { id: 1, genome: initGenomeUX(uxC(this.opts.contest), gen0Genome(), this.opts.reflex ?? 1, this.opts.uxSeed), weights: null, born: 0, n: 0, fit: 0, bench: null, scores: [] };
+    if (this.opts.wiring === 'designed') delete this.champ.genome.ux;
     this.history = []; this.hof = []; this.log = []; this.best = null;
     this.rnd = mulberry32(12345);
   }
@@ -63,8 +90,11 @@ export class Evolution {
     if (hof && this.gen - (this.lastRM || 0) >= 25 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck) && (this.lastRM = this.gen) >= 0)
       return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? cloneW(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
     const { genome, errors } = copyGenome(c.genome, o.rate, this.rnd);   // copy errors go into the CHILD's copy only
+    if (c.genome.ux) genome.ux = mutateUX(uxC(o.contest), c.genome.ux, o.rate, this.rnd, errors);   // the understanding layer's wiring
     let weights = null, wErrors = 0;
-    if (o.lamarck && c.weights) { const isObj = !!c.weights.W, r = copyWeights(isObj ? c.weights.W : c.weights, o.rate, this.rnd, genome.wMax); weights = isObj ? { ...c.weights, W: r.w } : r.w; wErrors = r.n; }
+    if (o.lamarck && c.weights) { const isObj = !!c.weights.W, r = copyWeights(isObj ? c.weights.W : c.weights, o.rate, this.rnd, genome.wMax); weights = isObj ? { ...c.weights, W: r.w } : r.w; wErrors = r.n;
+      // Pong: a rewired unit starts with fresh synapses (NaN = 'initialise' for Brain.initPlastic)
+      if (!isObj && genome.ux) { const NM = PLASTIC.NM, a0 = GRID.GF[0] * GRID.GF[1]; genome.ux.units.forEach((u, k) => { if (unitKey(u) !== unitKey(c.genome.ux.units[k])) for (let x = 0; x < 2; x++) { const a = a0 + 2 * k + x; for (let m = 0; m < NM; m++) if (weights[a * NM + m] >= 0) weights[a * NM + m] = NaN; } }); } }
     return { id: this.nextId++, genome, weights, errors, wErrors, parent: c.id, born: this.gen + 1 };
   }
   job(child) {
@@ -74,6 +104,8 @@ export class Evolution {
     // full task (the last curriculum level), so the chart can show real progress across level changes
     const C = CONTEST[j.contest], last = C && C.levels ? C.levels.length - 1 : 0;
     if (C && C.levels && j.level < last && this.gen - (this.lastProbe ?? -99) >= 10) { this.lastProbe = this.gen; j.probe = last; }
+    // the Understanding probe every 10 generations (ablations every 100) on the champion's synapses
+    if (((C && C.probe) || ((!C || C.kind !== 'choice') && c.genome.ux)) && this.gen - (this.lastUP ?? -99) >= 10) { this.lastUP = this.gen; j.uprobe = true; if (c.genome.ux && this.gen - (this.lastAbl ?? -999) >= 100) { this.lastAbl = this.gen; j.ablate = true; } }
     if (side === 0) Object.assign(j, { gA: c.genome, wA: c.weights, gB: child.genome, wB: child.weights });
     else Object.assign(j, { gA: child.genome, wA: child.weights, gB: c.genome, wB: c.weights });
     return j;
@@ -135,6 +167,7 @@ export class Evolution {
     const C = CONTEST[o.contest];
     const lv0 = this.level || 0;   // the level these duels were played and benchmarked at
     const pr = results.find(r => r && r.probe); if (pr) this.fullAcc = pr.probe.acc;
+    const ur = results.find(r => r && r.up); if (ur) { this.uAcc = ur.up.acc; this.uOpen = ur.up.openSide ?? null; this.uHit = ur.up.hit ?? null; if (ur.up.ablate) { this.uAbl = { gen: this.gen, ...ur.up.ablate }; this.uRead = { gen: this.gen, units: ur.up.units, readout: ur.up.readout }; } }
     if (out.some(e => e.newChamp)) this.lastProbe = -99;
     if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= levelThr(C, this.level || 0) && (this.level || 0) < C.levels.length - 1) {
       const passed = this.champ.bench.acc;
@@ -142,7 +175,14 @@ export class Evolution {
       const last = out[out.length - 1]; if (last) { last.levelUp = this.level; last.passed = passed; }
       (this.levelUps = this.levelUps || []).push({ gen: this.gen, level: this.level });
     }
-    for (const e of out) { e.level = lv0; if (C && C.levels) e.fullAcc = lv0 === C.levels.length - 1 ? e.champAccNow : this.fullAcc ?? null; }
+    for (const e of out) { e.level = lv0; if (C && C.levels) e.fullAcc = lv0 === C.levels.length - 1 ? e.champAccNow : this.fullAcc ?? null;
+      // understanding metrics: probe accuracy, beyond-reflex (full-task accuracy minus the reflex's guess on the same items), layer census
+      if (C && C.probe) { e.uAcc = this.uAcc ?? null; const fa = C.levels ? e.fullAcc : e.champAccNow; e.beyond = fa != null ? fa - priorAcc(C, benchSet(C, C.levels ? C.levels.length - 1 : 0)) : null; }
+      // Pong: probe = serves won outright against the statue; beyond-reflex = how much more often a return beats the
+      // statue than a perfect tracker's returns do (aim quality, independent of how often the brain hits at all)
+      if ((!C || C.kind !== 'choice') && this.champ.genome.ux) { e.uAcc = this.uAcc ?? null; e.openSide = this.uOpen ?? null; e.uHit = this.uHit ?? null; e.beyond = this.uOpen != null ? this.uOpen - pongPrior().probe.openSide : null;
+        const ai = results.map((r, k) => r && r.aim && r.aim[jobs[k].side]).filter(Boolean), ret = ai.reduce((a, x) => a + x.ret, 0); e.duelWinners = ret ? ai.reduce((a, x) => a + x.won, 0) / ret : null; }
+      if (this.champ.genome.ux) e.cls = classCounts(uxC(o.contest), this.champ.genome.ux); }
     return out;
   }
   toHof(c) {
@@ -156,7 +196,7 @@ export class Evolution {
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
     return { v: STORE_V, tl: TRIAL_LOOP, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+      bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, uAcc: this.uAcc ?? null, uOpen: this.uOpen ?? null, uHit: this.uHit ?? null, uAbl: this.uAbl || null, uRead: this.uRead || null, lastUP: this.lastUP ?? -99, lastAbl: this.lastAbl ?? -999, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {
@@ -173,7 +213,7 @@ export class Evolution {
 const S = b => b.score ?? b.hits, F = b => b.fit ?? b.hit;
 const cloneW = w => w.W ? { ...w, W: new Float32Array(w.W) } : new Float32Array(w);
 // choice-brain weights are { W, seed, pAM, size, K }: quantise W, keep the metadata
-export function quantW(w, wMax) { return w.W ? { meta: { seed: w.seed, pAM: w.pAM, size: w.size, K: w.K, rBar: w.rBar }, q: quant(w.W, wMax) } : quant(w, wMax); }
+export function quantW(w, wMax) { return w.W ? { meta: { seed: w.seed, pAM: w.pAM, size: w.size, K: w.K, rBar: w.rBar, uk: w.uk }, q: quant(w.W, wMax) } : quant(w, wMax); }
 export function dequantW(q) { return q.meta ? { ...q.meta, W: dequant(q.q) } : dequant(q); }
 // 8-bit weight quantisation for storage (absent synapses = 255)
 export function quant(w, wMax) {

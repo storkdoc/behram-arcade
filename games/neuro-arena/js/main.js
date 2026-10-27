@@ -1,11 +1,13 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
-import { Evolution, quantW, dequantW, BENCH_N } from './evo.js';
-import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt } from './contests.js';
+import { Evolution, quantW, dequantW, BENCH_N, PROBE_P, pongPrior } from './evo.js';
+import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt, uPrep } from './contests.js';
 import { cLayout } from './cbrain.js';
 import { Stage } from './stage.js';
 import * as LAB from './lab.js';
 import { GENES, GENE, fmtGene, gen0Genome } from './genome.js';
-import { N, L } from './brain.js';
+import { N, L, PONG_UX } from './brain.js';
+// the descriptor the Understanding panels use: the contest itself, or Pong's evolved-layer descriptor (with its probe priors)
+function uxD() { if (isChoice()) { uPrep(C); return C; } const pr = pongPrior(); PONG_UX._probe = PROBE_P; PONG_UX._probePrior = pr.probe.acc; PONG_UX._fullPrior = pr.probe.openSide; return PONG_UX; }
 import { COURT } from './pong.js';
 import { Render3D, REGION_LABELS } from './render3d.js';
 import { Render2D } from './render2d.js';
@@ -41,7 +43,7 @@ window.addEventListener('unhandledrejection', e => { const m = String(e.reason &
 
 // ------------------------------------------------------------------ state
 const evos = {};
-function newEvo(id) { return new Evolution({ lamarck: true, contest: id, size: id === 'pong' ? 2800 : (meta.size || DEFAULT_SIZE) }); }
+function newEvo(id) { return new Evolution({ lamarck: true, contest: id, size: id === 'pong' ? 2800 : (meta.size || DEFAULT_SIZE), uxSeed: (Math.random() * 1e9) >>> 0 }); }
 function getEvo(id) { if (!evos[id]) { evos[id] = load(id) || newEvo(id); evos[id].opts.contest = id; if (id === 'pong') evos[id].opts.size = 2800; } return evos[id]; }
 const ui = { mode: 'watch', speed: 1, K: Math.max(1, Math.min(coarse ? 3 : 6, HC - 1)), epoch: 0, live: null, lastSave: 0, turboGen0: 0, turboT0: 0, gps: 0, tip: null, tab: 'chart', polMaps: [null, null] };
 let evo = getEvo(meta.cur), C = CONTEST[meta.cur];
@@ -52,7 +54,7 @@ function skey(id) { return KEY + '.' + id + (CONTEST[id] && CONTEST[id].save ? '
 function load(id) {
   if (CONTEST[id] && CONTEST[id].save) try { if (!localStorage.getItem(skey(id)) && meta.sum[id]) delete meta.sum[id]; } catch (e) { }
   try { const s = localStorage.getItem(skey(id)); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) return e; } } catch (e) { console.warn('could not restore', e); }
-  if (id === 'pong') try { const s = localStorage.getItem(KEY_V2); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) { ui.migrated = true; return e; } } } catch (e) { console.warn('could not migrate the v2 save', e); }
+  if (id === 'pong' && !(CONTEST.pong && CONTEST.pong.save)) try { const s = localStorage.getItem(KEY_V2); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) { ui.migrated = true; return e; } } } catch (e) { console.warn('could not migrate the v2 save', e); }
   return null;
 }
 function save(force) {
@@ -70,7 +72,9 @@ const lvOf = c => c === C ? (evo.level || 0) : ((meta.sum[c.id] && meta.sum[c.id
 const chanceOf = (c, lv) => c.kind === 'choice' ? chanceAt(c, lv ?? lvOf(c)) : RANDOM_HIT;
 const benchSet = c => benchSet_(c, lvOf(c));
 const lvTxt = c => c.levels ? ' · ' + levelName(c, lvOf(c)) : '';
-const neuronsOf = (c, size) => c.kind === 'choice' ? cLayout(size, c.K).N : N;
+// the layout of a choice brain (with its evolved understanding layer, if the champion has one)
+const layOf = (c, size) => { const g = evos[c.id] && evos[c.id].champ.genome, ux = g && g.ux; return cLayout(size, c.K, 0, ux ? { nU: ux.units.length, nCx: c.ctx_.length, uOnly: !!c.uOnly } : null); };
+const neuronsOf = (c, size) => c.kind === 'choice' ? layOf(c, size).N : N;
 
 // ------------------------------------------------------------------ renderer + layout
 let canvas = $('gl');
@@ -524,7 +528,16 @@ function drawChart() {
   const stepLine = (key, style, lw, glow) => { x.strokeStyle = style; x.lineWidth = lw; x.shadowColor = style; x.shadowBlur = glow; x.beginPath(); let prev = null;
     H.forEach((e, i) => { const v = e[key] ?? (key === 'champAccNow' ? e.champFit : key === 'bestAcc' ? e.bestFit : 0); if (i === 0) x.moveTo(X(e.gen - 1), Y(v)); else x.lineTo(X(e.gen), Y(prev)); x.lineTo(X(e.gen), Y(v)); prev = v; }); x.stroke(); x.shadowBlur = 0; };
   if (H.length) { x.setLineDash([4, 3]); stepLine(KB, 'rgba(255,255,255,.55)', 1, 0); x.setLineDash([]);
-    if (!lvs) stepLine(KC, '#ffd25a', 2.2, 6);
+    if (!lvs) { stepLine(KC, '#ffd25a', 2.2, 6);
+      if (!ch && H.some(e => e.uAcc != null)) {   // Pong UNDERSTANDING: probe winners (dashed aqua), beyond-reflex aim (orange), the tracker's probe score
+        const D = uxD(), line = (key, col, dash) => { x.strokeStyle = col; x.lineWidth = 1.5; x.setLineDash(dash); x.beginPath(); let on = false;
+          for (const e of H) { const v = e[key]; if (v == null) continue; const y = Y(Math.max(0, Math.min(1, v))); if (!on) { x.moveTo(X(e.gen), y); on = true; } else x.lineTo(X(e.gen), y); } x.stroke(); x.setLineDash([]); };
+        x.setLineDash([2, 4]); x.strokeStyle = 'rgba(255,159,67,.55)'; x.beginPath(); x.moveTo(pl, Y(D._probePrior)); x.lineTo(w - pr, Y(D._probePrior)); x.stroke(); x.setLineDash([]);
+        x.font = '9px -apple-system, system-ui, sans-serif'; x.fillStyle = 'rgba(255,159,67,.8)'; x.fillText(`tracker wins ${Math.round(D._probePrior * 100)}% of the probe`, pl + 2, Y(D._probePrior) - 3);
+        line('uAcc', '#7ff6ff', [5, 3]); line('beyond', '#ff9f43', []);
+        const lines = []; for (const it of ['dashed aqua = probe (won vs statue)', 'orange = beyond-reflex (aim)']) { const l = lines.length ? lines[lines.length - 1] + ' · ' + it : it; if (lines.length && x.measureText(l).width <= iw - 4) lines[lines.length - 1] = l; else lines.push(it); }
+        lines.forEach((lg, i) => { const tw = x.measureText(lg).width, y = pt + ih - 3 - (lines.length - 1 - i) * 11; x.fillStyle = 'rgba(8,12,24,.75)'; x.fillRect(w - pr - tw - 4, y - 9, tw + 4, 12); x.fillStyle = '#9fb3d8'; x.fillText(lg, w - pr - tw - 2, y); });
+        x.font = '10px -apple-system, system-ui, sans-serif'; } }
     else {   // the champion's benchmark, coloured by level (a new colour = a new, harder test)
       x.lineWidth = 2.2; let prev = null, pg = null, pl_ = null;
       H.forEach(e => { const v = e[KC] ?? 0, lv = e.level ?? 0, col = LVC[lv % LVC.length]; x.strokeStyle = col; x.shadowColor = col; x.shadowBlur = 6; x.beginPath();
@@ -533,8 +546,18 @@ function drawChart() {
       // the same champion on the FULL task (the last level), measured every ~10 generations: the real progress
       x.strokeStyle = '#50dcff'; x.lineWidth = 1.6; x.beginPath(); let on = false, pv = null;
       for (const e of H) { const v = e.fullAcc; if (v == null) continue; if (!on) { x.moveTo(X(e.gen - 1), Y(v)); on = true; } else x.lineTo(X(e.gen), Y(pv)); x.lineTo(X(e.gen), Y(v)); pv = v; } x.stroke();
-      x.font = '9px -apple-system, system-ui, sans-serif'; const lg = 'level benchmark (colour = level) · cyan = full task'; x.fillStyle = 'rgba(8,12,24,.75)'; x.fillRect(w - pr - x.measureText(lg).width - 4, pt + ih - 12, x.measureText(lg).width + 4, 12);
-      x.fillStyle = '#9fb3d8'; x.fillText(lg, w - pr - x.measureText(lg).width - 2, pt + ih - 3); x.font = '10px -apple-system, system-ui, sans-serif'; } }
+      // UNDERSTANDING: the frozen probe (dashed aqua), beyond-reflex (orange, full task minus the reflex's guess; drawn from 0 up) and the reflex's own full-task score
+      let lgU = '';
+      if (C.probe) { uPrep(C); const line = (key, col, dash) => { x.strokeStyle = col; x.lineWidth = 1.5; x.setLineDash(dash); x.beginPath(); let on = false;
+          for (const e of H) { const v = e[key]; if (v == null) continue; const y = Y(Math.max(0, Math.min(1, v))); if (!on) { x.moveTo(X(e.gen), y); on = true; } else x.lineTo(X(e.gen), y); } x.stroke(); x.setLineDash([]); return on; };
+        x.setLineDash([2, 4]); x.strokeStyle = 'rgba(255,159,67,.55)'; x.beginPath(); x.moveTo(pl, Y(C._fullPrior)); x.lineTo(w - pr, Y(C._fullPrior)); x.stroke(); x.setLineDash([]);
+        x.fillStyle = 'rgba(255,159,67,.8)'; x.fillText(`reflex guess ${Math.round(C._fullPrior * 1000) / 10}%`, w - pr - 92, Y(C._fullPrior) - 3); x.fillStyle = '#7f93b8';
+        if (line('uAcc', '#7ff6ff', [5, 3]) | line('beyond', '#ff9f43', [])) lgU = ' · dashed aqua = understanding probe · orange = beyond-reflex'; }
+      x.font = '9px -apple-system, system-ui, sans-serif'; const lg0 = 'level benchmark (colour = level) · cyan = full task';
+      const items = (lg0 + lgU).split(' · '), lines = [];   // wrap the legend on narrow charts
+      for (const it of items) { const l = lines.length ? lines[lines.length - 1] + ' · ' + it : it; if (lines.length && x.measureText(l).width <= iw - 4) lines[lines.length - 1] = l; else lines.push(it); }
+      lines.forEach((lg, i) => { const tw = x.measureText(lg).width, y = pt + ih - 3 - (lines.length - 1 - i) * 11; x.fillStyle = 'rgba(8,12,24,.75)'; x.fillRect(w - pr - tw - 4, y - 9, tw + 4, 12); x.fillStyle = '#9fb3d8'; x.fillText(lg, w - pr - tw - 2, y); });
+      x.font = '10px -apple-system, system-ui, sans-serif'; } }
   ui.marks = [];
   for (const e of H) if (e.newChamp && e.beneficial) { const px = X(e.gen), py = Y(e[KC] ?? e.champFit); ui.marks.push({ px, py, e }); x.fillStyle = '#5cff9d'; x.beginPath(); x.moveTo(px, py - 4.5); x.lineTo(px + 3.5, py); x.lineTo(px, py + 4.5); x.lineTo(px - 3.5, py); x.closePath(); x.fill(); }
   else if (e.newChamp && e.hof) { x.fillStyle = '#ffd25a'; x.fillText('♛', X(e.gen) - 4, Y(e[KC] ?? e.champFit) + 4); }
@@ -587,7 +610,7 @@ function syncControls() {
   const ch = isChoice(), sz = ch ? o.size : 2800, si2 = SIZES.indexOf(sz);
   $('sSize').max = SIZES.length - 1; $('sSize').value = si2 < 0 ? 1 : si2; $('sSize').disabled = !ch;
   $('vSize').textContent = neuronsOf(C, sz).toLocaleString();
-  $('sizeNote').textContent = ch ? `Neurons per brain in ${C.name} (every area scales; ${(cLayout(sz, C.K).gs)} cells per answer population). Changing it keeps the champion's genes but its synapses must be relearned. Larger brains run slower than real time (measured on one core: 2,800 ≈ 2× real time, 5,600 ≈ 0.6×, 11,200 ≈ 0.2×, 22,400 ≈ 0.1×); Watch then plays in slow motion and Turbo takes longer.` : 'The Pong brain has a fixed 2,800-neuron layout. Pick a quiz contest in the carousel to change the brain size.';
+  $('sizeNote').textContent = ch ? `Neurons per brain in ${C.name} (every area scales; ${(layOf(C, sz).gs)} cells per answer population). Changing it keeps the champion's genes but its synapses must be relearned. Larger brains run slower than real time (measured on one core: 2,800 ≈ 2× real time, 5,600 ≈ 0.6×, 11,200 ≈ 0.2×, 22,400 ≈ 0.1×); Watch then plays in slow motion and Turbo takes longer.` : 'The Pong brain has a fixed 2,800-neuron layout. Pick a quiz contest in the carousel to change the brain size.';
 }
 $('sRate').oninput = e => { evo.opts.rate = +e.target.value / 100; syncControls(); updateStatus(); save(true); };
 $('sLen').oninput = e => { evo.opts.matchSec = +e.target.value; syncControls(); save(true); };
@@ -599,7 +622,7 @@ $('sSize').oninput = e => { $('vSize').textContent = neuronsOf(C, SIZES[+e.targe
 $('sSize').onchange = e => {
   if (!isChoice()) return; const v = SIZES[+e.target.value]; if (v === evo.opts.size) return;
   evo.opts.size = v; meta.size = v; const c = evo.champ; c.weights = null; c.bench = null; c.fit = 0; c.scores = []; evo.hof = [];
-  ui.lay = cLayout(v, C.K); save(true); syncControls(); updateStatus(); ui.started = false; ui.polMaps = [null, null]; drawMaps(); setMode(ui.mode === 'turbo' ? 'turbo' : ui.mode);
+  ui.lay = layOf(C, v); save(true); syncControls(); updateStatus(); ui.started = false; ui.polMaps = [null, null]; drawMaps(); setMode(ui.mode === 'turbo' ? 'turbo' : ui.mode);
   toast(`${C.name}: ${neuronsOf(C, v).toLocaleString()} neurons per brain · the champion relearns its synapses`);
 };
 $('bReset').onclick = () => {
@@ -624,9 +647,11 @@ $('fImport').onchange = async e => {
     const cid = d.contest || 'pong'; if (!CONTEST[cid]) throw new Error('unknown contest ' + cid);
     if (cid !== C.id) selectContest(cid);
     const g = { ...gen0Genome() }; for (const s of GENES) if (typeof d.champion.genome[s.key] === 'number') g[s.key] = Math.max(s.min, Math.min(s.max, d.champion.genome[s.key]));
+    const ux = d.champion.genome.ux;   // the evolved understanding layer (unit wiring), if the file has one
+    if (ux && Array.isArray(ux.units) && ux.units.every(u => Array.isArray(u.i) && u.i.length <= 3 && u.i.every(Number.isInteger))) g.ux = { units: ux.units.map(u => ({ i: u.i.slice(), o: u.o ? 1 : 0 })), rec: Array.isArray(ux.rec) ? ux.rec.filter(e => Array.isArray(e) && e.length === 2).map(e => [e[0] | 0, e[1] | 0]) : [], reflex: [0, 1, 2].includes(ux.reflex) ? ux.reflex : 1 };
     let w = d.champion.weights ? dequantW(d.champion.weights) : null;
     if (w && !w.W && w.length !== L.A_E.n * (L.M_UP.n + L.M_DN.n)) throw new Error('weight matrix has the wrong size');
-    if (w && w.W) { if (w.K !== C.K) throw new Error('weights are for a different answer set'); if (w.size !== evo.opts.size) { evo.opts.size = w.size; ui.lay = cLayout(w.size, C.K); syncControls(); } }
+    if (w && w.W) { if (w.K !== C.K) throw new Error('weights are for a different answer set'); if (w.size !== evo.opts.size) { evo.opts.size = w.size; ui.lay = layOf(C, w.size); syncControls(); } }
     evo.toHof(evo.champ);
     evo.champ = { id: evo.nextId++, genome: g, weights: w, born: evo.gen, n: 0, fit: 0, bench: null, scores: [], imported: true };   // re-benchmarked next round
     if (w && !evo.opts.lamarck) toast('Imported. Its learned synapses are kept only in Lamarckian mode.'); else toast(`Imported champion from generation ${d.generation ?? '?'}`);
@@ -657,7 +682,7 @@ function selectContest(id) {
   save(true);
   if (liveW) liveW.postMessage({ t: 'stop' });
   C = CONTEST[id]; evo = getEvo(id); meta.cur = id; saveMeta();
-  ui.lay = isChoice() ? cLayout(evo.opts.size, C.K) : null; ui.polMaps = [null, null]; ui.stageR = null; lastFrame = null;
+  ui.lay = isChoice() ? layOf(C, evo.opts.size) : null; ui.polMaps = [null, null]; ui.stageR = null; lastFrame = null;
   stage.setContest(C); labReset();
   if (R) R.setFrame(null);
   $('reaper').classList.add('hidden');
@@ -715,7 +740,7 @@ function labReset() {
   const AR = ['TH_E', 'TH_I', 'S_E', 'S_I', 'A_E', 'A_I', 'M_UP', 'M_DN', 'M_I']; lab.cells = new Int32Array(rows);
   AR.forEach((k, a) => { for (let j = 0; j < LAB.RASTER_ROWS; j++) lab.cells[a * LAB.RASTER_ROWS + j] = L[k].s + Math.floor((j + 0.5) * L[k].n / LAB.RASTER_ROWS); });
   // real cells per display area (choice brains scale; their motor pool is split over the two motor rows)
-  if (isChoice()) { const q = ui.lay || cLayout(evo.opts.size, C.K); lab.nReal = [q.TH_E.n, q.TH_I.n, q.S_E.n, q.S_I.n, q.A_E.n, q.A_I.n, q.M_E.n / 2, q.M_E.n / 2, q.M_I.n]; }
+  if (isChoice()) { const q = ui.lay || layOf(C, evo.opts.size); lab.nReal = [q.TH_E.n, q.TH_I.n, q.S_E.n, q.S_I.n, q.A_E.n, q.A_I.n, q.M_E.n / 2, q.M_E.n / 2, q.M_I.n]; }
   else lab.nReal = AR.map(k => L[k].n);
 }
 function labCollect(f) {
@@ -743,6 +768,7 @@ function drawLab(full) {
     LAB.drawCurve($('lCurve'), evo.history, chanceOf(C), !isChoice());
     const w = evo.champ.weights; LAB.drawWeights($('lW'), w ? (w.W || w) : null, evo.champ.genome.wMax, evo.lab);
     $('lReaper').innerHTML = LAB.reaperHTML(evo); $('lLine').innerHTML = LAB.lineageHTML(evo, !isChoice()); $('lLD').innerHTML = LAB.lamDarHTML(evo, chanceOf(C));
+    drawUnderstanding();
   }
   LAB.drawLive($('lLive'), isChoice() ? stage.hist : [[], []], chanceOf(C));
   // Word completion: correct answers split into the intended letter and an alternate letter that also makes a valid word
@@ -756,6 +782,32 @@ function drawLab(full) {
     la.textContent = parts.join(' · '); la.style.display = parts.length ? '' : 'none'; }
   LAB.drawDA($('lDA'), lab.tr); LAB.drawRaster($('lRas'), lab.ras, lab.rates);
 }
+// the UNDERSTANDING panels (hypothesis, probe / beyond-reflex / ablation, unit census, the evolved units)
+function drawUnderstanding() {
+  const has = !isChoice() || !!C.probe; document.querySelectorAll('#lab .und, #lUM, #lUC, #lUnits').forEach(el => { const box = el.closest('section, figure'); if (box) box.style.display = has ? '' : 'none'; });
+  if (!has) return; const D = uxD();
+  const ux = evo.champ.genome.ux; $('uReflex').value = String(ux ? ux.reflex ?? 1 : 1); $('uReflex').disabled = !ux; $('uWire').value = ux ? 'evolved' : 'designed';
+  $('lHyp').innerHTML = LAB.hypothesisHTML(D, evo); $('lUM').innerHTML = LAB.understandHTML(D, evo); $('lUnits').innerHTML = LAB.unitsHTML(D, evo);
+  LAB.drawUC($('lUC'), evo.history, D); $('uAbl').disabled = !!ui.ablating; $('uAbl').textContent = ui.ablating ? 'Ablating…' : 'Run ablation';
+}
+// changing the reflex or the wiring is a new experiment: restart this contest's evolution from generation 0
+function restartUX(reflex, wiring) {
+  if (!confirm(`Restart the ${C.name} evolution with Reflex ${['Full', 'Limited', 'None'][reflex]} and ${wiring} wiring? Its champion and history will be erased.`)) { drawUnderstanding(); return; }
+  const o = { ...evo.opts, reflex, wiring, uxSeed: (Math.random() * 1e9) >>> 0 }; evo = evos[C.id] = new Evolution(o); localStorage.removeItem(skey(C.id)); ui.started = false; ui.polMaps = [null, null];
+  ui.lay = layOf(C, evo.opts.size); labReset(); save(true); drawChart(); renderLog(); renderGenome(); updateStatus(); drawMaps(); setMode(ui.mode === 'turbo' ? 'turbo' : ui.mode); drawLab(true);
+  toast(`${C.name}: new experiment · Reflex ${['Full', 'Limited', 'None'][reflex]} · ${wiring} wiring`);
+}
+$('uReflex').onchange = e => restartUX(+e.target.value, evo.champ.genome.ux ? 'evolved' : 'designed');
+$('uWire').onchange = e => restartUX(+(evo.opts.reflex ?? 1), e.target.value);
+let ablW = null;
+$('uAbl').onclick = () => {
+  if (ui.ablating) return; const c = evo.champ, ev0 = evo; ui.ablating = true; drawUnderstanding(); toast('Ablation running in the background (about a minute)…');
+  if (!ablW) ablW = mkWorker();
+  ablW.onmessage = e => { if (!e.data || e.data.t !== 'ablate') return; ui.ablating = false; const r = e.data.res;
+    if (ev0 === evo && r) { if (r.ablate) { evo.uAbl = { gen: evo.gen, ...r.ablate }; evo.uRead = { gen: evo.gen, units: r.units, readout: r.readout }; } evo.uAcc = r.acc; if (r.openSide != null) evo.uOpen = r.openSide; save(true); }
+    drawLab(true); toast('Ablation done'); };
+  ablW.postMessage({ t: 'ablate', rid: 0, contest: C.id, g: c.genome, w: c.weights, size: evo.opts.size });
+};
 $('bLab').onclick = () => toggleLab(true); $('labX').onclick = () => toggleLab(false);
 $('lab').addEventListener('click', e => { if (e.target.id === 'lab') toggleLab(false); });
 const download = (name, text, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
@@ -764,7 +816,9 @@ $('labJSON').onclick = () => {
   const tr = lab.tr, ord = a => { const o = []; const cnt = Math.min(tr.n, tr.cap); for (let j = 0; j < cnt; j++) o.push(+a[(tr.i - cnt + j + tr.cap) % tr.cap].toFixed(4)); return o; };
   const data = { app: 'neuro-arena', kind: 'lab', contest: C.id, neurons: neuronsOf(C, evo.opts.size), size: evo.opts.size, chance: chanceOf(C), exported: new Date().toISOString(), opts: evo.opts,
     reaperRule: { correct: 1, incorrect: -2, abstain: 0, margin: 'max(3, 5% of max) points (Pong: 2) and a paired sign test', benchmark: isChoice() ? benchSet(C).length + ' frozen items' : BENCH_N + ' serves' },
-    history: evo.history.map(e => ({ gen: e.gen, lam: e.lam !== false, champId: e.champId, childId: e.childId, champAccNow: e.champAccNow, childAcc: e.childAcc ?? e.childBench, reaper: e.reaper, newChamp: e.newChamp, errors: e.errors, wErrors: e.wErrors, duel: e.score, seg: e.seg })),
+    history: evo.history.map(e => ({ gen: e.gen, lam: e.lam !== false, champId: e.champId, childId: e.childId, champAccNow: e.champAccNow, childAcc: e.childAcc ?? e.childBench, reaper: e.reaper, newChamp: e.newChamp, errors: e.errors, wErrors: e.wErrors, duel: e.score, seg: e.seg, level: e.level, fullAcc: e.fullAcc, probeAcc: e.uAcc, beyondReflex: e.beyond, units: e.cls, openSide: e.openSide, duelWinners: e.duelWinners })),
+    understanding: !isChoice() ? (D => ({ reflex: evo.champ.genome.ux ? ['Full', 'Limited', 'None'][evo.champ.genome.ux.reflex ?? 1] : 'designed wiring', probeServes: D._probe.length, probeTrackerWinRate: D._probePrior, trackerOpenSideRate: D._fullPrior, ablation: evo.uAbl || null, readout: evo.uRead || null }))(uxD())
+      : C.probe ? (uPrep(C), { reflex: evo.champ.genome.ux ? ['Full', 'Limited', 'None'][evo.champ.genome.ux.reflex ?? 1] : 'designed wiring', probeItems: C._probe.length, probeReflexAcc: C._probePrior, fullReflexAcc: C._fullPrior, ablation: evo.uAbl || null, readout: evo.uRead || null }) : null,
     weights: evo.lab || [], dopamine: tr ? { A: { level: ord(tr.lvl[0]), pulses: ord(tr.pul[0]) }, B: { level: ord(tr.lvl[1]), pulses: ord(tr.pul[1]) } } : null,
     ratesHz: Object.fromEntries(LAB.AREA_NAMES.map((n, i) => [n, +lab.rates[i].toFixed(2)])), champion: { id: evo.champ.id, genome: evo.champ.genome, bench: evo.champ.bench } };
   download(`neuro-arena-${C.id}-lab.json`, JSON.stringify(data), 'application/json'); toast('Lab data exported as JSON');
@@ -784,7 +838,7 @@ function frame(now) {
   if (ui.live && !ui.live.benching && ui.mode !== 'turbo' && !noWorkers && !document.hidden && now - Math.max(ui.liveT0 || 0, ui.lastLiveMsg || 0, ui.visT || 0) > 8000) workersFailed('no response from worker');
 }
 document.addEventListener('visibilitychange', () => { ui.visT = performance.now(); });
-ui.lay = isChoice() ? cLayout(evo.opts.size, C.K) : null; stage.setContest(C); labReset();
+ui.lay = isChoice() ? layOf(C, evo.opts.size) : null; stage.setContest(C); labReset();
 syncControls(); chartLegend(); layout(); renderLog(); renderGenome(); updateStatus(); drawMaps();
 if (evo.champ.weights && !isChoice()) ui.polMaps = [polFromWeights(evo.champ.weights), null];
 if (ui.migrated) setTimeout(() => toast('Your Pong evolution was kept; new contests are in the carousel'), 1500);

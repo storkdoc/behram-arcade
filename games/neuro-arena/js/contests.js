@@ -5,6 +5,7 @@
 import { mulberry32 } from './brain.js';
 import { ChoiceBrain } from './cbrain.js';
 import { PUZZLE5, DICT5 } from './words5.js';
+import { ctxSyms, ctxOf, UX_SRC, initUX, unitClass } from './understand.js';
 
 const D = n => Array.from({ length: n }, (_, k) => String(k));
 const pick = (r, a) => a[Math.floor(r() * a.length)];
@@ -25,6 +26,38 @@ const W5TILES = (() => { const s = new Set(); for (const it of W5ITEMS) for (con
 // curriculum: few words with the LAST letter missing -> few words, any position -> more words -> all words, any position
 // (smaller steps than before: the last letter, then the last two, then any; pos = the blank positions allowed)
 const TXL = [{ n: 25, pos: [4] }, { n: 25, pos: [3, 4] }, { n: 25 }, { n: 80 }, { n: 200 }, { n: W5.length }];
+/* the understanding layer for Word completion (understand.js): units over the gap position (src 0) and the
+   (place, letter) inputs (src 1). The reflex = the gap position alone (it can only learn S, R, A, E, E: the most
+   common letter for each place). Unit classes: 'neighbor' = the gap + a letter right next to it ("Q at 1 + gap at
+   2"), 'bigram' = two letters side by side, 'far' = the gap + letters further away, 'letters' / 'cue' otherwise. */
+const TX_UX = {
+  uOnly: true, uN: 480, reflexSrc: [0], src0W: 0.3, ctxW: 0.06,
+  symName: (src, s) => src === 0 ? `gap at ${s + 1}` : `${AZ[s % 26]} at ${Math.floor(s / 26) + 1}`,
+  uClass: u => { const gp = u.i.filter(c => c < UX_SRC), lt = u.i.filter(c => c >= UX_SRC && c < 2 * UX_SRC).map(c => c - UX_SRC), q = lt.map(x => Math.floor(x / 26));
+    if (gp.length && lt.length) return gp.some(p => q.some(x => Math.abs(x - p) === 1)) ? 'neighbor' : 'far';
+    if (lt.length >= 2) return q.some((a, i) => q.some((b, j) => i !== j && Math.abs(a - b) === 1)) ? 'bigram' : 'letters';
+    return gp.length > 1 ? 'gaps' : 'cue'; },
+  uLocal: (code, r) => { if (code < 5) return Math.max(0, Math.min(4, code + (r() < 0.5 ? -1 : 1)));
+    if (code < UX_SRC || code >= 2 * UX_SRC) return null; const x = code - UX_SRC, q = Math.floor(x / 26), l = x % 26;
+    if (r() < 0.5) { const q2 = q + (r() < 0.5 ? -1 : 1); return q2 < 0 || q2 > 4 ? null : UX_SRC + q2 * 26 + l; } return UX_SRC + q * 26 + Math.floor(r() * 26); },
+  nbrClasses: ['neighbor', 'bigram'],
+  // the frozen Understanding probe: puzzles where the position-frequency guess is WRONG (not a valid letter) but the
+  // neighbouring letters strongly imply the answer: in the 8,636-word dictionary, the letter(s) next to the gap
+  // (both sides when the gap is inside the word) are followed by one letter in >= 60% of words (>= 6 words), and that
+  // letter is a valid answer. So the reflex scores 0% here by construction and a neighbour detector can score high.
+  probe: () => {
+    const items = W5ITEMS, pf = priorOf(TXC()), ctx = new Map();
+    for (const w of DICT5) for (let p = 0; p < 5; p++) { const k = p + (p > 0 ? w[p - 1] : '^') + (p < 4 ? w[p + 1] : '$'), m = ctx.get(k) || new Map(); m.set(w[p], (m.get(w[p]) || 0) + 1); ctx.set(k, m); }
+    const ok = items.filter(it => { const w = it[4], p = it[0]; if (it[5].includes(AZ[pf(it)])) return false;
+      const m = ctx.get(p + (p > 0 ? w[p - 1] : '^') + (p < 4 ? w[p + 1] : '$')); if (!m) return false; let n = 0, bl = '', bv = 0; for (const [l, v] of m) { n += v; if (v > bv) { bv = v; bl = l; } }
+      return n >= 6 && bv / n >= 0.6 && it[5].includes(bl); });
+    const r = mulberry32(777), a = [...ok]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a.slice(0, 80); },
+  probeName: 'neighbour letters imply the answer, the frequency guess is wrong',
+  reflexText: 'In Word completion the reflex is “the gap is in place 3, so say A”: the most common letter for that place (S, R, A, E, E), right 25.3% of the time without reading the word.',
+  understandText: 'a letter next to the gap, e.g. “Q at 1 + gap at 2” → U, or pairs of letters that go together',
+};
+const TXC = () => CONTEST.text;
 const txName = L => `${TXL[L].n} words · ${!TXL[L].pos ? 'any letter' : TXL[L].pos.length === 1 ? 'last letter' : 'last 2 letters'} missing`;
 
 /* Smallest divisor: given N (2..99,999), answer its smallest divisor > 1, or P if N is prime. Answers: the primes
@@ -60,7 +93,7 @@ const SM_ITEMS = (() => { const o = []; for (const L of SM_LEN) for (let k = 0; 
 /* a contest: K answers (labels), two input slots with n[c] symbols (sym[c] names them for the display),
    all(): every distinct item [x0, x1, answerIndex, display]; items are drawn uniformly from all() */
 export const CONTESTS = [
-  { id: 'pong', name: 'Pong', icon: '🏓', kind: 'pong', blurb: 'Return the ball. A miss gives the other brain the point.' },
+  { id: 'pong', name: 'Pong', icon: '🏓', kind: 'pong', save: 3, blurb: 'Return the ball. A miss gives the other brain the point.' },
   // the symbolic contests with a curriculum: levels[] = the largest operand (or number) of each level; inLevel(item, L)
   { id: 'add', name: 'Addition', icon: '➕', kind: 'choice', blurb: 'a + b, starting at 0–2 + 0–2 and growing to 0–9 + 0–9 as the brains pass 80% (two-digit answers are judged per digit).',
     n: [10, 10], labels: D(19), rf: [0.35, 0.35], levels: [2, 3, 4, 5, 6, 7, 8, 9], inLevel: (it, L) => it[0] <= L && it[1] <= L, levelName: L => `0–${L} + 0–${L}`,
@@ -85,10 +118,10 @@ export const CONTESTS = [
   { id: 'evenodd', name: 'Even or odd', icon: '🎲', kind: 'choice', hidden: true, blurb: 'Rapid fire: is the number even (E) or odd (O)? 0–9, then 0–99, then 0–999 as the brains pass 80%.',
     n: [10, 10], labels: ['E', 'O'], rf: [0.35, 0.35], marg: 0.4, levels: [9, 99, 999], inLevel: (it, L) => it[4] <= L, levelName: L => `0–${L}`,
     all: () => Array.from({ length: 1000 }, (_, v) => [v % 10, Math.floor(v / 10) % 10, v % 2, String(v), v]) },
-  { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 6, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). Starts with 25 words and the last letter missing, grows to all ${PUZZLE5.length} words with any letter missing.`,
+  { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 7, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). Starts with 25 words and the last letter missing, grows to all ${PUZZLE5.length} words with any letter missing.`,
     n: [5, 130], split: 0.2, currThr: [0.8, 0.6, 0.42, 0.38, 0.33], mixOld: 0.25, trial: { thinkMs: 700 }, aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5,
     levels: [0, 1, 2, 3, 4, 5], inLevel: (it, L) => it[6] < TXL[L].n && (!TXL[L].pos || TXL[L].pos.includes(it[0])), levelName: txName,
-    chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26,
+    chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26, ...TX_UX,
     all: () => W5ITEMS },
   { id: 'text3', name: 'Text completion (3 letters)', icon: '🔤', kind: 'choice', hidden: true, blurb: `Complete the word: CA_ → T. Vocabulary: ${WORDS.join(' ')}.`,
     n: [W1.length, W2.length], labels: W3, sym: [W1, W2], rf: [0.35, 0.35],
@@ -117,7 +150,49 @@ export const CONTESTS = [
     all: () => [[0, 0, 0, '◀'], [1, 0, 1, '▶']] },
 ];
 export const CONTEST = Object.fromEntries(CONTESTS.map(c => [c.id, c]));
-for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = c.chanceOf ? c.chanceOf(c.all_) : 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; }
+/* THE UNDERSTANDING LAYER for the other contests: each one's REFLEX (the one cue it can answer from without reading
+   the rest) and a frozen probe of real items where that reflex is wrong but the full input decides the answer.
+   Contests whose answer is a one-to-one copy of a single input (Echo, Count the dots, Rock paper scissors) have no
+   reflex to limit: their units are not capped, and they get the self / enemy layer but no probe. */
+const shuf = (a, seed) => { const r = mulberry32(seed), b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const fullOf = C => C.levels ? benchSet(C, C.levels.length - 1) : benchSet(C, 0);
+const wrongProbe = (C, keep, n = 40, pool = null) => () => { const pf = priorOf(C); return shuf((pool ? pool() : fullOf(C)).filter((it, i, all) => keep(it) && it[2] !== pf(it) && all.findIndex(x => x[3] === it[3]) === i), 901).slice(0, n); };
+const UXDEF = {
+  add: { reflexSrc: [0], reflexText: 'In Addition the reflex is “the first number is 3, so say the answer that is most often right after a 3”: it never reads the second number.', understandText: 'the two numbers together, e.g. “3 in slot 1 + 4 in slot 2” → 7',
+    probeName: 'sums the first-number guess gets wrong', probe: null },
+  sub: { reflexSrc: [0], reflexText: 'In Subtraction the reflex answers from the first number alone.', understandText: 'both numbers together', probeName: 'differences the first-number guess gets wrong' },
+  big: { reflexSrc: [0], reflexText: 'In Bigger number the reflex is “the left number is big, so say Left”: right 78% of the time without looking at the right number.', understandText: 'both numbers together, especially close pairs',
+    probeName: 'close pairs (differ by 1 or 2) where the left-number guess is wrong', keep: it => Math.abs(it[0] - it[1]) <= 2 },
+  divisor: { reflexSrc: [0], reflexText: 'In Smallest divisor the reflex is the last-digit cue (even → 2, ends in 5 → 5, otherwise its usual answer): right 66% of the time.', understandText: 'the digit-sum and other digits beyond the last one (3, 7, 11 …)',
+    probeName: 'numbers that need more than the last-digit cue', pool: C => C.all_ },
+  evenodd: { reflexSrc: [1], reflexText: 'In Even/odd the tempting cue is the tens digit; the answer depends only on the ones digit.', understandText: 'the ones digit, not the tens digit', probeName: 'numbers whose tens and ones digits differ in parity', keep: it => (it[0] % 2) !== (it[1] % 2) },
+  simon: { reflexSrc: [0], reflexText: 'In Simon the reflex is “light 3, so say the colour most often at place 3”: right 26% (chance 25%) without remembering the sequence.', understandText: 'the place in the sequence together with the colour shown there, and repeats',
+    probeName: 'steps inside repeated-colour runs, where the place-only guess is wrong', keep: it => it[0] > 0 && it[4] && it[4][it[0]] === it[4][it[0] - 1], pool: C => C.all_.filter((it, i) => i % 7 === 0) },
+  pattern: { reflexSrc: [0], reflexText: 'In Pattern completion the reflex answers from the first number of the run alone (right 50%).', understandText: 'the first number together with the step', probeName: 'step-1 runs the first-number guess gets wrong', keep: it => it[1] === 1 },
+  echo: { reflexSrc: [] }, dots: { reflexSrc: [] }, rps: { reflexSrc: [] },
+};
+for (const [id, d] of Object.entries(UXDEF)) { const C = CONTEST[id]; if (!C) continue; const { keep, pool, probe, ...rest } = d; Object.assign(C, rest);
+  if (d.probeName) C.probe = wrongProbe(C, keep || (() => true), 40, pool ? () => pool(C) : null); }
+for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = c.chanceOf ? c.chanceOf(c.all_) : 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; c.ctx_ = ctxSyms(c); }
+/* the reflex's guess for an item: the most common (valid) answer given the reflex slot's symbol alone (Word
+   completion: the gap position -> S, R, A, E, E). Used for the beyond-reflex metric. */
+export function priorOf(C) {
+  if (C._prior) return C._prior;
+  const src = (C.reflexSrc || [0])[0], cnt = new Map();
+  for (const it of C.all_) { const v = String(it[src]), m = cnt.get(v) || new Array(C.K).fill(0); if (C.valid != null && it[C.valid]) { for (const l of it[C.valid]) m[C.labels.indexOf(l)]++; } else m[it[2]]++; cnt.set(v, m); }
+  const best = new Map(); for (const [v, m] of cnt) best.set(v, m.indexOf(Math.max(...m)));
+  return (C._prior = it => best.get(String(it[src])) ?? 0);
+}
+// accuracy of the reflex's guess on a set of items (a correct answer under THE REAPER's rule)
+export function priorAcc(C, items) { const pf = priorOf(C); let n = 0; for (const it of items) { const j = judgeItem(C, it, pf(it)); if (!j.bad && !j.abst && j.ok === j.max) n++; } return items.length ? n / items.length : 0; }
+// the frozen Understanding probe of a contest (C.probe builds it once)
+export function probeSet(C) { return C._probe || (C._probe = C.probe ? C.probe() : []); }
+// gen-0 understanding layer for a contest's genome (null = designed wiring only)
+export function initGenomeUX(C, g, reflex = 1, seed = null) { if (C && (C.kind === 'choice' || C.id === 'pong') && C.ux !== false) g.ux = initUX(C, seed ?? (g.seed | 0), reflex); return g; }
+export { unitClass };
+// cached reflex scores for the Lab: on the Understanding probe and on the full-task benchmark
+export function uPrep(C) { if (!C || !C.probe) return C; const P = probeSet(C); if (C._probePrior == null) C._probePrior = priorAcc(C, P);
+  if (C._fullPrior == null) C._fullPrior = priorAcc(C, benchSet(C, C.levels ? C.levels.length - 1 : 0)); return C; }
 // the items and chance level of curriculum level lv (contests without levels: all items)
 export function itemsAt(C, lv = 0) {
   if (!C.levels) return C.items;
@@ -215,6 +290,7 @@ export class ChoiceMatch {
     const n = players.length; this.n = n; this.hasHuman = players.some(p => p.human);
     this.st = { score: Array(n).fill(0), ok: Array(n).fill(0), bad: Array(n).fill(0), abst: Array(n).fill(0), right: Array(n).fill(0), alt: Array(n).fill(0), first: Array(n).fill(0), lat: Array(n).fill(0), latN: Array(n).fill(0) };
     this.seg = []; this.segAcc = { r: Array(n).fill(0), n: 0, t: 0 };
+    this.hist = players.map(() => ({ c: null, right: false, streak: 0, conf: null, first: false }));   // KNOW YOURSELF / YOUR ENEMY inputs
   }
   get acceptAt() { return this.T.presentMs + this.T.thinkMs; }
   startTrial() {
@@ -224,7 +300,9 @@ export class ChoiceMatch {
     else { this.item = this.next(this.trials); if (C.seq && !this.T.fixed && this.item[0] > 0) this.item = C.all_[this.item[7] - this.item[0]]; }
     this.phase = 'present'; this.pt = 0;
     this.out = this.P.map(() => ({ c: -1, t: null, cnt: null })); this.done = new Uint8Array(this.n); this.until = new Int32Array(this.n);
-    for (const p of this.P) if (p.brain) { p.brain.quiesce(); p.brain.sense(this.item[0], this.item[1]); p.brain.commit(-1); }
+    this.P.forEach((p, k) => { if (!p.brain) return; p.brain.quiesce(); p.brain.sense(this.item[0], this.item[1]);
+      if (p.brain.ux) p.brain.senseCtx(ctxOf(C, this.hist[k], this.n > 1 ? this.hist[1 - k] : null).concat(C.itemCtx ? C.itemCtx(this.item) : []));
+      p.brain.commit(-1); });
   }
   decide(k, c) {
     const T = this.T, o = this.out[k], b = this.P[k].brain;
@@ -249,6 +327,9 @@ export class ChoiceMatch {
     }
     const rt = res.map(o => !o.j.bad && !o.j.abst && o.j.ok === o.j.max ? o.t : Infinity), fk = rt.indexOf(Math.min(...rt));
     if (rt[fk] < Infinity) st.first[fk]++;
+    res.forEach((o, k) => { const h = this.hist[k], right = !o.j.bad && !o.j.abst && o.j.ok === o.j.max, b = this.P[k].brain;
+      h.c = o.c; h.right = right; h.first = rt[fk] < Infinity && fk === k; h.conf = o.conf != null && b ? o.conf >= b.margin : null;
+      if (o.c >= 0) h.streak = right ? (h.streak > 0 ? h.streak + 1 : 1) : (h.streak < 0 ? h.streak - 1 : -1); });
     this.trials++; this.segAcc.n++;
     this.events.push({ t: this.t, item: this.item, res: res.map(o => ({ c: o.c, t: o.t, s: o.j.s, ok: o.j.ok, bad: o.j.bad, abst: o.j.abst, alt: o.j.alt || 0, da: o.da, conf: o.conf, cnt: o.cnt })), first: rt[fk] < Infinity ? fk : -1 });
     if (this.events.length > 64) this.events.splice(0, this.events.length - 64);
@@ -296,9 +377,9 @@ export function runTrial(brains, contest, item, opts = {}) {
   while (m.pt < m.T.iti) m.stepMs(1);
   return m.events[0].res.map(o => ({ c: o.c, t: o.t, conf: o.conf, da: o.da, cnt: o.cnt, j: { s: o.s, ok: o.ok, bad: o.bad, abst: o.abst, alt: o.alt, max: ansLen(contest, item) } }));
 }
-export function makeBrain(contest, genome, weights, size, frozen = false) {
-  const g = frozen ? { ...genome, eta: 0, homeo: 0 } : genome;
-  const b = new ChoiceBrain(g, { K: contest.K, n: contest.n, rf: contest.rf, marg: contest.marg || 0, tiles: contest.tiles, mtiles: contest.mtiles, mfrac: contest.mfrac, mW: contest.mW, wSlot: contest.wSlot, split: contest.split, aBias: contest.aBias, wSA: contest.wSA, size }, weights);
+export function makeBrain(contest, genome, weights, size, frozen = false, opts = {}) {
+  const g = frozen ? { ...genome, eta: 0, homeo: 0 } : genome, ux = genome.ux || null;
+  const b = new ChoiceBrain(g, { ux, nCx: ux ? contest.ctx_.length : 0, uOnly: !!(ux && contest.uOnly), reflexSrc: contest.reflexSrc, silence: opts.silence, K: contest.K, n: contest.n, rf: contest.rf, marg: contest.marg || 0, tiles: contest.tiles, mtiles: contest.mtiles, mfrac: contest.mfrac, mW: contest.mW, wSlot: contest.wSlot, split: contest.split, aBias: contest.aBias, wSA: contest.wSA, size }, weights);
   b.margin = marginOf(b.g, b.L.gs);
   return b;
 }
@@ -319,8 +400,8 @@ export function benchSet(contest, level = 0) {
   if (it.length > BENCH_CAP) it.length = BENCH_CAP;
   return (benchCache[key] = it);
 }
-export function choiceBenchmark(contest, genome, weights, size, level = 0, set = null) {
-  const b = makeBrain(contest, genome, weights, size, true); set = set || benchSet(contest, level);
+export function choiceBenchmark(contest, genome, weights, size, level = 0, set = null, opts = {}) {
+  const b = makeBrain(contest, genome, weights, size, true, opts); set = set || benchSet(contest, level);
   const m = new ChoiceMatch(contest, [{ brain: b }], i => set[i], { learn: false, iti: 20, fixed: true }); const vec = [];
   const pos = contest.seq ? [new Array(SM_MAX).fill(0), new Array(SM_MAX).fill(0)] : null; let sqN = 0, sqOK = 0, sqF = 1;
   let max = 0, i0 = 0; const cls = contest.baseOf ? [new Array(contest.K).fill(0), new Array(contest.K).fill(0)] : null;
@@ -335,10 +416,26 @@ export function runChoiceDuel(job) {
   const m = new ChoiceMatch(C, [{ brain: A }, { brain: B }], () => drawItem(C, job.level, r));
   // the champion's synapses as they were before this duel, on the FULL task (the last level): tracks progress on the
   // real problem even while the curriculum benchmark restarts at every level
-  const probe = job.probe != null ? choiceBenchmark(C, job.side === 0 ? job.gA : job.gB, job.side === 0 ? job.wA : job.wB, size, job.probe) : null;
+  const cg = job.side === 0 ? job.gA : job.gB, cw = job.side === 0 ? job.wA : job.wB;
+  const probe = job.probe != null ? choiceBenchmark(C, cg, cw, size, job.probe) : null;
+  // the frozen Understanding probe (and, when asked, the ablations) for the champion's pre-duel synapses
+  const up = job.uprobe && probeSet(C).length ? understandingReport(C, cg, cw, size, job.ablate) : null;
   m.stepMs(Math.round(job.matchSec * 1000));
   const st = m.stats(); st.score = [...st.score];
   const wA = A.exportWeights(), wB = B.exportWeights();
   const bench = job.bench === false ? null : [choiceBenchmark(C, job.gA, wA, size, job.level), choiceBenchmark(C, job.gB, wB, size, job.level)];
-  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, probe: probe && { acc: probe.acc, alt: probe.alt, level: probe.level } };
+  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, probe: probe && { acc: probe.acc, alt: probe.alt, level: probe.level }, up };
+}
+/* Understanding probe accuracy (+ ablations: knock out unit classes and re-measure the probe and the full task).
+   ablate: true -> 'all units', 'self', 'enemy', 'self+enemy', the contest's neighbour classes, 'reflex' */
+export function understandingReport(C, g, w, size, ablate = false) {
+  const P = probeSet(C), out = { acc: choiceBenchmark(C, g, w, size, 0, P).acc, n: P.length, prior: priorAcc(C, P) };
+  if (ablate && g.ux) {
+    const full = benchSet(C, C.levels ? C.levels.length - 1 : 0), cls = g.ux.units.map(u => unitClass(C, u));
+    const kos = { 'none': () => false, 'all units': () => true, 'self': u => cls[u] === 'self', 'enemy': u => cls[u] === 'enemy', 'self+enemy': u => cls[u] === 'self' || cls[u] === 'enemy', 'reflex': u => cls[u] === 'reflex' };
+    if (C.nbrClasses) kos['neighbour detectors'] = u => C.nbrClasses.includes(cls[u]);
+    out.ablate = {}; out.fullPrior = priorAcc(C, full); out.units = g.ux.units; out.readout = makeBrain(C, g, w, size, true).unitReadout();
+    for (const [k, f] of Object.entries(kos)) { const o = { silence: f }; out.ablate[k] = { probe: choiceBenchmark(C, g, w, size, 0, P, o).acc, full: choiceBenchmark(C, g, w, size, C.levels ? C.levels.length - 1 : 0, null, o).acc }; }
+  }
+  return out;
 }

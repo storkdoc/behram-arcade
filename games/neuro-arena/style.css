@@ -210,3 +210,7 @@ body.thumb #carousel { display: none; }
 #lab td.ok { color: var(--ok); font-weight: 700; } #lab td.bad { color: #ff8a8a; }
 #lab .ln { font-size: 10.5px; color: var(--dim); margin: 4px 0 0; }
 @media (max-width: 900px) { #lab .lgrid { grid-template-columns: minmax(0, 1fr); } #lab .w2 { grid-column: auto; } #lab .lhead #labTitle { display: none; } }
+#lab .urow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px; font-size: 11px; color: var(--dim); }
+#lab .urow select { -webkit-appearance: none; appearance: none; padding-right: 18px !important; background: #0a1024 linear-gradient(45deg, transparent 50%, #9fb3d8 50%) no-repeat right 8px center / 6px 6px; color: #dfe8ff; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+#lab .urow .btn { flex: none; padding: 5px 10px; }
+#lab .hyp { font-size: 12px; color: var(--gold); margin: 2px 0 4px; }
