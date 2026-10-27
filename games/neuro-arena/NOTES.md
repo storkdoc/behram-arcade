@@ -110,6 +110,42 @@ one gen-0 brain, one lifetime, accuracy on the frozen benchmark, all characters 
 Evolution (Lamarckian) carries learned synapses across generations, so in the browser champions keep improving
 beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Turbo.
 
+## Word completion (5-letter, Oct 27 2026; contest id `text`, the old 3-letter one is hidden as `text3`)
+- **Task:** a five-letter word with one letter missing at any of the 5 positions (`L_GHT`); answer one of 26 letters.
+  643 curated common words (`js/words5.js` PUZZLE5), every word × every blank position = 3,215 items.
+- **Any legitimate answer counts.** THE REAPER (`judgeItem` in contests.js) accepts ANY letter that makes a word in
+  DICT5: the 8,636 five-letter words of the ENABLE word list (public domain, vendored in words5.js), much broader
+  than the puzzle list. An alternate valid letter gets full credit (+1, the same dopamine) and the stage shows
+  `VALID ALT: SOUTH→MOUTH ✓`. 47% of items have more than one valid letter (mean 1.96). Ambiguous puzzles are kept.
+  The benchmark, live accuracy and curriculum all use the same rule. Live stats and the Lab (caption under the live
+  curve) split correct answers into intended + alternate; the champion benchmark reports `alt` too.
+- **Chance** under that rule = mean(#valid letters)/26 = 7.6% (shown everywhere). A stronger baseline: always guessing
+  the most common valid letter for the blank's position (S, R, A, E, E) gets **25.3%** on the full set.
+- **Curriculum** (`TXL`, thresholds `currThr` over the last 60 practice trials): L1 25 words, last letter missing
+  (≥80%) → L2 25 words, any position (≥50%) → L3 80 words (≥40%) → L4 200 words (≥35%) → L5 all 643, any position.
+- **Input coding** (new discrete mode in cbrain.js, `spec.tiles`): slot 0 = the blank's position (5 symbols, 20% of
+  the thalamic/sensory cells, `split`), slot 1 = (position, letter) of the 4 known letters (130 symbols, multi-hot:
+  4 on at once). Association cells are conjunction tiles [blank position, (position, letter)]: the 468 pairs that
+  occur in the words (≈2 cells per tile at 2,800 neurons). Contest-level `aBias −4` (sharper AND) and `wSA 0.35`.
+  Learning, the trial loop, dopamine, eligibility, evolution and the Lab are unchanged.
+- **Ceilings measured** (`tests/ideal5.mjs`, hand-wired Assoc→Motor weights = P(letter | tile)): ~85–94% at L1 and
+  ~27–33% at L5 for the spiking brain; a noiseless linear readout of the same features reaches 50%. `tests/diag5.mjs`
+  showed the limit is association cells that match only the blank position firing a little (noise ~1.5× the signal);
+  re-weighting the two slots, bigger brains (5,600) and position-only cells did not raise the spiking ceiling.
+- **Learning** (`S0=<seed> PROBE=4 node tests/learn.mjs text <trials> 1 2800 <every>`; benchmark = 50–100 frozen
+  items, so ±4–5 points of noise; ~2× real time on one core, 4,000 trials ≈ 33 simulated minutes ≈ 6.5 wall min):
+  | seed | full-level probe at trial 0 | L1→L2 / L3 / L4 / L5 reached at trial | full level, benchmark at 4k / 5k / 6k | practice acc at L5 |
+  |---|---|---|---|---|
+  | 1 | 8% | 477 / 1,365 / 1,978 / 2,407 | 17 / 30 / 27% | 21–25% |
+  | 2 | 13% | 451 / 1,399 / 1,572 / 3,014 | 16 / 24 / 20% | 22–24% |
+  | 3 | 3% | 527 / 2,232 / 2,520 / 3,123 | 21 / 26 / 19% | 20–23% |
+
+  So: 3–13% (chance 7.6%) → ~20–25% on all 643 words after 4,000–6,000 trials (33–49 simulated min), i.e. about
+  3× chance but only level with the 25% position-frequency baseline. In the small levels the climb is clearly word
+  knowledge: 25 words, last letter: 2–6% → 74–88% in 500–750 trials (baseline 28%); 25 words, any position:
+  → 45–51% after 3,500 trials (baseline 27%). Trained directly on the full level (no curriculum, seeds 1–3):
+  8/3/11% → 24/22/12% after 4,000–5,000 trials.
+
 ## Evolution (headless Turbo, `node tests/evochoice.mjs <contest> 10 4 1 30`: 4 arenas, Lamarckian, 30-s duels)
 - Addition: champion benchmark 24% (gen 4) → 26% (gen 12–40); chance 11%; 40 generations in 2 min wall.
 - Subtraction: 19% (gen 4) → 38% (gen 8–40); chance 17%.
@@ -127,3 +163,6 @@ copy-error effects by gene, every Reaper verdict, Lamarck vs Darwin per contest,
   well needs a longer lifetime or several generations (evolution carries the curriculum level and the weights).
 - Even or odd only wires the ones and tens digits (the hundreds digit is shown but has no input tile).
 - Big brains are slower than real time.
+- Word completion at the full 643-word level plateaus around the position-frequency baseline (≈20–25% vs 25%):
+  the brain clearly learns words in the small levels (25 words: 2–8% → 50–88%) but at full size its 2 cells per
+  conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much.
