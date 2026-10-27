@@ -27,7 +27,7 @@ const LEVEL_DESC = ['A nervous squire. Leaves pieces hanging. Your army will fee
 
 /* ---------- state ---------- */
 const G = window.LCG = {
-  booted: false, mode: null, me: 0, level: S.level, chess: new LC.Chess(), startFen: LC.START, history: [], mem: new Mind.Memory(),
+  booted: false, netQ: [], mode: null, me: 0, level: S.level, chess: new LC.Chess(), startFen: LC.START, history: [], mem: new Mind.Memory(),
   an: null, thr: null, th: null, gen: 0, busy: false, over: null, sel: null, cursor: 28, hoverId: null, shownId: null, pv: null, confirmUci: null,
   clock: null, clk: [0, 0], lastTick: 0, againMe: false, againThem: false, netLost: false, errors: 0, analysing: false, speakingId: null, events: [],
 };
@@ -38,7 +38,7 @@ async function boot() {
   const prog = f => { $('lprog').style.width = Math.round(f * 100) + '%'; };
   R = new Board3D($('gl'), { msaa: QS.has('msaa'), q: QS.get('q'), onFatal: m => window.LCFatal(m), onLost: () => toast('Graphics were reset — restoring…') });
   await R.init(f => prog(f * 0.6));
-  R.hooks({ sfx: sfxHook }); G.R = R;
+  R.hooks({ sfx: sfxHook }); G.R = R; G.Net = Net;
   G.chess = new LC.Chess(); R.sync(G.chess);
   $('lmsg').textContent = 'THE PIECES ARE STIRRING…';
   engine = LCEngine.browser('');
@@ -133,10 +133,10 @@ function newGame(o) {
   G.mode = o.mode; G.me = o.me; G.level = o.level != null ? o.level : G.level; G.startFen = o.fen || LC.START;
   G.chess = new LC.Chess(G.startFen); G.history = []; G.mem = new Mind.Memory(); G.mem.init(G.chess);
   for (const u of o.moves || []) { const before = G.chess.clone(); const rec = G.chess.play(u); if (!rec) break; G.history.push(rec); G.mem.observe(before, rec); }
-  G.an = G.thr = G.th = null; G.over = null; G.sel = null; G.pv = null; G.confirmUci = null; G.againMe = G.againThem = false; G.netLost = false;
+  G.netQ = []; G.an = G.thr = G.th = null; G.over = null; G.sel = null; G.pv = null; G.confirmUci = null; G.againMe = G.againThem = false; G.netLost = false;
   const ck = o.clock || CLOCKS[0]; G.clock = ck.b ? { b: ck.b, i: ck.i, n: ck.n } : null; G.clk = o.clk ? o.clk.slice() : [ck.b * 1000, ck.b * 1000]; G.lastTick = performance.now();
   G.cursor = G.me ? 52 : 12;
-  R.endShot(); R.resetReactions(); R.setOrientation(G.me, false); R.sync(G.chess); R.setLast(G.history[G.history.length - 1] || null); R.setSel(null); R.setDots([]); R.setGhost(null); R.setGhost(null, 'counsel'); R.setCursor(isTouchDev ? null : G.cursor); R.clearThoughts();
+  R.endShot(); R.resetReactions(); R.setOrientation(G.me, R.orient !== G.me); R.sync(G.chess); R.setLast(G.history[G.history.length - 1] || null); R.setSel(null); R.setDots([]); R.setGhost(null); R.setGhost(null, 'counsel'); R.setCursor(isTouchDev ? null : G.cursor); R.clearThoughts();
   $('over').classList.add('hidden'); $('promo').classList.add('hidden'); $('gmenu').classList.add('hidden'); $('pv').classList.add('hidden');
   $('nMe').textContent = 'YOU · ' + (G.me ? 'BLACK' : 'WHITE'); $('nOpp').textContent = (G.mode === 'solo' || G.mode === 'practice' ? LCEngine.LEVELS[G.level].name : 'BUDDY') + ' · ' + (G.me ? 'WHITE' : 'BLACK');
   $('bUndo').disabled = !(G.mode === 'solo' || G.mode === 'practice');
@@ -235,7 +235,7 @@ async function doMove(uci, src) {
   try { await R.playMove(rec, G.chess, { cinematic: !FAST }); } catch (e) { console.error(e); R.sync(G.chess); }
   afterMoveWords(rec, mover);
   G.busy = false;
-  nextTurn();
+  nextTurn(); drainNet();
   return true;
 }
 const LOSS = ['No… not the {v}!', 'The {v} on {sq} is gone. Make it mean something.', 'They took our {v}. I saw it coming.', 'Our {v}… I will remember this.'];
@@ -444,7 +444,7 @@ function onNet(d) {
     if (d.t === 'mv') {
       const guestSide = 1 - G.me;
       if (G.over || G.chess.turn !== guestSide || d.ply !== G.history.length || !G.chess.parse(d.uci) || !legalUci(d.uci)) { safeSend({ t: 'rej', ply: d.ply }); safeSend({ t: 'go', fen: G.startFen, moves: G.history.map(r => r.uci), clock: S.clock, clk: G.clk, hostSide: G.me, resync: 1 }); return; }
-      doMove(d.uci, 'remote');
+      netMove(d.uci);
     } else if (d.t === 'resign') { gameOver({ over: true, result: G.me ? '0-1' : '1-0', reason: 'resignation', winner: G.me }); }
     else if (d.t === 'again') { G.againThem = true; toast('Your buddy wants a rematch.'); if (G.againMe) hostStart(1 - G.hostSide); }
     else if (d.t === 'bye') { netGone('YOUR BUDDY LEFT THE GAME.'); }
@@ -455,12 +455,15 @@ function onNet(d) {
       toast(d.moves && d.moves.length && !d.resync ? 'You take command of the ' + (G.me ? 'black' : 'white') + ' army, mid-battle!' : 'Your buddy is here. To arms!', 3500);
     } else if (d.t === 'mv') {
       if (d.clk) { G.clk = d.clk.slice(); G.lastTick = performance.now(); }
-      if (d.ply === G.history.length && legalUci(d.uci)) doMove(d.uci, 'remote');
+      if (d.ply === G.history.length + G.netQ.length) netMove(d.uci);
     } else if (d.t === 'over') { gameOver({ over: true, result: d.result, reason: d.reason, winner: d.winner }); }
     else if (d.t === 'again') { G.againThem = true; toast('Your buddy wants a rematch.'); }
     else if (d.t === 'bye') { netGone('YOUR BUDDY LEFT THE GAME.'); }
   }
 }
+/* remote moves wait their turn while a local animation is still playing */
+function netMove(u) { G.netQ.push(u); drainNet(); }
+function drainNet() { if (G.busy || !G.netQ.length) return; const u = G.netQ.shift(); if (legalUci(u)) doMove(u, 'remote'); else drainNet(); }
 function legalUci(u) { const m = G.chess.parse(u); return !!m && G.chess.moves().some(x => x.from === m.from && x.to === m.to && (x.promo || 0) === (m.promo || 0)); }
 function netGone(msg) {
   if (G.netLost) return; G.netLost = true; toast(msg, 5000);

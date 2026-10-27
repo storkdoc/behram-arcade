@@ -429,7 +429,7 @@ export class Board3D {
     const home = this.homeShot(); let tp = home.pos, tl = home.look, k = 2.2, focusT = 0;
     if (this.camShot) { const s = this.camShot; s.t += dt; if (s.orbit) { const a = s.orbit * dt, c = Math.cos(a), sn = Math.sin(a), dx = s.pos.x - s.look.x, dz = s.pos.z - s.look.z; s.pos.x = s.look.x + dx * c - dz * sn; s.pos.z = s.look.z + dx * sn + dz * c; } tp = s.pos; tl = s.look; k = s.k; focusT = s.focus; if (s.t > s.hold && s.hold < 90) this.camShot = null; }
     else if (this.focusChar && this.tier >= 2) { // gentle push toward the hovered piece (close-up feel) with focus blur
-      const c = this.focusChar; const fp = c.root.position; tp = home.pos.clone().lerp(new THREE.Vector3(fp.x, fp.y + 4.5, fp.z + (this.orient ? -5.2 : 5.2)), 0.18); tl = home.look.clone().lerp(fp, 0.25); focusT = 0.35;
+      const c = this.focusChar; const fp = c.root.position; void fp; tp = home.pos; tl = home.look; focusT = 0.35; // focus blur only: moving the camera would slide pieces out from under the pointer
     }
     const kk = 1 - Math.exp(-k * dt);
     this.camCur.pos.lerp(tp, kk); this.camCur.look.lerp(tl, kk);

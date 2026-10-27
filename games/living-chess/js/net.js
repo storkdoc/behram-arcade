@@ -99,7 +99,7 @@ const Net = window.Net = (() => {
     hb = setInterval(() => {
       if (!conn || !conn.open) return;
       safe(() => conn.send({ t: 'ping', ts: now() }));
-      if (now() - st.lastRx > 8000) { st.status = 'error'; st.error = 'CONNECTION LOST.'; cleanup(true); }
+      if (now() - st.lastRx > 30000) { st.status = 'error'; st.error = 'CONNECTION LOST.'; cleanup(true); } // chess is turn-based and phones background tabs: be patient
     }, 1000);
   }
 

@@ -25,7 +25,9 @@
   var booted = function () { return window.LCG && window.LCG.booted; };
   addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) LCFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
   addEventListener('unhandledrejection', function (e) { if (!booted()) LCFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
-  setTimeout(function () { if (!booted()) LCFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 30000);
+  // slow-boot watchdog: scripts missing -> error at 30 s; scripts present but still loading (slow device/network) -> wait up to 120 s
+  var dog = function (n) { if (booted()) return; if (!window.LCG && n === 0) LCFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); else if (n >= 3) LCFatal('The game is taking very long to start on this device. Try RELOAD.'); else setTimeout(function () { dog(n + 1); }, 30000); };
+  setTimeout(function () { dog(0); }, 30000);
   /* block pinch / double-tap zoom (iOS ignores user-scalable=no) */
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
   document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });

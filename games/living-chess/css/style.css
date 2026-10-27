@@ -110,7 +110,7 @@ button { font-family: inherit; }
 .otitle { font-size: 28px; } .osub { color: var(--ink); margin-bottom: 14px; font-style: italic; }
 .obtns, .gmenu { display: flex; flex-direction: column; gap: 8px; min-width: 240px; }
 .over { top: 40%; }
-.toast { position: fixed; left: 50%; bottom: calc(24px + var(--sab)); transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 10px; font: 14px system-ui, sans-serif; z-index: 40; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + var(--sab)); transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 10px; font: 14px system-ui, sans-serif; z-index: 40; pointer-events: none; }
 #fatal { position: fixed; inset: 0; z-index: 99; background: #200808; color: #ffd0c0; white-space: pre-wrap; padding: 30px; font: 15px/1.5 system-ui, sans-serif; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 #fatal button { margin-top: 16px; font-size: 18px; padding: 12px 24px; border-radius: 10px; background: #ffd0c0; color: #200808; border: 0; }
 

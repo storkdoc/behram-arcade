@@ -25,7 +25,7 @@ const FAKE_SPEECH = () => {
   const p = await ctx.newPage(); const errs = [];
   p.on('console', m => { if (m.type() === 'error' || (m.type() === 'warning' && /living-chess|black/.test(m.text()))) errs.push(m.text()); }); p.on('pageerror', e => errs.push('PAGEERR ' + e.message));
   console.log(`== ${ENG} ${DEV}`);
-  await p.goto(URL); await p.waitForFunction(() => window.LCG && LCG.booted && LCG.screen === 'title', null, { timeout: 120000 });
+  await p.goto(URL, { timeout: 180000 }); await p.waitForFunction(() => window.LCG && LCG.booted && LCG.screen === 'title', null, { timeout: 120000 });
   const st0 = await p.evaluate(() => LCG.api.state());
   check(/stockfish/i.test(st0.engine), 'Stockfish WASM engine loaded', st0.engine);
   if (phone && ENG === 'webkit') check(st0.render.ios && st0.render.maxTier <= 1, 'iOS: no float post targets (max quality 1)', st0.render);
