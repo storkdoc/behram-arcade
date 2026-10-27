@@ -38,7 +38,7 @@ export class ChoiceBrain {
   /* spec: { K, n: [n0, n1], rf: [r0, r1] (fraction of symbol spacing), size }
      weights: null or { W: Float32Array, seed, pAM, size } (synapses inherited from a parent) */
   constructor(genome, spec, weights = null) {
-    this.g = { ...genome }; this.spec = spec;
+    this.g = { ...genome }; this.spec = spec; this.disc = !!spec.tiles;
     const L = this.L = cLayout(spec.size || 2800, spec.K, spec.marg || 0), N = this.N = L.N;
     this.K = spec.K; this.NA = L.A_E.n; this.NM = L.M_E.n; this.M0 = L.M_E.s;
     this.type = new Uint8Array(N); this.area = new Uint8Array(N); this.ch = new Int8Array(N).fill(-1); this.c1 = new Float32Array(N); this.c2 = new Float32Array(N);
@@ -54,13 +54,14 @@ export class ChoiceBrain {
     this.Iext = new Float32Array(N);
     this.build(); this.initPlastic(weights);
     // a hyperpolarising bias on the association cells: one matching slot alone stays below threshold (a sharper AND)
-    for (let i = L.A_E.s; i < L.A_E.e; i++) this.Iext[i] = CB.aBias * ((this.c1[i] < 0 || this.c2[i] < 0) ? 0 : 1);
+    for (let i = L.A_E.s; i < L.A_E.e; i++) this.Iext[i] = (this.spec.aBias ?? CB.aBias) * ((this.c1[i] < 0 || this.c2[i] < 0) ? 0 : 1);
     this.xPre = new Float32Array(this.NA); this.yPost = new Float32Array(this.NM);
     this.rateM = new Float32Array(this.NM); this.rExp = new Float32Array(this.NM); this.cntM = new Uint16Array(this.NM);
     this.gcnt = new Float32Array(this.K); this.tcnt = new Float32Array(this.K); this.cntA = new Uint16Array(this.NA); this.grate = new Float32Array(this.K); this.ou = new Float32Array(this.K); this.bias = new Float32Array(this.K);
     this.reset();
   }
   label() {
+    if (this.disc) return this.labelDisc();
     const L = this.L, h = L.TH_E.n / 2, hs = L.S_E.n / 2, G = L.G;
     for (let k = 0; k < L.TH_E.n; k++) { const i = L.TH_E.s + k, c = k < h ? 0 : 1, r = k % h; this.ch[i] = c; this.c1[i] = (r + 0.5) / h; }
     for (let k = 0; k < L.S_E.n; k++) { const i = L.S_E.s + k, c = k < hs ? 0 : 1, r = k % hs; this.ch[i] = c; this.c1[i] = (r + 0.5) / hs; }
@@ -75,6 +76,23 @@ export class ChoiceBrain {
       const km = k - (L.A_E.n - L.nMarg);
       if (km >= 0) { const sl = km % 2, n = this.spec.n[sl], v = ((Math.floor(km / 2) % n) + 0.5) / n; this.c1[i] = sl === 0 ? v : -1; this.c2[i] = sl === 1 ? v : -1; }
     }
+  }
+  /* discrete ("feature") input mode, used by Word completion: each input line cell codes exactly one symbol of its slot
+     (no Gaussian tuning: 130 position x letter symbols are too many for a topographic line), the two slots may get
+     unequal shares of the thalamic / sensory cells (spec.split = slot 0's share), several symbols of a slot can be
+     on at once (sense(x0, [list])) and each association cell is a given conjunction tile [slot-0 symbol, slot-1
+     symbol] from spec.tiles (cell k gets tile k mod #tiles, so every tile has the same number of cells) */
+  labelDisc() {
+    const L = this.L, sp = this.spec, n = sp.n, f = sp.split || 0.5;
+    this.symOf = new Int16Array(this.N).fill(-1);
+    const line = (A) => { const N = L[A].n, h0 = Math.max(n[0], Math.round(N * f)); this['h0' + A] = h0;
+      for (let k = 0; k < N; k++) { const i = L[A].s + k, c = k < h0 ? 0 : 1, r = c ? k - h0 : k, len = c ? N - h0 : h0; this.ch[i] = c; this.c1[i] = (r + 0.5) / len; this.symOf[i] = Math.min(n[c] - 1, Math.floor(this.c1[i] * n[c])); } };
+    line('TH_E'); line('S_E');
+    // optional single-slot tiles (spec.mtiles, e.g. [p, -1] = "the gap is at position p") get the last spec.mfrac of the cells
+    const T = sp.tiles, nT = T.length, MT = sp.mtiles || [], nM = MT.length ? Math.round(L.A_E.n * (sp.mfrac || 0.1)) : 0;
+    this.allT = T.concat(MT); this.tileOf = new Int32Array(L.A_E.n);
+    for (let k = 0; k < L.A_E.n; k++) { const i = L.A_E.s + k, km = k - (L.A_E.n - nM), ti = km >= 0 ? nT + km % MT.length : k % nT, t = this.allT[ti]; this.ch[i] = 4; this.tileOf[k] = ti;
+      this.c1[i] = t[0] < 0 ? -1 : (t[0] + 0.5) / n[0]; this.c2[i] = t[1] < 0 ? -1 : (t[1] + 0.5) / n[1]; }
   }
   build() {
     const g = this.g, L = this.L, N = this.N, rnd = mulberry32(g.seed | 0), ch = this.ch, c1 = this.c1, c2 = this.c2, sp = this.spec;
@@ -92,7 +110,17 @@ export class ChoiceBrain {
     if (g.sTRN >= 0.5) for (let i = L.TH_E.s; i < L.TH_E.e; i++) randIn('TH_I', i, 0.15, 0.025, 2);
     // thalamus -> sensory (topographic within a slot). Candidates are restricted to a window for speed.
     const h = L.TH_E.n / 2, hs = L.S_E.n / 2;
-    for (let i = L.S_E.s; i < L.S_E.e; i++) {
+    // discrete mode: cells of each (slot, symbol) by area
+    const bySym = A => { const m = new Map(); for (let i = L[A].s; i < L[A].e; i++) { const key = this.ch[i] * 4096 + this.symOf[i]; if (!m.has(key)) m.set(key, []); m.get(key).push(i); } return m; };
+    const thSym = this.disc ? bySym('TH_E') : null, sSym = this.disc ? bySym('S_E') : null;
+    if (this.disc) for (let i = L.S_E.s; i < L.S_E.e; i++) {
+      // all relay cells of the same symbol, total drive matched to the topographic case (~pTS * sqrt(2pi) * 0.03 * 160 inputs)
+      const src = thSym.get(ch[i] * 4096 + this.symOf[i]) || [], wt = g.wTS * g.pTS * 2.5066 * 0.03 * 160 / Math.max(1, src.length);
+      for (const j of src) add(j, i, wt, 4);
+      const sib = sSym.get(ch[i] * 4096 + this.symOf[i]) || []; for (const j of sib) if (j !== i && rnd() < 0.5) add(j, i, g.wEE, 2);
+      randIn('S_I', i, 0.2, g.wIE, 2);
+    }
+    else for (let i = L.S_E.s; i < L.S_E.e; i++) {
       const c = ch[i], sg = sigS[c], off = L.TH_E.s + c * h, ctr = c1[i] * h, win = Math.ceil(4 * sg * h);
       for (let r = Math.max(0, Math.floor(ctr - win)); r < Math.min(h, Math.ceil(ctr + win)); r++) { const j = off + r, d = c1[j] - c1[i]; if (rnd() < g.pTS * Math.exp(-d * d / (2 * sg * sg))) add(j, i, g.wTS, 4); }
       const so = L.S_E.s + c * hs, sc = c1[i] * hs, sw = Math.ceil(0.06 * hs);
@@ -105,7 +133,13 @@ export class ChoiceBrain {
     // in-degree per slot matched to the Pong gain field (pSA * sqrt(2pi) * gfW * 224 cells); when the symbol tuning
     // is too narrow to supply that many inputs, the synapses are made proportionally stronger instead
     const pf = [0, 1].map(c => { const e = g.pSA * 2.5066 * gw[c] * hs, T = g.pSA * 2.5066 * g.gfW * 224, f = Math.min(0.95 / g.pSA, T / e); return { f, wm: T / (e * f) }; });
-    for (let i = L.A_E.s; i < L.A_E.e; i++) {
+    if (this.disc) for (let i = L.A_E.s; i < L.A_E.e; i++) {
+      const t = this.allT[this.tileOf[i - L.A_E.s]], T = g.pSA * 2.5066 * g.gfW * 224, mw = (t[0] < 0 || t[1] < 0) ? (sp.mW ?? 1.5) : 1;
+      const sw = sp.wSlot || [1, 1];
+      for (let c = 0; c < 2; c++) { if (t[c] < 0) continue; const src = sSym.get(c * 4096 + t[c]) || [], wt = sw[c] * mw * g.wSA * (sp.wSA ?? CB.wSA) * T / Math.max(1, src.length); for (const j of src) add(j, i, wt, 4); }
+      randIn('A_I', i, 0.2, g.wIE * CB.aInh, 2);
+    }
+    else for (let i = L.A_E.s; i < L.A_E.e; i++) {
       for (let c = 0; c < 2; c++) {
         const ctr = c === 0 ? c1[i] : c2[i]; if (ctr < 0) continue; const mw = (c1[i] < 0 || c2[i] < 0) ? CB.margW : 1, gwc = gw[c], so = L.S_E.s + c * hs, win = Math.ceil(4 * gwc * hs) + 1, cc = ctr * hs, P = g.pSA * pf[c].f, wt = g.wSA * CB.wSA * pf[c].wm * mw;
         for (let r = Math.max(0, Math.floor(cc - win)); r < Math.min(hs, Math.ceil(cc + win)); r++) { const j = so + r, d = c1[j] - ctr; if (rnd() < P * Math.exp(-d * d / (2 * gwc * gwc))) add(j, i, wt, 4); }
@@ -165,6 +199,11 @@ export class ChoiceBrain {
   // present symbols (indices into each slot's alphabet; -1 = nothing). Drive in Hz per relay cell.
   sense(x0, x1) {
     const g = this.g, L = this.L, sp = this.spec, d = this.drive, h = L.TH_E.n / 2, gain = g.thGain * CB.thG;
+    if (this.disc) {   // discrete mode: x0 / x1 are a symbol or a list of symbols (multi-hot)
+      const on = [new Set([].concat(x0 ?? [])), new Set([].concat(x1 ?? []))];
+      for (let k = 0; k < L.TH_E.n; k++) { const i = L.TH_E.s + k; d[k] = on[this.ch[i]].has(this.symOf[i]) ? 3 + gain : 3; }
+      return;
+    }
     const rs = (sp.rf || [0.35, 0.35]).map((r, c) => r * CB.rfX / sp.n[c] * (g.rfW / 0.14));
     const v = [x0, x1];
     for (let k = 0; k < L.TH_E.n; k++) {

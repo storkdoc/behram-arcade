@@ -10,12 +10,12 @@ export class Stage {
     if (this.c.width !== W || this.c.height !== H) { this.c.width = W; this.c.height = H; }
     this.dpr = dpr;
   }
-  setContest(C) { this.C = C; this.hist = [[], []]; this.last = null; this.f = null; this.rope = 0; }
+  setContest(C) { this.C = C; this.hist = [[], []]; this.tally = [[0, 0], [0, 0]]; this.last = null; this.f = null; this.rope = 0; }
   setFrame(f) {
     this.f = f;
     for (const e of f.ev || []) {
       this.last = e; e.at = performance.now();
-      e.res.forEach((o, k) => { const right = !o.bad && !o.abst; this.hist[k].push(o.abst ? 0.5 * 0 : right ? 1 : 0); if (this.hist[k].length > 400) this.hist[k].shift(); if (this.C.race && e.first === k) this.rope += k ? 1 : -1; });
+      e.res.forEach((o, k) => { const right = !o.bad && !o.abst; if (right) this.tally[k][o.alt ? 1 : 0]++; this.hist[k].push(o.abst ? 0.5 * 0 : right ? 1 : 0); if (this.hist[k].length > 400) this.hist[k].shift(); if (this.C.race && e.first === k) this.rope += k ? 1 : -1; });
       if (e.first >= 0) this.flash[e.first] = 1;
     }
   }
@@ -36,8 +36,10 @@ export class Stage {
     this.timeline(f, w, fs);
     x.font = `800 ${fs}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillStyle = live ? '#fff' : 'rgba(255,255,255,.45)';
     const prompt = item ? (C.race ? item[3] : item[3]) : '…';
-    x.fillText(prompt, w / 2, fs * 1.42);
-    if (!live && this.last && item) { x.font = `600 ${fs * 0.34}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 2.08); }
+    let wb = fs * 1.9; if (C.valid && item) wb = this.word(item, live, w, fs);
+    else x.fillText(prompt, w / 2, fs * 1.42);
+    if (C.valid && !live && this.last && item) { const alts = item[C.valid].split('').filter(l => l !== want); x.font = `600 ${Math.max(10, fs * 0.3)}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${item[4]}${alts.length ? ' · also valid: ' + alts.join(' ') : ''}`, w / 2, Math.max(fs * 2.12, wb + Math.max(7, fs * 0.2)), w - 16); }
+    else if (!live && this.last && item) { x.font = `600 ${fs * 0.34}px -apple-system, system-ui, sans-serif`; x.fillStyle = DIM; x.fillText(`answer: ${want}${item[4] ? '  (' + item[4] + ')' : ''}`, w / 2, fs * 2.08); }
     // two answer columns
     const top = fs * 2.38, colW = w / 2, st = f.stats;
     const tiny = h < 220, pl = 10, ph = Math.max(28, Math.min(54, h * 0.13)), py = h - ph - 8, pw = w - 2 * pl, floorY = C.race ? h - 80 : tiny ? h - 2 : py - 4;
@@ -55,19 +57,27 @@ export class Stage {
       const thinking = f.phase === 'present' || f.phase === 'think';
       if (given == null) { x.fillStyle = 'rgba(160,170,200,.55)'; const tl = live ? (k === 1 && !br ? '?' : thinking ? 'thinking…' : '…') : 'abstain'; if (tl.length > 1) x.font = `700 ${Math.max(11, Math.min(af * 0.42, colW * 0.8 / tl.length * 1.6))}px ui-monospace, "SF Mono", Menlo, monospace`; x.fillText(tl, cx, ay); }
       else if (live) { x.fillStyle = '#fff'; x.fillText(given, cx, ay); }
+      else if (C.valid) {   // Word completion: the guessed letter, the word it makes and the Reaper's verdict (an alternate valid word counts)
+        const good = judged && judged.s > 0, wd = item ? item[4].slice(0, item[0]) + given + item[4].slice(item[0] + 1) : '';
+        x.fillStyle = good ? OK : BAD; x.fillText(given, cx, ay);
+        if (judged) { x.font = `700 ${Math.max(9, Math.min(af * 0.22, colW / 15))}px -apple-system, system-ui, sans-serif`;
+          x.fillText(judged.alt ? `VALID ALT: ${item[4]}→${wd} ✓` : good ? `${wd} ✓` : `${wd} ✗`, cx, ay + af * 0.6, colW - 8);
+          x.font = `600 ${Math.max(8, Math.min(af * 0.18, colW / 18))}px -apple-system, system-ui, sans-serif`; x.fillStyle = good ? OK : judged.s < 0 ? BAD : DIM;
+          x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.86, colW - 8); }
+      }
       else {
         const showJ = true; const cw = x.measureText('0').width; const sx = cx - (given.length - 1) * cw / 2;
         for (let i = 0; i < given.length; i++) { const okc = given[i] === want[i]; x.fillStyle = okc ? OK : BAD; x.fillText(given[i], sx + i * cw, ay); }
         if (showJ && judged) { x.font = `600 ${Math.max(9, af * 0.2)}px -apple-system, system-ui, sans-serif`; x.fillStyle = judged.s > 0 ? OK : judged.s < 0 ? BAD : DIM; x.fillText(`${judged.s > 0 ? '+' : ''}${judged.s} Reaper pts${judged.da != null ? ' · dopamine ' + (judged.da > 0 ? '+' : '') + judged.da.toFixed(2) : ''}`, cx, ay + af * 0.62); }
       }
       // the race: spike counts of each choice population this trial (bar = population; the margin line = the answer threshold)
-      const by = ay + af * 0.95, bh = Math.max(12, Math.min(90, floorY - by - 50)), bw = Math.min(colW * 0.86, C.K * 30), bx = cx - bw / 2, gw = bw / C.K;
+      const by = ay + af * (C.valid ? 1.08 : 0.95), bh = Math.max(12, Math.min(90, floorY - by - 50)), bw = Math.min(colW * 0.86, C.K * 30), bx = cx - bw / 2, gw = bw / C.K;
       if (br) {
         const gc = br.gc, mx = Math.max(br.margin * 2, ...gc); let i1 = 0; gc.forEach((v, i) => { if (v > gc[i1]) i1 = i; });
         for (let q = 0; q < C.K; q++) {
           const v = gc[q] / mx, isW = item && q === item[2] && !live;
           x.fillStyle = q === i1 && gc[q] > 0 ? col : 'rgba(150,170,220,.35)'; x.fillRect(bx + q * gw + 1, by + bh * (1 - v), gw - 2, bh * v);
-          x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; x.fillText(C.labels[q], bx + q * gw + gw / 2, by + bh + 8);
+          x.font = `600 ${Math.max(8, Math.min(13, gw * 0.5))}px ui-monospace, Menlo, monospace`; x.fillStyle = isW ? OK : DIM; if (gw >= 9 || q === i1 || isW) x.fillText(C.labels[q], bx + q * gw + gw / 2, by + bh + 8);
         }
         // confidence threshold (Play only): the leader must be this many spikes ahead of the runner-up or the brain abstains
         const sorted = [...gc].sort((a, b) => b - a), thr = (sorted[1] || 0) + Math.max(br.margin, (br.kconf || 0) * Math.sqrt((sorted[0] || 0) + (sorted[1] || 0)));
@@ -80,7 +90,7 @@ export class Stage {
       x.fillStyle = fr >= 0 ? OK : BAD; x.fillRect(fr >= 0 ? mid : mid + fr * colW * 0.42, sy, Math.abs(fr) * colW * 0.42, 8);
       x.fillStyle = 'rgba(255,255,255,.5)'; x.fillRect(mid - 0.5, sy - 2, 1, 12);
       x.font = `600 ${Math.max(9, Math.min(12, w * 0.018))}px -apple-system, system-ui, sans-serif`; x.fillStyle = '#d8e6ff';
-      x.fillText(`score ${sc} · ✓${st.ok[k]} ✗${st.bad[k]} · abstain ${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right`, cx, sy + 20);
+      x.fillText(`score ${sc} · ✓${st.ok[k]} ✗${st.bad[k]} · abstain ${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right`, cx, sy + 20, colW - 6);
       if (this.flash[k] > 0.05) { x.strokeStyle = `rgba(92,255,157,${this.flash[k]})`; x.lineWidth = 2; rr(x, colW * k + 6, top - 4, colW - 12, sy + 26 - top, 10); x.stroke(); x.lineWidth = 1; }
     }
     // tug-of-war rope
@@ -106,6 +116,18 @@ export class Stage {
     }
   }
 }
+// Word completion: the five letters in boxes, the missing one as a highlighted gap (filled in with the intended
+// letter once the trial is judged)
+Stage.prototype.word = function (item, live, w, fs) {
+  const x = this.x, s = item[3], n = s.length, tl = fs * 0.36 + Math.max(7, fs * 0.2) + Math.max(9, Math.min(14, fs * 0.24)) + 4, cw = Math.min(fs * 0.85, (w - 24) / (n + 0.6), (fs * 1.95 - tl) / 1.1), gap = cw * 0.12, tw = n * cw + (n - 1) * gap, x0 = (w - tw) / 2, bh = cw * 1.1, y = tl + bh / 2;
+  x.font = `800 ${cw * 0.72}px ui-monospace, "SF Mono", Menlo, monospace`;
+  for (let i = 0; i < n; i++) { const bx = x0 + i * (cw + gap), blank = s[i] === '_';
+    x.fillStyle = blank ? (live ? 'rgba(46,230,255,.18)' : 'rgba(92,255,157,.12)') : 'rgba(255,255,255,.06)'; rr(x, bx, y - bh / 2, cw, bh, 6); x.fill();
+    x.strokeStyle = blank ? (live ? '#2ee6ff' : 'rgba(92,255,157,.8)') : 'rgba(150,170,220,.35)'; x.lineWidth = blank ? 2 : 1; if (blank) x.setLineDash([4, 3]); x.stroke(); x.setLineDash([]); x.lineWidth = 1;
+    x.fillStyle = blank ? (live ? '#2ee6ff' : 'rgba(92,255,157,.9)') : (live ? '#fff' : 'rgba(255,255,255,.55)');
+    x.fillText(blank ? (live ? '?' : item[4][i]) : s[i], bx + cw / 2, y + 1); }
+  return y + bh / 2;
+};
 // PRESENT → THINKING → ANSWER → JUDGED: the fixed trial loop every brain runs, with a cursor at the current moment
 Stage.prototype.timeline = function (f, w, fs) {
   const x = this.x, T = f.T; if (!T) return;

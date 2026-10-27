@@ -4,11 +4,26 @@
    judged per character. */
 import { mulberry32 } from './brain.js';
 import { ChoiceBrain } from './cbrain.js';
+import { PUZZLE5, DICT5 } from './words5.js';
 
 const D = n => Array.from({ length: n }, (_, k) => String(k));
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 const WORDS = ['CAT', 'DOG', 'SUN', 'PIG', 'BEE', 'OWL', 'FOX', 'COW', 'HEN', 'RAT', 'BUS', 'CUP', 'HAT', 'MAP', 'JAM', 'BOX'];
 const W1 = [...new Set(WORDS.map(w => w[0]))].sort(), W2 = [...new Set(WORDS.map(w => w[1]))].sort(), W3 = [...new Set(WORDS.map(w => w[2]))].sort();
+/* Word completion: a five-letter word with one letter blanked out (any of the 5 positions); answer the missing letter.
+   Input = slot 0: the blank's position (5 symbols); slot 1: a position x letter grid (5 x 26 = 130 symbols), the
+   four known letters are on at once. Association cells are conjunctions (blank at p) AND (letter l at position q),
+   e.g. "the gap is 1st and the 2nd letter is I". THE REAPER accepts ANY letter that makes a word of DICT5 (8,636
+   five-letter words), so _IGHT -> N is as right as L. Item: [p, [q*26+l...], answer, 'L_GHT', word, valid letters, rank] */
+const AZ = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const W5 = (() => { const r = mulberry32(55), a = [...PUZZLE5]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; })();
+const W5ITEMS = []; for (let rk = 0; rk < W5.length; rk++) { const w = W5[rk]; for (let p = 0; p < 5; p++) {
+  const syms = []; for (let q = 0; q < 5; q++) if (q !== p) syms.push(q * 26 + AZ.indexOf(w[q]));
+  const valid = AZ.filter(c => DICT5.has(w.slice(0, p) + c + w.slice(p + 1))).join('');
+  W5ITEMS.push([p, syms, AZ.indexOf(w[p]), w.slice(0, p) + '_' + w.slice(p + 1), w, valid, rk]); } }
+const W5TILES = (() => { const s = new Set(); for (const it of W5ITEMS) for (const x of it[1]) s.add(it[0] * 1000 + x); return [...s].sort((a, b) => a - b).map(v => [Math.floor(v / 1000), v % 1000]); })();
+// curriculum: few words with the LAST letter missing -> few words, any position -> more words -> all words, any position
+const TXL = [{ n: 25, any: 0 }, { n: 25, any: 1 }, { n: 80, any: 1 }, { n: 200, any: 1 }, { n: W5.length, any: 1 }];
 
 /* a contest: K answers (labels), two input slots with n[c] symbols (sym[c] names them for the display),
    all(): every distinct item [x0, x1, answerIndex, display]; items are drawn uniformly from all() */
@@ -33,7 +48,12 @@ export const CONTESTS = [
   { id: 'parity', name: 'Even or odd', icon: '🎲', kind: 'choice', blurb: 'Rapid fire: is the number even (E) or odd (O)? 0–9, then 0–99, then 0–999 as the brains pass 80%.',
     n: [10, 10], labels: ['E', 'O'], rf: [0.35, 0.35], marg: 0.4, levels: [9, 99, 999], inLevel: (it, L) => it[4] <= L, levelName: L => `0–${L}`,
     all: () => Array.from({ length: 1000 }, (_, v) => [v % 10, Math.floor(v / 10) % 10, v % 2, String(v), v]) },
-  { id: 'text', name: 'Text completion', icon: '🔤', kind: 'choice', blurb: `Complete the word: CA_ → T. Vocabulary: ${WORDS.join(' ')}.`,
+  { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 5, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). Starts with 25 words and the last letter missing, grows to all ${PUZZLE5.length} words with any letter missing.`,
+    n: [5, 130], split: 0.2, currThr: [0.85, 0.7, 0.55, 0.45], aBias: -4, wSA: 0.35, tiles: W5TILES, mtiles: [0, 1, 2, 3, 4].map(p => [p, -1]), mfrac: +(globalThis.process?.env?.MFRAC ?? 0.1), mW: +(globalThis.process?.env?.MW ?? 1.5), labels: AZ, rf: [0.35, 0.35], valid: 5,
+    levels: [0, 1, 2, 3, 4], inLevel: (it, L) => it[6] < TXL[L].n && (TXL[L].any || it[0] === 4), levelName: L => `${TXL[L].n} words · ${TXL[L].any ? 'any letter' : 'last letter'} missing`,
+    chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26,
+    all: () => W5ITEMS },
+  { id: 'text3', name: 'Text completion (3 letters)', icon: '🔤', kind: 'choice', hidden: true, blurb: `Complete the word: CA_ → T. Vocabulary: ${WORDS.join(' ')}.`,
     n: [W1.length, W2.length], labels: W3, sym: [W1, W2], rf: [0.35, 0.35],
     all: () => WORDS.map(w => [W1.indexOf(w[0]), W2.indexOf(w[1]), W3.indexOf(w[2]), `${w[0]}${w[1]}_`, w]) },
   { id: 'rps', name: 'Rock paper scissors', icon: '✊', kind: 'choice', blurb: 'Your opponent throws a move: answer the move that beats it (R beats S, P beats R, S beats P).',
@@ -56,14 +76,14 @@ export const CONTESTS = [
     all: () => [[0, 0, 0, '◀'], [1, 0, 1, '▶']] },
 ];
 export const CONTEST = Object.fromEntries(CONTESTS.map(c => [c.id, c]));
-for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; }
+for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = c.chanceOf ? c.chanceOf(c.all_) : 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; }
 // the items and chance level of curriculum level lv (contests without levels: all items)
 export function itemsAt(C, lv = 0) {
   if (!C.levels) return C.items;
   const L = C.levels[Math.max(0, Math.min(C.levels.length - 1, lv | 0))], key = '_lv' + L;
   return C[key] || (C[key] = C.all_.filter(it => C.inLevel(it, L)));
 }
-export const chanceAt = (C, lv = 0) => C.kind !== 'choice' ? 0 : C.levels ? 1 / new Set(itemsAt(C, lv).map(it => it[2])).size : C.chance;
+export const chanceAt = (C, lv = 0) => C.kind !== 'choice' ? 0 : C.chanceOf ? C.chanceOf(itemsAt(C, lv)) : C.levels ? 1 / new Set(itemsAt(C, lv).map(it => it[2])).size : C.chance;
 export const levelName = (C, lv = 0) => C.levels ? `level ${(lv | 0) + 1}/${C.levels.length} · ${C.levelName(C.levels[Math.min(lv | 0, C.levels.length - 1)])}` : '';
 /* lifetime curriculum: advance a level when the rolling accuracy of the last `win` trials reaches `thr` */
 export const CURR = { thr: 0.9, win: 60 };
@@ -73,7 +93,7 @@ export class Curriculum {
   note(right, t = 0) {
     if (!this.C.levels) return false;
     this.h.push(right ? 1 : 0); if (this.h.length > CURR.win) this.h.shift();
-    if (this.h.length >= CURR.win && this.h.reduce((a, b) => a + b, 0) >= CURR.thr * CURR.win && this.level < this.C.levels.length - 1) { this.level++; this.h = []; this.ups.push(t); return true; }
+    if (this.h.length >= CURR.win && this.h.reduce((a, b) => a + b, 0) >= (this.C.currThr ? this.C.currThr[this.level] : CURR.thr) * CURR.win && this.level < this.C.levels.length - 1) { this.level++; this.h = []; this.ups.push(t); return true; }
     return false;
   }
 }
@@ -108,6 +128,12 @@ export function judge(given, want) {
   for (let i = 0; i < Math.max(given.length, want.length); i++) { if (i >= given.length) continue; if (given[i] === want[i]) ok++; else bad++; }
   return { s: ok - 2 * bad, ok, bad, abst: 0, max: want.length };
 }
+// judge an answer index for an item; contests with a `valid` field accept any valid alternative (full credit, j.alt)
+export function judgeItem(C, item, c) {
+  const want = C.labels[item[2]], given = c >= 0 ? C.labels[c] : null;
+  if (given != null && C.valid != null && given !== want && item[C.valid] && item[C.valid].includes(given)) return { ...judge(given, given), alt: 1, intended: want };
+  return judge(given, want);
+}
 /* verdict between the reigning champion (ka) and a challenger (kb) on the SAME frozen benchmark set:
    the challenger is reaped (replaces the champion) only if it scores >= margin more Reaper points AND
    the paired sign test over items favours it (items it did better on minus items it did worse on >= sqrt(sum)).
@@ -130,7 +156,7 @@ export class ChoiceMatch {
     this.C = contest; this.P = players; this.next = next; this.T = { ...TRIAL, ...opts }; this.learn = opts.learn !== false;
     this.t = 0; this.phase = 'iti'; this.pt = this.T.iti; this.trials = 0; this.events = []; this.item = null; this.onJudge = opts.onJudge || null;
     const n = players.length; this.n = n; this.hasHuman = players.some(p => p.human);
-    this.st = { score: Array(n).fill(0), ok: Array(n).fill(0), bad: Array(n).fill(0), abst: Array(n).fill(0), right: Array(n).fill(0), first: Array(n).fill(0), lat: Array(n).fill(0), latN: Array(n).fill(0) };
+    this.st = { score: Array(n).fill(0), ok: Array(n).fill(0), bad: Array(n).fill(0), abst: Array(n).fill(0), right: Array(n).fill(0), alt: Array(n).fill(0), first: Array(n).fill(0), lat: Array(n).fill(0), latN: Array(n).fill(0) };
     this.seg = []; this.segAcc = { r: Array(n).fill(0), n: 0, t: 0 };
   }
   get acceptAt() { return this.T.presentMs + this.T.thinkMs; }
@@ -141,7 +167,7 @@ export class ChoiceMatch {
   }
   decide(k, c) {
     const T = this.T, o = this.out[k], b = this.P[k].brain;
-    o.c = c; o.t = this.pt; o.j = judge(c >= 0 ? this.C.labels[c] : null, this.C.labels[this.item[2]]);
+    o.c = c; o.t = this.pt; o.j = judgeItem(this.C, this.item, c);
     this.done[k] = 1; this.until[k] = this.pt + (b && c >= 0 ? T.commitMs : 0);
     if (b) b.commit(c, T.commitI);
   }
@@ -157,13 +183,13 @@ export class ChoiceMatch {
     const C = this.C, want = C.labels[this.item[2]], st = this.st, res = [];
     for (let k = 0; k < this.n; k++) {
       const o = this.out[k]; const j = o.j || judge(null, want); o.j = j; res.push(o);
-      st.score[k] += j.s; st.ok[k] += j.ok; st.bad[k] += j.bad; st.abst[k] += j.abst; const right = !j.bad && !j.abst && j.ok === j.max; if (right) { st.right[k]++; this.segAcc.r[k]++; }
+      st.score[k] += j.s; st.ok[k] += j.ok; st.bad[k] += j.bad; st.abst[k] += j.abst; const right = !j.bad && !j.abst && j.ok === j.max; if (right) { st.right[k]++; this.segAcc.r[k]++; if (j.alt) st.alt[k]++; }
       if (o.t != null) { st.lat[k] += o.t; st.latN[k]++; }
     }
     const rt = res.map(o => !o.j.bad && !o.j.abst && o.j.ok === o.j.max ? o.t : Infinity), fk = rt.indexOf(Math.min(...rt));
     if (rt[fk] < Infinity) st.first[fk]++;
     this.trials++; this.segAcc.n++;
-    this.events.push({ t: this.t, item: this.item, res: res.map(o => ({ c: o.c, t: o.t, s: o.j.s, ok: o.j.ok, bad: o.j.bad, abst: o.j.abst, da: o.da, conf: o.conf, cnt: o.cnt })), first: rt[fk] < Infinity ? fk : -1 });
+    this.events.push({ t: this.t, item: this.item, res: res.map(o => ({ c: o.c, t: o.t, s: o.j.s, ok: o.j.ok, bad: o.j.bad, abst: o.j.abst, alt: o.j.alt || 0, da: o.da, conf: o.conf, cnt: o.cnt })), first: rt[fk] < Infinity ? fk : -1 });
     if (this.events.length > 64) this.events.splice(0, this.events.length - 64);
     if (this.onJudge) this.onJudge(this.events[this.events.length - 1], this);
     for (const p of this.P) if (p.brain) { p.brain.blank(); p.brain.commit(-1); }
@@ -207,11 +233,11 @@ export function runTrial(brains, contest, item, opts = {}) {
   const m = new ChoiceMatch(contest, brains.map(b => ({ brain: b })), () => item, opts);
   m.pt = m.T.iti; while (m.trials < 1) m.stepMs(1);
   while (m.pt < m.T.iti) m.stepMs(1);
-  return m.events[0].res.map(o => ({ c: o.c, t: o.t, conf: o.conf, da: o.da, cnt: o.cnt, j: { s: o.s, ok: o.ok, bad: o.bad, abst: o.abst, max: contest.labels[item[2]].length } }));
+  return m.events[0].res.map(o => ({ c: o.c, t: o.t, conf: o.conf, da: o.da, cnt: o.cnt, j: { s: o.s, ok: o.ok, bad: o.bad, abst: o.abst, alt: o.alt, max: contest.labels[item[2]].length } }));
 }
 export function makeBrain(contest, genome, weights, size, frozen = false) {
   const g = frozen ? { ...genome, eta: 0, homeo: 0 } : genome;
-  const b = new ChoiceBrain(g, { K: contest.K, n: contest.n, rf: contest.rf, marg: contest.marg || 0, size }, weights);
+  const b = new ChoiceBrain(g, { K: contest.K, n: contest.n, rf: contest.rf, marg: contest.marg || 0, tiles: contest.tiles, mtiles: contest.mtiles, mfrac: contest.mfrac, mW: contest.mW, wSlot: contest.wSlot, split: contest.split, aBias: contest.aBias, wSA: contest.wSA, size }, weights);
   b.margin = marginOf(b.g, b.L.gs);
   return b;
 }
@@ -233,7 +259,7 @@ export function choiceBenchmark(contest, genome, weights, size, level = 0, set =
   let max = 0, i0 = 0;
   while (m.trials < set.length) { m.stepMs(1); if (m.events.length && m.trials > i0) { const e = m.events[m.events.length - 1]; vec.push(e.res[0].s); max += contest.labels[e.item[2]].length; i0 = m.trials; } }
   const st = m.stats();
-  return { fit: st.score[0] / max, score: st.score[0], correct: st.ok[0], wrong: st.bad[0], abstain: st.abst[0], max, n: set.length, acc: st.right[0] / set.length, lat: st.lat[0], vec, level: contest.levels ? level | 0 : null };
+  return { fit: st.score[0] / max, score: st.score[0], correct: st.ok[0], wrong: st.bad[0], abstain: st.abst[0], max, n: set.length, acc: st.right[0] / set.length, alt: st.alt[0], lat: st.lat[0], vec, level: contest.levels ? level | 0 : null };
 }
 // a duel: both brains learn while they race on the same random items for matchSec seconds of simulated time
 export function runChoiceDuel(job) {

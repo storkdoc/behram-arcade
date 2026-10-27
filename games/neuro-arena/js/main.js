@@ -47,14 +47,17 @@ const ui = { mode: 'watch', speed: 1, K: Math.max(1, Math.min(coarse ? 3 : 6, HC
 let evo = getEvo(meta.cur), C = CONTEST[meta.cur];
 window.NA = { get evo() { return evo; }, get contest() { return C; }, select: id => selectContest(id), evos, ui, errs, get R() { return R; }, get noWorkers() { return noWorkers; }, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
 
+// a contest whose task changed (save: n) keeps its evolution under a new key, so an old save (other answer set) is ignored
+const skey = id => KEY + '.' + id + (CONTEST[id] && CONTEST[id].save ? '.s' + CONTEST[id].save : '');
 function load(id) {
-  try { const s = localStorage.getItem(KEY + '.' + id); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) return e; } } catch (e) { console.warn('could not restore', e); }
+  if (CONTEST[id] && CONTEST[id].save) try { if (!localStorage.getItem(skey(id)) && meta.sum[id]) delete meta.sum[id]; } catch (e) { }
+  try { const s = localStorage.getItem(skey(id)); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) return e; } } catch (e) { console.warn('could not restore', e); }
   if (id === 'pong') try { const s = localStorage.getItem(KEY_V2); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) { ui.migrated = true; return e; } } } catch (e) { console.warn('could not migrate the v2 save', e); }
   return null;
 }
 function save(force) {
   const now = performance.now(); if (!force && now - ui.lastSave < 8000) return; ui.lastSave = now;
-  const id = evo.opts.contest, k = KEY + '.' + id;
+  const id = evo.opts.contest, k = skey(id);
   meta.sum[id] = { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size, level: evo.level || 0 }; meta.cur = C.id; saveMeta();
   try { localStorage.setItem(k, JSON.stringify(evo.serialize(true))); if (id === 'pong') localStorage.removeItem(KEY_V2); }
   catch (e) { try { localStorage.setItem(k, JSON.stringify(evo.serialize(false))); } catch (e2) { /* storage full or disabled */ } }
@@ -392,7 +395,7 @@ function updateMeters(f) {
       const d = $('da' + s), v = Math.max(-1, Math.min(1, b.rpe * 0.8));
       d.style.width = Math.abs(v) * 50 + '%'; d.style.left = v < 0 ? (50 + v * 50) + '%' : '50%'; d.classList.toggle('neg', v < 0);
       const st = f.stats, n = Math.max(1, st.trials);
-      $('hr' + s).textContent = `✓${st.ok[k]} ✗${st.bad[k]} –${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right (chance ${pct(chanceOf(C))})`;
+      $('hr' + s).textContent = `✓${st.ok[k]} ✗${st.bad[k]} –${st.abst[k]} · ${Math.round(100 * st.right[k] / n)}% right${C.valid && st.alt ? ` (${st.alt[k]} alt)` : ''} (chance ${pct(chanceOf(C))})`;
     });
     return;
   }
@@ -412,7 +415,7 @@ function updateStatus() {
   const c = evo.champ, h = evo.history, nb = h.filter(e => e.beneficial).length, nc = h.filter(e => e.newChamp).length, b = c.bench;
   const nn = neuronsOf(C, evo.opts.size).toLocaleString();
   const bl = isChoice()
-    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items · best ever ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
+    ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct}${C.valid && b.alt != null ? `, ${b.alt} via an alternate valid word` : ''} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items · best ever ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
     : `Benchmark ${pct(c.fit)} of ${BENCH_N} standard serves · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}<br>Mean rally (20 duels) ${recentRally().toFixed(1)} hits`;
   $('stat').innerHTML = `<b>${C.icon} ${C.name} · generation ${evo.gen}</b><br>${nn} neurons per brain<br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>` +
     `${bl}<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
@@ -574,7 +577,7 @@ $('sSize').onchange = e => {
 };
 $('bReset').onclick = () => {
   if (!confirm(`Reset the ${C.name} evolution to generation 0? Its champion and history will be erased (other contests are kept).`)) return;
-  const o = { ...evo.opts }; evo = evos[C.id] = new Evolution(o); localStorage.removeItem(KEY + '.' + C.id); if (C.id === 'pong') localStorage.removeItem(KEY_V2); ui.started = false; ui.polMaps = [null, null];
+  const o = { ...evo.opts }; evo = evos[C.id] = new Evolution(o); localStorage.removeItem(skey(C.id)); if (C.id === 'pong') localStorage.removeItem(KEY_V2); ui.started = false; ui.polMaps = [null, null];
   drawChart(); renderLog(); renderGenome(); updateStatus(); drawMaps(); setMode(ui.mode === 'turbo' ? 'watch' : ui.mode); toast('Evolution reset to generation 0');
 };
 $('bExport').onclick = () => {
@@ -715,6 +718,9 @@ function drawLab(full) {
     $('lReaper').innerHTML = LAB.reaperHTML(evo); $('lLine').innerHTML = LAB.lineageHTML(evo, !isChoice()); $('lLD').innerHTML = LAB.lamDarHTML(evo, chanceOf(C));
   }
   LAB.drawLive($('lLive'), isChoice() ? stage.hist : [[], []], chanceOf(C));
+  // Word completion: correct answers split into the intended letter and an alternate letter that also makes a valid word
+  const la = $('lAlt'); if (la) { const b = evo.champ.bench, t = stage.tally || [[0, 0], [0, 0]];
+    la.textContent = C.valid ? `correct = intended + alternate valid word · live A ${t[0][0]}+${t[0][1]} alt · B ${t[1][0]}+${t[1][1]} alt${b && b.alt != null ? ` · champion benchmark ${b.correct - b.alt}+${b.alt} alt of ${b.n}` : ''}` : ''; la.style.display = C.valid ? '' : 'none'; }
   LAB.drawDA($('lDA'), lab.tr); LAB.drawRaster($('lRas'), lab.ras, lab.rates);
 }
 $('bLab').onclick = () => toggleLab(true); $('labX').onclick = () => toggleLab(false);

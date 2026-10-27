@@ -11,7 +11,8 @@ import { CB } from '../js/cbrain.js';
 for (const k of Object.keys(CB)) if (process.env['CB_' + k] != null) CB[k] = +process.env['CB_' + k];
 if (process.env.DK) DEC.k = +process.env.DK; for (const k of Object.keys(TRIAL)) if (process.env['T_' + k] != null) TRIAL[k] = +process.env['T_' + k];
 const [id = 'add', NT = '600', seeds = '1', size = '2800', every = '200', ...kv] = process.argv.slice(2);
-const C = CONTEST[id], over = Object.fromEntries(kv.map(s => s.split('=')).map(([k, v]) => [k, +v]));
+const C = CONTEST[id]; for (const k of ['aBias', 'wSA', 'split', 'mW']) if (process.env['C_' + k] != null) C[k] = +process.env['C_' + k]; if (process.env.WSL) C.wSlot = process.env.WSL.split(',').map(Number);
+const over = Object.fromEntries(kv.map(s => s.split('=')).map(([k, v]) => [k, +v]));
 const S0 = +(process.env.S0 || 1), PROBE = process.env.PROBE != null ? +process.env.PROBE : null;
 for (let sd = S0; sd < S0 + +seeds; sd++) {
   const g = { ...gen0Genome(1000 + sd), ...over };
