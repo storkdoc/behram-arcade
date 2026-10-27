@@ -25,6 +25,7 @@
     darter: { name: 'DARTER', hp: 1, shield: 0, r: 3.6, speed: 50, turn: 2.3, pts: 10 },
     lancer: { name: 'LANCER', hp: 2, shield: 0, r: 5.5, speed: 33, turn: 1.15, pts: 25 },
     hive: { name: 'HIVE', hp: 3, shield: 4, r: 11, speed: 13, turn: 0.45, pts: 60 },
+    rival: { name: 'ENEMY FLAGSHIP', hp: 1, shield: 0, r: 3.4, speed: 74, turn: 1.6, pts: 0 },
   };
   const BASE_POS = [0, -18, -260];
   const RANKS = ['GALACTIC FRY COOK', 'ASTEROID JANITOR', 'GARBAGE BARGE PILOT', 'SPACE CADET', 'COMET CHASER', 'ENSIGN', 'WINGMAN', 'LIEUTENANT', 'ACE', 'STARSHIP CAPTAIN', 'FLEET COMMANDER', 'STAR COMMANDER'];
@@ -32,8 +33,8 @@
   // per difficulty
   const DCFG = [
     { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0 },
-    { fleets: [3, 4, 1], bases: 4, move: 1.25, need: 3, siege: 75, plasmaV: 82, aimErr: 0.1, fireMul: 1.25, home: 0.1, drift: 0.12, hitE: 120, bareE: 900, bareSys: 3, bareKill: 0.25, hunters: 1 },
-    { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.6, hunters: 2 },
+    { fleets: [3, 4, 1], bases: 4, move: 1.25, need: 3, siege: 75, plasmaV: 82, aimErr: 0.1, fireMul: 1.25, home: 0.1, drift: 0.12, hitE: 120, bareE: 900, bareSys: 3, bareKill: 0.15, hunters: 1 },
+    { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.35, hunters: 2 },
     { fleets: [3, 5, 3], bases: 3, move: 0.8, need: 2, siege: 58, plasmaV: 108, aimErr: 0.035, fireMul: 0.8, home: 0.45, drift: 0.38, hitE: 180, bareE: 0, bareSys: 0, bareKill: 1, hunters: 3 },
   ];
   const MISSIONS = {
@@ -74,6 +75,7 @@
 
   /* ---------- new game ---------- */
   function newGame(o = {}) {
+    if (o.mode === 'war') return newWar(o);
     const diff = clamp(o.diff | 0, 0, 3), seed = (o.seed >>> 0) || 1, R = rng(seed), mission = MISSIONS[o.mission] ? o.mission : 'campaign';
     const C = Object.assign({}, DCFG[diff]);
     const G = { diff, seed, mission, C, R, t: 0, W, H, nextId: 1, bases: [], fleets: [], players: [], ships: [], shots: [], ev: [], msgs: [], over: null,
@@ -131,12 +133,23 @@
     const p = { idx, sx: b.x, sy: b.y, pos: [0, 0, 40], q: [0, 0, 0, 1], speed: 0, thr: 0, energy: G.energyMax || 9999, emax: G.energyMax || 9999,
       shields: false, comp: true, dmg: { P: 0, E: 0, S: 0, C: 0, L: 0, R: 0 }, alive: true, kills: 0, cool: 0, side: 0, targetId: 0, lock: false, lockT: 0,
       warp: null, dock: null, respawn: 0, hitT: 0, shieldT: 0, view: 'fore', inTransit: false, track: false, steer: [0, 0], used: 0, redAlert: 0 };
+    if (G.war) { p.team = idx; const hb = G.bases.find(b => b.team === idx && b.home) || G.bases.find(b => b.team === idx); p.sx = hb.x; p.sy = hb.y; }
     G.players[idx] = p; return p;
   }
   function msg(G, text, kind = 'info', who = -1) { G.msgs.push({ id: G.nextId++, t: G.t, text, kind, who }); if (G.msgs.length > 40) G.msgs.shift(); }
   function ev(G, o) { o.id = G.nextId++; G.ev.push(o); }
   const sectorKey = p => p.inTransit || !p.alive ? -1 : key(p.sx, p.sy);
   const fleetAt = (G, x, y) => G.fleets.find(f => f.x === x && f.y === y);
+  // team: undefined = the Vrell (hostile to every pilot); in WAR mode 0 / 1 for the two sides
+  const hostileTo = (a, b) => a === undefined || b === undefined || a !== b;
+  const RIVAL = 900000;
+  /** everything pilot p can shoot at in its sector: hostile ships plus (WAR) the enemy flagship */
+  function hostiles(G, p) {
+    const sk = key(p.sx, p.sy), out = G.ships.filter(s => s.sk === sk && hostileTo(s.team, p.team));
+    if (G.war) for (const o of G.players) if (o && o !== p && o.alive && !o.inTransit && o.team !== p.team && key(o.sx, o.sy) === sk) out.push({ id: RIVAL + o.idx, kind: 'rival', pos: o.pos, fwd: fwdOf(o.q), speed: o.speed, rival: o });
+    return out;
+  }
+  function findTarget(G, id) { if (id >= RIVAL) { const o = G.players[id - RIVAL]; return o && o.alive && !o.inTransit ? { id, kind: 'rival', pos: o.pos, rival: o } : null; } return G.ships.find(s => s.id === id); }
   const baseAt = (G, x, y) => G.bases.find(b => b.alive && b.x === x && b.y === y);
   const thrCap = p => p.dmg.E >= 2 ? 2 : p.dmg.E >= 1 ? 5 : 9;
 
@@ -210,12 +223,13 @@
     if (G.over) return;
     G.t += dt; G.ev.length = 0;
     const R = G.R, C = G.C;
+    if (G.war) for (const p of G.players) if (p && inputs[p.idx] && inputs[p.idx].acts) for (const a of inputs[p.idx].acts) warAct(G, p.team, a);
     for (const p of G.players) if (p) stepPlayerSystems(G, p, inputs[p.idx] || {}, dt, opts.remote && opts.remote[p.idx]);
-    stepGalaxy(G, dt);
+    if (G.war) stepWar(G, dt); else stepGalaxy(G, dt);
     stepShips(G, dt);
     stepShots(G, dt);
     // game end
-    if (!G.over) {
+    if (!G.over && !G.war) {
       const alivePl = G.players.filter(p => p && (p.alive || p.respawn > 0));
       if (G.mission !== 'laststand' && G.fleets.length === 0 && G.ships.length === 0) end(G, true, 'ALL VRELL FLEETS DESTROYED');
       else if (!G.bases.some(b => b.alive)) end(G, false, 'ALL STARBASES DESTROYED');
@@ -252,18 +266,17 @@
     // targeting: the nearest ship near the crosshair, else the nearest in the view hemisphere
     const sk = sectorKey(p), dir = viewDir(p);
     let best = null, bs = 1e9, cur = null;
-    for (const s of G.ships) {
-      if (s.sk !== sk) continue;
+    for (const s of hostiles(G, p)) {
       const rel = V.sub(s.pos, p.pos), d = V.len(rel), c = V.dot(rel, dir) / (d || 1);
       if (s.id === p.targetId) cur = { s, d, c };
       if (c < 0.05) continue;
       const score = d * (1.6 - c) * (c > 0.995 ? 0.3 : 1);
       if (score < bs) { bs = score; best = s; }
     }
-    if (inp.target === 'next') { const list = G.ships.filter(s => s.sk === sk).sort((a, b) => V.dist(a.pos, p.pos) - V.dist(b.pos, p.pos)); if (list.length) { const i = list.findIndex(s => s.id === p.targetId); p.targetId = list[(i + 1) % list.length].id; p.manualT = 4; } }
+    if (inp.target === 'next') { const list = hostiles(G, p).sort((a, b) => V.dist(a.pos, p.pos) - V.dist(b.pos, p.pos)); if (list.length) { const i = list.findIndex(s => s.id === p.targetId); p.targetId = list[(i + 1) % list.length].id; p.manualT = 4; } }
     p.manualT = Math.max(0, (p.manualT || 0) - dt);
     if (!(p.manualT > 0 && cur) && !(p.track && cur)) p.targetId = best ? best.id : 0;
-    const tg = G.ships.find(s => s.id === p.targetId);
+    const tg = findTarget(G, p.targetId);
     const wasLock = p.lock;
     p.lock = false;
     if (tg && p.comp && p.dmg.C < 1) { const rel = V.sub(tg.pos, p.pos), d = V.len(rel); if (d < 240 && V.dot(rel, dir) / d > Math.cos(0.075)) p.lock = true; }
@@ -274,14 +287,14 @@
     let n = inp.fire | 0;
     while (n-- > 0) fire(G, p, inp.fireAt);
     // red alert when enemies are in the sector
-    const hostile = G.ships.some(s => s.sk === sk);
+    const hostile = hostiles(G, p).length > 0;
     if (hostile && !p.redAlert) { p.redAlert = 1; ev(G, { e: 'redalert', p: p.idx }); }
     if (!hostile) p.redAlert = 0;
     // docking
-    const base = baseAt(G, p.sx, p.sy);
+    let base = baseAt(G, p.sx, p.sy); if (base && G.war && base.team !== p.team) base = null;
     if (base && !p.dock) {
       const rel = V.sub(BASE_POS, p.pos), d = V.len(rel), f = fwdOf(p.q);
-      p.canDock = d < 70 && V.dot(rel, f) / d > 0.9;
+      p.canDock = d < 95 && V.dot(rel, f) / d > 0.9;
       if (p.canDock && (p.speed < 0.8 || inp.dock)) { p.dock = { t: 0, phase: 'orbit' }; p.thr = 0; ev(G, { e: 'orbit', p: p.idx }); msg(G, 'ORBIT ESTABLISHED', 'good', p.idx); }
     } else if (!base) p.canDock = false;
     if (p.dock) {
@@ -314,17 +327,19 @@
     if (!p.alive) return;
     p.alive = false; p.warp = null; p.dock = null; p.lock = false; p.inTransit = false; G.stats.deaths++;
     ev(G, { e: 'pdead', p: p.idx, pos: p.pos, sk: key(p.sx, p.sy), why }); G.lastDeath = why;
+    if (G.war) { warDeath(G, p); return; }
     const coop = G.players.filter(Boolean).length > 1;
     if (coop && G.bases.some(b => b.alive)) { p.respawn = 9; msg(G, 'PILOT ' + (p.idx + 1) + ' LOST · NEW SHIP IN 9 SECONDS', 'alert'); }
   }
   function respawn(G, p) {
-    const b = G.bases.filter(b => b.alive)[G.R.i(Math.max(1, G.bases.filter(b => b.alive).length))]; if (!b) return;
+    const live = G.bases.filter(b => b.alive && (!G.war || b.team === p.team)), b = live[G.R.i(Math.max(1, live.length))]; if (!b) return;
     Object.assign(p, { alive: true, sx: b.x, sy: b.y, pos: [0, 0, 40], q: [0, 0, 0, 1], speed: 0, thr: 0, energy: p.emax, shields: false, dmg: { P: 0, E: 0, S: 0, C: 0, L: 0, R: 0 }, warp: null, dock: null, inTransit: false, respawned: (p.respawned || 0) + 1 });
     ev(G, { e: 'respawn', p: p.idx }); arriveSector(G, p);
   }
   function arriveSector(G, p) {
     const f = fleetAt(G, p.sx, p.sy);
-    if (f) materialize(G, f, p);
+    if (G.war) { for (const o of G.fleets) if (o.x === p.sx && o.y === p.sy && o.team !== p.team && !o.decoy) materialize(G, o, p); warArrive(G, p); }
+    else if (f) materialize(G, f, p);
     p.redAlert = 0;
     const b = baseAt(G, p.sx, p.sy);
     ev(G, { e: 'arrive', p: p.idx, base: !!b, fleet: !!f });
@@ -347,7 +362,7 @@
   }
   function spawnShip(G, kind, f, sk, pos, fwd) {
     const K = KIND[kind], R = G.R;
-    const s = { id: G.nextId++, kind, fleet: f.id, sk, pos, fwd: V.norm(fwd), speed: K.speed * 0.7, hp: K.hp, sh: K.shield, shT: 0, st: 'attack', stT: 0, fireT: R.r(1.5, 4) * G.C.fireMul, side: R() < 0.5 ? -1 : 1, jink: null, bank: 0, burst: 0, launchT: 18, hitT: 0, brk: null, tgt: -1 };
+    const s = { id: G.nextId++, kind, fleet: f.id, sk, pos, fwd: V.norm(fwd), speed: K.speed * 0.7, hp: K.hp, sh: K.shield, shT: 0, st: 'attack', stT: 0, fireT: R.r(1.5, 4) * G.C.fireMul, side: R() < 0.5 ? -1 : 1, jink: null, bank: 0, burst: 0, launchT: 18, hitT: 0, brk: null, tgt: -1, team: f.team };
     G.ships.push(s); return s;
   }
 
@@ -460,9 +475,10 @@
     const C = G.C, R = G.R;
     const bySk = {};
     for (const p of G.players) if (p && p.alive && !p.inTransit) (bySk[key(p.sx, p.sy)] = bySk[key(p.sx, p.sy)] || []).push(p);
+    if (G.war) for (const k in bySk) bySk[k] = bySk[k]; // filtered per ship below
     const lancers = {};
     for (const s of G.ships) {
-      const K = KIND[s.kind], pl = bySk[s.sk]; if (!pl) continue;
+      const K = KIND[s.kind]; let pl = bySk[s.sk]; if (pl && G.war) pl = pl.filter(o => o.team !== s.team); if (!pl || !pl.length) continue;
       // target the nearest player in the sector
       let p = pl[0], pd = V.dist(s.pos, p.pos); for (const o of pl) { const d = V.dist(s.pos, o.pos); if (d < pd) { pd = d; p = o; } }
       s.tgt = p.idx; s.hitT = Math.max(0, s.hitT - dt); s.stT += dt;
@@ -550,21 +566,23 @@
     const e = C.aimErr; aim = V.norm(V.add(aim, [R.r(-e, e), R.r(-e, e), R.r(-e, e)]));
     if (spread) aim = V.norm(Q.rot(Q.axis(V.norm(V.cross(aim, [0, 1, 0])), 0), Q.rot(Q.axis([0, 1, 0], spread), aim)));
     const pos = V.madd(s.pos, s.fwd, KIND[s.kind].r + 1);
-    G.shots.push({ id: G.nextId++, own: -1, sk: s.sk, pos, vel: V.mul(aim, C.plasmaV), life: 3.6, kind: 'plasma', tgt: p.idx });
+    G.shots.push({ id: G.nextId++, own: -1, team: s.team, sk: s.sk, pos, vel: V.mul(aim, C.plasmaV), life: 3.6, kind: 'plasma', tgt: p.idx });
     ev(G, { e: 'plasma', pos, sk: s.sk, kind: s.kind });
   }
   function stepShots(G, dt) {
     const C = G.C;
     for (const sh of G.shots) {
       sh.life -= dt;
-      if (sh.kind === 'torp' && sh.tgt) { const t = G.ships.find(s => s.id === sh.tgt); if (t) { const sp = V.len(sh.vel), d = V.norm(V.sub(t.pos, sh.pos)); sh.vel = V.mul(turnToward(V.norm(sh.vel), d, 2.6 * dt), sp); } }
+      if (sh.kind === 'torp' && sh.tgt) { const t = findTarget(G, sh.tgt); if (t) { const sp = V.len(sh.vel), d = V.norm(V.sub(t.pos, sh.pos)); sh.vel = V.mul(turnToward(V.norm(sh.vel), d, 2.6 * dt), sp); } }
       if (sh.kind === 'plasma' && C.home > 0) { const p = G.players[sh.tgt]; if (p && p.alive && !p.inTransit && key(p.sx, p.sy) === sh.sk) { const sp = V.len(sh.vel); sh.vel = V.mul(turnToward(V.norm(sh.vel), V.norm(V.sub(p.pos, sh.pos)), C.home * dt), sp); } }
       const p0 = sh.pos; sh.pos = V.madd(sh.pos, sh.vel, dt);
       if (sh.kind === 'torp') {
-        for (const s of G.ships) { if (s.sk !== sh.sk || s.hp <= 0) continue; const r = KIND[s.kind].r + (s.sh > 0.5 ? 2.5 : 0) + 1.2; if (segDist(p0, sh.pos, s.pos) < r) { damageShip(G, s, 1, sh.own, false, sh.pos); sh.life = 0; break; } }
+        const ot = G.players[sh.own] ? G.players[sh.own].team : undefined;
+        if (G.war) { warTorp(G, sh, p0, ot); if (sh.life <= 0) continue; }
+        for (const s of G.ships) { if (s.sk !== sh.sk || s.hp <= 0 || !hostileTo(s.team, ot)) continue; const r = KIND[s.kind].r + (s.sh > 0.5 ? 2.5 : 0) + 1.2; if (segDist(p0, sh.pos, s.pos) < r) { damageShip(G, s, 1, sh.own, false, sh.pos); sh.life = 0; break; } }
         if (sh.life > 0) for (const o of G.shots) { if (o.kind !== 'plasma' || o.life <= 0 || o.sk !== sh.sk) continue; if (segDist(p0, sh.pos, o.pos) < 3.2) { o.life = 0; sh.life = 0; ev(G, { e: 'pop', pos: o.pos, sk: o.sk }); break; } }
       } else {
-        for (const p of G.players) { if (!p || !p.alive || p.inTransit || key(p.sx, p.sy) !== sh.sk) continue; if (segDist(p0, sh.pos, p.pos) < 3.4) { hitPlayer(G, p, sh.pos, 1); sh.life = 0; break; } }
+        for (const p of G.players) { if (!p || !p.alive || p.inTransit || key(p.sx, p.sy) !== sh.sk || !hostileTo(sh.team, p.team)) continue; if (segDist(p0, sh.pos, p.pos) < 3.4) { hitPlayer(G, p, sh.pos, 1); sh.life = 0; break; } }
       }
     }
     G.shots = G.shots.filter(s => s.life > 0);
@@ -580,7 +598,8 @@
     ev(G, { e: 'boom', pos: s.pos, sk: s.sk, kind: s.kind, size: s.kind === 'hive' ? 3 : s.kind === 'lancer' ? 1.7 : 1, vel: V.mul(s.fwd, s.speed), by });
     const f = G.fleets.find(f => f.id === s.fleet);
     if (f) { if (s.kind === 'darter') f.d = Math.max(0, f.d - 1); else if (s.kind === 'lancer') f.l = Math.max(0, f.l - 1); else f.h = Math.max(0, f.h - 1);
-      if (f.d + f.l + f.h <= 0) { G.fleets = G.fleets.filter(o => o !== f); const el = G.t - (f.engT || G.t);
+      if (f.d + f.l + f.h <= 0 && G.war) { G.fleets = G.fleets.filter(o => o !== f); wmsg(G, f.team, `SQUADRON ${f.name} LOST AT ${f.x},${f.y}`, 'alert', true); wmsg(G, 1 - f.team, 'ENEMY SQUADRON DESTROYED', 'good'); ev(G, { e: 'fleetdead', x: f.x, y: f.y }); }
+      else if (f.d + f.l + f.h <= 0) { G.fleets = G.fleets.filter(o => o !== f); const el = G.t - (f.engT || G.t);
         if (el > 0 && el < 50) { G.stats.fast = (G.stats.fast || 0) + 1; msg(G, `SECTOR CLEARED IN ${Math.round(el)} S · FAST-CLEAR BONUS`, 'good'); } else msg(G, 'VRELL FLEET DESTROYED · SECTOR CLEARED', 'good'); ev(G, { e: 'fleetdead', x: f.x, y: f.y }); G.galSeq++; } }
     if (by >= 0) { const p = G.players[by]; if (p) p.kills++; G.stats.kills[s.kind]++; G.stats.killPts += K.pts; }
   }
@@ -622,9 +641,312 @@
     ev(G, { e: 'over', win });
   }
   /** quick strategic summary for HUD / autopilot */
+  /* ==========================================================================
+     WAR — the head-to-head two-player mode (host-authoritative).
+     Each side (team 0 = BLUE, west; team 1 = GOLD, east) has starbases, a
+     flagship flown by its pilot, and squadrons it orders on its own chart.
+     Fog of war: a side only knows what its bases, squadrons, flagship and
+     probes can see. viewFor(G, team) is the ONLY thing a side's UI (and the
+     guest's network snapshot) is built from, so nothing hidden can leak.
+     ========================================================================== */
+  const WAR = {
+    cost: { build: 1100, probe: 250, decoy: 250, mines: 350, jam: 600, eccm: 250, repair: 400 },
+    income: 4, perSector: 0.9, buildT: 18, maxFleets: 8, startRes: 1600,
+    probeT: 75, jamT: 35, decoyT: 140, respawnT: 15,
+    vision: { base: 2, fleet: 1, ship: 2, probe: 1 },
+    lengths: { short: 540, long: 1200 },
+  };
+  const LAYOUTS = {
+    classic: { name: 'CLASSIC FRONT', desc: 'Two home clusters facing each other across open space.', bases: [[1, 1], [2, 4], [1, 6]], nebula: [] },
+    crossfire: { name: 'CROSSFIRE', desc: 'Forward bases sit close to the enemy. Strike first or lose them.', bases: [[1, 2], [5, 6], [2, 5]], nebula: [] },
+    nebula: { name: 'DARK NEBULA', desc: 'A nebula fills the middle of the galaxy: squadrons inside are hidden and slow.', bases: [[1, 1], [3, 4], [1, 6]],
+      nebula: [[6, 2], [7, 2], [8, 2], [9, 2], [6, 3], [7, 3], [8, 3], [9, 3], [6, 4], [7, 4], [8, 4], [9, 4], [7, 5], [8, 5], [7, 1], [8, 1]] },
+  };
+  const mirror = ([x, y]) => [W - 1 - x, H - 1 - y];
+  const SQN = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  function newWar(o) {
+    const seed = (o.seed >>> 0) || 1, R = rng(seed), layout = LAYOUTS[o.layout] ? o.layout : 'classic', L = LAYOUTS[layout];
+    const C = Object.assign({}, DCFG[1], { bareKill: 0.3 });
+    const len = WAR.lengths[o.length] || WAR.lengths.short;
+    const G = { diff: 1, seed, mission: 'war', C, R, t: 0, W, H, nextId: 1, bases: [], fleets: [], players: [], ships: [], shots: [], ev: [], msgs: [], over: null,
+      wave: 0, waveT: 0, stats: { killPts: 0, kills: { darter: 0, lancer: 0, hive: 0 }, basesLost: 0, energyUsed: 0, deaths: 0, warps: 0, docks: 0 }, galSeq: 0 };
+    G.war = { layout, len, tLeft: len, res: [WAR.startRes, WAR.startRes], probes: [], mines: [], builds: [], jam: [0, 0], eccmT: [0, 0],
+      nebula: new Set(L.nebula.map(([x, y]) => key(x, y))), vis: [new Set(), new Set()], edge: [new Set(), new Set()], seen: [{}, {}], knownBases: [new Set(), new Set()],
+      held: [0, 0], visT: 0, heldT: 0, sqn: [0, 0], score: [{ kills: 0, flag: 0, bases: 0, squads: 0 }, { kills: 0, flag: 0, bases: 0, squads: 0 }], intelT: [0, 0] };
+    for (const team of [0, 1]) {
+      L.bases.forEach((pos, i) => { const [x, y] = team ? mirror(pos) : pos; G.bases.push({ id: G.nextId++, team, x, y, alive: true, hp: 100, siege: 0, alert: 0, home: i === 0 }); });
+      const home = G.bases.filter(b => b.team === team);
+      const comps = [[3, 0], [3, 0], [2, 1], [2, 1]];
+      comps.forEach(([d, l], i) => { const b = home[i % home.length]; const x = clamp(b.x + (team ? -1 : 1), 0, W - 1); warFleet(G, team, x, b.y, d, l); });
+    }
+    warVision(G);
+    return G;
+  }
+  function warFleet(G, team, x, y, d, l, decoy) {
+    const f = { id: G.nextId++, team, x, y, px: x, py: y, mt: 0, d, l, h: 0, order: null, moveT: 0, engaged: false, wear: 0, decoy: !!decoy, name: decoy ? '?' : SQN[G.war.sqn[team]++ % SQN.length], born: G.t };
+    if (decoy) { f.life = WAR.decoyT; f.fake = [d, l]; }
+    G.fleets.push(f); return f;
+  }
+  const fleetInterval = f => (f.l ? 7 : 5.5);
+  function wmsg(G, team, text, kind = 'info', radio = false) {
+    if (radio && G.war && G.war.jam[team] > 0) return; // jammed radios hear static
+    msg(G, text, kind, team === 0 || team === 1 ? (G.players[team] ? team : -9) : -1);
+  }
+  function warAct(G, team, a) {
+    const Wd = G.war; if (!a || G.over) return false;
+    const cost = WAR.cost[a.a], p = G.players[team];
+    const pay = () => { if (cost === undefined) return true; if (Wd.res[team] < cost) { wmsg(G, team, 'NOT ENOUGH RESERVES (' + cost + ' NEEDED)', 'warn'); return false; } Wd.res[team] -= cost; return true; };
+    const inG = (x, y) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < W && y < H;
+    switch (a.a) {
+      case 'order': {
+        const f = G.fleets.find(f => f.id === a.f && f.team === team); if (!f || !inG(a.x, a.y)) return false;
+        f.order = [a.x, a.y]; if (f.moveT <= 0) f.moveT = fleetInterval(f) * 0.5; return true;
+      }
+      case 'build': {
+        const b = G.bases.find(b => b.id === a.b && b.team === team && b.alive) || G.bases.find(b => b.team === team && b.alive && b.home) || G.bases.find(b => b.team === team && b.alive);
+        if (!b) return false;
+        if (G.fleets.filter(f => f.team === team && !f.decoy).length + Wd.builds.filter(q => q.team === team).length >= WAR.maxFleets) { wmsg(G, team, 'SQUADRON LIMIT REACHED', 'warn'); return false; }
+        if (!pay()) return false; Wd.builds.push({ team, b: b.id, t: WAR.buildT }); wmsg(G, team, `BUILDING SQUADRON AT ${b.x},${b.y} · ${WAR.buildT} S`); return true;
+      }
+      case 'repair': {
+        const b = G.bases.find(b => b.id === a.b && b.team === team && b.alive); if (!b || b.hp >= 100) return false;
+        if (!pay()) return false; b.hp = Math.min(100, b.hp + 35); wmsg(G, team, `STARBASE ${b.x},${b.y} REPAIRED TO ${Math.round(b.hp)}%`, 'good'); return true;
+      }
+      case 'probe': {
+        if (!inG(a.x, a.y)) return false; if (!pay()) return false;
+        const from = p && p.alive ? [p.sx, p.sy] : [a.x, a.y];
+        Wd.probes.push({ id: G.nextId++, team, x: a.x, y: a.y, t: WAR.probeT, fx: from[0], fy: from[1], fly: Math.min(6, cheb(from[0], from[1], a.x, a.y) * 0.8) });
+        wmsg(G, team, `SENSOR PROBE AWAY TO ${a.x},${a.y}`); return true;
+      }
+      case 'decoy': {
+        if (!inG(a.x, a.y)) return false;
+        const src = (p && p.alive && !p.inTransit) ? [p.sx, p.sy] : (() => { const b = G.bases.find(b => b.team === team && b.alive); return b ? [b.x, b.y] : null; })();
+        if (!src || !pay()) return false;
+        const f = warFleet(G, team, src[0], src[1], 3, G.R() < 0.5 ? 1 : 0, true); f.order = [a.x, a.y]; f.moveT = 2;
+        wmsg(G, team, `DECOY LAUNCHED FROM ${src[0]},${src[1]} TOWARD ${a.x},${a.y}`); return true;
+      }
+      case 'mines': {
+        if (!p || !p.alive || p.inTransit) return false;
+        if (Wd.mines.some(m => m.team === team && m.x === p.sx && m.y === p.sy)) { wmsg(G, team, 'THIS SECTOR IS ALREADY MINED', 'warn'); return false; }
+        if (!pay()) return false; Wd.mines.push({ id: G.nextId++, team, x: p.sx, y: p.sy, n: 3 }); wmsg(G, team, `MINEFIELD LAID AT ${p.sx},${p.sy}`, 'good'); return true;
+      }
+      case 'jam': {
+        if (Wd.jam[1 - team] > 0) { wmsg(G, team, 'ENEMY ALREADY JAMMED', 'warn'); return false; }
+        if (!pay()) return false; Wd.jam[1 - team] = WAR.jamT;
+        wmsg(G, team, `JAMMING ENEMY SCAN AND RADIO · ${WAR.jamT} S`, 'good'); msg(G, 'SENSORS JAMMED · SCAN RANGE DOWN, RADIO OUT · USE ECCM TO CLEAR', 'alert', G.players[1 - team] ? 1 - team : -9);
+        ev(G, { e: 'jammed', team: 1 - team }); return true;
+      }
+      case 'eccm': {
+        if (Wd.jam[team] <= 0) { wmsg(G, team, 'NO JAMMING TO CLEAR', 'warn'); return false; }
+        if (!pay()) return false; Wd.jam[team] = 0; wmsg(G, team, 'ECCM BURST · SENSORS CLEAR', 'good'); return true;
+      }
+    }
+    return false;
+  }
+  function warArrive(G, p) {
+    const Wd = G.war;
+    for (const m of Wd.mines) if (m.team !== p.team && m.x === p.sx && m.y === p.sy && m.n > 0) {
+      m.n--; hitPlayer(G, p, V.add(p.pos, [2, 0, -6]), 1); damageSys(G, p);
+      msg(G, 'MINEFIELD! HULL DAMAGE', 'alert', p.idx); wmsg(G, m.team, `ENEMY FLAGSHIP HIT YOUR MINES AT ${m.x},${m.y}`, 'good', true);
+      ev(G, { e: 'mine', p: p.idx, pos: V.add(p.pos, [2, 0, -6]), sk: key(p.sx, p.sy) });
+    }
+    Wd.mines = Wd.mines.filter(m => m.n > 0);
+    // decoys are exposed by an enemy flagship arriving in their sector
+    for (const f of G.fleets.slice()) if (f.decoy && f.team !== p.team && f.x === p.sx && f.y === p.sy) popDecoy(G, f, p.team);
+    const eb = G.bases.find(b => b.alive && b.team !== p.team && b.x === p.sx && b.y === p.sy);
+    if (eb) { eb.turretT = 2.5; wmsg(G, eb.team, `ENEMY FLAGSHIP ATTACKING STARBASE ${eb.x},${eb.y}`, 'alert', true); }
+  }
+  function popDecoy(G, f, by) {
+    G.fleets = G.fleets.filter(o => o !== f);
+    wmsg(G, by, `IT WAS A DECOY · ${f.x},${f.y}`, 'warn'); wmsg(G, f.team, `DECOY AT ${f.x},${f.y} EXPOSED`, 'info');
+  }
+  function warDeath(G, p) {
+    const team = p.team, other = 1 - team, Wd = G.war;
+    Wd.score[other].flag++;
+    const has = G.bases.some(b => b.alive && b.team === team);
+    if (!has) { warEnd(G, other, 'ENEMY FLAGSHIP DESTROYED WITH NO STARBASE LEFT'); return; }
+    p.respawn = WAR.respawnT;
+    msg(G, `FLAGSHIP LOST · NEW SHIP AT A STARBASE IN ${WAR.respawnT} S`, 'alert', p.idx);
+    wmsg(G, other, 'ENEMY FLAGSHIP DESTROYED!', 'good');
+    for (const s of G.ships) if (s.team === other && !G.players.some(o => o && o.alive && o.team !== s.team && key(o.sx, o.sy) === s.sk)) s.gone = true;
+  }
+  function warTorp(G, sh, p0, ot) {
+    // PvP: torpedoes hit the enemy flagship, and enemy starbases
+    for (const o of G.players) {
+      if (!o || !o.alive || o.inTransit || o.team === ot || key(o.sx, o.sy) !== sh.sk) continue;
+      if (segDist(p0, sh.pos, o.pos) < 3.6) { pvpHit(G, o, sh); sh.life = 0; return; }
+    }
+    const b = G.bases.find(b => b.alive && b.team !== ot && key(b.x, b.y) === sh.sk);
+    if (b && segDist(p0, sh.pos, BASE_POS) < 22) {
+      b.hp -= 3; sh.life = 0; ev(G, { e: 'hullhit', pos: sh.pos, sk: sh.sk, ship: -1 });
+      if (b.hp <= 0) baseDown(G, b, 1 - b.team); else if (G.R() < 0.3) wmsg(G, b.team, `STARBASE ${b.x},${b.y} UNDER FIRE · ${Math.round(b.hp)}%`, 'alert', true);
+    }
+  }
+  function pvpHit(G, o, sh) {
+    const R = G.R; if (!o.alive || o.hitT > 0.15) return;
+    o.hitT = 0.5;
+    const up = o.shields && o.dmg.S < 2 && (o.dmg.S === 0 || R() < 0.7);
+    if (up) { use(G, o, 380); o.shieldT = 0.6; if (R() < 0.3) damageSys(G, o); ev(G, { e: 'phit', p: o.idx, shield: true, pos: sh.pos }); }
+    else { ev(G, { e: 'phit', p: o.idx, shield: false, pos: sh.pos }); if (R() < 0.3) { kill(G, o, 'DESTROYED BY THE ENEMY FLAGSHIP'); } else { use(G, o, 900); damageSys(G, o); damageSys(G, o); } }
+    const by = G.players[sh.own]; if (by) { ev(G, { e: 'pop', pos: sh.pos, sk: sh.sk, pts: 0, p: by.idx }); }
+    if (o.alive && o.energy <= 0) { o.energy = 0; kill(G, o, 'ENERGY EXHAUSTED'); }
+  }
+  function baseDown(G, b, by) {
+    if (!b.alive) return;
+    b.alive = false; b.hp = 0; G.war.score[by].bases++;
+    ev(G, { e: 'basedead', x: b.x, y: b.y });
+    wmsg(G, b.team, `STARBASE ${b.x},${b.y} DESTROYED`, 'alert'); wmsg(G, by, `ENEMY STARBASE ${b.x},${b.y} DESTROYED!`, 'good');
+    G.war.knownBases[by].add(b.id);
+    if (!G.bases.some(o => o.alive && o.team === b.team)) warEnd(G, by, 'ALL ENEMY STARBASES DESTROYED');
+  }
+  function warEnd(G, winner, why) {
+    if (G.over) return;
+    const Wd = G.war;
+    G.over = { win: winner, winner, why, t: G.t, held: Wd.held.slice(), score: Wd.score.map(s => Object.assign({}, s)),
+      bases: [0, 1].map(t => G.bases.filter(b => b.alive && b.team === t).length) };
+    ev(G, { e: 'over', winner });
+  }
+  function heldCount(G) {
+    const own = [new Map(), new Map()];
+    for (const b of G.bases) if (b.alive) own[b.team].set(key(b.x, b.y), 1);
+    for (const f of G.fleets) if (!f.decoy) own[f.team].set(key(f.x, f.y), 1);
+    let a = 0, c = 0; for (const k of own[0].keys()) if (!own[1].has(k)) a++; for (const k of own[1].keys()) if (!own[0].has(k)) c++;
+    return [a, c];
+  }
+  function warVision(G) {
+    const Wd = G.war;
+    for (const team of [0, 1]) {
+      const vis = new Set(), edgeC = new Set(), core = new Set(), jam = Wd.jam[team] > 0 ? 1 : 0;
+      const see = (x, y, r, deep) => { r = Math.max(0, r - jam);
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+          const k = key(X, Y); if (Wd.nebula.has(k) && !deep && Math.max(Math.abs(dx), Math.abs(dy)) > 0) continue;
+          vis.add(k); if (Math.max(Math.abs(dx), Math.abs(dy)) === r && r > 0 && !deep) edgeC.add(k); else core.add(k); } };
+      for (const b of G.bases) if (b.alive && b.team === team) see(b.x, b.y, WAR.vision.base);
+      for (const f of G.fleets) if (f.team === team && !f.decoy) see(f.x, f.y, WAR.vision.fleet);
+      const p = G.players[team]; if (p && p.alive && !p.inTransit) see(p.sx, p.sy, p.dmg.L >= 2 ? 0 : p.dmg.L ? 1 : WAR.vision.ship);
+      for (const pr of Wd.probes) if (pr.team === team && pr.fly <= 0) see(pr.x, pr.y, WAR.vision.probe + jam, true);
+      const edge = new Set([...edgeC].filter(k => !core.has(k))); // a closer or deeper look clears edge uncertainty
+      Wd.vis[team] = vis; Wd.edge[team] = edge;
+      for (const b of G.bases) if (b.team !== team && vis.has(key(b.x, b.y))) Wd.knownBases[team].add(b.id);
+      // last-known intel on enemy squadrons (refreshes slowly while jammed)
+      if (jam && G.t - Wd.intelT[team] < 5) continue;
+      Wd.intelT[team] = G.t;
+      for (const f of G.fleets) if (f.team !== team && vis.has(key(f.x, f.y))) Wd.seen[team][f.id] = { x: f.x, y: f.y, t: G.t, n: f.decoy ? f.fake[0] + f.fake[1] : f.d + f.l };
+      for (const id in Wd.seen[team]) { const s = Wd.seen[team][id]; if (G.t - s.t > 45 || (vis.has(key(s.x, s.y)) && !G.fleets.some(f => f.id === +id && f.x === s.x && f.y === s.y))) delete Wd.seen[team][id]; }
+    }
+  }
+  function stepWar(G, dt) {
+    const Wd = G.war, R = G.R;
+    Wd.tLeft -= dt;
+    // economy: a trickle plus a share for every sector held
+    Wd.heldT -= dt; if (Wd.heldT <= 0) { Wd.held = heldCount(G); Wd.heldT = 1; }
+    for (const t of [0, 1]) { Wd.res[t] = Math.min(9999, Wd.res[t] + (WAR.income + Wd.held[t] * WAR.perSector) * dt); if (Wd.jam[t] > 0) Wd.jam[t] = Math.max(0, Wd.jam[t] - dt); }
+    // builds
+    for (const q of Wd.builds) { q.t -= dt; if (q.t <= 0) { const b = G.bases.find(b => b.id === q.b && b.alive) || G.bases.find(b => b.alive && b.team === q.team);
+      if (b) { const f = warFleet(G, q.team, b.x, b.y, 3, 1); wmsg(G, q.team, `SQUADRON ${f.name} READY AT ${b.x},${b.y}`, 'good'); } } }
+    Wd.builds = Wd.builds.filter(q => q.t > 0);
+    // probes fly, then watch
+    for (const pr of Wd.probes) { if (pr.fly > 0) pr.fly -= dt; else pr.t -= dt; }
+    Wd.probes = Wd.probes.filter(pr => pr.t > 0);
+    // squadron movement
+    for (const f of G.fleets.slice()) {
+      f.mt = Math.min(1, f.mt + dt / 1.2);
+      if (f.decoy) { f.life -= dt; if (f.life <= 0) { G.fleets = G.fleets.filter(o => o !== f); continue; } }
+      if (!f.order || (f.order[0] === f.x && f.order[1] === f.y)) { f.order = null; continue; }
+      const neb = Wd.nebula.has(key(f.x, f.y)) ? 1.6 : 1;
+      const live = G.ships.some(s => s.fleet === f.id);
+      f.moveT -= dt / neb / (live ? 1.8 : 1);
+      if (f.moveT > 0) continue;
+      f.moveT = fleetInterval(f);
+      const nx = f.x + Math.sign(f.order[0] - f.x), ny = f.y + Math.sign(f.order[1] - f.y);
+      // leaving: its 3D ships jump out
+      for (const s of G.ships) if (s.fleet === f.id) s.gone = true;
+      f.px = f.x; f.py = f.y; f.x = nx; f.y = ny; f.mt = 0;
+      // entering: mines, decoy contact, enemy flagship present
+      for (const m of Wd.mines) if (m.team !== f.team && m.x === nx && m.y === ny && m.n > 0 && !f.decoy) {
+        m.n--; f.wear += 1.6; wmsg(G, m.team, `ENEMY SQUADRON HIT YOUR MINES AT ${nx},${ny}`, 'good', true); wmsg(G, f.team, `SQUADRON ${f.name} HIT MINES AT ${nx},${ny}`, 'alert', true);
+      }
+      Wd.mines = Wd.mines.filter(m => m.n > 0);
+      if (f.decoy && (G.fleets.some(o => o.team !== f.team && !o.decoy && o.x === nx && o.y === ny) || G.players.some(o => o && o.alive && o.team !== f.team && o.sx === nx && o.sy === ny))) { popDecoy(G, f, 1 - f.team); continue; }
+      if (!f.decoy) for (const o of G.fleets.slice()) if (o.decoy && o.team !== f.team && o.x === nx && o.y === ny) popDecoy(G, o, f.team);
+      if (!f.decoy) for (const p of G.players) if (p && p.alive && !p.inTransit && p.team !== f.team && p.sx === nx && p.sy === ny) { materialize(G, f, p, true); msg(G, 'ENEMY SQUADRON ENTERING SECTOR', 'alert', p.idx); }
+      const eb = G.bases.find(b => b.alive && b.team !== f.team && b.x === nx && b.y === ny);
+      if (eb && !f.decoy) wmsg(G, eb.team, `STARBASE ${eb.x},${eb.y}: ENEMY SQUADRON IN SECTOR · REQUEST ASSISTANCE`, 'alert', true);
+    }
+    G.ships = G.ships.filter(s => !s.gone);
+    // battles, resolved per sector. A flagship in the sector doubles its side's punch
+    const bySk = new Map();
+    for (const f of G.fleets) if (!f.decoy) { const k = key(f.x, f.y); if (!bySk.has(k)) bySk.set(k, [[], []]); bySk.get(k)[f.team].push(f); }
+    for (const b of G.bases) if (b.alive) { const k = key(b.x, b.y); if (!bySk.has(k)) bySk.set(k, [[], []]); }
+    for (const [k, sides] of bySk) {
+      const x = k % W, y = (k / W) | 0, base = G.bases.find(b => b.alive && b.x === x && b.y === y);
+      const flag = [0, 1].map(t => G.players.some(p => p && p.alive && !p.inTransit && p.team === t && p.sx === x && p.sy === y));
+      const power = [0, 1].map(t => sides[t].reduce((a, f) => a + f.d + 2.2 * f.l, 0) * (flag[t] ? 2 : 1) + (base && base.team === t ? 3 : 0));
+      if (sides[0].length && sides[1].length) {
+        for (const t of [0, 1]) { const dmg = power[1 - t] * 0.03 * dt, tot = sides[t].reduce((a, f) => a + f.d + f.l, 0) || 1;
+          for (const f of sides[t]) f.wear += dmg * (f.d + f.l) / tot; }
+        if (!Wd.battle) Wd.battle = {}; if (!Wd.battle[k] || G.t - Wd.battle[k] > 25) { Wd.battle[k] = G.t; for (const t of [0, 1]) wmsg(G, t, `SQUADRONS ENGAGED AT ${x},${y}`, 'warn', true); }
+      } else if (base) {
+        const att = sides[1 - base.team]; if (!att.length) { base.siege = 0; continue; }
+        base.siege = 1;
+        base.hp -= power[1 - base.team] * 0.4 * dt;
+        for (const f of att) f.wear += (flag[base.team] ? 0.12 : 0.06) * dt;
+        if (base.hp <= 0) baseDown(G, base, 1 - base.team);
+        else { base.alertT = (base.alertT || 0) - dt; if (base.alertT <= 0) { base.alertT = 20; wmsg(G, base.team, `STARBASE ${x},${y} UNDER SIEGE · SHIELDS ${Math.round(base.hp)}% · MAYDAY`, 'alert', true); ev(G, { e: 'siege', x, y, team: base.team }); } }
+      }
+    }
+    // wear turns into losses; live 3D ships of that squadron explode
+    for (const f of G.fleets.slice()) while (!f.decoy && f.wear >= 1 && f.d + f.l > 0) {
+      f.wear -= 1; const kind = f.d > 0 ? 'darter' : 'lancer';
+      const s = G.ships.find(s => s.fleet === f.id && s.kind === kind && s.hp > 0);
+      if (s) { s.hp = 0.0001; s.sh = 0; damageShip(G, s, 1, -2, true); G.ships = G.ships.filter(o => o !== s); }
+      else { if (kind === 'darter') f.d--; else f.l--; if (f.d + f.l <= 0) { G.fleets = G.fleets.filter(o => o !== f); Wd.score[1 - f.team].squads++; wmsg(G, f.team, `SQUADRON ${f.name} LOST AT ${f.x},${f.y}`, 'alert', true); wmsg(G, 1 - f.team, `ENEMY SQUADRON DESTROYED AT ${f.x},${f.y}`, 'good'); ev(G, { e: 'fleetdead', x: f.x, y: f.y }); } }
+    }
+    // starbase turrets shoot at an enemy flagship in their sector
+    for (const b of G.bases) if (b.alive) for (const p of G.players) {
+      if (!p || !p.alive || p.inTransit || p.team === b.team || p.sx !== b.x || p.sy !== b.y) continue;
+      b.turretT = (b.turretT || 2) - dt; if (b.turretT > 0) continue; b.turretT = 2.2;
+      const lead = V.madd(p.pos, fwdOf(p.q), p.speed * 0.8), aim = V.norm(V.sub(lead, BASE_POS));
+      G.shots.push({ id: G.nextId++, own: -1, team: b.team, sk: key(b.x, b.y), pos: V.madd(BASE_POS, aim, 24), vel: V.mul(aim, G.C.plasmaV), life: 4, kind: 'plasma', tgt: p.idx });
+      ev(G, { e: 'plasma', pos: BASE_POS, sk: key(b.x, b.y), kind: 'base' });
+    }
+    Wd.visT -= dt; if (Wd.visT <= 0) { Wd.visT = 0.5; warVision(G); }
+    // the clock
+    if (Wd.tLeft <= 60 && !Wd.oneMin) { Wd.oneMin = 1; msg(G, 'ONE MINUTE LEFT · SECTORS HELD DECIDE THE WAR', 'alert'); }
+    if (Wd.tLeft <= 0 && !G.over) {
+      const h = heldCount(G); Wd.held = h;
+      const hp = [0, 1].map(t => G.bases.filter(b => b.alive && b.team === t).reduce((a, b) => a + b.hp, 0));
+      const w = h[0] !== h[1] ? (h[0] > h[1] ? 0 : 1) : hp[0] !== hp[1] ? (hp[0] > hp[1] ? 0 : 1) : (Wd.score[0].squads + Wd.score[0].flag >= Wd.score[1].squads + Wd.score[1].flag ? 0 : 1);
+      warEnd(G, w, h[0] !== h[1] ? `TIME · ${h[w]} SECTORS HELD TO ${h[1 - w]}` : 'TIME · SECTORS TIED, DECIDED ON STARBASE STRENGTH');
+    }
+  }
+  /** everything side `team` is allowed to know. Never include hidden enemy data here. */
+  function viewFor(G, team) {
+    const Wd = G.war, vis = Wd.vis[team], edge = Wd.edge[team], jam = Wd.jam[team] > 0, me = G.players[team];
+    const fleets = [];
+    for (const f of G.fleets) {
+      if (f.team === team) fleets.push({ id: f.id, own: 1, x: f.x, y: f.y, px: f.px, py: f.py, mt: f.mt, d: f.d, l: f.l, name: f.name, order: f.order, decoy: f.decoy ? 1 : 0, live: G.ships.some(s => s.fleet === f.id) ? 1 : 0 });
+    }
+    for (const id in Wd.seen[team]) {
+      const s = Wd.seen[team][id], k = key(s.x, s.y), now = vis.has(k) && G.t - s.t < 1.2 && !jam && G.fleets.some(f => f.id === +id && f.x === s.x && f.y === s.y);
+      const unsure = edge.has(k) || jam;
+      fleets.push({ id: +id, own: 0, x: s.x, y: s.y, n: unsure ? 0 : s.n, age: Math.round(G.t - s.t), live: now ? 1 : 0 });
+    }
+    const bases = G.bases.filter(b => b.team === team || Wd.knownBases[team].has(b.id)).map(b => ({ id: b.id, own: b.team === team ? 1 : 0, x: b.x, y: b.y, alive: b.alive,
+      hp: b.team === team || vis.has(key(b.x, b.y)) ? Math.round(b.hp) : -1, siege: b.team === team ? b.siege : 0, home: b.home ? 1 : 0 }));
+    const foe = G.players[1 - team];
+    const foeSeen = foe && foe.alive && !foe.inTransit && vis.has(key(foe.sx, foe.sy)) && !jam ? [foe.sx, foe.sy] : null;
+    return { team, t: G.t, tLeft: Math.max(0, Wd.tLeft), len: Wd.len, layout: Wd.layout, res: Math.floor(Wd.res[team]), held: Wd.held[team],
+      jam: Math.ceil(Wd.jam[team]), jamming: Math.ceil(Wd.jam[1 - team]), vis: [...vis], nebula: [...Wd.nebula],
+      fleets, bases, probes: Wd.probes.filter(p => p.team === team).map(p => ({ x: p.x, y: p.y, t: Math.ceil(p.t), fly: p.fly > 0 ? 1 : 0 })),
+      mines: Wd.mines.filter(m => m.team === team).map(m => ({ x: m.x, y: m.y, n: m.n })),
+      builds: Wd.builds.filter(q => q.team === team).map(q => ({ t: Math.ceil(q.t) })),
+      me: me ? [me.sx, me.sy] : null, foe: foeSeen, score: Wd.score[team] };
+  }
   function threat(G) { return G.bases.filter(b => b.alive).map(b => ({ b, n: siegeCount(G, b), need: needFor(G, b), siege: b.siege, max: G.C.siege })); }
 
   root.SRSim = { W, H, SPEED, DRAIN, DIFFS, SYS, SYSNAME, KIND, BASE_POS, RANKS, MISSIONS, DCFG, V, Q, fwdOf, upOf, rightOf, turnToward, rng, clamp, key,
-    newGame, addPlayer, stepPilot, stepWorld, startWarp, warpCost, thrCap, fleetAt, baseAt, siegeSlots, siegeCount, needFor, viewDir, threat, end, msg, kill, interval, cheb };
+    newGame, addPlayer, stepPilot, stepWorld, startWarp, warpCost, thrCap, fleetAt, baseAt, siegeSlots, siegeCount, needFor, viewDir, threat, end, msg, kill, interval, cheb,
+    WAR, LAYOUTS, warAct, viewFor, hostiles, findTarget, RIVAL, heldCount };
   if (typeof module !== 'undefined') module.exports = root.SRSim;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -158,7 +158,7 @@ export class Hud {
       if (D.phase === 'drone') { const k = clamp(D.t / 5.5, 0, 1), bw = u * 18; c.fillStyle = 'rgba(125,255,154,0.2)'; c.fillRect(this.W / 2 - bw / 2, y + u, bw, u * 0.6); c.fillStyle = COL.good; c.fillRect(this.W / 2 - bw / 2, y + u, bw * k, u * 0.6); }
       return;
     }
-    if (d < 400) { const al = me.canDock; this.text(al ? 'ALIGNED · THROTTLE 0 TO DOCK' + (st.touch ? '' : ' (KEY 0)') : d < 70 ? 'CENTER THE STARBASE TO DOCK' : 'APPROACH THE STARBASE · ENTER = AUTO-APPROACH', this.W / 2, y, u * 1.05, al ? COL.good : COL.base, 'center', 6); }
+    if (d < 400) { const al = me.canDock; this.text(al ? 'ALIGNED · THROTTLE 0 TO DOCK' + (st.touch ? '' : ' (KEY 0)') : d < 95 ? 'CENTER THE STARBASE TO DOCK' : 'APPROACH THE STARBASE · ENTER = AUTO-APPROACH', this.W / 2, y, u * 1.05, al ? COL.good : COL.base, 'center', 6); }
   }
   /* ---------- hyperwarp ---------- */
   warp(st) {
