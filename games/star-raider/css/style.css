@@ -98,3 +98,4 @@ body.port #tbtns { right: calc(10px + var(--sr)); }
 
 /* galactic chart open on touch: the chart is tapped directly, so the stick, throttle and FIRE step aside */
 body.chartv #tstick, body.chartv #tthr, body.chartv #tfire { visibility: hidden; }
+.vlab { font-size: 11px; letter-spacing: .12em; opacity: .8; min-width: 38px; text-align: right; }

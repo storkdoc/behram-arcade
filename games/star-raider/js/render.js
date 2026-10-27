@@ -79,10 +79,12 @@ void main(){ vec2 d = vUv - 0.5; vec3 c;
 #include <colorspace_fragment>
 }`;
 class Post {
-  constructor(r) {
-    this.r = r; this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); this.quad.frustumCulled = false; this.qs = new THREE.Scene(); this.qs.add(this.quad);
-    const o8 = { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false, samples: 0, generateMipmaps: false };
-    this.scene = new THREE.WebGLRenderTarget(4, 4, Object.assign({}, o8, { depthBuffer: true, colorSpace: THREE.SRGBColorSpace }));
+  constructor(r, hdr) {
+    this.r = r; this.hdr = !!hdr; this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); this.quad.frustumCulled = false; this.qs = new THREE.Scene(); this.qs.add(this.quad);
+    // HDR: desktop WebGL2 with float colour buffers renders the scene + bloom chain in half-float so bright cores keep their energy;
+    // iOS (and any failed self-check) stays on the 8-bit chain
+    const o8 = { type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false, samples: 0, generateMipmaps: false };
+    this.scene = new THREE.WebGLRenderTarget(4, 4, Object.assign({}, o8, { depthBuffer: true, colorSpace: hdr ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace }));
     this.lv = []; for (let i = 0; i < 4; i++) this.lv.push([new THREE.WebGLRenderTarget(4, 4, o8), new THREE.WebGLRenderTarget(4, 4, o8)]);
     const M = (u, fs) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: QUAD_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
     this.mBright = M({ tDiffuse: { value: null }, th: { value: 0.72 } }, BRIGHT_FS);
@@ -222,7 +224,9 @@ export class Renderer {
     this.ft = []; this.time = 0; this.lastCheck = -99; this.selfChecks = 0; this.lastSelf = null;
     this.shake = 0; this.flash = 0; this.flashCol = new THREE.Color(1, 1, 1); this.W = 1; this.H = 1; this.pr = 1; this.fov = 70;
     this.scene = new THREE.Scene(); this.cam = new THREE.PerspectiveCamera(70, 1, 0.1, 9000); this.scene.add(this.cam);
-    this.post = new Post(this.r);
+    const gl = this.r.getContext();
+    this.hdr = opts.hdr !== false && !this.ios && !this.mobile && this.r.capabilities.isWebGL2 && !!gl.getExtension('EXT_color_buffer_float') && (this.lockTier ? this.tier >= 2 : true);
+    this.post = new Post(this.r, this.hdr);
     this.build();
   }
   build() {
@@ -487,7 +491,8 @@ export class Renderer {
     else { O.uHit.value = Math.max(O.uHit.value, this.flash * 0.5); this.r.setRenderTarget(null); this.r.render(this.scene, this.cam); }
     if ((this.selfChecks < 3 && T - this.lastCheck > 1.2) || T - this.lastCheck > 20) { this.lastCheck = T; this.selfCheck(); }
     if (!this.lockTier) { this.ft.push(dtIn); if (this.ft.length >= 90) { const s = this.ft.slice().sort((a, b) => a - b), med = s[45]; this.ft.length = 0;
-      if (med > 1 / 45 && this.tier > 0 && !document.hidden) { this.setTier(this.tier - 1); console.info('[star-raider] quality ->', this.tier); } } }
+      if (med > 1 / 45 && this.hdr && !document.hidden) { this.hdr = false; this.post = new Post(this.r, false); this._sized = false; console.info('[star-raider] slow frames: HDR chain -> 8-bit'); }
+      else if (med > 1 / 45 && this.tier > 0 && !document.hidden) { this.setTier(this.tier - 1); console.info('[star-raider] quality ->', this.tier); } } }
   }
   /** react to sim events */
   fx(list, me) {
@@ -521,10 +526,11 @@ export class Renderer {
       gl.readPixels(Math.round(x * pr), Math.round(Hh - y * pr), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); n++; if (px[0] + px[1] + px[2] < 6) black++; }
     this.lastSelf = { n, black, tier: this.tier };
     if (n >= 6 && black / n >= 0.25) {
-      if (this.tier > 0) { console.warn(`[star-raider] black regions (${black}/${n}) at quality ${this.tier}; stepping effects down`); this.maxTier = this.tier - 1; this.setTier(this.maxTier); this.selfChecks = 0; }
+      if (this.hdr) { console.warn('[star-raider] black regions with the HDR chain; falling back to 8-bit'); this.hdr = false; this.post = new Post(this.r, false); this._sized = false; this.resize(); this.selfChecks = 0; }
+      else if (this.tier > 0) { console.warn(`[star-raider] black regions (${black}/${n}) at quality ${this.tier}; stepping effects down`); this.maxTier = this.tier - 1; this.setTier(this.maxTier); this.selfChecks = 0; }
       else if (!this.reportedBlack && this.selfChecks > 2) { this.reportedBlack = true; this.opts.onBlack && this.opts.onBlack(); }
     }
   }
-  stats() { return { tier: this.tier, maxTier: this.maxTier, lastSelf: this.lastSelf, pr: this.pr, parts: this.parts.length, cube: this.cubeSize }; }
+  stats() { return { hdr: this.hdr, tier: this.tier, maxTier: this.maxTier, lastSelf: this.lastSelf, pr: this.pr, parts: this.parts.length, cube: this.cubeSize }; }
 }
 const V3add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];

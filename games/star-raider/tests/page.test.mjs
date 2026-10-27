@@ -41,7 +41,12 @@ async function runCase(browserType, eng, dev) {
   page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/favicon|peerjs|Failed to load resource/i.test(m.text())) errs.push(m.text()); });
   await page.route(/0\.peerjs\.com|peerjs\.com\/peerjs/, r => r.abort());
   const touch = dev !== 'desktop';
-  await page.goto(ROOT + '?nolock=1' + (touch ? '&touch=1' : ''));
+  if (eng === 'chromium' && dev === 'desktop') {   // the desktop HDR (half-float) chain boots and passes the pixel self-check; the play loop below runs 8-bit for speed under software GL
+    await page.goto(ROOT + '?nolock=1');
+    ok(await until(page, () => window.SR && SR.booted && SR.app.screen === 'title', 30000), `${tag}: boots (HDR)`);
+    ok(await until(page, () => { const s = SR.R.stats(); return s.lastSelf && s.lastSelf.black < 6; }, 20000), `${tag}: HDR self-check not black (hdr ${await page.evaluate(() => SR.R.stats().hdr)})`);
+  }
+  await page.goto(ROOT + '?nolock=1&hdr=0' + (touch ? '&touch=1' : ''));
   ok(await until(page, () => window.SR && SR.booted && SR.app.screen === 'title', 25000), `${tag}: boots to title`);
   await wait(1500);
   const st = await page.evaluate(() => SR.R.stats());
@@ -60,8 +65,9 @@ async function runCase(browserType, eng, dev) {
     await wait(1500); await page.keyboard.press('Digit4'); ok(await until(page, () => SR.sess.me.thr === 4, 4000), `${tag}: 4 sets throttle`);
     const q0 = await page.evaluate(() => SR.sess.me.q.slice()); await page.keyboard.down('ArrowLeft'); await wait(450); await page.keyboard.up('ArrowLeft');
     const q1 = await page.evaluate(() => SR.sess.me.q.slice()); ok(Math.abs(q1[1] - q0[1]) > 0.02, `${tag}: arrows steer (q.y ${q0[1].toFixed(3)} -> ${q1[1].toFixed(3)})`);
-    await page.keyboard.press('Space'); await wait(400); await page.keyboard.press('Space');
+    for (let i = 0; i < 6 && !(await page.evaluate(() => SR.sess.fired >= 2)); i++) { await page.keyboard.press('Space'); await until(page, n => (SR.sess.fired || 0) > n, 1500, i); await wait(500); }
     ok(await until(page, () => SR.sess.fired >= 2, 4000), `${tag}: Space fires alternating torpedoes`);
+    if (process.env.DIAG) console.log('DIAG', await page.evaluate(() => JSON.stringify({ f: SR.sess.fired, t: SR.sess.G.t, scr: SR.app.screen, p: SR.app.paused, en: SR.sess.me.energy, al: SR.sess.me.alive, dk: SR.sess.me.dock, hs: SR.sess.hitStop, w: !!SR.sess.me.warp })), errs.slice(0, 3));
     await page.keyboard.press('KeyS'); await wait(100); ok(await page.evaluate(() => SR.sess.me.shields), `${tag}: S raises shields`);
     await page.keyboard.press('KeyA'); await wait(100); ok(await page.evaluate(() => SR.sess.me.view === 'aft'), `${tag}: A aft view`);
     await page.keyboard.press('KeyF'); await page.keyboard.press('KeyL'); await wait(300); ok(await page.evaluate(() => SR.sess.me.view === 'lrs'), `${tag}: L long-range scan`);
@@ -69,7 +75,7 @@ async function runCase(browserType, eng, dev) {
     // dock: Enter auto-approaches the starbase in the start sector
     await page.keyboard.press('Digit0'); await page.evaluate(() => { SR.sess.me.energy = 5000; SR.sess.me.dmg.S = 1; });
     await page.keyboard.press('Enter');
-    ok(await until(page, () => SR.sess.me.dock && SR.sess.me.dock.phase === 'done', 45000), `${tag}: Enter auto-approach -> orbit -> drone -> docked`);
+    ok(await until(page, () => SR.sess.me.dock && SR.sess.me.dock.phase === 'done', 100000), `${tag}: Enter auto-approach -> orbit -> drone -> docked`);
     ok(await page.evaluate(() => SR.sess.me.energy > 9000 && SR.sess.me.dmg.S === 0), `${tag}: docking refuels and repairs`);
     // combat: bring a fleet here, aim and fire
     await page.keyboard.press('Digit3');

@@ -29,7 +29,7 @@ document.addEventListener('touchend', e => {
 /* ---------------- persistent settings ---------------- */
 const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const app = {
-  screen: 'loading', muted: LS.get('sr.mute', false), keys: LS.get('sr.keys', 'classic'), voiceOn: LS.get('sr.voice', true), voiceVol: LS.get('sr.vvol', 0.8),
+  screen: 'loading', muted: LS.get('sr.mute', false), keys: LS.get('sr.keys', 'classic'), voiceOn: LS.get('sr.voice', true), voiceVol: LS.get('sr.vvol', 0.8), sfxVol: LS.get('sr.sfxv', 0.9), musVol: LS.get('sr.musv', 0.6),
   sel: { players: 1, diff: LS.get('sr.diff', 0), mission: 'campaign', layout: 'classic', length: 'short', p2: 'war' },
   online: null, guestOn: false, paused: false, cfg: null, localAgain: false, remoteAgain: false,
 };
@@ -38,7 +38,7 @@ AU.setMuted(app.muted); VO.setMuted(!app.voiceOn); VO.setVolume(app.voiceVol);
 /* ---------------- renderer + HUD ---------------- */
 const canvas = $('gl'), hud = new HUD($('hudc'));
 const SOLID = new Set(['gl', 'hudc', 'touch', 'title', 'loading', 'top']);
-const R = new Renderer(canvas, { q: Q.get('q'), msaa: Q.get('msaa') === '1',
+const R = new Renderer(canvas, { q: Q.get('q'), msaa: Q.get('msaa') === '1', hdr: Q.get('hdr') !== '0',
   covered: (x, y) => { const el = document.elementFromPoint(x, y); if (!el) return false; if (SOLID.has(el.id) || el.classList.contains('screen') || el.classList.contains('tblock')) return false; return true; },
   onLost: () => toast('GRAPHICS RESET… ONE MOMENT', 3), onBlack: () => toast('GRAPHICS LOOK DARK ON THIS DEVICE · TRY ?q=0', 6) });
 
@@ -270,6 +270,10 @@ function unlockAudio() { AU.unlock(); VO.unlock(); }
 addEventListener('pointerup', unlockAudio, { passive: true }); addEventListener('touchend', unlockAudio, { passive: true }); addEventListener('click', unlockAudio, { passive: true });
 function say(text, o) { if (!sess) return; VO.say(text, o); }
 const NUMW = c => VO.sector(c[0], c[1]);
+/* 3D audio: a world point / velocity in the listener's frame (camera frame: x right, y up, -z ahead; flipped in the aft view) */
+function qinvRot(q, v) { return S.Q.rot([-q[0], -q[1], -q[2], q[3]], v); }
+function loc(pos, p, vel) { if (!pos || !p || !p.q) return null; const r = qinvRot(p.q, vel ? vel : V.sub(pos, p.pos)); return p.view === 'aft' ? [-r[0], r[1], -r[2]] : r; }
+function relVel(s, p) { const sv = s.fwd ? V.mul(s.fwd, s.speed || 0) : (s.vel || [0, 0, 0]), pv = V.mul(S.fwdOf(p.q), p.speed || 0); return loc(null, p, V.sub(sv, pv)); }
 function onEvents(list, p) {
   if (!p || !list.length) return;
   const sk = S.key(p.sx, p.sy), mine = e => e.p === p.idx, fxl = [];
@@ -278,17 +282,17 @@ function onEvents(list, p) {
     switch (e.e) {
       case 'torp': if (mine(e)) { AU.torp(e.side); sess.fired = (sess.fired || 0) + 1; } fxl.push(e); break;
       case 'dry': if (mine(e)) { AU.dry(); say('Photons destroyed', { gap: 8 }); } break;
-      case 'boom': { fxl.push(e); AU.boom(V.dist(e.pos, p.pos), e.size);
+      case 'boom': { fxl.push(e); AU.boom(V.dist(e.pos, p.pos), e.size, loc(e.pos, p), e.vel ? relVel({ vel: e.vel }, p) : null);
         if (e.by === p.idx) { const K = S.KIND[e.kind]; hud.pop(e.pos, '+' + (K ? K.pts : 10), e.kind === 'hive' ? '#ff9af0' : '#ffd25a'); if (sess.role === 'local') sess.hitStop = e.kind === 'hive' ? 0.11 : 0.06; } break; }
-      case 'hullhit': case 'shieldhit': fxl.push(e); AU.enemyHit(); break;
+      case 'hullhit': case 'shieldhit': fxl.push(e); AU.enemyHit(e.pos ? loc(e.pos, p) : null); break;
       case 'pop': fxl.push(e); AU.pop(); if (e.p === p.idx && sess.war) hud.pop(e.pos, 'HIT!', '#ffb040'); break;
-      case 'plasma': AU.plasma(0); break;
+      case 'plasma': AU.plasma(e.pos ? loc(e.pos, p) : null); break;
       case 'launch': fxl.push(e); break;
       case 'phit': if (mine(e)) { fxl.push(e); if (e.shield) AU.shieldHit(); else { AU.hullHit(); say(p.shields ? 'Hull breach' : 'Hull hit. Raise shields', { key: 'hull', gap: 9, urgent: true }); } } break;
       case 'sysdmg': if (mine(e)) { AU.sysdmg(e.lvl >= 2); say(S.SYSNAME[e.k].toLowerCase().replace('long-range', 'long range') + (e.lvl >= 2 ? ' destroyed' : ' damaged'), { key: 'sys' + e.k + e.lvl, gap: 4 }); } break;
       case 'pdead':
         if (mine(e)) { fxl.push(e); AU.death(); say('Ship destroyed', { urgent: true, gap: 2 }); }
-        else if (e.sk === sk) { R.explode(e.pos, 3, [0, 0, 0], [1, 0.6, 0.2]); AU.boom(V.dist(e.pos, p.pos), 3); if (sess.war) { hud.pop(e.pos, 'FLAGSHIP KILL!', '#7dff9a'); say('Enemy flagship destroyed', { urgent: true, gap: 3 }); } }
+        else if (e.sk === sk) { R.explode(e.pos, 3, [0, 0, 0], [1, 0.6, 0.2]); AU.boom(V.dist(e.pos, p.pos), 3, loc(e.pos, p)); if (sess.war) { hud.pop(e.pos, 'FLAGSHIP KILL!', '#7dff9a'); say('Enemy flagship destroyed', { urgent: true, gap: 3 }); } }
         break;
       case 'redalert': if (mine(e)) { hud.alertT = 2.4; AU.klaxon(); say('Red alert', { key: 'red', gap: 6, urgent: true }); } break;
       case 'lock': if (mine(e)) AU.lock(); break;
@@ -558,7 +562,7 @@ function frame(now) {
     if (!demo) startDemo(); stepDemo(dtR);
     const D = demo, sk = S.key(D.p.sx, D.p.sy);
     R.frame(dtR, { me: D.p, ships: D.G.ships.filter(s => s.sk === sk), shots: D.G.shots.filter(s => s.sk === sk), base: !!S.baseAt(D.G, D.p.sx, D.p.sy), noCockpit: true });
-    hud.draw({ me: null, t: D.G.t, dt: dtR, R }); AU.engine(0, false); AU.warpTunnel(false, 0);
+    hud.draw({ me: null, t: D.G.t, dt: dtR, R }); AU.engine(0, false); AU.warpTunnel(false, 0); AU.ships([]); AU.music(app.screen === 'loading' ? 0 : 0.3);
     if (app.screen !== 'loading') pollPad();
     return;
   }
@@ -637,6 +641,11 @@ function present(dtR, t) {
   if (p.alive && p.energy < 1500 && !sess.lowE) { sess.lowE = true; AU.lowEnergy(); say('Energy low. Dock at a starbase', { gap: 20 }); }
   if (p.energy > 2500) sess.lowE = false;
   const quiet = app.screen !== 'play' || !p.alive, tunnel = !!(p.warp && p.warp.phase === 'tunnel');
+  // live HRTF engine loops for the 3 nearest hostiles, and the score's intensity
+  if (!quiet && !tunnel && !p.warp) { const near = hostile.map(s => ({ s, d: V.dist(s.pos, p.pos) })).filter(o => o.d < 1400).sort((a, b) => a.d - b.d).slice(0, 3); AU.ships(near.map(o => ({ id: o.s.id, kind: o.s.kind, rel: loc(o.s.pos, p), vr: relVel(o.s, p) }))); }
+  else AU.ships([]);
+  { const nearest = hostile.reduce((m, s) => Math.min(m, V.dist(s.pos, p.pos)), 1e9);
+    AU.music(app.screen === 'pause' ? 0.12 : !p.alive ? 0.18 : tunnel || p.warp ? 0.45 : nearest < 700 ? 1 : nearest < 1600 || p.redAlert ? 0.62 : p.dock ? 0.16 : 0.24); }
   AU.engine(quiet ? 0 : p.speed, !quiet && !tunnel);
   AU.warpTunnel(tunnel && !quiet, p.warp ? Math.hypot(p.warp.m[0], p.warp.m[1]) : 0);
   if (p.dock && p.dock.phase === 'drone' && Math.random() < dtR * 3) AU.repairTick();
@@ -727,6 +736,18 @@ for (const id of ['vvol', 'pvvol']) {
   $(id).addEventListener('change', () => { unlockAudio(); VO.say('Voice level set', { key: 'vtest', gap: 0.3, urgent: true }); });
   $(id).addEventListener('pointerdown', e => e.stopPropagation());
 }
+function setVols(kind, v) {
+  if (kind) { if (kind === 'music') { app.musVol = v; LS.set('sr.musv', v); } else { app.sfxVol = v; LS.set('sr.sfxv', v); } }
+  AU.setVol('sfx', app.sfxVol); AU.setVol('music', app.musVol);
+  for (const [id, val] of [['sfxv', app.sfxVol], ['psfxv', app.sfxVol], ['musv', app.musVol], ['pmusv', app.musVol]]) { const el = $(id); if (el && +el.value !== Math.round(val * 100)) el.value = Math.round(val * 100); }
+}
+for (const id of ['sfxv', 'psfxv', 'musv', 'pmusv']) {
+  const el = $(id); if (!el) continue; const kind = id.indexOf('mus') >= 0 ? 'music' : 'sfx';
+  el.addEventListener('input', e => { unlockAudio(); setVols(kind, +e.target.value / 100); });
+  el.addEventListener('change', () => { if (kind === 'sfx') AU.ui(); });
+  el.addEventListener('pointerdown', e => e.stopPropagation());
+}
+setVols();
 function setKeys(k) {
   app.keys = k; LS.set('sr.keys', k); document.querySelectorAll('#keysel .chip').forEach(c => c.classList.toggle('sel', c.dataset.k === k)); setText('pkeys', 'KEYS: ' + (k === 'wasd' ? 'WASD' : 'CLASSIC'));
   setText('tfoot', touchDev ? 'Stick steers · slider throttles · hold FIRE · CHART, tap a sector, WARP · DOCK auto-approaches' : k === 'wasd' ? 'WASD steer · 0-9 throttle · Space fires · G chart · H hyperwarp · R aft · L scan · E shields · Enter smart action · P pause' : 'Arrows steer · 0-9 throttle · Space fires · G chart · H hyperwarp · F/A fore/aft · L scan · S shields · Enter smart action · P pause');
