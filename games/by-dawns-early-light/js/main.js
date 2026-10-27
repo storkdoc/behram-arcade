@@ -115,7 +115,7 @@ function handleEvents(evs) {
       case 'hl': AU.S.teletype(6); if (app.station !== 'hotline') $('hlbadge').classList.add('on'); break;
       case 'ladder': AU.S.ladder(e.up); AU.setLevel(app.view.ladder); ticker(e.text, e.up ? 'bad' : 'good'); app.timeline.push({ clock: clk, text: e.text }); if (e.up) st.shake = Math.max(st.shake, 0.4); break;
       case 'strike': ticker(e.text, 'bad'); app.timeline.push({ clock: clk, text: e.text }); AU.S.rumble(0.8); flashScreen(0.35);
-        if (app.cineOn && !app.busy && !app.cp && (app.flags.strikeFilms || 0) < 2 && app.role !== 'guest') { app.flags.strikeFilms = (app.flags.strikeFilms || 0) + 1; playFilm('strike', { text: e.text, on: e.on, side: app.side }); }
+        if (app.cineOn && !app.busy && !app.cp && (app.flags.strikeFilms || 0) < 2 && app.role !== 'guest') { app.flags.strikeFilms = (app.flags.strikeFilms || 0) + 1; playFilm('strike', { text: e.text, on: e.on, side: app.side, pos: e.pos }); }
         break;
       case 'cease': AU.S.cease(); ticker(e.text, 'good'); toast('CEASEFIRE'); app.timeline.push({ clock: clk, text: e.text }); break;
       case 'crisis': AU.S.alert(); ticker(e.text, 'warn'); if (e.k === 'enemy' || e.k === 'radio') app.timeline.push({ clock: clk, text: e.text }); break;
@@ -141,6 +141,7 @@ function renderAll(force) {
   const stat = (l, v, lo, ok) => '<div class="stat"><span class="lbl">' + l + '</span><b class="' + (lo ? 'lo' : ok ? 'ok' : '') + '">' + v + '</b></div>';
   setHTML($('stats'), stat('LEGITIMACY', me.legit, me.legit < 40, me.legit >= 65) + stat('FUEL', me.fuel + 'm', me.fuel < 45) + stat('COMMS', me.comms + '%', me.comms < 40) + stat('TRUST', V.rel.trust, V.rel.trust < 30, V.rel.trust >= 55) + (V.cease.agreed ? stat('CEASEFIRE', 'HOLDING', 0, 1) : ''));
   setHTML($('speed'), app.role === 'sp' ? [['‖', 0], ['1×', 1], ['2×', 2], ['4×', 4]].map(([l, s]) => '<button class="btn chip' + ((s === 0 ? app.paused : !app.paused && app.speed === s) ? ' on' : '') + '" data-speed="' + s + '">' + l + '</button>').join('') : '');
+  { const h = $('topbar').offsetHeight; if (h && h !== app._tbh) { app._tbh = h; document.documentElement.style.setProperty('--tbh', h + 'px'); } }
   $('link').textContent = app.online && app.role !== 'sp' ? 'LINK ' + (Net.st.ping == null ? '--' : Math.round(Net.st.ping)) + ' MS' : '';
   // inbox
   let ib = '';

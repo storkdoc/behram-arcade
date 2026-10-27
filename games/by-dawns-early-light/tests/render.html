@@ -18,7 +18,7 @@ if (mode === 'globe') st.focus(55, -40, 2.6);
 if (mode === 'cabin') st.cabView(q.get('v') || 'post');
 let cin = null; const sp = +(q.get('sp') || 1);
 if (mode === 'cine') { const R = document.getElementById('cin'); cin = new Cinema(st, null, { root: R, title: R.querySelector('.ctitle'), sub: R.querySelector('.csub'), fade: R.querySelector('.cfade') }); window.cin = cin;
-  cin.play(q.get('film') || 'coldopen', { name: 'HOUR OF THE WOLF', sub: 'Hold the line.', dawn: +(q.get('dawn') || 0), result: q.get('res') || 'turned', from: +(q.get('from') || 0) }).then(() => (window.__cineDone = 1)); }
+  cin.play(q.get('film') || 'coldopen', { name: 'HOUR OF THE WOLF', sub: 'Hold the line.', dawn: +(q.get('dawn') || 0), result: q.get('res') || 'turned', from: +(q.get('from') || 0), text: q.get('text') || 'Federation missiles strike Plains bomber base.', on: 0, pos: q.get('pos') ? q.get('pos').split(',').map(Number) : undefined }).then(() => (window.__cineDone = 1)); }
 let last = performance.now(); window.__frames = 0;
 function loop(){ const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now; if (cin) { for (let i = 0; i < sp; i++) cin.update(dt); Object.assign(ui, { cover: undefined, cabDim: 0, alert: false, arcs: null }, cin.active ? cin.ui : { mode: 'globe' }); } st.frame(dt, V, ui); __frames++; requestAnimationFrame(loop); }
 loop();

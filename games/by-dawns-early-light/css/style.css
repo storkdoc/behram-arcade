@@ -129,7 +129,7 @@ h2{font-family:Georgia,serif;font-weight:normal;letter-spacing:.2em;margin:0}
   #topbar{gap:8px;flex-wrap:wrap;padding-bottom:4px}.tb-ladder{min-width:110px}.tb-stats{gap:8px;order:5;flex-basis:100%}.stat{min-width:44px}.stat b{font-size:12.5px}
   #tabs{left:calc(6px + var(--sal));right:calc(6px + var(--sar));top:auto;bottom:calc(44vh + var(--sab));width:auto}
   #panel{left:calc(6px + var(--sal));right:calc(6px + var(--sar));top:auto;height:43vh;bottom:calc(4px + var(--sab));width:auto}
-  #ticker{top:calc(96px + var(--sat));bottom:auto;width:calc(100vw - 20px)}#ticker div:nth-child(n+3){display:none}
+  #ticker{top:calc(var(--tbh,96px) + 6px);bottom:auto;width:calc(100vw - 20px)}#ticker div:nth-child(n+3){display:none}
   #hint{display:none}
 }
 @media (orientation:landscape) and (max-height:500px){
