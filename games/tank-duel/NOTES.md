@@ -31,3 +31,25 @@
 - In night variants your own tank is a little dark outside its headlight cone
 - Guest shells are dead-reckoned between snapshots, so a fast guided turn can show a small correction
 - Real fps was only measured in swiftshader. Real Mac/iPad hardware should reach tier 3; the adaptive tier steps down if not
+
+## Spawn-kill fix (Oct 2026)
+Problem: after a kill the victim recovered in place (0.7 s flicker), so the killer could re-kill it over and over.
+- **Respawn** (sim.js `respawn`/`pickSpawn`): at the end of the 1.1 s hit spin the victim is moved to a safe spot. Candidates are
+  every open cell where the hull fits (cached per `tilesVer`). It skips cells within 7 tiles of the killer (3.5 in a second, loose pass),
+  near moving-wall rails, mines, portals, the hill, live shells and power-ups. Score = path (BFS) distance from the killer
+  + 12 if the killer has no line of sight + straight distance + openness − distance from own home + small randomness.
+  If nothing fits it falls back to the home spawn. It faces the longest open ray, leaning away from the killer.
+- **Spawn shield**: `tk.prot = SPAWN_PROT` (2 s). Shells deflect off it (`deflect` event), seekers ignore it, mines don't
+  trigger, and it can't take the hill. Firing drops it at once. The last 0.5 s blinks.
+- **Ceasefire**: `g.cease = 0.75 s` from every kill. Nobody can fire (mega specials are blocked too).
+- **Killer nudge**: if the killer is more than 1.5 tiles from home, it gets a knockback-style push of up to 3 tiles toward home (`nudge` event).
+- **CPU** (ai.js): holds fire while the target's shield is up or the ceasefire is on. While the target is shielded it regroups
+  toward its own side instead of chasing the spawn, and does no strafing at it.
+- **Online**: the host simulates all of it. Snapshots carry `pr` (prot) per tank and `cs` (cease). In invisible and night variants,
+  the host's own respawn and nudge events reach the guest with their coordinates stripped. Guest interpolation of the host
+  tank snaps on jumps of more than 2 tiles.
+- **Render/audio**: team-tinted icosahedron-lattice bubble, plus warp-out and warp-in rings and sparks. Warp-in is hidden from the opponent
+  in invisible and night variants. `AU.spawn` chime arpeggio. Toast "RESPAWNED — SHIELD UP 2s (FIRING DROPS IT)".
+- `cfg.legacySpawn` restores the old behaviour (tests only, to show the chain).
+- Tests: `tests/respawn.test.js` covers the camper aimbot in all 26 variants (old vs new), the mechanics, and ACE-vs-ACE and ACE-vs-idle checks.
+  mp.test.js covers online respawn sync and the invisible no-leak check. page.test.mjs runs a 4-kill chain in Chromium and WebKit, desktop and iPhone.

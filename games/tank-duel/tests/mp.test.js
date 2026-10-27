@@ -58,12 +58,27 @@ let fails = 0; const check = (ok, msg, x) => { if (!ok) fails++; console.log(ok 
   check(/^LINK \d+ MS$/.test(link) && /^LINK \d+ MS$/.test(hl), 'LINK ms readout on both', [link, hl]);
   const t1 = await G.evaluate(() => TD.game.t); await G.waitForTimeout(1000); const t2 = await G.evaluate(() => TD.game.t);
   check(t2 > t1, 'guest receives live snapshots', [t1, t2]);
+  // spawn-kill: host kills the guest point blank, then tries again right after the respawn -> shielded, far away, synced
+  await G.evaluate(() => { window.__ev = []; const R = TD.R, f = R.fx.bind(R); R.fx = evs => { for (const e of evs) window.__ev.push(Object.assign({}, e)); return f(evs); }; });
+  const k1 = await H.evaluate(() => { const g = TD.game, h = g.tanks[0], v = g.tanks[1]; v.x = h.x + 2.5; v.y = h.y; v.prot = 0; const s0 = h.score; TD.S.hitTank(g, v, 0, v.x - 0.4, v.y, 10, 0, 'shell'); return { s0, s1: h.score }; });
+  await H.waitForFunction(() => TD.game.tanks[1].prot > 0, null, { timeout: 5000 });
+  const k2 = await H.evaluate(() => { const g = TD.game, h = g.tanks[0], v = g.tanks[1]; const s0 = h.score, ok = TD.S.hitTank(g, v, 0, v.x, v.y, 1, 0, 'shell'); return { s0, s1: h.score, ok, d: Math.hypot(v.x - h.x, v.y - h.y), v: [v.x, v.y], prot: v.prot }; });
+  check(k1.s1 === k1.s0 + 1 && k2.s1 === k2.s0 && k2.d > 7, 'online: host kill -> guest respawns far away and a re-kill bounces off the shield', { k1, k2 });
+  await G.waitForTimeout(400);
+  const gv = await G.evaluate(() => ({ prot: TD.game.tanks[1].prot, x: TD.game.tanks[1].x, y: TD.game.tanks[1].y, toast: document.getElementById('toast').textContent, sh: TD.R.tanks[1].pshield.visible, resp: window.__ev.filter(e => e.e === 'respawn').length }));
+  check(gv.prot > 0 && gv.sh && Math.hypot(gv.x - k2.v[0], gv.y - k2.v[1]) < 1.2 && /SHIELD UP/.test(gv.toast) && gv.resp === 1, 'guest sees its shield, respawn toast and the respawn position', gv);
+  await H.waitForTimeout(2200);
   // privacy: invisible variation -> the quiet host tank's position is never sent
   await H.evaluate(() => { TD.app.variant = TD.S.VARIANTS.findIndex(v => v.name === 'INVISIBLE TANKS'); TD.newOnlineMatch(); });
   await G.waitForFunction(() => TD.game.v.invisible, null, { timeout: 15000 });
   await H.waitForFunction(() => TD.game.phase === 'play', null, { timeout: 30000 }); await H.waitForTimeout(2600);
   const hid = await G.evaluate(() => { const r = TD.gs.lastRaw; return { h: r.k[0].h, x: r.k[0].x, hidden: TD.game.tanks[0].hidden }; });
   check(hid.h === 1 && hid.x === undefined && hid.hidden, 'invisible host tank: no position in guest snapshots', hid);
+  await G.evaluate(() => { window.__ev = []; });
+  await H.evaluate(() => { const g = TD.game; TD.S.hitTank(g, g.tanks[0], 1, g.tanks[0].x + 0.4, g.tanks[0].y, -10, 0, 'shell'); });
+  await H.waitForFunction(() => TD.game.tanks[0].prot > 0, null, { timeout: 5000 }); await H.waitForTimeout(1200);
+  const ir = await G.evaluate(() => ({ resp: window.__ev.filter(e => e.e === 'respawn'), hid: TD.game.tanks[0].hidden, sh: TD.R.tanks[0].pshield.visible }));
+  check(ir.resp.length === 1 && ir.resp[0].x == null && ir.hid && !ir.sh, 'invisible: the host respawn spot is not leaked to the guest', ir);
   // end of round -> both see the end screen; rematch
   await H.evaluate(() => { const g = TD.game; g.tanks[0].score = 2; g.timeLeft = 0.05; });
   await Promise.all([H, G].map(p => p.waitForFunction(() => TD.screen === 'endp', null, { timeout: 30000 })));

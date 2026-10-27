@@ -112,5 +112,23 @@ await ev(() => TD.start(TD.S.VARIANTS.findIndex(v => v.name === 'BLIZZARD'))); a
 await shot('blizzard');
 await ev(() => TD.start(TD.S.VARIANTS.findIndex(v => v.name === 'CHAOS'))); await p.waitForFunction(() => TD.game.phase === 'play', null, { timeout: 60000 }); await wait(1500);
 await shot('chaos');
+// spawn-kill chain: the CPU (ACE) kills me point blank 4 times in a row; each time it is then dropped right next to my respawn
+await ev(() => TD.start(TD.S.VARIANTS.findIndex(v => v.name === 'OPEN FIELD'), { level: 3 })); await p.waitForFunction(() => TD.game.phase === 'play', null, { timeout: 60000 });
+await ev(() => { window.__hits = []; const R = TD.R, f = R.fx.bind(R); R.fx = evs => { for (const e of evs) if (e.e === 'hit' || e.e === 'respawn') window.__hits.push({ e: e.e, tank: e.tank, t: TD.game.t }); return f(evs); }; });
+const rounds = [];
+for (let k = 0; k < 4; k++) {
+  await ev(() => { const g = TD.game, me = g.tanks[0], c = g.tanks[1]; me.prot = 0; me.spin = 0; c.prot = 0; me.x = Math.max(3, c.x - 2.6); me.y = c.y; TD.S.hitTank(g, me, 1, me.x + 0.4, me.y, -10, 0, 'shell'); });
+  await p.waitForFunction(() => TD.game.tanks[0].prot > 0, null, { timeout: 8000 });
+  const r = await ev(() => { const g = TD.game, me = g.tanks[0], c = g.tanks[1], d = Math.hypot(me.x - c.x, me.y - c.y);
+    // worst case camper: put the CPU 3 tiles in front of my fresh spawn, aimed at me
+    const ang = Math.atan2(10 - me.y, 16 - me.x); c.x = me.x + Math.cos(ang) * 3; c.y = me.y + Math.sin(ang) * 3; c.a = ang + Math.PI; c.reload = 0;
+    return { d: +d.toFixed(1), t: g.t, score: c.score, sh: TD.R.tanks[0].pshield.visible }; });
+  if (k === 0) { await wait(300); await shot('spawn-shield'); }
+  await wait(1500);
+  const after = await ev(t => ({ spin: TD.game.tanks[0].spin, score: TD.game.tanks[1].score, hits: window.__hits.filter(h => h.e === 'hit' && h.tank === 0 && h.t > t).length, sh: TD.R.tanks[0].pshield.visible, prot: +TD.game.tanks[0].prot.toFixed(2) }), r.t);
+  rounds.push({ spawnDist: r.d, shieldShown: r.sh, rekills: after.hits, scoreGain: after.score - r.score, protLeft: after.prot });
+  await wait(1200);
+}
+ok(rounds.every(r => r.spawnDist > 7 && r.shieldShown && r.rekills === 0 && r.scoreGain === 0), 'spawn-kill chain: 4 kills in a row -> far respawn, visible shield, no instant re-kill', rounds);
 ok(errs.length === 0, 'no console errors / black-region warnings', errs.slice(0, 5));
 console.log(fails.length ? `FAILED ${fails.length} (${tag})` : `ALL PASS (${tag})`); await b.close(); process.exit(fails.length ? 1 : 0);

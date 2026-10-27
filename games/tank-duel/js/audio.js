@@ -67,6 +67,9 @@
       noise(p, t + 0.03, 0.5, 'bandpass', 3200, 0.8, 0.25, 0.005, 500);
       for (let i = 0; i < 6; i++) noise(p, t + 0.1 + Math.random() * 0.7 * s, 0.07, 'bandpass', 1500 + Math.random() * 2000, 2, 0.12, 0.002); },
     shield(pan) { if (!ok()) return; const t = now(), p = panner(pan); tone(p, t, 0.5, 'sine', 600, 0.3, 1800); tone(p, t, 0.5, 'sine', 905, 0.2, 2700); noise(p, t, 0.3, 'bandpass', 5000, 3, 0.15); },
+    spawn(pan) { if (!ok()) return; const t = now(), p = panner(pan); // warp-in shimmer: rising chime arpeggio over an airy sweep
+      [523, 784, 1046, 1568].forEach((f, i) => { tone(p, t + i * 0.055, 0.45, 'sine', f, 0.13, f * 1.005); tone(p, t + i * 0.055, 0.3, 'triangle', f * 2, 0.04, f * 2); });
+      noise(p, t, 0.5, 'bandpass', 2500, 4, 0.12, 0.05, 7000); },
     brick(hp, pan) { if (!ok()) return; const t = now(), p = panner(pan); noise(p, t, hp ? 0.18 : 0.6, 'bandpass', hp ? 900 : 600, 1, hp ? 0.45 : 0.7, 0.001, 200);
       const n = hp ? 3 : 9; for (let i = 0; i < n; i++) noise(p, t + 0.05 + Math.random() * 0.35, 0.05, 'bandpass', 1200 + Math.random() * 1500, 4, 0.18); },
     mine(pan) { this.boom(1.1, pan); },

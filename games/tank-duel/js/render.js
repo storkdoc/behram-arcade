@@ -149,9 +149,15 @@ function buildTank(team, shared) {
   add(new THREE.SphereGeometry(0.018, 8, 6), stripeM, 0, 0.55, 0, false, ant);
   const shield = new THREE.Mesh(new THREE.SphereGeometry(0.72, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.4, 2.4), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
   shield.scale.y = 0.6; shield.position.y = 0.2; shield.visible = false; G.add(shield); mats.push(shield.material);
+  // spawn protection: a shimmering hex-lattice bubble + soft core, team tinted (not in mats: its opacity is driven separately)
+  const pcol = (team === 0 ? new THREE.Color(0.55, 1.15, 1.6) : new THREE.Color(1.6, 1.0, 0.55));
+  const pshield = new THREE.Group(); pshield.position.y = 0.22; pshield.visible = false; G.add(pshield);
+  const pw = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, 2), new THREE.MeshBasicMaterial({ color: pcol, wireframe: true, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const pc = new THREE.Mesh(new THREE.SphereGeometry(0.8, 28, 14), new THREE.MeshBasicMaterial({ color: pcol, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+  pw.scale.y = pc.scale.y = 0.62; pshield.add(pw, pc);
   G.traverse(o => { if (o.isMesh) o.userData.baseShadow = o.castShadow; });
   for (const m of mats) { m.userData.baseOp = m.opacity; m.userData.baseTr = m.transparent; }
-  return { G, T, B, ant, treadL, treadR, stripeM, lightM, mats, shield, recoil: 0, antV: 0, antA: 0, opacity: 1, team, wasTr: false };
+  return { G, T, B, ant, treadL, treadR, stripeM, lightM, mats, shield, pshield, pw, pc, recoil: 0, antV: 0, antA: 0, opacity: 1, team, wasTr: false };
 }
 
 /* ========================================================================== */
@@ -419,6 +425,12 @@ export class Renderer {
         case 'thud': this.sparks(e.x, e.y, 0.35, e.mega ? 30 : 8, [5, 3.6, 1.6], e.mega ? 7 : 3.5); this.puff(e.x, e.y, 0.3, e.mega ? 12 : 4, { c: 0.6, size: 0.1, size1: e.mega ? 1.4 : 0.5, life: 1, a: 0.5 });
           if (e.mega) { this.fireball(e.x, e.y, 0.8); this.shake = Math.max(this.shake, 0.4); this.scorch(e.x, e.y, 0.9); this.light(e.x, e.y, 1, 0xff9040, 20, 0.4); } this.fowFlash(e.x, e.y, 1.2, 0.2); break;
         case 'fizzle': this.puff(e.x, e.y, 0.3, 4, { c: 0.75, size: 0.06, size1: 0.4, life: 0.8, a: 0.4 }); this.sparks(e.x, e.y, 0.3, 3, [3, 2, 1], 1.5); break;
+        case 'respawn': { // warp-out where it died, warp-in at the safe spot (the new spot is only shown to people allowed to see it)
+          const tc = TEAM[e.tank].clone().multiplyScalar(2.6);
+          if (e.fx != null) { this.ring(e.fx, e.fy, 2, 0.35, tc); this.sparks(e.fx, e.fy, 0.4, 14, [2, 3, 6], 3); }
+          const hideNew = (this.g && (this.g.v.invisible || this.g.v.night)) && e.tank !== this.viewer && this.viewer >= 0;
+          if (e.x != null && !hideNew) { this.ring(e.x, e.y, 3.2, 0.5, tc); this.ring(e.x, e.y, 1.6, 0.35, new THREE.Color(3, 3, 3)); this.sparks(e.x, e.y, 0.6, 26, [3, 4, 6], 3.5, 0.5); this.light(e.x, e.y, 1, 0xa0d0ff, 12, 0.4); }
+          break; }
         case 'deflect': this.sparks(e.x, e.y, 0.4, 16, [2, 4, 6], 5); this.ring(e.x, e.y, 1.3, 0.3, new THREE.Color(1, 2, 3)); break;
         case 'clash': this.sparks(e.x, e.y, 0.4, 26, [6, 5, 3], 6); this.ring(e.x, e.y, 2.2, 0.4, new THREE.Color(3, 2.5, 1.5)); this.light(e.x, e.y, 0.8, 0xffffff, 12, 0.18); this.fowFlash(e.x, e.y, 2, 0.3); break;
         case 'hit': {
@@ -483,6 +495,12 @@ export class Renderer {
       t.treadL.map.offset.x = -tl * 0.9; t.treadR.map.offset.x = -trr * 0.9;
       const acc = (tk.fwd || 0) - (t.lastFwd || 0); t.lastFwd = tk.fwd || 0;
       t.antV += (-acc * 6 - t.antA * 40 - t.antV * 4) * dt; t.antA += t.antV * dt; t.antA = Math.max(-0.5, Math.min(0.5, t.antA)); t.ant.rotation.z = t.antA + (tk.recoil * 0.2);
+      // spawn shield: shimmer, and blink fast in its last half second so both players see it ending
+      const pv = (tk.prot || 0) > 0 && (op > 0.2 || i === viewer);
+      t.pshield.visible = pv;
+      if (pv) { const end = tk.prot < 0.5 ? (Math.sin(T * 50) > 0 ? 1 : 0.25) : 1, sh = 0.75 + 0.25 * Math.sin(T * 23 + i) * Math.sin(T * 7.3);
+        t.pw.material.opacity = 0.42 * sh * end * Math.max(op, 0.6); t.pc.material.opacity = (0.05 + 0.04 * Math.sin(T * 11)) * end * Math.max(op, 0.6);
+        t.pw.rotation.y = T * 1.7; t.pw.rotation.x = Math.sin(T * 1.3) * 0.3; const pu = 1 + 0.04 * Math.sin(T * 9); t.pshield.scale.set(pu, pu, pu); }
       t.shield.visible = tk.shield > 0 && op > 0.2; if (t.shield.visible) { t.shield.material.opacity = 0.18 + 0.08 * Math.sin(T * 8); t.shield.rotation.y = T; }
       t.stripeM.emissiveIntensity = 1.2 + (tk.speedT > 0 || tk.nitro > 0 ? 1.4 * (0.5 + 0.5 * Math.sin(T * 20)) : 0) + (tk.triple > 0 ? 0.8 : 0);
       t.lightM.emissiveIntensity = night ? 4 : 1.6;

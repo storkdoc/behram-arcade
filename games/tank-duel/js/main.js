@@ -309,6 +309,7 @@ function cues(evs) {
       case 'clash': AU.clash(p); break;
       case 'hit': AU.boom(e.cause === 'mega' ? 1.4 : 1.1, p); popScore(e.by); if (e.self) toast(e.tank === app.me ? 'YOUR OWN RICOCHET!' : 'THEY HIT THEMSELVES!', 1.6); break;
       case 'shield': AU.shield(p); break;
+      case 'respawn': AU.spawn(e.tank === app.me || e.x == null || g.v.invisible || g.v.night ? 0 : p); if (e.tank === app.me) toast('RESPAWNED — SHIELD UP 2s (FIRING DROPS IT)', 1.8); break;
       case 'brick': AU.brick(e.hp, p); break;
       case 'mine': AU.mine(p); break;
       case 'minedrop': if (e.tank === app.me) AU.minedrop(p); break;
@@ -365,7 +366,7 @@ function stepLocal(dpad) {
   else i1 = ai.think(g);
   S.step(g, [i0, i1]);
   if (app.online === 'host' && app.guestOn) g.tanks[1].ack = remoteInp.n;
-  if (g.events.length) { R.fx(g.events); cues(g.events); if (app.online === 'host' && app.guestOn) for (const e of g.events) if (!(e.e === 'minedrop' && e.tank === 0)) evOut.push(e); }
+  if (g.events.length) { R.fx(g.events); cues(g.events); if (app.online === 'host' && app.guestOn) for (const e of g.events) { if (e.e === 'minedrop' && e.tank === 0) continue; if ((e.e === 'respawn' || e.e === 'nudge') && e.tank === 0 && (g.v.invisible || g.v.night)) { evOut.push({ e: e.e, tank: 0 }); continue; } evOut.push(e); } }
 }
 function interp(alpha) {
   if (!prevPos) { for (const t of g.tanks) { t.rx = t.x; t.ry = t.y; t.ra = t.a; } return; }
@@ -415,7 +416,7 @@ function hostVisibleToGuest(h, gt) {
   return true;
 }
 function packTank(t, hide) {
-  const o = { sp: +t.spin.toFixed(3), iv: +t.inv.toFixed(2), sh: t.shield, tr: t.triple, st: +t.speedT.toFixed(2), ni: +(t.nitro || 0).toFixed(2), vt: +t.visT.toFixed(2), rc: +t.recoil.toFixed(2), sc: t.score, sn: t.sp.n, sd: +t.sp.cd.toFixed(1), rl: +t.reload.toFixed(2), ak: t.ack };
+  const o = { sp: +t.spin.toFixed(3), iv: +t.inv.toFixed(2), sh: t.shield, tr: t.triple, st: +t.speedT.toFixed(2), ni: +(t.nitro || 0).toFixed(2), vt: +t.visT.toFixed(2), rc: +t.recoil.toFixed(2), sc: t.score, sn: t.sp.n, sd: +t.sp.cd.toFixed(1), rl: +t.reload.toFixed(2), ak: t.ack, pr: +(t.prot || 0).toFixed(2) };
   if (hide) { o.h = 1; return o; }
   Object.assign(o, { x: +t.x.toFixed(3), y: +t.y.toFixed(3), a: +t.a.toFixed(4), vx: +t.vx.toFixed(3), vy: +t.vy.toFixed(3), kx: +t.kvx.toFixed(3), ky: +t.kvy.toFixed(3), t0: +t.tread[0].toFixed(2), t1: +t.tread[1].toFixed(2), mo: +t.moving.toFixed(2), fw: +(t.fwd || 0).toFixed(2), bt: +t.bumpT.toFixed(2) });
   return o;
@@ -425,7 +426,7 @@ function hostSend(dt) {
   if (g.tilesVer !== tilesSent) { tilesSent = g.tilesVer; Net.send({ t: 'tiles', d: tilesPayload() }); }
   if (evOut.length) { Net.send({ t: 'e', l: evOut }); evOut = []; }
   const h = g.tanks[0], gt = g.tanks[1], hide = !hostVisibleToGuest(h, gt);
-  Net.sendFast({ t: 's', T: +g.t.toFixed(3), ph: g.phase, tl: +g.timeLeft.toFixed(2), ot: g.overtime ? 1 : 0, w: g.winner, k: [packTank(h, hide), packTank(gt, false)],
+  Net.sendFast({ t: 's', T: +g.t.toFixed(3), ph: g.phase, cs: +(g.cease || 0).toFixed(2), tl: +g.timeLeft.toFixed(2), ot: g.overtime ? 1 : 0, w: g.winner, k: [packTank(h, hide), packTank(gt, false)],
     sh: g.shells.filter(s => !(hide && s.owner === 0 && s.age < 0.05)).map(s => [s.id, +s.x.toFixed(3), +s.y.toFixed(3), +s.vx.toFixed(2), +s.vy.toFixed(2), s.owner, (s.mega ? 1 : 0) | (s.guided ? 2 : 0) | (s.seeker ? 4 : 0), +s.age.toFixed(2)]),
     mi: g.mines.filter(m => m.owner === 1).map(m => [m.id, +m.x.toFixed(2), +m.y.toFixed(2), +m.arm.toFixed(2)]),
     pu: g.pups.map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), p.type, +p.t.toFixed(1)]),
@@ -453,7 +454,7 @@ function guestStart(cfg, tiles) {
 }
 function applyTiles(d) { if (!d || !g) return; for (let i = 0; i < d.t.length; i++) { g.tiles[i] = d.t[i]; g.hp[i] = d.h[i]; } g.tilesVer = d.v; }
 function unpackTank(t, o) {
-  t.spin = o.sp; t.inv = o.iv; t.shield = o.sh; t.triple = o.tr; t.speedT = o.st; t.nitro = o.ni; t.visT = o.vt; t.recoil = Math.max(t.recoil * 0.5, o.rc); t.score = o.sc; t.sp.n = o.sn; t.sp.cd = o.sd; t.reload = o.rl;
+  t.spin = o.sp; t.inv = o.iv; t.shield = o.sh; t.triple = o.tr; t.speedT = o.st; t.nitro = o.ni; t.visT = o.vt; t.recoil = Math.max(t.recoil * 0.5, o.rc); t.score = o.sc; t.sp.n = o.sn; t.sp.cd = o.sd; t.reload = o.rl; t.prot = o.pr || 0;
   t.hidden = !!o.h;
   if (!o.h) { t.x = o.x; t.y = o.y; t.a = o.a; t.vx = o.vx; t.vy = o.vy; t.kvx = o.kx; t.kvy = o.ky; t.tread[0] = o.t0; t.tread[1] = o.t1; t.moving = o.mo; t.fwd = o.fw; t.bumpT = o.bt; }
 }
@@ -467,7 +468,7 @@ function onSnapshot(s) {
   if (s.T <= gs.lastSnapT) return; gs.lastSnapT = s.T; gs.lastRaw = s;
   const nowS = performance.now() / 1000, off = nowS - s.T; gs.off = gs.off == null || off < gs.off ? off : gs.off + (off - gs.off) * 0.02;
   const prevPhase = g.phase;
-  g.phase = s.ph; g.timeLeft = s.tl; g.overtime = !!s.ot; g.winner = s.w; g.t = s.T;
+  g.phase = s.ph; g.cease = s.cs || 0; g.timeLeft = s.tl; g.overtime = !!s.ot; g.winner = s.w; g.t = s.T;
   // opponent (host) tank -> interpolation buffer
   const h = g.tanks[0]; unpackTank(h, s.k[0]);
   gs.snaps.push({ T: s.T, h: s.k[0].h ? null : [h.x, h.y, h.a] }); if (gs.snaps.length > 40) gs.snaps.shift();
@@ -505,7 +506,8 @@ function guestFrame(dt, dpad) {
   const h = g.tanks[0], rt = performance.now() / 1000 - (gs.off || 0) - 0.075, sn = gs.snaps;
   let a = null, b = null; for (let i = sn.length - 1; i >= 0; i--) { if (sn[i].T <= rt) { a = sn[i]; b = sn[i + 1] || null; break; } }
   if (!a && sn.length) a = sn[0];
-  if (a && a.h) { if (b && b.h) { const u = S.clamp((rt - a.T) / Math.max(1e-3, b.T - a.T), 0, 1); h.rx = a.h[0] + (b.h[0] - a.h[0]) * u; h.ry = a.h[1] + (b.h[1] - a.h[1]) * u; h.ra = a.h[2] + S.wrapA(b.h[2] - a.h[2]) * u; } else { h.rx = a.h[0]; h.ry = a.h[1]; h.ra = a.h[2]; } }
+  if (b && b.h && a && a.h && Math.hypot(b.h[0] - a.h[0], b.h[1] - a.h[1]) > 2) a = b; // respawn teleport: snap, don't slide across the map
+  if (a && a.h) { if (b && b.h && a !== b) { const u = S.clamp((rt - a.T) / Math.max(1e-3, b.T - a.T), 0, 1); h.rx = a.h[0] + (b.h[0] - a.h[0]) * u; h.ry = a.h[1] + (b.h[1] - a.h[1]) * u; h.ra = a.h[2] + S.wrapA(b.h[2] - a.h[2]) * u; } else { h.rx = a.h[0]; h.ry = a.h[1]; h.ra = a.h[2]; } }
   const nowS = performance.now() / 1000;
   for (const s of g.shells) { const age = Math.min(0.06, nowS - s.recv); s.rx = s.x + s.vx * age; s.ry = s.y + s.vy * age; }
 }
