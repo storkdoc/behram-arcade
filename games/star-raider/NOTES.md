@@ -1,6 +1,6 @@
 # STAR RAIDER — worker notes
 
-## Status (2026-10-27 ~00:15 EDT): FEATURE-COMPLETE, final test pass + push in progress
+## Status (2026-10-27 ~00:15 EDT): DONE, all tests pass, pushed
 - [x] sim.js / auto.js (solo, co-op, WAR rules + bots), render.js, hud.js, audio.js, voice.js, models.js, net.js, main.js
 - [x] tests: sim.test.js (balance), war.test.js (war balance + fog privacy), page.test.mjs (Playwright, every engine/device),
       mp.test.mjs (2P over the stand-in transport tests/mp/fakepeer.js + broker.js)
@@ -84,5 +84,6 @@
 - sim.test.js: Novice 100% win for a sloppy bot; sharp bot Pilot 100%, Warrior ~33%, Commander 0%. PASS.
 - war.test.js: better commander usually wins, equal bots split, fog privacy holds. PASS.
 - page.test.mjs chromium desktop 28/28 (HDR boot + self-check, full loop: combat, kill, chart, warp, dock, game over, rank).
-- mp.test.mjs chromium + webkit 60/60 before the audio/HDR pass; final rerun below.
+- page.test.mjs chromium touch devices (iphone, iphone-land, ipad) 69/69, webkit all devices 95/95.
+- mp.test.mjs chromium 60/60, webkit 60/60 (war: lobby, code join, orders, build, jam/ECCM, wire privacy, duel, wins, rematch, forfeit; co-op).
 
