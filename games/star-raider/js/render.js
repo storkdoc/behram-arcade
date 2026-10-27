@@ -267,7 +267,7 @@ export class Renderer {
     const ringM = new THREE.ShaderMaterial({ uniforms: { uR: { value: 0.75 }, uW: { value: 0.12 }, uA: { value: 0.5 }, uC: { value: new THREE.Color(0.8, 0.7, 0.55) } }, vertexShader: UV_VS, fragmentShader: RING_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide });
     this.pring = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ringM); this.pring.renderOrder = -6; this.planet.add(this.pring); this.pring.scale.setScalar(2.4); this.pring.rotation.x = -1.2;
     // ship pools
-    this.pools = { darter: [], lancer: [], hive: [], wing: [] }; this.shipObj = new Map();
+    this.pools = { darter: [], lancer: [], hive: [], wing: [], rival: [] }; this.shipObj = new Map();
     this.base = makeStarbase(); this.base.visible = false; sc.add(this.base);
     this.drone = makeDrone(); this.drone.visible = false; sc.add(this.drone);
     // shots
@@ -348,7 +348,9 @@ export class Renderer {
   /** fraction of the screen height (from the top) where the console begins */
   consoleTop() { if (!this.cockpit) return 0.82; const u = this.cockpit.userData; return 0.5 - u.top / (2 * u.hh); }
   /* ---------- pools ---------- */
-  getShip(kind) { const p = this.pools[kind]; let o = p.find(o => !o.userData.used); if (!o) { o = kind === 'darter' ? makeDarter() : kind === 'lancer' ? makeLancer() : kind === 'hive' ? makeHive() : makeWingman(); o.userData.kind = kind; p.push(o); this.scene.add(o); } o.userData.used = true; o.visible = true; return o; }
+  getShip(kind) { const p = this.pools[kind]; let o = p.find(o => !o.userData.used); if (!o) { o = kind === 'darter' ? makeDarter() : kind === 'lancer' ? makeLancer() : kind === 'hive' ? makeHive() : makeWingman();
+      if (kind === 'rival') o.traverse(c => { if (c.isMesh && c.material) { c.material = c.material.clone(); if (c.material.color) c.material.color.multiply(new THREE.Color(1.0, 0.62, 0.25)); if (c.material.emissive) c.material.emissive.setRGB(0.35, 0.12, 0.0); } if (c.isSprite && c.userData.engine) c.material = Object.assign(c.material.clone(), {}), c.material.color && c.material.color.setRGB(1, 0.55, 0.15); });
+      o.userData.kind = kind; p.push(o); this.scene.add(o); } o.userData.used = true; o.visible = true; return o; }
   sprite(pool, col, s) { let o = pool.find(o => !o.userData.used); if (!o) { o = new THREE.Group(); const a = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: col, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); a.scale.setScalar(s); const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); b.scale.setScalar(s * 0.35); o.add(a, b); o.userData.a = a; o.userData.b = b; o.renderOrder = 8; pool.push(o); this.scene.add(o); } o.userData.used = true; o.visible = true; return o; }
   /* ---------- particles / effects ---------- */
   emit(pos, vel, n, o = {}) {
@@ -430,7 +432,7 @@ export class Renderer {
     }
     for (const [id, o] of this.shipObj) if (!seen.has(id)) { this.shipObj.delete(id); }
     // the co-op buddy
-    if (V.buddy) { const b = V.buddy; let o = this.shipObj.get('buddy'); if (!o) { o = this.getShip('wing'); this.shipObj.set('buddy', o); } o.userData.used = true; o.visible = true; rel(b.pos, o); const bq = b.q; o.quaternion.set(bq[0], bq[1], bq[2], bq[3]); o.rotateY(Math.PI); }
+    if (V.buddy) { const b = V.buddy, bk = b.rival ? 'rival' : 'wing'; let o = this.shipObj.get('buddy'); if (!o || o.userData.kind !== bk) { o = this.getShip(bk); this.shipObj.set('buddy', o); } o.userData.used = true; o.visible = true; rel(b.pos, o); const bq = b.q; o.quaternion.set(bq[0], bq[1], bq[2], bq[3]); o.rotateY(Math.PI); }
     else this.shipObj.delete('buddy');
     for (const k in this.pools) for (const o of this.pools[k]) if (!o.userData.used) o.visible = false;
     // starbase + drone

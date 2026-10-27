@@ -45,9 +45,10 @@
   </div>
   <div class="menu" id="tmenu">
     <button class="btn big" data-act="solo">1 PLAYER</button>
-    <button class="btn" data-act="host">2 PLAYER (ONLINE CO-OP)</button>
+    <button class="btn" data-act="host">2 PLAYER (ONLINE)</button>
     <button class="btn" data-act="join">JOIN TWO-PLAYER GAME IN PROGRESS</button>
     <div class="row2"><button class="btn" data-act="how">HOW TO PLAY</button><button class="btn" data-act="sound" id="bsound">SOUND: ON</button></div>
+      <div class="vrow"><button class="btn small" data-act="voice" id="bvoice">VOICE: ON</button><input type="range" class="vvol" id="vvol" min="0" max="100" step="5" value="80" aria-label="Computer voice volume"></div>
   </div>
   <div class="tfoot" id="tfoot">Arrows steer · 0-9 throttle · Space fires · G chart · H hyperwarp · F/A fore/aft · L scan · S shields</div>
 </div>
@@ -56,10 +57,16 @@
 <div id="setup" class="screen">
   <div class="panel">
     <div class="ph"><span id="setuph">SELECT YOUR GAME</span><button class="btn x" data-act="back">✕</button></div>
-    <div class="lbl">DIFFICULTY</div>
-    <div class="chips diffs" id="diffs"></div>
-    <div class="lbl">MISSION</div>
-    <div class="chips" id="missions"></div>
+    <div class="lbl mrow">TWO-PLAYER MODE</div>
+    <div class="chips mrow" id="modes"><button class="chip" data-m="war">VERSUS · GALACTIC WAR<small>head-to-head · fog of war · squadrons</small></button><button class="chip" data-m="coop">CO-OP<small>two wingmen vs the Vrell</small></button></div>
+    <div class="lbl wrow">GALAXY</div>
+    <div class="chips wrow" id="layouts"></div>
+    <div class="lbl wrow">MATCH LENGTH</div>
+    <div class="chips wrow" id="lengths"><button class="chip" data-l="short">SHORT<small>9 minutes</small></button><button class="chip" data-l="long">LONG<small>20 minutes</small></button></div>
+    <div class="lbl crow">DIFFICULTY</div>
+    <div class="chips diffs crow" id="diffs"></div>
+    <div class="lbl crow">MISSION</div>
+    <div class="chips crow" id="missions"></div>
     <div class="hint" id="mdesc"></div>
     <div class="lbl kl">KEYBOARD</div>
     <div class="chips kl" id="keysel"><button class="chip" data-k="classic">CLASSIC<small>arrows steer · original letter keys</small></button><button class="chip" data-k="wasd">WASD<small>WASD steer · R aft · E shields</small></button></div>
@@ -91,6 +98,8 @@
         <tr><td>Gamepad</td><td>left stick steers · A / RT fire · B fore/aft · X hyperwarp · Y chart · LB/RB throttle · Back scan · L3 shields · R3 tracking · Start pause</td></tr>
         <tr><td>Touch</td><td>stick steers · FIRE · slide the throttle · CHART, SCAN, AFT, WARP and SHLD buttons · tap a sector on the chart</td></tr>
       </table>
+      <p><b>Galactic War (two players, online, or 1 player against the computer):</b> each side owns three starbases in its half of the galaxy, a flagship (you, in the cockpit) and squadrons you order on your chart in real time. You only see what your starbases, squadrons, flagship and sensor probes can see; the enemy shows up as uncertain blips. Tap one of your squadrons on the chart, then tap a sector to send it. Reserves grow with every sector you hold and buy new squadrons (BUILD), sensor PROBES, DECOY squadrons, MINES in your sector, JAMMING of the enemy's scan and radio, ECCM to clear jamming, and starbase REPAIR. Squadrons fight it out over time; your flagship in the sector doubles your side's firepower, and enemy squadrons there come at you as real ships. When both flagships meet in one sector it is a live dogfight. Destroy all enemy starbases to win, or hold more sectors than your opponent when the clock runs out. A lost flagship returns at a starbase after 15 seconds.
+        Chart keys: Tab selects your next squadron, O sends it to the cursor, B build, Z probe, X decoy, N mines, J jam, K ECCM, V repair.</p>
       <p><b>Online two-player co-op:</b> two wingmen share one galaxy and one chart, each in their own cockpit. A destroyed wingman gets a new ship at a starbase after 9 seconds while the other keeps fighting.</p>
       <p><b>Ranks</b> run from Galactic Fry Cook to Star Commander, each in class 5 (low) to 1 (high). The harder the level, the higher you can climb.</p>
     </div>
@@ -100,12 +109,12 @@
 <!-- ============ ONLINE (HOST) ============ -->
 <div id="online" class="screen">
   <div class="panel">
-    <div class="ph"><span>2 PLAYER (ONLINE CO-OP)</span><button class="btn x" data-act="cancelhost">✕</button></div>
+    <div class="ph"><span id="onlineh">2 PLAYER (ONLINE)</span><button class="btn x" data-act="cancelhost">✕</button></div>
     <p class="call" id="callmsg">Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.</p>
     <div class="ostat" id="ostat">OPENING THE LINE…</div>
     <div class="ocode" id="ocode"></div>
-    <p class="hint">On their device they pick <b>JOIN TWO-PLAYER GAME IN PROGRESS</b>. You can start flying now: your buddy joins your galaxy as a wingman the moment they arrive.</p>
-    <button class="btn big" data-act="hoststart">START FLYING NOW</button>
+    <p class="hint" id="ohint">On their device they pick <b>JOIN TWO-PLAYER GAME IN PROGRESS</b>.</p>
+    <button class="btn big" data-act="hoststart" id="bhoststart">START FLYING NOW</button>
   </div>
 </div>
 
@@ -123,6 +132,13 @@
 <!-- ============ IN-GAME DOM BITS ============ -->
 <div id="top" class="hidden"><div id="link"></div><div id="waitban" class="hidden"></div><button class="btn x" id="bpause" aria-label="pause">II</button></div>
 <div id="toast"></div>
+<div id="warbar" class="hidden">
+  <div id="wartop"></div>
+  <div id="warbtns">
+    <button class="wb" data-w="build">BUILD<small>1100</small></button><button class="wb" data-w="probe">PROBE<small>250</small></button><button class="wb" data-w="decoy">DECOY<small>250</small></button>
+    <button class="wb" data-w="mines">MINES<small>350</small></button><button class="wb" data-w="jam">JAM<small>600</small></button><button class="wb" data-w="eccm">ECCM<small>250</small></button><button class="wb" data-w="repair">REPAIR<small>400</small></button>
+  </div>
+</div>
 
 <!-- ============ TOUCH CONTROLS ============ -->
 <div id="touch" class="hidden">
@@ -142,6 +158,7 @@
     <button class="btn big" data-p="resume">RESUME</button>
     <button class="btn" data-p="keys" id="pkeys">KEYS: CLASSIC</button>
     <button class="btn" data-p="sound" id="psound">SOUND: ON</button>
+    <div class="vrow"><button class="btn small" data-p="voice" id="pvoice">VOICE: ON</button><input type="range" class="vvol" id="pvvol" min="0" max="100" step="5" value="80" aria-label="Computer voice volume"></div>
     <button class="btn" data-p="quit">QUIT TO TITLE</button>
   </div>
 </div>
@@ -165,6 +182,7 @@
 <script src="js/auto.js"></script>
 <script src="js/net.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/voice.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

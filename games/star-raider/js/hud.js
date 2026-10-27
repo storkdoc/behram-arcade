@@ -10,9 +10,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pad = (n, w) => String(Math.max(0, Math.round(n))).padStart(w, '0');
 const sgn = n => (n < 0 ? '-' : '+') + pad(Math.abs(n), 2);
 const COL = { hud: '#7ff7ff', dim: 'rgba(127,247,255,0.45)', warn: '#ffd25a', bad: '#ff4a3a', good: '#7dff9a', enemy: '#ff4a6a', base: '#7fd8ff', buddy: '#9dff7a', mag: '#ff5ad2' };
-const KCOL = { darter: '#ff4a6a', lancer: '#ff9a3a', hive: '#ff5ad2' };
+const KCOL = { darter: '#ff4a6a', lancer: '#ff9a3a', hive: '#ff5ad2', rival: '#ffb040' };
+const TEAMCOL = ['#6ab8ff', '#ffb040'];
 export class Hud {
-  constructor(canvas) { this.c = canvas; this.x = canvas.getContext('2d'); this.W = 1; this.H = 1; this.pr = 1; this.msgs = []; this.seenMsg = 0; this.alertT = 0; this.flashT = 0; this.chartHits = []; this.lrsGhost = []; this.galCache = null; this.galCacheT = -99; this.font = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'; }
+  constructor(canvas) { this.c = canvas; this.x = canvas.getContext('2d'); this.W = 1; this.H = 1; this.pr = 1; this.msgs = []; this.seenMsg = 0; this.alertT = 0; this.flashT = 0; this.chartHits = []; this.lrsGhost = []; this.galCache = null; this.galCacheT = -99; this.pops = []; this.barH = 0; this.font = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'; }
   resize(insets) {
     const pr = Math.min(2, devicePixelRatio || 1); this.pr = pr; this.W = innerWidth; this.H = innerHeight;
     this.c.width = Math.round(this.W * pr); this.c.height = Math.round(this.H * pr); this.c.style.width = this.W + 'px'; this.c.style.height = this.H + 'px';
@@ -27,12 +28,14 @@ export class Hud {
     const port = H > W, sm = Math.min(W, H), u = clamp(sm / 70, 6.5, 13); this.u = u; this.port = port;
     const I = this.I;
     this.pullMsgs(st);
-    if (st.view === 'chart') { this.chart(st); this.messages(st, true); return; }
+    if (st.view === 'chart') { if (st.war) this.warChart(st); else this.chart(st); this.messages(st, true); return; }
     if (st.view === 'lrs') { this.lrs(st); this.messages(st, true); this.panel(st); return; }
     if (!me.alive) { this.dead(st); this.messages(st); return; }
     if (me.warp) { this.warp(st); this.panel(st); return; }
     this.targets(st);
+    this.drawPops(st);
     this.crosshair(st);
+    this.objective(st);
     this.panel(st);
     this.attackComputer(st);
     this.dockGuide(st);
@@ -57,6 +60,19 @@ export class Hud {
     if (on) this.text('RED ALERT', this.W / 2, this.I.t + u * 4.2, u * 2.6, COL.bad, 'center', 18, 900);
     const c = this.x, g = c.createRadialGradient(this.W / 2, this.H / 2, Math.min(this.W, this.H) * 0.35, this.W / 2, this.H / 2, Math.max(this.W, this.H) * 0.75);
     g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, `rgba(255,30,20,${on ? 0.28 : 0.1})`); c.fillStyle = g; c.fillRect(0, 0, this.W, this.H);
+  }
+  /** score pops: +pts floating up from where a kill happened */
+  pop(pos, text, col) { this.pops.push({ pos, text, col: col || COL.warn, t: 0 }); if (this.pops.length > 8) this.pops.shift(); }
+  drawPops(st) {
+    const u = this.u;
+    for (const p of this.pops) { p.t += st.dt; const q = st.R.project(p.pos, st.me); if (!q.on) continue; const a = clamp(1.6 - p.t, 0, 1), sc = 1 + Math.max(0, 0.25 - p.t) * 3;
+      this.x.globalAlpha = a; this.text(p.text, q.x, q.y - p.t * u * 5, u * 1.6 * sc, p.col, 'center', 12, 900); this.x.globalAlpha = 1; }
+    this.pops = this.pops.filter(p => p.t < 1.6);
+  }
+  /** a short-term goal line for the sector you are in */
+  objective(st) {
+    if (!st.obj || this.msgs.length) return;
+    this.text(st.obj, this.W / 2, this.I.t + this.u * 6.2, this.u * 1.0, st.objCol || COL.dim, 'center', 4);
   }
   /* ---------- crosshair (fore: open cross, aft: diagonal) ---------- */
   crosshair(st) {
@@ -183,7 +199,7 @@ export class Hud {
   }
   /* ---------- the Galactic Chart ---------- */
   chartRect() {
-    const I = this.I, W = this.W, H = this.H, u = this.u, top = I.t + u * 5, bot = H - I.b - u * (this.st && this.st.touch ? (this.port ? 13 : 3) : 7.5);
+    const I = this.I, W = this.W, H = this.H, u = this.u, top = I.t + u * 5 + (this.st && this.st.war ? this.barH : 0), bot = H - I.b - u * (this.st && this.st.touch ? (this.port ? 13 : 3) : 7.5);
     const left = I.l + u * 1.5 + (this.st && this.st.touch && !this.port ? u * 0 : 0), right = W - I.r - u * 1.5 - (this.st && this.st.touch && !this.port ? Math.min(W * 0.22, 170) : 0);
     const cw = Math.min((right - left) / S.W, (bot - top) / S.H), gw = cw * S.W, gh = cw * S.H;
     return { x: left + (right - left - gw) / 2, y: top + (bot - top - gh) / 2, cw, gw, gh };
@@ -211,7 +227,7 @@ export class Hud {
       c.save(); c.translate(x, y); c.rotate(st.t * 0.5); c.strokeStyle = COL.base; c.lineWidth = 2; c.shadowColor = COL.base; c.shadowBlur = 10; c.beginPath(); c.moveTo(0, -cw * 0.28); c.lineTo(cw * 0.28, 0); c.lineTo(0, cw * 0.28); c.lineTo(-cw * 0.28, 0); c.closePath(); c.stroke(); c.restore(); c.shadowBlur = 0;
       c.fillStyle = COL.base; c.beginPath(); c.arc(x, y, cw * 0.07, 0, 7); c.fill();
       if (b.siege > 0) { const k = clamp(b.siege / st.siegeMax, 0, 1); c.strokeStyle = COL.bad; c.lineWidth = 3; c.beginPath(); c.arc(x, y, cw * 0.4, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); c.stroke(); if (Math.floor(st.t * 3) % 2) this.text('SIEGE', x, y - cw * 0.48, u * 0.8, COL.bad, 'center'); }
-      if (b.need) for (const [sx, sy] of S.siegeSlots(b)) { const [qx, qy] = ctr(sx, sy); c.fillStyle = 'rgba(127,216,255,0.06)'; c.fillRect(qx - cw / 2 + 1, qy - cw / 2 + 1, cw - 2, cw - 2); }
+      if (b.siege > 0 || fleets.some(f => Math.abs(f.x - b.x) + Math.abs(f.y - b.y) <= 2)) for (const [sx, sy] of S.siegeSlots(b)) { const [qx, qy] = ctr(sx, sy); c.fillStyle = 'rgba(127,216,255,0.06)'; c.fillRect(qx - cw / 2 + 1, qy - cw / 2 + 1, cw - 2, cw - 2); }
     }
     // fleets (animated between sectors), intent arrows if the computer is working
     for (const f of fleets) {
@@ -244,6 +260,70 @@ export class Hud {
     // legend
     const lx = r.x, ly = r.y + r.gh + u * 4.8;
     if (!this.port || !st.touch) this.text('◆ STARBASE   ▲ DARTERS   ▲ LANCER FLEET   ⬢ HIVE FLEET   H HUNTER   ○ YOU', W / 2, ly, u * 0.8, COL.dim, 'center');
+  }
+  /* ---------- GALACTIC WAR chart: fog of war, squadrons, orders ---------- */
+  warChart(st) {
+    const c = this.x, me = st.me, u = this.u, W = this.W, H = this.H, v = st.war, mine = TEAMCOL[v.team], theirs = TEAMCOL[1 - v.team];
+    c.fillStyle = 'rgba(2,6,14,0.86)'; c.fillRect(0, 0, W, H);
+    const r = this.chartRect(), cw = r.cw, ctr = (x, y) => [r.x + (x + 0.5) * cw, r.y + (y + 0.5) * cw];
+    this.text('GALACTIC WAR · ' + (v.team ? 'GOLD' : 'BLUE') + ' COMMAND', W / 2, this.I.t + u * 2.4, u * 1.5, mine, 'center', 10, 900);
+    // fog: visible sectors are lit, the rest is dark; nebula purple
+    const vis = new Set(v.vis), neb = new Set(v.nebula);
+    for (let y = 0; y < S.H; y++) for (let x = 0; x < S.W; x++) { const k = S.key(x, y), X = r.x + x * cw, Y = r.y + y * cw;
+      if (neb.has(k)) { c.fillStyle = 'rgba(150,70,200,0.22)'; c.fillRect(X + 1, Y + 1, cw - 2, cw - 2); }
+      c.fillStyle = vis.has(k) ? 'rgba(127,247,255,0.06)' : 'rgba(0,0,0,0.55)'; c.fillRect(X + 1, Y + 1, cw - 2, cw - 2); }
+    c.strokeStyle = 'rgba(127,247,255,0.12)'; c.lineWidth = 1; c.beginPath();
+    for (let i = 0; i <= S.W; i++) { c.moveTo(r.x + i * cw + 0.5, r.y); c.lineTo(r.x + i * cw + 0.5, r.y + r.gh); }
+    for (let j = 0; j <= S.H; j++) { c.moveTo(r.x, r.y + j * cw + 0.5); c.lineTo(r.x + r.gw, r.y + j * cw + 0.5); }
+    c.stroke();
+    // mines and probes (yours only: the enemy's are invisible to you)
+    for (const m of v.mines) { const [x, y] = ctr(m.x, m.y); this.text('✳'.repeat(m.n), x, y + cw * 0.42, cw * 0.18, COL.warn, 'center'); }
+    for (const p of v.probes) { const [x, y] = ctr(p.x, p.y); c.strokeStyle = mine; c.globalAlpha = p.fly ? 0.5 : 0.9; c.lineWidth = 1.5; c.beginPath(); c.ellipse(x, y - cw * 0.36, cw * 0.12, cw * 0.07, 0, 0, 7); c.stroke(); c.globalAlpha = 1; }
+    // starbases
+    for (const b of v.bases) { const [x, y] = ctr(b.x, b.y), col = b.own ? mine : theirs;
+      if (!b.alive) { this.text('✕', x, y + cw * 0.15, cw * 0.45, 'rgba(255,74,58,0.6)', 'center'); continue; }
+      c.save(); c.translate(x, y); c.rotate(st.t * 0.5); c.strokeStyle = col; c.lineWidth = 2; c.shadowColor = col; c.shadowBlur = 10; c.beginPath(); c.moveTo(0, -cw * 0.28); c.lineTo(cw * 0.28, 0); c.lineTo(0, cw * 0.28); c.lineTo(-cw * 0.28, 0); c.closePath(); c.stroke(); c.restore(); c.shadowBlur = 0;
+      if (b.hp >= 0) { c.strokeStyle = b.hp < 35 ? COL.bad : b.hp < 70 ? COL.warn : col; c.lineWidth = 2.5; c.beginPath(); c.arc(x, y, cw * 0.4, -Math.PI / 2, -Math.PI / 2 + b.hp / 100 * Math.PI * 2); c.stroke(); }
+      if (b.siege && Math.floor(st.t * 3) % 2) this.text('SIEGE', x, y - cw * 0.46, u * 0.8, COL.bad, 'center');
+    }
+    // squadrons: yours exact, theirs as blips (? when at the edge of your sensors), ghosts fade with age
+    for (const f of v.fleets) {
+      if (f.own) {
+        const k = clamp(f.mt, 0, 1), e = k * k * (3 - 2 * k), fx = f.px + (f.x - f.px) * e, fy = f.py + (f.y - f.py) * e; const [x, y] = ctr(fx, fy);
+        if (f.order) { const [gx, gy] = ctr(f.order[0], f.order[1]); c.strokeStyle = mine; c.globalAlpha = 0.55; c.setLineDash([4, 4]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, y); c.lineTo(gx, gy); c.stroke(); c.setLineDash([]); c.globalAlpha = 1; }
+        const sel = st.sel === f.id; c.fillStyle = f.decoy ? 'rgba(200,200,200,0.5)' : mine; c.shadowColor = mine; c.shadowBlur = sel ? 16 : 6;
+        c.beginPath(); c.moveTo(x, y - cw * 0.24); c.lineTo(x + cw * 0.22, y + cw * 0.18); c.lineTo(x, y + cw * 0.06); c.lineTo(x - cw * 0.22, y + cw * 0.18); c.closePath(); c.fill(); c.shadowBlur = 0;
+        if (sel) { c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, cw * 0.34, 0, 7); c.stroke(); }
+        this.text(f.decoy ? 'DECOY' : f.name + (f.d + f.l), x, y + cw * 0.44, cw * 0.2, '#fff', 'center');
+      } else {
+        const [x, y] = ctr(f.x, f.y), a = f.live ? 1 : clamp(1 - f.age / 45, 0.15, 0.6);
+        c.globalAlpha = a; c.fillStyle = theirs; c.shadowColor = theirs; c.shadowBlur = f.live ? 10 : 0;
+        c.beginPath(); c.arc(x, y, cw * 0.17, 0, 7); c.fill(); c.shadowBlur = 0;
+        this.text(f.n ? String(f.n) : '?', x, y + cw * 0.08, cw * 0.22, '#000', 'center', 0, 900);
+        if (!f.live) this.text(f.age + 'S', x, y + cw * 0.42, cw * 0.16, theirs, 'center');
+        c.globalAlpha = 1;
+      }
+    }
+    // flagships
+    const blink = Math.floor(st.t * 2.5) % 2 === 0;
+    if (v.foe) { const [x, y] = ctr(v.foe[0], v.foe[1]); c.strokeStyle = theirs; c.lineWidth = 2; c.beginPath(); c.arc(x, y, cw * 0.3, 0, 7); c.stroke(); this.text('ENEMY FLAGSHIP', x, y - cw * 0.4, u * 0.75, theirs, 'center'); }
+    { const [x, y] = ctr(me.sx, me.sy); if (blink || me.warp) { c.fillStyle = '#fff'; c.shadowColor = '#fff'; c.shadowBlur = 10; c.beginPath(); c.arc(x, y, cw * 0.1, 0, 7); c.fill(); c.shadowBlur = 0; } c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, cw * 0.2, 0, 7); c.stroke(); }
+    // cursor + info
+    const cu = st.cursor; if (cu) { const [x, y] = ctr(cu[0], cu[1]), h = cw * 0.5; c.strokeStyle = COL.warn; c.lineWidth = 2.5; c.shadowColor = COL.warn; c.shadowBlur = 10; c.beginPath();
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { c.moveTo(x + sx * h, y + sy * h * 0.45); c.lineTo(x + sx * h, y + sy * h); c.lineTo(x + sx * h * 0.45, y + sy * h); } c.stroke(); c.shadowBlur = 0;
+      const k = S.key(cu[0], cu[1]), here = v.fleets.filter(f => f.x === cu[0] && f.y === cu[1]), b = v.bases.find(b => b.x === cu[0] && b.y === cu[1] && b.alive);
+      const parts = [];
+      if (b) parts.push((b.own ? 'YOUR STARBASE' : 'ENEMY STARBASE') + (b.hp >= 0 ? ' ' + b.hp + '%' : ''));
+      for (const f of here) parts.push(f.own ? (f.decoy ? 'YOUR DECOY' : 'SQUADRON ' + f.name + ' (' + f.d + ' DARTER' + (f.l ? ' ' + f.l + ' LANCER' : '') + ')') : (f.live ? 'ENEMY CONTACT' : 'LAST SEEN ' + f.age + ' S AGO') + (f.n ? ' ×' + f.n : ' · SIZE UNKNOWN'));
+      if (!vis.has(k)) parts.push('NO SENSOR COVER'); if (neb.has(k)) parts.push('NEBULA');
+      const iy = r.y + r.gh + u * 1.7;
+      this.text(`${cu[0]},${cu[1]} · ${parts.join(' · ') || 'EMPTY SPACE'}`, W / 2, iy, u * 0.95, COL.hud, 'center', 4);
+      const selF = v.fleets.find(f => f.id === st.sel);
+      const wc = S.warpCost(st.G || { R: Math.random }, me, cu[0], cu[1]), can = !(cu[0] === me.sx && cu[1] === me.sy);
+      const hint = selF ? `TAP A SECTOR TO SEND SQUADRON ${selF.name}${st.touch ? '' : ' (OR O)'}` : can ? `HYPERWARP ${wc.e} ENERGY${st.touch ? ' · TAP WARP' : ' · H OR ENTER'} · TAP A SQUADRON TO GIVE IT ORDERS` : 'TAP ONE OF YOUR SQUADRONS, THEN A SECTOR, TO SEND IT';
+      this.text(hint, W / 2, iy + u * 1.5, u * 0.85, selF ? mine : COL.warn, 'center');
+    }
+    if (!st.touch && !this.port) this.text('ARROWS CURSOR · TAB SELECT SQUADRON · O SEND · B BUILD · Z PROBE · X DECOY · N MINES · J JAM · K ECCM · V REPAIR · F VIEW', W / 2, H - this.I.b - u * 1.2, u * 0.78, COL.dim, 'center');
   }
   /* ---------- Long-Range Scan: top-down around your ship ---------- */
   lrs(st) {
