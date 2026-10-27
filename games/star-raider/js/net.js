@@ -67,7 +67,7 @@ const Net = window.Net = (() => {
 
   /* ---------- the one paired connection ---------- */
   function paired(c) {
-    conn = c; st.status = 'connected'; st.lastRx = now(); clearTimeout(timer); timer = null;
+    conn = c; st.status = 'connected'; st.lastRx = now(); st.rxN = 0; clearTimeout(timer); timer = null;
     for (const o of pending) if (o !== c) safe(() => o.close());
     pending = []; queue = [];
     // host: drop off the signalling server (frees our slot / code id for other players) as soon as the
@@ -85,7 +85,7 @@ const Net = window.Net = (() => {
   }
   function releaseIds() { clearTimeout(sigT); sigT = null; if (st.role === 'host') for (const p of peers) safe(() => p.disconnect()); }
   function mainData(c, d) {
-    st.lastRx = now();
+    st.lastRx = now(); st.rxN = (st.rxN || 0) + 1;
     if (d.t === 'ping') { c.send({ t: 'pong', ts: d.ts }); return; }
     if (d.t === 'pong') { st.ping = Math.round(now() - d.ts); return; }
     if (d.t === 'avail' || d.t === 'claim' || d.t === 'welcome' || d.t === 'busy') return;
@@ -97,7 +97,8 @@ const Net = window.Net = (() => {
     hb = setInterval(() => {
       if (!conn || !conn.open) return;
       safe(() => conn.send({ t: 'ping', ts: now() }));
-      if (now() - st.lastRx > 8000) { st.status = 'error'; st.error = 'CONNECTION LOST.'; cleanup(true); }
+      // a phone compiling the cockpit shaders can stall for seconds right after connecting: allow more slack until traffic flows
+      if (now() - st.lastRx > (st.rxN > 40 ? 9000 : 20000)) { st.status = 'error'; st.error = 'CONNECTION LOST.'; cleanup(true); }
     }, 1000);
   }
 

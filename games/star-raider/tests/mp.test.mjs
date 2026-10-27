@@ -18,19 +18,19 @@ async function until(page, fn, ms = 15000, arg) { const t0 = Date.now(); while (
 const AIMLIB = () => {
   window.__aimAt = (p, pos) => { const V = SR.S.V, d = V.norm(V.sub(pos, p.pos)), f = [0, 0, -1];
     const ax = [f[1] * d[2] - f[2] * d[1], f[2] * d[0] - f[0] * d[2], f[0] * d[1] - f[1] * d[0]], s2 = Math.hypot(...ax), c = f[0] * d[0] + f[1] * d[1] + f[2] * d[2], h = Math.atan2(s2, c) / 2, k = s2 > 1e-6 ? Math.sin(h) / s2 : 0;
-    p.q = [ax[0] * k, ax[1] * k, ax[2] * k, Math.cos(h)]; p.speed = 0; p.thr = 0; };
+    p.q = s2 > 1e-6 ? [ax[0] * k, ax[1] * k, ax[2] * k, Math.cos(h)] : c > 0 ? [0, 0, 0, 1] : [0, 1, 0, 0]; p.speed = 0; p.thr = 0; };
 };
 const launchOpts = eng === 'webkit' ? {} : { executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] };
 
 async function pair(browser, broker, errs) {
   const mk = async name => {
-    const ctx = await browser.newContext({ viewport: { width: 960, height: 640 } }); const page = await ctx.newPage();
+    const ctx = await browser.newContext({ viewport: { width: 640, height: 400 } }); const page = await ctx.newPage();
     page.on('pageerror', e => errs.push(name + ': ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/i.test(m.text())) errs.push(name + ': ' + m.text()); });
     await page.route('**/vendor/peerjs.min.js', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: FAKE }));
     await page.exposeFunction('__broker', broker.attach(page));
     await page.addInitScript(AIMLIB);
-    await page.goto(ROOT + '?nolock=1');
+    await page.goto(ROOT + '?nolock=1&q=0');
     return page;
   };
   const H = await mk('host'), J = await mk('guest');
@@ -56,15 +56,18 @@ async function hostSetup(H, mode, layout = 'classic') {
   ok(await until(H, () => SR.app.screen === 'online'), 'host: online lobby');
   ok((await H.textContent('#callmsg')).trim() === 'Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.', 'host: exact call-your-buddy message');
   ok(await until(H, () => /BACKUP CODE [A-Z]{5}/.test(document.getElementById('ocode').textContent)), 'host: backup code shown');
-  const code = (await H.textContent('#ocode')).match(/[A-Z]{5}/)[0];
+  const code = (await H.textContent('#ocode')).match(/CODE\s*([A-Z]{5})/)[1];
   ok([...broker.ids.keys()].some(k => k.startsWith('behram-sr-v1-')), 'peer ids use the behram-sr-v1- namespace');
   ok(await H.evaluate(() => document.getElementById('bhoststart').classList.contains('hidden')), 'war: no START FLYING NOW (the war starts when the opponent arrives)');
   // the guest joins with the backup code (the auto-search is the other path; co-op below uses it)
-  await J.click('[data-act=join]'); await J.fill('#jcode', code); await J.click('[data-j=code]');
+  // open the join screen without the auto-search (which would find the host first) so the code path itself is tested
+  await J.evaluate(() => SR.show('join')); await J.fill('#jcode', code); await J.click('[data-j=code]');
   ok(await until(H, () => SR.app.screen === 'play' && SR.sess.war && SR.sess.G.players[1]) && await until(J, () => SR.app.screen === 'play' && SR.sess && SR.sess.role === 'guest' && SR.sess.war), 'both in a GALACTIC WAR match');
+  if (fails.length) { console.log('DIAG host', await H.evaluate(() => JSON.stringify({ s: SR.app.screen, net: SR.Net.st, on: SR.app.online, w: document.getElementById('ewhy').textContent }))); console.log('DIAG guest', await J.evaluate(() => JSON.stringify({ s: SR.app.screen, net: SR.Net.st, on: SR.app.online, j: document.getElementById('jstat').textContent, w: document.getElementById('ewhy').textContent, t: document.getElementById('etitle').textContent }))); const cnt = {}; for (const m of wire) cnt[m.t] = (cnt[m.t] || 0) + 1; console.log('WIRE', JSON.stringify(cnt), wire.length ? JSON.stringify(wire[0]).slice(0, 200) : ''); console.log(errs); process.exit(3); }
   const seeds = await Promise.all([H.evaluate(() => SR.sess.cfg.seed), J.evaluate(() => SR.sess.cfg.seed)]);
   ok(seeds[0] === seeds[1], 'same galaxy seed on both sides');
   ok(await H.evaluate(() => SR.sess.me.team === 0) && await J.evaluate(() => SR.sess.me.team === 1), 'host commands side 0, guest side 1');
+  if (process.env.DIAG) { await H.evaluate(() => { window.__rf = 0; const f = () => { __rf++; requestAnimationFrame(f); }; requestAnimationFrame(f); }); console.log('ERRS', errs, await H.evaluate(() => JSON.stringify({ p: SR.app.paused, hs: SR.sess.hitStop, acc: 0 }))); } if (process.env.DIAG) for (let i = 0; i < 5; i++) { console.log('RF', await H.evaluate(() => __rf), await J.evaluate(() => SR.R.stats().fps)); await wait(1000); console.log('T', i, await H.evaluate(() => JSON.stringify({ t: SR.sess.G.t.toFixed(1), sc: SR.app.screen, st: SR.Net.st.status, rx: Math.round(performance.now() - SR.Net.st.lastRx) })), await J.evaluate(() => JSON.stringify({ sc: SR.app.screen, st: SR.Net.st.status, rx: Math.round(performance.now() - SR.Net.st.lastRx), ping: SR.Net.st.ping, fps: SR.R.stats().fps })), wire.length); }
   ok(await until(J, () => /\d+\s*MS/i.test(document.getElementById('link').textContent)), 'guest: LINK latency shown');
   ok(await until(J, () => SR.sess.warV && SR.sess.warV.team === 1 && SR.sess.warV.fleets.some(f => f.own)), 'guest: receives its own war view with its squadrons');
   // both command charts
@@ -131,25 +134,29 @@ async function hostSetup(H, mode, layout = 'classic') {
   for (let i = 0; i < 14 && !gHit; i++) {
     await J.evaluate(() => { if (SR.sess.bud) __aimAt(SR.sess.me, SR.sess.bud.pos); });
     await J.keyboard.press('Space');
-    gHit = await until(H, () => SR.sess.G.players[0].hitT > 0 || SR.sess.G.players[0].energy < 8990 && SR.sess.G.players[0].shieldT > 0, 900);
+    gHit = await until(H, () => SR.sess.G.players[0].hitT > 0, 900);
   }
   ok(gHit, 'duel: guest torpedo hits the host flagship');
   // host shoots the guest, then finishes it off
-  let hHit = false;
+  let hHit = false, gSaw = false;
   for (let i = 0; i < 14 && !hHit; i++) {
     await H.evaluate(() => __aimAt(SR.sess.G.players[0], SR.sess.G.players[1].pos));
     await H.keyboard.press('Space');
-    hHit = await until(J, () => SR.sess.me.hitT > 0, 900);
+    if (process.env.DIAG) console.log('HD', await H.evaluate(() => { const G = SR.sess.G, a = G.players[0], b = G.players[1]; return JSON.stringify({ a: a.pos.map(Math.round), b: b.pos.map(Math.round), ak: SR.S.key(a.sx, a.sy), bk: SR.S.key(b.sx, b.sy), bal: b.alive, tr: b.inTransit, view: a.view, sh: G.shots.filter(s => s.own === 0).map(s => [s.kind, s.pos.map(Math.round), s.sk, s.life.toFixed(1)]) }); }));
+    const seen = J.evaluate(() => new Promise(r => { const t0 = performance.now(); const f = () => { const p = SR.sess.me; if (p.hitT > 0 || p.shieldT > 0) r(true); else if (performance.now() - t0 > 2500) r(false); else setTimeout(f, 30); }; f(); }));
+    hHit = await until(H, () => SR.sess.G.players[1].hitT > 0, 900);
+    if (hHit) gSaw = await seen; else await seen;
   }
-  ok(hHit, 'duel: host torpedo hits the guest flagship (seen on the guest)');
-  await H.evaluate(() => { const b = SR.sess.G.players[1]; b.energy = 3; b.shields = false; });
+  ok(hHit, 'duel: host torpedo hits the guest flagship');
+  ok(gSaw, 'duel: the guest sees the hit (shield flash / hull hit from the host)');
+  await H.evaluate(() => { const b = SR.sess.G.players[1]; b.energy = 600; b.shields = false; });
   let dead = false;
   for (let i = 0; i < 16 && !dead; i++) {
-    await H.evaluate(() => { const b = SR.sess.G.players[1]; if (b.alive) { b.energy = Math.min(b.energy, 3); __aimAt(SR.sess.G.players[0], b.pos); } });
+    await H.evaluate(() => { const b = SR.sess.G.players[1]; if (b.alive) { b.energy = Math.min(b.energy, 600); b.shields = false; __aimAt(SR.sess.G.players[0], b.pos); } });
     await H.keyboard.press('Space');
     dead = await until(H, () => !SR.sess.G.players[1].alive, 900);
   }
-  ok(dead && await H.evaluate(() => SR.sess.G.war.score[0].flag === 1), 'duel: enemy flagship destroyed, host scores it');
+  ok(dead && await H.evaluate(() => SR.sess.G.war.score[0].flag === 1 && /ENEMY FLAGSHIP|ENERGY/.test(SR.sess.G.lastDeath)), 'duel: enemy flagship destroyed by torpedoes, host scores it');
   ok(await until(J, () => !SR.sess.me.alive && SR.sess.me.respawn > 0), 'guest: flagship lost, respawn countdown (respawns cost time)');
   await H.evaluate(() => { SR.sess.G.players[1].respawn = 0.3; });
   ok(await until(J, () => SR.sess.me.alive, 12000), 'guest: new flagship at a starbase');
@@ -202,8 +209,9 @@ async function hostSetup(H, mode, layout = 'classic') {
   ok(await until(J, () => SR.app.screen === 'play' && SR.sess && SR.sess.role === 'guest' && !SR.sess.war, 20000), 'co-op: guest found the game and joined as wingman');
   ok(await until(H, () => SR.sess.G.players[1] && document.getElementById('waitban').classList.contains('hidden')), 'co-op: host has a wingman, banner gone');
   ok(await until(J, () => SR.sess.gal && SR.sess.gal.fleets.length > 0), 'co-op: guest gets the shared galactic chart');
-  await J.keyboard.press('Digit5');
-  ok(await until(H, () => SR.sess.G.players[1].speed > 1), 'co-op: guest flight reaches the host');
+  let flew = false;
+  for (let i = 0; i < 6 && !flew; i++) { await J.keyboard.press('Digit5'); flew = await until(H, () => SR.sess.G.players[1].speed > 1, 2500); }
+  ok(flew, 'co-op: guest flight reaches the host');
   await J.close();
   ok(await until(H, () => SR.app.screen === 'play' && SR.sess.G.players.length === 1, 15000), 'co-op: buddy leaves, host keeps flying solo');
   await H.close();

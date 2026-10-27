@@ -366,7 +366,7 @@ function startHost() {
   show('online');
 }
 function startJoin() { app.online = 'guest'; Net.onMessage = onNet; Net.joinAny(); $('jcode').value = ''; show('join'); }
-function joinByCode() { const c = $('jcode').value.trim().toUpperCase(); if (c.length < 4) { AU.dry(); setText('jstat', 'TYPE THE 5-LETTER BACKUP CODE FROM YOUR BUDDY\u2019S SCREEN.'); return; } app.online = 'guest'; Net.onMessage = onNet; Net.join(c); AU.ui(); $('jcode').blur(); }
+function joinByCode() { if (Net.st.role === 'guest' && Net.st.status === 'connected') { setText('jstat', 'ALREADY CONNECTED! WAITING FOR THE HOST…'); return; } const c = $('jcode').value.trim().toUpperCase(); if (c.length < 4) { AU.dry(); setText('jstat', 'TYPE THE 5-LETTER BACKUP CODE FROM YOUR BUDDY\u2019S SCREEN.'); return; } app.online = 'guest'; Net.onMessage = onNet; Net.join(c); AU.ui(); $('jcode').blur(); }
 function hostNewMatch() {
   const cfg = Object.assign({}, app.cfg, { seed: (Math.random() * 1e9) >>> 0 });
   startLocal(cfg, 'host'); app.localAgain = app.remoteAgain = false;
