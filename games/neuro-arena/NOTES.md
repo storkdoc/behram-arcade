@@ -259,6 +259,22 @@ Hypothesis (owner): intelligence evolves when reflexive pathways are limited; to
   returns 38→22% (seeds 2, 3), i.e. the enemy context is used for HITTING, not for aiming; silencing all units
   raised the seed-1 probe 43→58% (the units add noise to aim).
 
+### Baseline runs, final (stopped 09:33 EDT; Word 78-100 generations, Pong 72-77)
+| run | gens | full task / returns | probe | beyond-reflex | open side | units nbr/bigram, self, enemy |
+|---|---|---|---|---|---|---|
+| Word Full s1/s2/s3 | 91/100/99 | 18 / 16 / 17% | 10 / 5 / 1.7% | −7 / −9 / −8 | | 56/40, 47/56 nbr/bigram; ~31-37 self, 11-12 enemy |
+| Word Limited s1/s2/s3 | 80/85/78 | 18 / 20 / 18% | 3.3 / 3.3 / 1.7% | −7 / −5 / −7 | | (same seed wiring; counts did not change) |
+| Pong Full s1/s2/s3 | 73/74/72 | 94 / 90 / 98% | 62.5 / 55 / 70% | +8.5 / −3.9 / +8.7 | 74 / 61 / 74% | enemy 26/32/27, self 10/14/5 |
+| Pong Limited s1/s2/s3 | 73/77/76 | 76 / 48 / 40% | 47.5 / 15 / 27.5% | +0.5 / −10.5 / −0.3 | 66 / 55 / 65% | as Full (same seeds) |
+Probe noise: Word 60 items (±4 points at 5%), Pong 40 serves (±8 points at 65%). Only 0-4 thrones changed per run:
+selection barely acted. Word ablation (gen 100, Full s2): all units 16→8% full task, neighbour detectors 16→19% (no
+loss). Pong Full ablations (gen 40): silencing all units RAISED the probe in all 3 seeds (+2.5…+15 points) and cut
+returns 0-8 points; silencing enemy units cut returns 74→68%, 90→86%, 86→76% (s1 Limited / Full s2 / s3) but did not
+lower the probe. Verdict: no understanding emerged; Pong Full seeds 1 and 3 aim ~9 points better than a tracker, within
+noise. Fix runs (Oct 27 09:35): `FIX=nbr,mix,rate` Word (bigram-only stage 40 gens, 40 probe-style puzzles in the
+benchmark, 3× unit-wiring mutation, 2 arenas) and `FIX=aim,statue,rate` Pong (aimed-winner reward 1.5× hitR, half of
+each duel practised against a statue, 3× mutation).
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and

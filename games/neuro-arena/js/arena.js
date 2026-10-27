@@ -43,9 +43,11 @@ export class Match {
       // rewards -> dopamine
       for (const ev of pg.events) {
         const b = this.P[ev.p].brain, o = this.P[1 - ev.p].brain;
-        if (ev.t === 'hit') { this.lastHit = ev.p; this.aim[ev.p].ret++; } else { if (this.lastHit === 1 - ev.p) this.aim[1 - ev.p].won++; this.lastPt[1 - ev.p] = 1; this.lastPt[ev.p] = 0; this.lastHit = -1; }
+        if (ev.t === 'hit') { this.lastHit = ev.p; this.aim[ev.p].ret++; this.lastWin = -1; } else { this.lastWin = this.lastHit; if (this.lastHit === 1 - ev.p) this.aim[1 - ev.p].won++; this.lastPt[1 - ev.p] = 1; this.lastPt[ev.p] = 0; this.lastHit = -1; }
         if (ev.t === 'hit' && b) b.reward(b.g.hitR);
-        if (ev.t === 'miss') { if (b) b.reward(-b.g.missR); if (o) o.reward(0.3 * o.g.hitR); }
+        if (ev.t === 'miss') { if (b) b.reward(-b.g.missR); if (o) o.reward(0.3 * o.g.hitR);
+          // understanding fix: an extra dopamine reward for an AIMED WINNER (my return, then the enemy missed)
+          if (o && this.opts.aimR && this.lastWin === 1 - ev.p) o.reward(this.opts.aimR * o.g.hitR); }
         if (ev.t === 'miss' && this.opts.manualServe) pg.hold = true;
         if (this.onEvent) this.onEvent(ev);
       }

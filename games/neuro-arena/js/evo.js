@@ -63,8 +63,12 @@ export function clearlyBetter(champ, child) { const { b, c } = paired(champ.vec,
 // gA/gB genomes, wA/wB dense weights or null
 export function runDuel(job) {
   if (job.contest && job.contest !== 'pong') return runChoiceDuel(job);
-  const A = new Brain(job.gA, job.wA), B = new Brain(job.gB, job.wB);
-  const m = new Match([{ brain: A }, { brain: B }], mulberry32(job.seed));
+  const A = new Brain(job.gA, job.wA), B = new Brain(job.gB, job.wB), mo = { aimR: job.aimR || 0 };
+  // understanding fix, static-opponent curriculum: each brain first practises against a statue (height changes every
+  // 10 s) for half the duel time, learning where returns beat a parked paddle; then the real duel
+  if (job.statue) for (const X of [A, B]) { const st = { fixed: 0.8 }, ms = new Match([{ brain: X }, st], mulberry32(job.seed ^ 0x5eed), mo), r = mulberry32(job.seed + 7);
+    for (let t = 0; t < job.matchSec / 2; t += 10) { st.fixed = 0.15 + 0.7 * r(); ms.stepMs(10000); } }
+  const m = new Match([{ brain: A }, { brain: B }], mulberry32(job.seed), mo);
   m.stepMs(Math.round(job.matchSec * 1000));
   const st = m.stats(), wA = A.exportWeights(), wB = B.exportWeights();
   const bench = job.bench === false ? null : [benchmark(job.gA, wA), benchmark(job.gB, wB)];
@@ -90,7 +94,7 @@ export class Evolution {
     if (hof && this.gen - (this.lastRM || 0) >= 25 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck) && (this.lastRM = this.gen) >= 0)
       return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? cloneW(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
     const { genome, errors } = copyGenome(c.genome, o.rate, this.rnd);   // copy errors go into the CHILD's copy only
-    if (c.genome.ux) genome.ux = mutateUX(uxC(o.contest), c.genome.ux, o.rate, this.rnd, errors);   // the understanding layer's wiring
+    if (c.genome.ux) genome.ux = mutateUX(uxC(o.contest), c.genome.ux, o.rate * (o.uxRate || 1), this.rnd, errors);   // the understanding layer's wiring
     let weights = null, wErrors = 0;
     if (o.lamarck && c.weights) { const isObj = !!c.weights.W, r = copyWeights(isObj ? c.weights.W : c.weights, o.rate, this.rnd, genome.wMax); weights = isObj ? { ...c.weights, W: r.w } : r.w; wErrors = r.n;
       // Pong: a rewired unit starts with fresh synapses (NaN = 'initialise' for Brain.initPlastic)
@@ -99,7 +103,7 @@ export class Evolution {
   }
   job(child) {
     const c = this.champ, side = this.rnd() < 0.5 ? 0 : 1;   // random sides: no court bias
-    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800, level: this.level || 0 };
+    const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800, level: this.level || 0, nbrStage: !!this.opts.nbrStage && this.gen < (this.opts.nbrGens || 1e9), probeMix: !!this.opts.probeMix, aimR: this.opts.aimR || 0, statue: !!this.opts.statue && this.gen < (this.opts.statueGens || 1e9) };
     // every 10 generations (and right after a new champion or a level-up) one duel also benchmarks the champion on the
     // full task (the last curriculum level), so the chart can show real progress across level changes
     const C = CONTEST[j.contest], last = C && C.levels ? C.levels.length - 1 : 0;

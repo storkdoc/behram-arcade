@@ -14,13 +14,17 @@ if (!isMainThread) {
   const { CONTEST } = await import('../js/contests.js');
   const [id = 'add', rounds = 10, K = 6, lam = 1, matchSec = 30, size = 2800, rs = 12345, reflex = 1, wiring = 'evolved'] = process.argv.slice(2);
   const C = uxC(id);
-  const evo = new Evolution({ contest: id, size: +size, lamarck: !!+lam, matchSec: +matchSec, reflex: +reflex, wiring, uxSeed: +rs }); evo.rnd = mulberry32(+rs);
+  // env FIX=nbr,mix,rate,aim,statue switches on the understanding fixes (bigram stage for NBRG generations, probe-style
+  // puzzles in the benchmark, 3x unit-wiring mutation, aimed-winner reward, statue curriculum for STG generations)
+  const FX = (process.env.FIX || '').split(',');
+  const evo = new Evolution({ contest: id, size: +size, lamarck: !!+lam, matchSec: +matchSec, reflex: +reflex, wiring, uxSeed: +rs,
+    nbrStage: FX.includes('nbr'), nbrGens: +(process.env.NBRG || 40), probeMix: FX.includes('mix'), uxRate: FX.includes('rate') ? 3 : 1, aimR: FX.includes('aim') ? 1.5 : 0, statue: FX.includes('statue'), statueGens: +(process.env.STG || 1e9) }); evo.rnd = mulberry32(+rs);
   const ABL = +(process.env.ABL || 0); const { classCounts, unitName, unitClass } = await import('../js/understand.js');
   const pool = Array.from({ length: +K }, () => new Worker(here));
   let rid = 0; const run = (w, m) => new Promise(r => { const id = ++rid; const f = d => { if (d.rid === id) { w.off('message', f); r(d.res); } }; w.on('message', f); w.postMessage({ ...m, rid: id }); });
   const acc = () => evo.champAccNow ?? (evo.champ.bench && evo.champ.bench.acc) ?? 0;
   const t0 = Date.now();
-  console.log(JSON.stringify({ contest: id, chance: C.chance ?? null, K: +K, lamarck: !!+lam, matchSec: +matchSec, size: +size, reflex: +reflex, wiring, seed: +rs }));
+  console.log(JSON.stringify({ fix: FX, contest: id, chance: C.chance ?? null, K: +K, lamarck: !!+lam, matchSec: +matchSec, size: +size, reflex: +reflex, wiring, seed: +rs }));
   const ablate = async tag => { const r = await run(pool[0], { t: 'ablate', contest: id, g: evo.champ.genome, w: evo.champ.weights, size: +size });
     const ux = evo.champ.genome.ux, top = ux && r.readout ? ux.units.map((u, i) => ({ n: unitName(C, u), c: unitClass(C, u), to: C.labels[r.readout[i][0]], sel: +(r.readout[i][1] - r.readout[i][2]).toFixed(3) })).filter(o => o.c !== 'empty').sort((a, b) => b.sel - a.sel).slice(0, 25) : null;
     console.log(JSON.stringify({ abl: tag, gen: evo.gen, probe: r.acc, prior: r.prior, openSide: r.openSide, fullPrior: r.fullPrior, ablate: r.ablate, cls: ux ? classCounts(C, ux) : null, top })); };

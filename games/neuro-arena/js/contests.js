@@ -54,6 +54,16 @@ const TX_UX = {
     const r = mulberry32(777), a = [...ok]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a.slice(0, 80); },
   probeName: 'neighbour letters imply the answer, the frequency guess is wrong',
+  /* training puzzles for the "understanding" fixes (never the probe's own puzzles): the gap sits next to a strongly
+     predictive neighbour (>= 50% of >= 4 dictionary words). all = the bigram curriculum stage; mix = 40 of them where
+     the reflex is wrong, added to the benchmark so THE REAPER selects for neighbour use. */
+  nbrTrain: () => { const C = TXC(); if (C._nbrT) return C._nbrT;
+    const pf = priorOf(C), ctx = new Map(), P = new Set(probeSet(C).map(it => it[4] + it[0]));
+    for (const w of DICT5) for (let p = 0; p < 5; p++) { const k = p + (p > 0 ? w[p - 1] : '^') + (p < 4 ? w[p + 1] : '$'), m = ctx.get(k) || new Map(); m.set(w[p], (m.get(w[p]) || 0) + 1); ctx.set(k, m); }
+    const all = W5ITEMS.filter(it => { const w = it[4], p = it[0]; if (P.has(w + p)) return false; const m = ctx.get(p + (p > 0 ? w[p - 1] : '^') + (p < 4 ? w[p + 1] : '$')); if (!m) return false;
+      let n = 0, bl = '', bv = 0; for (const [l, v] of m) { n += v; if (v > bv) { bv = v; bl = l; } } return n >= 4 && bv / n >= 0.5 && it[5].includes(bl); });
+    const r = mulberry32(4242), a = [...all]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return (C._nbrT = { all: a, mix: a.filter(it => !it[5].includes(AZ[pf(it)])).slice(0, 40) }); },
   reflexText: 'In Word completion the reflex is “the gap is in place 3, so say A”: the most common letter for that place (S, R, A, E, E), right 25.3% of the time without reading the word.',
   understandText: 'a letter next to the gap, e.g. “Q at 1 + gap at 2” → U, or pairs of letters that go together',
 };
@@ -413,7 +423,9 @@ export function choiceBenchmark(contest, genome, weights, size, level = 0, set =
 export function runChoiceDuel(job) {
   const C = CONTEST[job.contest], size = job.size || 2800;
   const A = makeBrain(C, job.gA, job.wA, size), B = makeBrain(C, job.gB, job.wB, size), r = mulberry32(job.seed);
-  const m = new ChoiceMatch(C, [{ brain: A }, { brain: B }], () => drawItem(C, job.level, r));
+  // understanding fixes (Evolution opts): train only on neighbour-predictive puzzles (bigram stage) ...
+  const NT = (job.nbrStage || job.probeMix) && C.nbrTrain ? C.nbrTrain() : null;
+  const m = new ChoiceMatch(C, [{ brain: A }, { brain: B }], job.nbrStage && NT ? () => NT.all[Math.floor(r() * NT.all.length)] : () => drawItem(C, job.level, r));
   // the champion's synapses as they were before this duel, on the FULL task (the last level): tracks progress on the
   // real problem even while the curriculum benchmark restarts at every level
   const cg = job.side === 0 ? job.gA : job.gB, cw = job.side === 0 ? job.wA : job.wB;
@@ -423,7 +435,9 @@ export function runChoiceDuel(job) {
   m.stepMs(Math.round(job.matchSec * 1000));
   const st = m.stats(); st.score = [...st.score];
   const wA = A.exportWeights(), wB = B.exportWeights();
-  const bench = job.bench === false ? null : [choiceBenchmark(C, job.gA, wA, size, job.level), choiceBenchmark(C, job.gB, wB, size, job.level)];
+  // ... and select on probe-style puzzles: 40 of them join the frozen benchmark THE REAPER compares
+  const bset = job.probeMix && NT ? benchSet(C, job.level).concat(NT.mix) : null;
+  const bench = job.bench === false ? null : [choiceBenchmark(C, job.gA, wA, size, job.level, bset), choiceBenchmark(C, job.gB, wB, size, job.level, bset)];
   return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, probe: probe && { acc: probe.acc, alt: probe.alt, level: probe.level }, up };
 }
 /* Understanding probe accuracy (+ ablations: knock out unit classes and re-measure the probe and the full task).
