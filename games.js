@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'star-raider',
+    title: 'STAR RAIDER',
+    tagline: 'One starfighter, a galaxy under siege. Hunt the Vrell fleets before your starbases fall, or wage a live galactic war against a buddy.',
+    description: "A first-person space combat and strategy game in the spirit of the 1979 home-computer classic, rebuilt with modern 3D graphics: PBR-lit starfighters and starbases, HDR bloom, painted nebulae and planets, a streaking hyperwarp tunnel and particle explosions with shockwaves and debris. From the cockpit you set the throttle 0 to 9, flip between fore and aft views, raise shields and fire alternating photon torpedoes, with a crosshair, a lock indicator and an attack computer whose tracking bars turn red when you are locked on. The original Vrell come in three kinds with different tactics: Darters dodge and dogfight in pincer pairs, Lancers flank and strafe, and shielded Hives hang back and launch Darters. Their plasma can be dodged or shot down. Hits damage your Photons, Engines, Shields, Computer, Long-range scan and Radio one by one. The Galactic Chart shows fleets closing on your starbases. Every hyperwarp costs energy and time, and you steer a drifting marker to land on target. Starbases radio for help when besieged, and docking refuels and repairs you. A ship computer voice calls out red alerts, sieges and system damage. Sound is 3D (HRTF) with reverb and Doppler, and an adaptive score swells in combat, with separate SFX, music and voice volumes. There are Campaign, Last Stand and Blitz missions, four difficulty levels from Novice to Commander, and a rank with a class from Galactic Fry Cook to Star Commander, scored on efficiency. Two-player is online. In GALACTIC WAR you each command half the galaxy from your own chart: three starbases, squadrons ordered in real time, fog of war, sensor probes, decoys, mines, jamming and ECCM. Your flagship is your cockpit, and when both flagships meet in one sector it becomes a live dogfight. War matches run 9 or 20 minutes on three layouts, and you can also play it against the computer. Co-op puts two wingmen in one galaxy. All sound is synthesized.",
+    thumb: 'games/star-raider/thumb.png',
+    added: '2026-10-26',
+    genre: 'SPACE COMBAT',
+    year: '1979 REMIX',
+    controls: 'arrows (or WASD) steer · mouse steers too (click to capture) · 0-9 throttle, wheel also throttles · SPACE or click fires · F / A fore / aft view (WASD layout: R) · G Galactic Chart, then arrows or click a sector · H hyperwarp to the cursor, steer to keep the marker centred · L long-range scan · S shields (WASD layout: E) · T / C tracking and attack computer · M next target · ENTER smart action (warp, auto-approach and dock) · war chart: TAB selects a squadron, O orders it, B build, Z probe, X decoy, N mines, J jam, K ECCM, V repair · P or ESC pauses · gamepad: left stick steers, A / RT fire, B shields, X next target, Y chart, LB fore/aft, RB warp or dock, d-pad throttle, BACK scan, START pauses',
+    touch: 'on-screen stick steers, slide the throttle, hold FIRE · CHART, SCAN, AFT, SHLD, WARP and DOCK buttons · tap a sector on the chart, then WARP · war: tap a squadron, then a sector to send it, plus action buttons on the chart · works on iPhone and iPad in portrait and landscape',
+    accent: '#5ac8ff'
+  },
+  {
     slug: 'by-dawns-early-light',
     title: "BY DAWN'S EARLY LIGHT",
     tagline: 'A rogue launch. A missing head of state. One aircraft, one night, and a hotline. Bring the bombers home before dawn.',
