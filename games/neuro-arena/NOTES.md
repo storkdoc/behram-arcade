@@ -298,6 +298,8 @@ Big/evenodd/pattern "beyond reflex" comes from the designed (uncapped) tiles, no
 units only. Probe values in the round log (post-duel weights) and ablation re-measures (stored weights) disagree.
 Examples: "enemy's last answer R + B=0 → L", "I am on a 3+ losing streak + A=7 → 2". No contest showed unit-driven
 understanding in these short runs. echo/dots/rps have no probe (no reflex-wrong items defined); RPS hidden cycle not built.
+Tests after the fixes (Oct 27 10:30 EDT): page.test.cjs ALL PASS; live game smoke in Chromium + WebKit, desktop + iPhone
+viewport, no errors; Lab understanding panels checked in both engines.
 
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
