@@ -245,6 +245,20 @@ Hypothesis (owner): intelligence evolves when reflexive pathways are limited; to
   vs the tracker is unchanged (the tracker never misses, so winners there are always 0).
 - Headless: `ABL=<every> node tests/evochoice.mjs <contest|pong> rounds K lamarck matchSec size seed reflex wiring`.
 
+### Understanding experiments, interim (Oct 27 2026 08:58 EDT; 1 arena, Lamarckian, 60-s Word / 30-s Pong duels)
+`ABL=50 node tests/evochoice.mjs text 400 1 1 60 2800 <seed 1-3> <0 Full | 1 Limited>`, Pong the same with 30-s duels.
+- **Word completion, ~60-80 generations, 3 seeds each:** full-task accuracy Full 10-18%, Limited 15-17% (reflex
+  guess 25.3%): beyond-reflex is NEGATIVE in all 6 runs (−7 … −15 points). Probe 2-5% (reflex 0%; 60 items, ±3%).
+  Neighbour/bigram detectors exist from the random seed wiring (~55 / ~45 units) and their count does not grow.
+  Ablation at gen 50: silencing neighbour detectors does not lower the probe (it is at the floor); silencing all
+  units cuts the full task 16→12 / 17→5 / 15→8%. Most selective units are reflex units (“gap at 5 → T”) and a few
+  neighbour units (“E at 4 + gap at 5 → R”, “S at 4 + gap at 5 → S”). **No understanding has emerged yet.**
+- **Pong, 40 generations:** Full: benchmark returns 86-94%, probe 40-48% of serves won vs the statue (tracker 65%),
+  open-side 55-71% of returns (tracker 65%) → beyond-reflex −10 … +6 points: no aiming yet. Limited: the capped,
+  decaying tracking reflex cripples returns (38% in 2 seeds, 74% in 1), probe 18-23%. Knocking out enemy units cut
+  returns 38→22% (seeds 2, 3), i.e. the enemy context is used for HITTING, not for aiming; silencing all units
+  raised the seed-1 probe 43→58% (the units add noise to aim).
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and
