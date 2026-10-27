@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>STAR RAIDER — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.SRFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'STAR RAIDER hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.SR && window.SR.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) SRFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) SRFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!window.SR) SRFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 25000);
+})();
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hudc"></canvas>
+<a id="home" href="../../">← ARCADE</a>
+
+<div id="loading" class="screen show"><div class="lt">STAR RAIDER</div><div class="lbar"><i id="lprog"></i></div><div class="lsub" id="lmsg">CHARTING THE GALAXY…</div></div>
+
+<!-- ============ TITLE (attract demo flies behind it) ============ -->
+<div id="title" class="screen">
+  <div class="tblock">
+    <div class="tsub">BEHRAM ARCADE PRESENTS</div>
+    <h1 class="tt"><span>STAR</span> <span class="b">RAIDER</span></h1>
+    <div class="ttag">The Vrell are closing on your starbases. One fighter. One galaxy. Hold the line.</div>
+  </div>
+  <div class="menu" id="tmenu">
+    <button class="btn big" data-act="solo">1 PLAYER</button>
+    <button class="btn" data-act="host">2 PLAYER (ONLINE CO-OP)</button>
+    <button class="btn" data-act="join">JOIN TWO-PLAYER GAME IN PROGRESS</button>
+    <div class="row2"><button class="btn" data-act="how">HOW TO PLAY</button><button class="btn" data-act="sound" id="bsound">SOUND: ON</button></div>
+  </div>
+  <div class="tfoot" id="tfoot">Arrows steer · 0-9 throttle · Space fires · G chart · H hyperwarp · F/A fore/aft · L scan · S shields</div>
+</div>
+
+<!-- ============ SETUP (difficulty, mission, keys) ============ -->
+<div id="setup" class="screen">
+  <div class="panel">
+    <div class="ph"><span id="setuph">SELECT YOUR GAME</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="lbl">DIFFICULTY</div>
+    <div class="chips diffs" id="diffs"></div>
+    <div class="lbl">MISSION</div>
+    <div class="chips" id="missions"></div>
+    <div class="hint" id="mdesc"></div>
+    <div class="lbl kl">KEYBOARD</div>
+    <div class="chips kl" id="keysel"><button class="chip" data-k="classic">CLASSIC<small>arrows steer · original letter keys</small></button><button class="chip" data-k="wasd">WASD<small>WASD steer · R aft · E shields</small></button></div>
+    <button class="btn big" data-act="start" id="bstart">LAUNCH</button>
+  </div>
+</div>
+
+<!-- ============ HOW TO PLAY ============ -->
+<div id="how" class="screen">
+  <div class="panel wide">
+    <div class="ph"><span>HOW TO PLAY</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="howtxt">
+      <p>Vrell fleets roam the 16×8 sector galaxy and move on your <b>starbases</b>. When enough fleets surround a starbase (the four sectors next to it), they destroy it. Lose them all and the war is over. Destroy every fleet to win.</p>
+      <p>Open the <b>Galactic Chart</b> (G), pick a sector and <b>hyperwarp</b> (H). In the tunnel the target marker drifts on harder levels: steer to keep it centered or you arrive off course. Warping costs energy and so does everything else: throttle, shields and the attack computer.</p>
+      <p>In combat raise your <b>shields</b>, set a cruising throttle and fire <b>photon torpedoes</b> that alternate left and right. The <b>attack computer</b> shows θ (left/right), Φ (up/down) and range; when both tracking bars go red and the range is under 240 you have a <b>lock</b> and torpedoes home in. Darters dodge and dogfight, Lancers flank you then strafe, Hives carry shields and launch Darters. Shoot their plasma down or dodge it.</p>
+      <p>Hits damage your systems: <b>P</b>hotons, <b>E</b>ngines, <b>S</b>hields, <b>C</b>omputer, <b>L</b>ong-range scan, <b>R</b>adio. Yellow is damaged, red is destroyed. Fly to a starbase, line it up in the crosshair within 70 units and cut the throttle to <b>dock</b>: a drone refuels and repairs you.</p>
+      <table class="keys">
+        <tr><td>Arrows (or WASD)</td><td>steer · mouse also steers (click to capture)</td></tr>
+        <tr><td>0 – 9</td><td>throttle (9 is fastest and burns the most energy)</td></tr>
+        <tr><td>Space / click</td><td>fire photon torpedoes</td></tr>
+        <tr><td>Enter</td><td>smart action: hyperwarp to the chart target, else auto-approach and dock at a starbase, else next target</td></tr>
+        <tr><td>F / A</td><td>fore / aft view (WASD layout: R for aft)</td></tr>
+        <tr><td>G</td><td>Galactic Chart (arrows move the cursor, or click a sector)</td></tr>
+        <tr><td>H</td><td>hyperwarp to the chart cursor</td></tr>
+        <tr><td>L</td><td>long-range scan</td></tr>
+        <tr><td>S</td><td>shields on/off (WASD layout: E)</td></tr>
+        <tr><td>T · C · M</td><td>tracking computer · attack computer · next target</td></tr>
+        <tr><td>P / Esc</td><td>pause</td></tr>
+        <tr><td>Gamepad</td><td>left stick steers · A / RT fire · B fore/aft · X hyperwarp · Y chart · LB/RB throttle · Back scan · L3 shields · R3 tracking · Start pause</td></tr>
+        <tr><td>Touch</td><td>stick steers · FIRE · slide the throttle · CHART, SCAN, AFT, WARP and SHLD buttons · tap a sector on the chart</td></tr>
+      </table>
+      <p><b>Online two-player co-op:</b> two wingmen share one galaxy and one chart, each in their own cockpit. A destroyed wingman gets a new ship at a starbase after 9 seconds while the other keeps fighting.</p>
+      <p><b>Ranks</b> run from Galactic Fry Cook to Star Commander, each in class 5 (low) to 1 (high). The harder the level, the higher you can climb.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ONLINE (HOST) ============ -->
+<div id="online" class="screen">
+  <div class="panel">
+    <div class="ph"><span>2 PLAYER (ONLINE CO-OP)</span><button class="btn x" data-act="cancelhost">✕</button></div>
+    <p class="call" id="callmsg">Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.</p>
+    <div class="ostat" id="ostat">OPENING THE LINE…</div>
+    <div class="ocode" id="ocode"></div>
+    <p class="hint">On their device they pick <b>JOIN TWO-PLAYER GAME IN PROGRESS</b>. You can start flying now: your buddy joins your galaxy as a wingman the moment they arrive.</p>
+    <button class="btn big" data-act="hoststart">START FLYING NOW</button>
+  </div>
+</div>
+
+<!-- ============ JOIN ============ -->
+<div id="join" class="screen">
+  <div class="panel">
+    <div class="ph"><span>JOIN GAME IN PROGRESS</span><button class="btn x" data-j="cancel">✕</button></div>
+    <div class="ostat" id="jstat">LOOKING FOR A GAME IN PROGRESS…</div>
+    <div class="lbl">OR TYPE THE BACKUP CODE</div>
+    <div class="jrow"><input id="jcode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE"><button class="btn" data-j="code">JOIN</button></div>
+    <button class="btn" data-j="retry">SEARCH AGAIN</button>
+  </div>
+</div>
+
+<!-- ============ IN-GAME DOM BITS ============ -->
+<div id="top" class="hidden"><div id="link"></div><div id="waitban" class="hidden"></div><button class="btn x" id="bpause" aria-label="pause">II</button></div>
+<div id="toast"></div>
+
+<!-- ============ TOUCH CONTROLS ============ -->
+<div id="touch" class="hidden">
+  <div id="tstick"><div id="tknob"></div></div>
+  <div id="tthr"><div id="tthrfill"></div><div id="tthrknob"></div><div id="tthrlbl">0</div></div>
+  <div id="tbtns">
+    <button class="tb" data-b="chart">CHART</button><button class="tb" data-b="scan">SCAN</button><button class="tb" data-b="aft">AFT</button>
+    <button class="tb" data-b="shld">SHLD</button><button class="tb warp" data-b="warp">WARP</button><button class="tb" data-b="dock">DOCK</button>
+  </div>
+  <button id="tfire" class="tb fire" data-b="fire">FIRE</button>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen ov">
+  <div class="panel">
+    <div class="ph"><span>PAUSED</span></div>
+    <button class="btn big" data-p="resume">RESUME</button>
+    <button class="btn" data-p="keys" id="pkeys">KEYS: CLASSIC</button>
+    <button class="btn" data-p="sound" id="psound">SOUND: ON</button>
+    <button class="btn" data-p="quit">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<!-- ============ GAME OVER / RANK ============ -->
+<div id="endp" class="screen ov">
+  <div class="panel">
+    <div class="ph"><span id="etitle">GAME OVER</span></div>
+    <div class="esub" id="ewhy"></div>
+    <div class="rank"><div class="rk1">RANK</div><div class="rk2" id="erank">GALACTIC FRY COOK</div><div class="rk3" id="ecls">CLASS 5</div></div>
+    <div class="estats" id="estats"></div>
+    <div class="menu" id="emenu">
+      <button class="btn big" data-e="again">PLAY AGAIN</button>
+      <button class="btn" data-e="title">TITLE</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/auto.js"></script>
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

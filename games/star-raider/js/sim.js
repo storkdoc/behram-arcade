@@ -39,7 +39,7 @@
   const MISSIONS = {
     campaign: { name: 'CAMPAIGN', desc: 'Destroy every Vrell fleet before they take your starbases.' },
     laststand: { name: 'LAST STAND', desc: 'One starbase, waves of fleets. Hold out as long as you can.' },
-    blitz: { name: 'BLITZ', desc: 'Small, fast galaxy. Twice the fleet speed, half the energy.' },
+    blitz: { name: 'BLITZ', desc: 'Faster Vrell fleets, quicker sieges and only 6000 energy units.' },
   };
 
   /* ---------- tiny math ---------- */
