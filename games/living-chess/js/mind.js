@@ -243,7 +243,7 @@
       if (fB && matesInBest) foresee.push({ ply: fB.mateAt, txt: `In ${movesWord(fB.mateAt)} I deliver mate: ${lineTxt(bestWalk.sans, fB.mateAt + 1)}.`, kind: 'mate' });
       if (fB && fB.promoAt >= 0) foresee.push({ ply: fB.promoAt, txt: `In ${movesWord(fB.promoAt)} I reach the last rank.`, kind: 'promo' });
       foresee.sort((a, b) => a.ply - b.ply);
-      ctx.foresee = foresee.length ? foresee[0].txt : ''; ctx.line = bestWalk ? lineTxt(bestWalk.sans) : ''; ctx.ksq = killerSq >= 0 ? sqName(killerSq) : (mainAtk >= 0 ? sqName(mainAtk) : ctx.sq);
+      ctx.foresee = foresee.length ? foresee[0].txt : ''; ctx.line = bestWalk ? (bestWalk.sans.length > 1 ? lineTxt(bestWalk.sans) : (/#$/.test(bestWalk.sans[0] || '') ? 'checkmate, no escape' : 'and nothing they can do stops it')) : ''; ctx.ksq = killerSq >= 0 ? sqName(killerSq) : (mainAtk >= 0 ? sqName(mainAtk) : ctx.sq);
       const inCheckK = t === K && chess.inCheck();
       const sacDecisive = isBest && diesBest >= 0 && diesBest <= 4 && (bestScore >= MATE_T || (bestWalk.matGain >= 250) || (bestWalk.fate && Object.values(bestWalk.fate).some(f => f.captures.some(c => c.type === Q && c.ply > diesBest - 2))));
       const winning = isBest && (bestScore >= MATE_T || (bestWalk && bestWalk.matGain >= (hang > 0 ? 300 : 200)) || (hang <= 0 && bigCapBest && bigCapBest.ply === 0 && chess.see(sq, bigCapBest.sq) > 0));

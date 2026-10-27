@@ -114,7 +114,7 @@ function applySettings() {
   $('vlist').innerHTML = V.supported ? 'Voices: ' + ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'].map(k => `<b>${k[0].toUpperCase() + k.slice(1)}</b> ${V.voiceName(k)}`).join(' · ') : 'Speech is not available in this browser; captions only.';
 }
 function act(a) {
-  A.unlock(); A.tick();
+  A.unlock(); V.unlock(); A.tick();
   if (a === 'solo') show('solo');
   else if (a === 'how') show('how');
   else if (a === 'settings') { G.settingsFrom = G.screen; applySettings(); show('settings'); }
@@ -262,10 +262,9 @@ function select(sq) {
 async function tryMove(to, viaTouch) {
   if (G.sel == null || !myTurn() || G.busy) return false;
   const ms = legalFrom(G.sel).filter(m => m.to === to); if (!ms.length) return false;
-  let m = ms[0];
-  if (ms.length > 1 && ms[0].promo) { const pick = await askPromo(); if (!pick) return false; m = ms.find(x => x.promo === pick) || ms[0]; }
-  const u = LC.uci(m);
+  let m = ms.find(x => !x.promo || x.promo === LC.Q) || ms[0], u = LC.uci(m);
   if (viaTouch && S.confirm && G.confirmUci !== u) { G.confirmUci = u; previewMove(u, true); return false; }
+  if (ms.length > 1 && ms[0].promo) { const pick = await askPromo(); if (!pick) return false; m = ms.find(x => x.promo === pick) || ms[0]; u = LC.uci(m); }
   return doMove(u, 'me');
 }
 function askPromo() {
@@ -369,7 +368,14 @@ function counsel() {
   const a = G.th.army; R.setCounsel(a.uci); A.counsel(); if (S.ghost) R.setGhost(a.steps, 'counsel', G.me);
   const from = LC.sqIdx(a.uci.slice(0, 2)), c = R.chars.get(G.chess.ids[from]); if (c) c.doReact('brave', 3);
   $('pv').innerHTML = `<b>THE ARMY'S COUNSEL: ${a.san}</b>${S.honest ? ` <span class="v best">${G.th.evalTxt}</span><div>Foreseen: ${a.line.join(' ')}</div>` : ''}`; $('pv').classList.remove('hidden');
-  const kingId = G.chess.ids[G.chess.kings[G.me]]; sayAs(kingId, 6, `The army counsels ${a.san}.`, 'calm', true);
+  const kingSq = G.chess.kings[G.me], kingId = G.chess.ids[kingSq], kt = G.th.pieces[kingId];
+  const rest = a.line.slice(1, 4);
+  const sc = a.score, mood = sc > 300 ? 'joy' : sc < -150 ? 'anxiety' : 'calm';
+  const words = S.honest
+    ? `Hear me: ${a.san}.` + (rest.length ? ` I see ${rest.join(', ')} after it.` : '') + (sc >= 10000 ? ' It ends in their mate.' : sc > 150 ? ' We will stand ahead.' : sc < -150 ? ' It is the least bad road we have.' : ' It keeps us whole.')
+    : `My heart says ${a.san}. Do not ask me why.`;
+  setDialog({ id: kingId, sq: kingSq, type: 6, side: G.me, name: 'King', emotion: mood, intensity: 0.6, text: words, foresee: kt ? kt.foresee : [], tone: 'honest', advice: { uci: a.uci, san: a.san } });
+  sayAs(kingId, 6, words, mood, true, kt && kt.voice);
   G.events.push({ t: 'counsel', uci: a.uci });
 }
 function undo() {
@@ -526,6 +532,8 @@ function onDown(e) {
   if (sq == null) { clearSelection(); return; }
   const pc = G.chess.board[sq];
   if (G.sel != null && G.sel !== sq && legalFrom(G.sel).some(m => m.to === sq)) { ptr.pendingTarget = sq; return; }
+  // a target square seen behind a standing piece: the square under the pointer wins
+  if (G.sel != null && p.boardSq != null && p.boardSq !== sq && legalFrom(G.sel).some(m => m.to === p.boardSq)) { ptr.pendingTarget = p.boardSq; return; }
   ptr.pendingTarget = null;
   if (pc && LC.colOf(pc) === G.me) {
     if (G.sel === sq && myTurn()) { ptr.fromSq = sq; ptr.reselect = true; return; }
@@ -644,8 +652,8 @@ G.api = {
   army: () => G.th && G.th.army,
   newSolo: (me = 0, level = 0, clock = 0, moves = [], fen = null) => newGame({ mode: 'solo', me, level, clock: CLOCKS[clock], moves, fen: fen || undefined }),
   move: u => doMove(u, 'me'),
-  screenOf: sq => { const p = R.sqScreen(typeof sq === 'string' ? LC.sqIdx(sq) : sq, 0.45); return { x: p.x, y: p.y }; },
-  pieceScreen: sq => { const c = R.charAt(typeof sq === 'string' ? LC.sqIdx(sq) : sq); if (!c) return null; const p = R.project(c.root.position.clone().setY(c.height * 0.6)); return { x: p.x, y: p.y }; },
+  screenOf: sq => { const p = R.sqScreen(typeof sq === 'string' ? LC.sqIdx(sq) : sq, 0.02); return { x: p.x, y: p.y }; },
+  pieceScreen: sq => { const c = R.charAt(typeof sq === 'string' ? LC.sqIdx(sq) : sq); if (!c) return null; const p = R.project(c.root.position.clone().setY(c.height * 0.8)); return { x: p.x, y: p.y }; },
   charState: sq => { const c = R.charAt(typeof sq === 'string' ? LC.sqIdx(sq) : sq); return c ? { emo: c.emo, gesture: c.gesture, react: c.react, inten: c.inten, callout: c.callout } : null; },
   dialog: () => ({ name: $('dname').textContent, emo: $('demo').textContent, text: $('dtext').textContent, tone: $('dtone').textContent, pv: $('pv').classList.contains('hidden') ? '' : $('pv').textContent }),
   preview: () => G.pv && { uci: G.pv.uci, verdict: G.pv.verdict, reacts: Object.values(G.pv.pieces).map(p => p.react) },

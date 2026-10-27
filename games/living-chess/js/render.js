@@ -105,7 +105,7 @@ export class Board3D {
     this.scene = new THREE.Scene(); this.cam = new THREE.PerspectiveCamera(36, 1, 0.1, 120);
     this.maxTier = this.hfOK ? 3 : 1;
     this.tier = opts.q != null ? Math.min(+opts.q, this.maxTier) : Math.min(this.maxTier, this.mobile ? 2 : 3);
-    if (this.mobile && opts.q == null) this.tier = Math.max(0, Math.min(this.tier, this.maxTier - 1, 2)); // phones/tablets start one tier lower
+    if (this.mobile && opts.q == null) this.tier = Math.max(Math.min(1, this.maxTier), Math.min(this.tier, this.maxTier - 1, 2)); // phones/tablets start one tier lower
     this.lockTier = opts.q != null; this.ft = []; this.time = 0; this.lastCheck = -999; this.selfChecks = 0; this.blackHoles = 0; this.lastSelf = null;
     this.chars = new Map(); this.orient = 0; this.insets = { top: 0, bottom: 0, left: 0, right: 0 };
     this.camCur = { pos: new THREE.Vector3(0, 9, 9), look: new THREE.Vector3() }; this.camShot = null; this.shake = 0; this.flash = 0; this.focusAmt = 0; this.focusPt = new THREE.Vector2(0.5, 0.5);
@@ -210,7 +210,7 @@ export class Board3D {
   setTier(t) { t = Math.max(0, Math.min(this.maxTier, t)); if (t === this.tier && this._sized) return; this.tier = t; this._sized = false; this.lastCheck = this.time - 999; this.selfChecks = 0; }
   resize() {
     const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight), dpr = Math.min(devicePixelRatio || 1, 3);
-    const cap = this.tier >= 3 ? 2 : this.tier >= 1 ? 1.5 : 1;
+    const cap = this.tier >= 3 ? 2 : this.tier === 1 && this.phone ? 2 : this.tier >= 1 ? 1.5 : 1;
     let pr = Math.min(dpr, cap); const maxPx = this.phone ? 2.2e6 : this.mobile ? 3.2e6 : 5.2e6; if (w * h * pr * pr > maxPx) pr = Math.sqrt(maxPx / (w * h));
     this.pr = pr; this.W = w; this.H = h;
     this.r.setPixelRatio(pr); this.r.setSize(w, h, false); this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
@@ -288,11 +288,12 @@ export class Board3D {
   /* ---------- picking ---------- */
   pick(cx, cy) {
     const v = new THREE.Vector2(cx / this.W * 2 - 1, -(cy / this.H) * 2 + 1); this.ray.setFromCamera(v, this.cam);
-    const proxies = []; for (const c of this.chars.values()) if (c.alive) proxies.push(c.proxy);
-    const hit = this.ray.intersectObjects(proxies, false)[0];
+    // exact: the visible body meshes (a tall piece in front really does hide the one behind it)
+    const roots = []; for (const c of this.chars.values()) if (c.alive && c.root.visible) roots.push(c.root);
+    let hit = null; for (const h of this.ray.intersectObjects(roots, true)) { const o = h.object; if (o === o.parent?.userData?.proxy || o.userData.charId == null) continue; if (this.chars.get(o.userData.charId)?.proxy === o) continue; hit = h; break; }
     const ph = this.ray.intersectObject(this.pickPlane, false)[0];
     let sq = null; if (ph) { const f = Math.floor(ph.point.x + 4), r = Math.floor(4 - ph.point.z); if (f >= 0 && f < 8 && r >= 0 && r < 8) sq = r * 8 + f; }
-    const c = hit ? this.chars.get(hit.object.userData.charId) : null;
+    const c = hit ? this.chars.get(hit.object.userData.charId) : (sq != null ? this.charAt(sq) : null);
     return { sq: c ? c.sq : sq, boardSq: sq, id: c ? c.id : null };
   }
   project(w) { const v = w.clone().project(this.cam); return { x: (v.x + 1) / 2 * this.W, y: (1 - v.y) / 2 * this.H, z: v.z }; }
