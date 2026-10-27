@@ -275,6 +275,30 @@ noise. Fix runs (Oct 27 09:35): `FIX=nbr,mix,rate` Word (bigram-only stage 40 ge
 benchmark, 3× unit-wiring mutation, 2 arenas) and `FIX=aim,statue,rate` Pong (aimed-winner reward 1.5× hitR, half of
 each duel practised against a statue, 3× mutation).
 
+### Fix runs, results (Oct 27 09:35-10:20 EDT, Limited Word / Full Pong, 3 seeds)
+| run | gens | full task / returns | probe | beyond-reflex | notes |
+|---|---|---|---|---|---|
+| Word `FIX=nbr,mix,rate` s1/s2/s3 | 44 (killed) | 15-18% | 5-6.7% | −7 … −10 | no better than baseline; reflex guess is 25.3% |
+| Pong `FIX=aim,statue,rate` s1/s2/s3 | 50/50/46 | 100 / 96 / 100% (vs tracker) | 72.5 / 50 / 62.5% | open side 72.5 / 64.5 / 69.4% → +7.5 / −0.5 / +4.4 | duel winners 0-11% |
+Pong ablation at gen 30 (stored champion weights): open side 67 / 72 / 67%; seed 1 enemy knockout cut probe 55→40%
+and returns 88→76%, seeds 2/3 no enemy effect. Detectors: "enemy moving up + my paddle moving up → UP", "enemy paddle
+low + ball just below my paddle → DOWN". Verdict: fixes improved tracking (returns ~96-100%) but aim beyond a tracker
+stays within probe noise (±8 points); Word shows no understanding.
+
+### Other contests, brief runs (6 generations, Limited, 3 seeds, /tmp/ux3)
+| contest | probe (round log) | full task / champ | beyond | ablation |
+|---|---|---|---|---|
+| add | 0-10% | 3-7% | −3 … −7 | — |
+| big (14 close pairs) | 36-50% (re-measure 71-86%) | champ 78-93% | 0 … +15.6 | s2 enemy knockout 71→57% probe |
+| divisor | 5-7.5% (re-measure 15-20%) | 23-49% | −17 … −43 | knockouts move probe ≤±8 points (noise) |
+| evenodd | 41-62% (re-measure 93-100%) | 98-99% | +51 | no knockout matters: the designed tiles read the ones digit |
+| pattern (5 items) | 0-20% (re-measure 80-100%) | 95-100% | +45 … +50 | same: designed tiles, not units |
+| simon | 22-32% (re-measure 35-47%) | 24-44% | −2 … +18 | silencing all units RAISES probe (s1 47→62%) |
+Big/evenodd/pattern "beyond reflex" comes from the designed (uncapped) tiles, not evolved units; the cap applies to
+units only. Probe values in the round log (post-duel weights) and ablation re-measures (stored weights) disagree.
+Examples: "enemy's last answer R + B=0 → L", "I am on a 3+ losing streak + A=7 → 2". No contest showed unit-driven
+understanding in these short runs. echo/dots/rps have no probe (no reflex-wrong items defined); RPS hidden cycle not built.
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and
