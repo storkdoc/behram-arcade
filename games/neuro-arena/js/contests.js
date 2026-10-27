@@ -49,7 +49,7 @@ export const CONTESTS = [
     n: [10, 10], labels: ['E', 'O'], rf: [0.35, 0.35], marg: 0.4, levels: [9, 99, 999], inLevel: (it, L) => it[4] <= L, levelName: L => `0–${L}`,
     all: () => Array.from({ length: 1000 }, (_, v) => [v % 10, Math.floor(v / 10) % 10, v % 2, String(v), v]) },
   { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 5, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). Starts with 25 words and the last letter missing, grows to all ${PUZZLE5.length} words with any letter missing.`,
-    n: [5, 130], split: 0.2, currThr: [0.85, 0.7, 0.55, 0.45], aBias: -4, wSA: 0.35, tiles: W5TILES, mtiles: [0, 1, 2, 3, 4].map(p => [p, -1]), mfrac: +(globalThis.process?.env?.MFRAC ?? 0.1), mW: +(globalThis.process?.env?.MW ?? 1.5), labels: AZ, rf: [0.35, 0.35], valid: 5,
+    n: [5, 130], split: 0.2, currThr: [0.85, 0.7, 0.55, 0.45], aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5,
     levels: [0, 1, 2, 3, 4], inLevel: (it, L) => it[6] < TXL[L].n && (TXL[L].any || it[0] === 4), levelName: L => `${TXL[L].n} words · ${TXL[L].any ? 'any letter' : 'last letter'} missing`,
     chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26,
     all: () => W5ITEMS },

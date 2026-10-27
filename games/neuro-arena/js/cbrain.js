@@ -89,7 +89,7 @@ export class ChoiceBrain {
       for (let k = 0; k < N; k++) { const i = L[A].s + k, c = k < h0 ? 0 : 1, r = c ? k - h0 : k, len = c ? N - h0 : h0; this.ch[i] = c; this.c1[i] = (r + 0.5) / len; this.symOf[i] = Math.min(n[c] - 1, Math.floor(this.c1[i] * n[c])); } };
     line('TH_E'); line('S_E');
     // optional single-slot tiles (spec.mtiles, e.g. [p, -1] = "the gap is at position p") get the last spec.mfrac of the cells
-    const T = sp.tiles, nT = T.length, MT = sp.mtiles || [], nM = MT.length ? Math.round(L.A_E.n * (sp.mfrac || 0.1)) : 0;
+    const T = sp.tiles, nT = T.length, MT = sp.mtiles || [], nM = MT.length ? Math.round(L.A_E.n * (sp.mfrac ?? 0.1)) : 0;
     this.allT = T.concat(MT); this.tileOf = new Int32Array(L.A_E.n);
     for (let k = 0; k < L.A_E.n; k++) { const i = L.A_E.s + k, km = k - (L.A_E.n - nM), ti = km >= 0 ? nT + km % MT.length : k % nT, t = this.allT[ti]; this.ch[i] = 4; this.tileOf[k] = ti;
       this.c1[i] = t[0] < 0 ? -1 : (t[0] + 0.5) / n[0]; this.c2[i] = t[1] < 0 ? -1 : (t[1] + 0.5) / n[1]; }

@@ -4,12 +4,12 @@
 - **Carousel** of contests (arrows, swipe, click a card, `[`/`]` or ←/→). Each contest has its own evolution,
   champion, Hall of Fame and history (localStorage `neuroArena.v3.<contest>`; the v2 Pong save migrates).
 - Visible contests: Pong, Addition (curriculum 0–2 + 0–2 … 0–9 + 0–9), Subtraction (curriculum, 0 ≤ b ≤ a ≤ 2 … 9),
-  Bigger number (L/R), Even or odd (E/O, numbers 0–9 → 0–99 → 0–999), Text completion (3-letter words, guess the last letter), Rock paper scissors (answer the move
+  Bigger number (L/R), Even or odd (E/O, numbers 0–9 → 0–99 → 0–999), Word completion (5-letter words, any one letter missing; see below), Rock paper scissors (answer the move
   that beats theirs), Echo (repeat a letter A–H), Count the dots (1–6), Pattern completion (a, a+d, a+2d, ?),
   Simon (repeat a two-colour sequence; a 2-character answer scored per character).
 - Not built: Odd one out (needs three input slots), Matching pennies (adversarial, no fixed right answer for the
   Reaper's frozen benchmark), Air hockey (a Pong variant; Pong already covers it).
-- Hidden: Addition small (`add5`, fixed 0..4 + 0..4), Tug-of-war reflex (`tug`). (`add7`/`sub9` were replaced
+- Hidden: the old 3-letter Text completion (`text3`), Addition small (`add5`, fixed 0..4 + 0..4), Tug-of-war reflex (`tug`). (`add7`/`sub9` were replaced
   by the curricula.) Reach them with `?contest=<id>`.
 
 ## THE REAPER (js/contests.js `judge`, `reaper`)

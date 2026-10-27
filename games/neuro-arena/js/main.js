@@ -48,7 +48,7 @@ let evo = getEvo(meta.cur), C = CONTEST[meta.cur];
 window.NA = { get evo() { return evo; }, get contest() { return C; }, select: id => selectContest(id), evos, ui, errs, get R() { return R; }, get noWorkers() { return noWorkers; }, courtPoint: (x, y) => R ? R.courtAnchor(x, y) : null, restart: () => { ui.started = false; setMode('watch'); } };   // for tests / console tinkering
 
 // a contest whose task changed (save: n) keeps its evolution under a new key, so an old save (other answer set) is ignored
-const skey = id => KEY + '.' + id + (CONTEST[id] && CONTEST[id].save ? '.s' + CONTEST[id].save : '');
+function skey(id) { return KEY + '.' + id + (CONTEST[id] && CONTEST[id].save ? '.s' + CONTEST[id].save : ''); }
 function load(id) {
   if (CONTEST[id] && CONTEST[id].save) try { if (!localStorage.getItem(skey(id)) && meta.sum[id]) delete meta.sum[id]; } catch (e) { }
   try { const s = localStorage.getItem(skey(id)); if (s) { const e = Evolution.restore(JSON.parse(s)); if (e) return e; } } catch (e) { console.warn('could not restore', e); }
