@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0807">
+<title>THE LIVING BOARD — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner with RELOAD instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.LCFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'THE LIVING BOARD hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.LCG && window.LCG.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) LCFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) LCFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!booted()) LCFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 30000);
+  /* block pinch / double-tap zoom (iOS ignores user-scalable=no) */
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+  var lastTouch = 0; document.addEventListener('touchend', function (e) { var t = Date.now(); if (t - lastTouch < 320 && e.target && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) e.preventDefault(); lastTouch = t; }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<a id="home" href="../../">←<span> ARCADE</span></a>
+
+<!-- ============ LOADING ============ -->
+<div id="loading" class="screen show"><div class="lt">THE LIVING BOARD</div><div class="lbar"><i id="lprog"></i></div><div class="lsub" id="lmsg">WAKING THE PIECES…</div></div>
+
+<!-- ============ TITLE ============ -->
+<div id="title" class="screen">
+  <div class="tblock">
+    <div class="tsub">BEHRAM ARCADE PRESENTS</div>
+    <h1 class="tt">THE <span>LIVING</span> BOARD</h1>
+    <div class="ttag">Every piece wants to live. Every piece has a dream. Listen to them, or don't.</div>
+  </div>
+  <div class="menu" id="tmenu">
+    <button class="btn big" data-act="solo">1 PLAYER — VS THE MACHINE</button>
+    <button class="btn" data-act="host">2 PLAYER — HOST AN ONLINE GAME</button>
+    <button class="btn" data-act="join">JOIN TWO-PLAYER GAME IN PROGRESS</button>
+    <button class="btn" data-act="how">HOW TO PLAY</button>
+    <button class="btn small" data-act="settings">SOUND &amp; VOICES</button>
+  </div>
+  <div class="tfoot">Mouse: hover a piece to hear it, click or drag to move · Keys: arrows + Space, Enter for counsel · Touch &amp; gamepad supported</div>
+</div>
+
+<!-- ============ SOLO SETUP ============ -->
+<div id="solo" class="screen">
+  <div class="panel">
+    <div class="ph"><span>ONE PLAYER</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="selrow"><div class="row-label">OPPONENT</div><div class="chips" id="levels"></div></div>
+    <div class="leveldesc" id="leveldesc"></div>
+    <div class="selrow"><div class="row-label">YOUR ARMY</div><div class="chips" id="colors"><button class="chip" data-c="0">WHITE</button><button class="chip" data-c="1">BLACK</button><button class="chip" data-c="r">RANDOM</button></div></div>
+    <div class="selrow"><div class="row-label">CLOCK</div><div class="chips" id="clocks"></div></div>
+    <div class="selfoot"><div class="hint">ENTER start · ESC back</div><button class="btn go" data-act="startSolo">MARCH ▶</button></div>
+  </div>
+</div>
+
+<!-- ============ HOST ============ -->
+<div id="online" class="screen">
+  <div class="panel">
+    <div class="ph"><span>TWO-PLAYER GAME</span><button class="btn x" data-act="leaveNet">✕</button></div>
+    <div id="omsg" class="omsg">Call your buddy and tell them to hop on their bike and head over. The game is loading… just like the old days.</div>
+    <div id="ostat" class="ostat">OPENING THE LINE…</div>
+    <div id="ocode" class="ocode"></div>
+    <div class="selrow"><div class="row-label">CLOCK</div><div class="chips" id="hclocks"></div></div>
+    <div class="ohint">On their device they open this page and pick <b>JOIN TWO-PLAYER GAME IN PROGRESS</b>. You play White.</div>
+    <div class="selfoot"><button class="btn" data-act="practice">PRACTISE VS THE MACHINE WHILE YOU WAIT</button></div>
+  </div>
+</div>
+
+<!-- ============ JOIN ============ -->
+<div id="join" class="screen">
+  <div class="panel">
+    <div class="ph"><span>JOIN A GAME IN PROGRESS</span><button class="btn x" data-act="leaveNet">✕</button></div>
+    <div id="jstat" class="ostat">LOOKING FOR A GAME IN PROGRESS…</div>
+    <div class="jrow"><input id="jcode" maxlength="5" placeholder="BACKUP CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn" data-j="code">JOIN BY CODE</button></div>
+    <div class="selfoot"><button class="btn" data-j="scan">SEARCH AGAIN</button></div>
+  </div>
+</div>
+
+<!-- ============ HOW ============ -->
+<div id="how" class="screen">
+  <div class="panel">
+    <div class="ph"><span>HOW TO PLAY</span><button class="btn x" data-act="back">✕</button></div>
+    <div class="howbody">
+      <p><b>Real chess, living pieces.</b> Every rule applies: castling, en passant, promotion, check, mate, stalemate, threefold repetition and the 50-move rule.</p>
+      <p><b>Your pieces see the future.</b> Before each of your moves the engine looks many moves ahead, and every one of your pieces reads that future from where it stands: will it die in three moves, fork the King, promote, or give its life for the Queen? That is what you see on their faces, in their hands, and hear in their voices.</p>
+      <p><b>Hover or tap a piece</b> to hear its plea or advice. <b>Pick a piece up and hover a target</b>: your whole army reacts to the move's future, cheering, shaking their heads or covering their eyes, and a faint ghost path shows the line they foresee.</p>
+      <p><b>Honest counsel</b> (on by default) marks selfish or reckless advice and tells you what it costs. Switch to <b>raw emotions</b> to hear only what they feel. <b>Counsel</b> (Enter / 👑 button) shows the move the whole army agrees on.</p>
+      <p>In two-player games you only hear your <b>own</b> army. The enemy's thoughts stay on their side of the board.</p>
+      <table class="keys">
+        <tr><td>Mouse</td><td>hover = listen · click or drag = move · right-click = cancel</td></tr>
+        <tr><td>Keys</td><td>arrows move the cursor · Space pick up / put down · Enter counsel · Esc cancel · U undo · H honest/raw</td></tr>
+        <tr><td>Touch</td><td>tap a piece to hear it · tap a target to preview, tap again to play (or drag)</td></tr>
+        <tr><td>Gamepad</td><td>d-pad / stick cursor · A pick / place · Y counsel · B cancel</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settings" class="screen">
+  <div class="panel">
+    <div class="ph"><span>SOUND &amp; VOICES</span><button class="btn x" data-act="closeSettings">✕</button></div>
+    <div class="sliders">
+      <label>MASTER <input type="range" min="0" max="1" step="0.05" id="vMaster"></label>
+      <label>MUSIC <input type="range" min="0" max="1" step="0.05" id="vMusic"></label>
+      <label>EFFECTS <input type="range" min="0" max="1" step="0.05" id="vSfx"></label>
+      <label>VOICES <input type="range" min="0" max="1" step="0.05" id="vVoice"></label>
+    </div>
+    <div class="chips setchips"><button class="chip" id="bVoice">VOICES: ON</button><button class="chip" id="bMute">SOUND: ON</button><button class="chip" id="bHonest">HONEST COUNSEL</button><button class="chip" id="bGhost">GHOST PATHS: ON</button><button class="chip" id="bConfirm">TAP TWICE TO MOVE: ON</button></div>
+    <div class="vlist" id="vlist"></div>
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="clk" id="clkOpp"><span class="cname" id="nOpp">MACHINE</span><span class="ctime" id="tOpp"></span></div>
+    <div id="status">—</div>
+    <div class="clk" id="clkMe"><span class="cname" id="nMe">YOU</span><span class="ctime" id="tMe"></span></div>
+    <div id="link"></div>
+  </div>
+  <div id="side">
+    <div id="dlg" class="dlg">
+      <div class="dtop">
+        <div class="portrait" id="portraitBox"><canvas id="portrait" width="220" height="176"></canvas><div class="picon" id="picon">♞</div></div>
+        <div class="dhead">
+          <div class="dname" id="dname">YOUR ARMY</div>
+          <div class="demo" id="demo">LISTENING…</div>
+          <div class="dtone" id="dtone"></div>
+        </div>
+        <button class="ibtn" id="bSpeak" title="Voices on/off">🔊</button>
+      </div>
+      <div class="dtext" id="dtext">Hover over or tap one of your pieces to hear what it sees coming.</div>
+      <ul class="dfore" id="dfore"></ul>
+      <div class="dadv" id="dadv"></div>
+    </div>
+    <div id="pv" class="pvbox hidden"></div>
+    <div id="tools">
+      <button class="tbtn" id="bCounsel" title="Counsel (Enter)">👑 COUNSEL</button>
+      <button class="tbtn" id="bUndo" title="Undo (U)">↶ UNDO</button>
+      <button class="tbtn" id="bHon" title="Honest counsel / raw emotions (H)">⚖ HONEST</button>
+      <button class="tbtn" id="bMenu" title="Menu">☰</button>
+    </div>
+    <div id="moves" class="moves"></div>
+  </div>
+  <div id="bubble" class="bubble hidden"></div>
+  <div id="promo" class="promo hidden"><div class="ptitle">THE PAWN BECOMES…</div><div class="pbtns"></div></div>
+  <div id="over" class="over hidden"><div class="otitle" id="otitle"></div><div class="osub" id="osub"></div><div class="obtns"><button class="btn" id="bAgain">REMATCH</button><button class="btn" id="bReview">LOOK AT THE BOARD</button><button class="btn" id="bQuit">MENU</button></div></div>
+  <div id="gmenu" class="gmenu hidden"><button class="btn" data-g="resume">RESUME</button><button class="btn" data-g="settings">SOUND &amp; VOICES</button><button class="btn" data-g="resign">RESIGN</button><button class="btn" data-g="quit">QUIT TO MENU</button></div>
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="js/chess.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/mind.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/net.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

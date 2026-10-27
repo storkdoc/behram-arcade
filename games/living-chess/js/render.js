@@ -227,14 +227,14 @@ export class Board3D {
     const cx = I.left + aw / 2, cy = I.top + ah / 2; this.cam.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h); this.cam.updateProjectionMatrix();
     // distance so a 9.4-unit board (seen at ~52 degrees) fits the free area
     const tanV = Math.tan(this.cam.fov * Math.PI / 360), portrait = ah > aw * 1.05;
-    const ext = 9.6, dV = (ext * 0.62) / tanV * (h / ah), dH = (ext / 2) / (tanV * w / h) * (w / aw) * 1.02;
+    const ext = 9.2, dV = (ext * 0.56) / tanV * (h / ah), dH = (ext / 2) / (tanV * w / h) * (w / aw) * 0.98;
     this.baseDist = Math.max(dV, dH) * (portrait ? 0.98 : 1.0); this.portrait = portrait;
   }
   setInsets(i) { this.insets = i; this.fit(); }
   setOrientation(side, snap) { this.orient = side; if (snap) { const s = this.homeShot(); this.camCur.pos.copy(s.pos); this.camCur.look.copy(s.look); } }
   homeShot() {
-    const d = this.baseDist || 13, el = this.portrait ? 0.98 : 0.9, sgn = this.orient ? -1 : 1;
-    const pos = new THREE.Vector3(this.drift.x * 0.6 * sgn, Math.sin(el) * d, Math.cos(el) * d * sgn - this.drift.y * 0.3 * sgn), look = new THREE.Vector3(0, -0.2, 0.35 * sgn);
+    const d = this.baseDist || 13, el = this.portrait ? 0.92 : 0.8, sgn = this.orient ? -1 : 1;
+    const pos = new THREE.Vector3(this.drift.x * 0.6 * sgn, Math.sin(el) * d, Math.cos(el) * d * sgn - this.drift.y * 0.3 * sgn), look = new THREE.Vector3(0, 0.1, 0.25 * sgn);
     return { pos, look };
   }
   /** cinematic shot: look at a world point from close range, held for `hold` seconds */
