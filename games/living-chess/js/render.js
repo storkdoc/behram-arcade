@@ -475,7 +475,7 @@ export class Board3D {
   selfCheck() {
     this.selfChecks++;
     const gl = this.r.getContext(), pr = this.pr, H = this.H * pr, px = new Uint8Array(4); let black = 0, n = 0;
-    for (let i = 0; i < 24; i++) { const s = (i * 37 + this.selfChecks * 11) % 64; if (this.charAt(s)) continue; const p = this.sqScreen(s, 0); if (p.x < 2 || p.y < 2 || p.x > this.W - 2 || p.y > this.H - 2) continue; gl.readPixels(Math.round(p.x * pr), Math.round(H - p.y * pr), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); n++; if (px[0] + px[1] + px[2] < 6) black++; }
+    for (let i = 0; i < 64 && n < 16; i++) { const s = (i * 37 + this.selfChecks * 11) % 64; if (this.charAt(s)) continue; const p = this.sqScreen(s, 0); if (p.x < 2 || p.y < 2 || p.x > this.W - 2 || p.y > this.H - 2) continue; gl.readPixels(Math.round(p.x * pr), Math.round(H - p.y * pr), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); n++; if (px[0] + px[1] + px[2] < 6) black++; }
     this.lastSelf = { n, black, tier: this.tier };
     if (n >= 6 && black / n >= 0.25) {
       if (this.tier > 0) { console.warn(`[living-chess] black board pixels (${black}/${n}) at quality ${this.tier}; stepping down`); this.maxTier = this.tier - 1; this.setTier(this.maxTier); }
