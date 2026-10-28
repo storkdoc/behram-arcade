@@ -1,0 +1,135 @@
+# Behram Arcade: daily self-improvement log
+
+## 2026-10-28 (day 1)
+
+Test rig: headless Google Chrome (playwright-core) with SwiftShader software WebGL on a shared 8-core box. The load
+average reached 20-36 because several workers were running at once. **No real GPU was available.** All fps numbers below
+are software-GL numbers on a loaded CPU (0.2-20 fps) and say nothing about real devices. Timing-based browser
+checks were flaky under that load. Each such failure was re-run on the unmodified origin/main to separate load from
+regressions.
+
+### Neuro Arena (read-only measurement)
+`tests/evochoice.mjs <contest> 40 1 1 30 2800 1 1 evolved` (K=1, Lamarck on, 30 s matches, size 2800, seed 1,
+reflex 1, evolved wiring, ABL=20; Word used 60 s matches). The runs hit a wall-clock cap, so some stopped before 40
+generations.
+
+- **champ**: champion accuracy on the current curriculum level.
+- **full**: accuracy on the full task.
+- **reflex base**: the `fullPrior` reflex/prior baseline on the full task.
+- **probe**: held-out understanding probe.
+- **beyond**: beyond-reflex score.
+- **slope**: least-squares change in champion accuracy per generation.
+- **stagnant**: generations since the champion's accuracy last changed.
+
+| contest | gens | champ first→last (max) | level | full | reflex base | probe | beyond | slope/gen | reaps | champ changes | stagnant |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| add | 40 | 17%→69% (100) | 1 | 13% (end ablation 7%) | 10% | 7.5% | +0.03 | +0.85 pp | 1 | 13 | 3 |
+| sub | 40 | 83%→93% (100) | 4 | 49% | 18% | 37.5% (end 42.5%) | +0.31 | +0.11 pp | 4 | 20 | 0 |
+| big | 17 | 71%→100% | 0 | – | chance 50% | 93% | +0.22 | +1.20 pp | 3 | 7 | 5 |
+| divisor | 29 | 34%→73% | 0 | 39% | **66%** | 20% | **−0.27** | +0.76 pp | 1 | 6 | **22** |
+| simon | 31 | 34%→73% (83) | 1 | 47% | 26% | 47.5% | +0.21 | +0.32 pp | 1 | 4 | **26** |
+| pong | 40 | hit 34%→74% | 0 | hit 74% | 65% | 42.5% (uHit 35%) | −0.01 | +0.83 pp | 2 | 4 | 3 |
+| text (Word) | 25 | 40%→48% (82) | 1 | **19%** | **25%** | **1.7%** | −0.06 | +0.55 pp | 3 | 8 | 1 |
+| rps | 29 | 100% from gen 1 | 0 | 100% | 33% | – | – | 0 | 0 | 0 | 28 (saturated) |
+| dots | 40 | 100% from gen 1 | 0 | 100% | 17% | – | – | 0 | 0 | 0 | 39 (saturated) |
+| pattern | 40 | 40%→100% at gen 3 | 0 | 100% | 50% | 100% | +0.50 | +0.34 pp | 2 | 2 | 37 (saturated) |
+| echo | 3 | 81%→100% | 0 | – | 12.5% | – | – | – | 0 | 2 | (cut at gen 3) |
+
+Pong extras: openSide 64% at the end (71% in the end ablation), duel winners 45%. Ablation at gen 40 showed that removing
+self units drops Pong full hit from 74% to 54%, and removing self+enemy units drops it to 48%. So the learned units
+matter. In add and sub, removing unit classes barely changes the score (add 7%→9-12%, sub 49%→49-51%), so those gains sit
+mostly in the reflex/wiring and not in the learned units. In Word (gen 20), removing all units drops full from 20% to 9%. Contests not run today: add5, evenodd, text3, simon2,
+tug.
+
+**Findings**
+1. **Word is still below its reflex baseline**: 19% on the full task against a 25% reflex prior, and the probe is 1.7%. The
+   champion's 82% peak was on the easy level and did not carry over. The growing lexicon landed today, so this needs a
+   fresh measurement next time.
+2. **Divisor is clearly worse than reflex**: 39% on the full task against a 66% prior (beyond −0.27), and its champion
+   has stagnated for 22 generations. Evolution is unlearning a prior that works.
+3. **Selection barely acts**: 0-4 reaps in 40 generations, and long plateaus (simon 26 generations, divisor 22).
+4. **rps, dots and pattern are saturated** (100% from generation 1-3). They give no learning signal and only use up compute.
+5. **Pong** now beats its prior (74% against 65% hits), but beyond-reflex is about 0 and openSide is only 64%.
+
+### Other games: smoke test (desktop 1280×800 and iPhone 390×844, local server)
+The smoke test loads each game, then does:
+- desktop: a click, then Space, Enter and the arrow keys
+- iPhone: four taps
+- both: connects an emulated standard gamepad (stick plus A, START and RT), then holds Space
+
+| game | console errors (desktop / iPhone) | notes |
+|---|---|---|
+| living-chess, star-raider, sky-shield, mushroom-cloud, neuro-storm, apex-gp, astro-shatter, sporewood, vector-armor, planet-guardian, star-invaders, trackball-football, atari-football, tube-shooter, tank-duel, meta-arena, neuro-arena | none / none | jax-adventures timed out taking screenshots under load (no errors) |
+| by-dawns-early-light | favicon 404 / favicon 404 | **fixed**: clean after the change |
+| reactor | 404 on desktop | still under construction, not touched |
+
+Input audit: every game except Neuro Storm already read `navigator.getGamepads`. Neuro Storm had no gamepad support and no
+Enter action, and Space only paused the simulation. **Fixed** (see below).
+
+**Star Raider (sim, auto.js bots)**: Commander was the weakest spot. A sharp bot won **0%** of Commander games in both
+campaign and blitz, at N=6-30, and games ended after about 1.6 min. Two causes:
+- Hits that got through damaged shields could kill outright (bareKill 1).
+- Starbases fell after about 2 min, because Commander needed only 2 fleets to start a siege.
+Other baseline rates: Warrior 33%, Pilot and Novice 100%, and the sloppy bot won Pilot 17%.
+
+**Landing page**:
+- The `tests/landing.test.js` 'fast flick right' check failed 1 run in 3 to 1 in 8. Its CDP touch round trips took 30-250 ms
+  each on this box, which turned the "fast" flick into a slow drag.
+- `tests/vortex-touch.test.js` still looked for the old `a.card[data-slug]` landing markup. Its URL check would also have
+  matched `?game=tube-shooter` as a launch.
+
+### Changes (all pushed to origin/main)
+| commit | change | tests |
+|---|---|---|
+| `abe0e2e` | **Star Raider Commander rebalance** (see below) | `tests/sim.test.js` (2 new asserts) and `war.test.js` pass. Under a load of 30+, page.test had 7 timing failures (arrows steer, dock, warp). Re-run at load ~7 it gives **97 passed, 0 failed** |
+| `36f2ec4` | **By Dawn's Early Light**: empty favicon, which removes the only console error the smoke test found | smoke test clean on both devices |
+| `2d76558` | **Neuro Storm: keyboard and gamepad play** (`js/padkeys.js`, see below) | `tests/padkeys.test.cjs`: 30/30 on 4K and on the 55K cortex, both locally and against the **live site**. Its page.test failed the same timing check on unmodified origin/main under load, and **passes fully** at load ~7 |
+| `c39fe88` | **Landing**: flick momentum (see below) | landing.test 4/4 runs pass, 0 flaky. vortex-touch landing section passes |
+
+Star Raider Commander rebalance (`abe0e2e`):
+- A hit that leaks through damaged but raised shields never kills outright. It costs 1000 energy and 1 system.
+- Outright death is only possible with shields off or destroyed, at 50%.
+- A siege needs 3 attackers, siege time is 62 s, and fleets are 3/4/3.
+- Aim error and homing are softer.
+- The autopilot breaks off a fight to repair.
+- Voice line: "Shields failing. Dock for repairs".
+- Result: the sharp bot wins Commander 17% at N=12 (27% at N=30) and games last 4.0 min (was 1.6). Blitz Commander 8%,
+  Warrior 58%.
+
+Neuro Storm keyboard and gamepad play (`2d76558`):
+- Arrows or the left stick aim a reticle.
+- **Space** or A stimulates the aimed neuron; holding it in electrode mode gives a 50 Hz train.
+- **Enter** or X/B sends a special volley (strong, or thalamic on the dense cortex).
+- Shift+arrows or the right stick rotate the view, and +/− or the triggers zoom.
+- P or START pauses (pause moved from Space), Y starts the demo and LB/RB change speed.
+- Mouse and touch work as before, and pointer use hides the reticle.
+
+Landing flick momentum (`c39fe88`):
+- The carousel now keeps coalesced pointer samples and the lift point, so a flick that fits in one frame keeps its momentum
+  on real phones.
+- The test now sends timestamped touches.
+- vortex-touch's landing check was rewritten for the carousel.
+
+Read-only measurement of VORTEX (tube-shooter, not edited):
+- `tests/vortex-rim.test.js` passes.
+- `tests/vortex-touch.test.js` gives 128 PASS and 2 FAIL. Both failures are "heat limit still applies to touch FIRE"
+  (overheat=false, 6 shots on screen) on 2 of the 4 devices. It looks frame-rate dependent. Passing devices show
+  overheat=true with 1-2 shots on screen. This is for the VORTEX owner.
+
+Live checks after pushing: `star-raider/js/sim.js` serves `bareKill: 0.5` and the page loads with no errors.
+`neuro-storm/js/padkeys.js` is live and padkeys.test passes against https://storkdoc.github.io/behram-arcade/games/neuro-storm/.
+
+### Recommended Neuro Arena changes for tomorrow
+1. **Divisor and Word: keep the reflex as a floor.** Reject (or reap) a child whose full-task score falls below the reflex
+   prior (`fullPrior`). Today divisor dropped from a 66% prior to 39%, and Word reached 19% against 25%.
+2. **Make selection bite**: 0-4 reaps in 40 generations and plateaus of 22-26 generations. Options:
+   - Raise mutation size or the number of children (K>1) when the champion has stagnated for more than 8 generations.
+   - Or score the champion on the full task and the probe instead of only the current level, so plateaus at level 0/1
+     move.
+3. **Retire or harden the saturated contests** (rps, dots, pattern hit 100% by generation 3). Either add a harder level
+   (an adaptive rps opponent, more dots, longer patterns) or drop them from the rotation to free compute.
+4. **Word**: measure the new growing lexicon (new vs familiar words) with seeds 1-3. The probe is 1.7%, so the
+   letter/bigram units are not generalizing yet. Try giving more of the unit budget to `bigram`/`neighbor` units and
+   fewer to `far`/`letters` (133 letters vs 40 bigram today).
+5. **Pong**: beyond-reflex is about 0 and openSide is 64%. Reward returns aimed at the open side directly in the duel score.
+6. Run add5, evenodd, text3, simon2 and tug next time, at 2 seeds, when the box is less loaded.
