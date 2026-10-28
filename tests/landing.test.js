@@ -89,15 +89,18 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; console.log
   const I = await open({ ...devices['iPhone 13'] });
   await I.evaluate(() => localStorage.clear()); await I.reload(); await I.waitForTimeout(500);
   const cdp = await I.context().newCDPSession(I);
+  // each touch carries its own timestamp (k * dt ms apart): on a loaded machine the CDP round trips alone take
+  // 30-250 ms, which turned the 'fast flick' into a slow drag and made that check flaky
   const swipe = async (x0, x1, y, steps = 6, dt = 12) => {
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
-    for (let k = 1; k <= steps; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + (x1 - x0) * k / steps, y }] }); await I.waitForTimeout(dt); }
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const t0 = Date.now() / 1000, ts = k => t0 + k * dt / 1000;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }], timestamp: ts(0) });
+    for (let k = 1; k <= steps; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + (x1 - x0) * k / steps, y }], timestamp: ts(k) }); await I.waitForTimeout(dt); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: ts(steps + 1) });
   };
   await swipe(300, 190, 450, 8, 30); await settled(I);
   check(await idx(I) === 1, 'slow swipe left moves one cabinet', await idx(I));
-  await swipe(80, 340, 450, 6, 4); await settled(I);
-  const fl = await idx(I); check(fl === n - 1 || fl === n - 2 || fl === n - 3, 'fast flick right carries momentum past several cabinets and snaps', [fl, await I.evaluate(() => ARCADE.flick)]);
+  await swipe(80, 340, 450, 6, 4); await settled(I);   // 260 px in 24 ms: the drag (~1 cabinet) plus up to 4 more of momentum
+  const fl = await idx(I); check(fl >= n - 4 && fl <= n - 1, 'fast flick right carries momentum past several cabinets and snaps', [fl, await I.evaluate(() => ARCADE.flick)]);
   check(await I.evaluate(() => Number.isInteger(ARCADE.pos)), 'flick snaps to a whole cabinet');
   await swipe(200, 200, 450, 2, 10); await settled(I);
   await I.evaluate(() => localStorage.setItem('arcade.selected', ARCADE.items[0].slug)); await I.reload(); await I.waitForTimeout(500);

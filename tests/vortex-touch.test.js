@@ -209,18 +209,21 @@ async function landing(browser) {
   const ctx = await browser.newContext({ ...devices['iPhone 14'], hasTouch: true, isMobile: true });
   const page = await ctx.newPage(); const errs = [];
   page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
-  await page.goto(BASE + '/index.html', { waitUntil: 'load' }); await sleep(600);
-  const info = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth, cards: document.querySelectorAll('a.card').length,
-    touchText: [...document.querySelectorAll('a.card[data-slug="tube-shooter"] .controls')].map(e => e.textContent).join(' | '), footer: document.querySelector('footer span').textContent }));
+  // the landing page is a cabinet carousel (assets/arcade.js): controls text lives in games.js, not on the cabinets
+  await page.goto(BASE + '/index.html?game=tube-shooter', { waitUntil: 'load' }); await sleep(600);
+  const info = await page.evaluate(() => { const g = ARCADE_GAMES.find(x => x.slug === 'tube-shooter') || {};
+    return { sw: document.documentElement.scrollWidth, iw: innerWidth, cab: !!document.querySelector('.cab[data-slug="tube-shooter"]'),
+      centred: ARCADE.items[ARCADE.index].slug, controls: g.controls || '', touch: g.touch || '', press: document.getElementById('press').textContent }; });
   check(info.sw <= info.iw, `no horizontal overflow (${info.sw} <= ${info.iw})`);
-  check(/TOUCH/i.test(info.touchText) && /SPACE/i.test(info.touchText), 'VORTEX card shows keyboard and touch controls: ' + info.touchText);
-  check(/TAP/i.test(info.footer), 'footer hint for touch: ' + info.footer);
+  check(info.cab && info.centred === 'tube-shooter', 'VORTEX has a cabinet and ?game=tube-shooter centres it: ' + info.centred);
+  check(/SPACE/i.test(info.controls) && info.touch.length > 10, 'VORTEX entry lists keyboard and touch controls: ' + info.touch);
+  check(/TAP/i.test(info.press), 'caption hint for touch: ' + info.press);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/landing-iphone.png`, fullPage: false });
-  const c = await page.evaluate(() => { const e = document.querySelector('a.card[data-slug="tube-shooter"]'); e.scrollIntoView({ block: 'center' }); const r = e.querySelector('.screen').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-  await sleep(200);
+  await page.waitForFunction(() => ARCADE.pos === ARCADE.index, null, { timeout: 3000 }).catch(() => {}); await sleep(200);
+  const c = await page.evaluate(() => { const r = document.querySelector('.cab[data-slug="tube-shooter"] .front').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height * 0.3 }; });
   await page.touchscreen.tap(c.x, c.y);
-  await page.waitForURL(/tube-shooter/, { timeout: 5000 }).catch(() => {});
-  check(/games\/tube-shooter\//.test(page.url()), 'one tap on the card opens the game: ' + page.url());
+  await page.waitForURL(/games\/tube-shooter\//, { timeout: 5000 }).catch(() => {});
+  check(/games\/tube-shooter\//.test(page.url()), 'one tap on the centred cabinet opens the game: ' + page.url());
   check(errs.length === 0, 'landing: no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
 }

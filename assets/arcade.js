@@ -509,13 +509,16 @@ ${slots}
     const dx = e.clientX - pd.x, dy = e.clientY - pd.y;
     if (!dragging) {
       if (Math.abs(dx) < 7 || Math.abs(dx) < Math.abs(dy)) return;
-      dragging = moved = true; started = true; tween = null; pd.startPos = pos; pd.x = e.clientX;
+      dragging = moved = true; started = true; tween = null; pd.startPos = pos; pd.x = e.clientX; pd.hist.push({ x: e.clientX, t: e.timeStamp });
       carousel.classList.add('dragging'); markMoving();
       try { carousel.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       return;
     }
     pos = pd.startPos - (e.clientX - pd.x) / S1;
-    pd.hist.push({ x: e.clientX, t: e.timeStamp }); if (pd.hist.length > 8) pd.hist.shift();
+    // a fast flick can fit inside one frame, and the browser then coalesces its moves into one event: keep every sample
+    const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const c of (co.length ? co : [e])) pd.hist.push({ x: c.clientX, t: c.timeStamp || e.timeStamp });
+    while (pd.hist.length > 12) pd.hist.shift();
     updateCaption(mod(Math.round(pos), n));
     if (!raf) raf = requestAnimationFrame(frame);
   });
@@ -523,7 +526,8 @@ ${slots}
     if (!pd || e.pointerId !== pd.id) return;
     const wasDragging = dragging; dragging = false; carousel.classList.remove('dragging');
     if (wasDragging) {
-      const last = pd.hist[pd.hist.length - 1];
+      let last = pd.hist[pd.hist.length - 1];
+      if (Math.abs(e.clientX - last.x) > 1) { last = { x: e.clientX, t: Math.max(e.timeStamp, last.t + 1) }; pd.hist.push(last); }   // the lift point (moves may not have been delivered yet)
       const h = pd.hist.filter(s => last.t - s.t < 130);
       let v = 0;
       if (h.length > 1 && e.timeStamp - last.t < 160) { const a = h[0]; v = (last.x - a.x) / Math.max(16, last.t - a.t) * 1000; }
