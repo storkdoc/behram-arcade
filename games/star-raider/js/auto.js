@@ -22,8 +22,10 @@
       const own = b => !G.war || b.team === p.team;
       let base = S.baseAt(G, p.sx, p.sy); if (base && !own(base)) base = null;
       const bases = G.bases.filter(b => b.alive && own(b));
-      const needDock = p.energy < 3000 || Object.values(p.dmg).reduce((a, b) => a + b, 0) >= 2;
-      if (foes.length && !(needDock && p.energy < 1200)) {
+      const needDock = p.energy < 3000 || Object.values(p.dmg).reduce((a, b) => a + b, 0) >= 2 || p.dmg.S >= 1;
+      // a sensible pilot breaks off to repair when the shields are gone (on Commander one bare hit can kill)
+      const bail = needDock && (p.energy < 1200 || (p.dmg.S >= 2 && G.C.bareKill >= 0.3 && bases.length > 0));
+      if (foes.length && !bail) {
         let t = foes.find(s => s.id === p.targetId) || foes[0];
         for (const s of foes) if (V.dist(s.pos, p.pos) < V.dist(t.pos, p.pos) - 30) t = s;
         const d = V.dist(t.pos, p.pos), s = steerTo(p, t.pos);

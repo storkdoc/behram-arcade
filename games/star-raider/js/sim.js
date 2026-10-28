@@ -35,7 +35,7 @@
     { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0 },
     { fleets: [3, 4, 1], bases: 4, move: 1.25, need: 3, siege: 75, plasmaV: 82, aimErr: 0.1, fireMul: 1.25, home: 0.1, drift: 0.12, hitE: 120, bareE: 900, bareSys: 3, bareKill: 0.15, hunters: 1 },
     { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.35, hunters: 2 },
-    { fleets: [3, 5, 3], bases: 3, move: 0.8, need: 2, siege: 58, plasmaV: 108, aimErr: 0.035, fireMul: 0.8, home: 0.45, drift: 0.38, hitE: 180, bareE: 0, bareSys: 0, bareKill: 1, hunters: 3 },
+    { fleets: [3, 4, 3], bases: 3, move: 0.85, need: 3, siege: 62, plasmaV: 104, aimErr: 0.045, fireMul: 0.9, home: 0.38, drift: 0.38, hitE: 180, bareE: 1500, bareSys: 3, bareKill: 0.5, leakE: 1000, leakSys: 1, sysHit: 0.08, hunters: 3 },
   ];
   const MISSIONS = {
     campaign: { name: 'CAMPAIGN', desc: 'Destroy every Vrell fleet before they take your starbases.' },
@@ -610,12 +610,16 @@
     const shieldsUp = p.shields && p.dmg.S < 2 && (p.dmg.S === 0 || R() < 0.75);
     if (shieldsUp) {
       use(G, p, C.hitE * sev); p.shieldT = 0.6;
-      if (R() < 0.22 * sev + G.diff * 0.04) damageSys(G, p);
+      if (R() < 0.22 * sev + (C.sysHit ?? G.diff * 0.04)) damageSys(G, p);
       ev(G, { e: 'phit', p: p.idx, shield: true, pos: at });
     } else {
-      ev(G, { e: 'phit', p: p.idx, shield: false, pos: at });
-      if (R() < C.bareKill) { kill(G, p, 'HIT WITH SHIELDS DOWN'); return; }
-      use(G, p, C.bareE * sev); for (let i = 0; i < C.bareSys; i++) damageSys(G, p);
+      // shields OFF (or destroyed): bareKill chance of instant death. A hit that LEAKS through damaged-but-raised
+      // shields is never instant death; it costs leakE energy and leakSys systems (Commander used to die to leaks).
+      const down = !p.shields || p.dmg.S >= 2;
+      ev(G, { e: 'phit', p: p.idx, shield: false, leak: !down, pos: at });
+      if (down && R() < C.bareKill) { kill(G, p, 'HIT WITH SHIELDS DOWN'); return; }
+      const lE = down ? C.bareE : (C.leakE ?? C.bareE), lS = down ? C.bareSys : (C.leakSys ?? C.bareSys);
+      use(G, p, lE * sev); for (let i = 0; i < lS; i++) damageSys(G, p);
     }
     if (p.energy <= 0) { p.energy = 0; kill(G, p, 'ENERGY EXHAUSTED'); }
   }

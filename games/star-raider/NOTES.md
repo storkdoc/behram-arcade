@@ -10,6 +10,24 @@
   DEV=iphone,iphone-land,ipad node tests/page.test.mjs chromium /tmp/sr · node tests/page.test.mjs webkit /tmp/sr ·
   node tests/mp.test.mjs chromium · node tests/mp.test.mjs webkit   (server: python3 -m http.server 8080 at repo root)
 
+## Commander rebalance (2026-10-28, daily loop day 1)
+- Measured before: the sharp bot won Commander 0% in every mode (campaign/blitz, N=6-30) and games ended in 1.5-1.8 min:
+  either "HIT WITH SHIELDS DOWN" (damaged shields leak 25% of hits, bareKill 1 = instant death on a leak) or all 3
+  starbases gone (need 2 attackers per siege, 58 s siege, 11 fleets). Not a skill test, a 90-second wipeout.
+- Changes (sim.js DCFG[3] + hitPlayer, auto.js):
+  - A hit that LEAKS through damaged-but-raised shields is never instant death; it costs `leakE` energy and `leakSys`
+    systems (Commander 1000 / 1). Instant-death risk only when shields are OFF or destroyed (S=2), and on Commander
+    that is now bareKill 0.5 (+1500 energy, 3 systems when you survive). Voice: "Shields failing. Dock for repairs".
+  - Commander: fleets 3/4/3 (was 3/5/3), need 3 attackers per siege (was 2), siege 62 s (58), move 0.85 (0.8),
+    plasma 104 (108), aim error 0.045 (0.035), fire interval x0.9 (x0.8), homing 0.38 (0.45), system damage on
+    shielded hits capped at +0.08 (`sysHit`, was +0.12).
+  - Autopilot: docks when shields are damaged and breaks off a fight to repair when shields are destroyed.
+- After (tests/sim.test.js 12): sharp bot Commander campaign 17% (N=30 sweep: 27%), mean game 4.0 min (was 1.6);
+  blitz Commander 8% (0%); Warrior 58% (33%); Novice/Pilot unchanged. New asserts: Commander lasts >= 2.5 min,
+  sharp bot wins Warrior >= 25%. war.test.js still passes.
+- Still NOT tested on a real GPU (the box only has SwiftShader). Last Stand Commander now lasts longer than Warrior
+  (10-13 vs 6 min, same waves ~3.3): worth a look.
+
 ## Why the gameplay works (the loop)
 - Every minute is a decision: the chart shows fleets crawling toward your starbases. Warping costs energy AND time,
   so you choose which siege to break, whether to dock first, and when to gamble on a long jump.

@@ -288,7 +288,7 @@ function onEvents(list, p) {
       case 'pop': fxl.push(e); AU.pop(); if (e.p === p.idx && sess.war) hud.pop(e.pos, 'HIT!', '#ffb040'); break;
       case 'plasma': AU.plasma(e.pos ? loc(e.pos, p) : null); break;
       case 'launch': fxl.push(e); break;
-      case 'phit': if (mine(e)) { fxl.push(e); if (e.shield) AU.shieldHit(); else { AU.hullHit(); say(p.shields ? 'Hull breach' : 'Hull hit. Raise shields', { key: 'hull', gap: 9, urgent: true }); } } break;
+      case 'phit': if (mine(e)) { fxl.push(e); if (e.shield) AU.shieldHit(); else { AU.hullHit(); say(e.leak ? 'Shields failing. Dock for repairs' : p.shields ? 'Hull breach' : 'Hull hit. Raise shields', { key: 'hull', gap: 9, urgent: true }); } } break;
       case 'sysdmg': if (mine(e)) { AU.sysdmg(e.lvl >= 2); say(S.SYSNAME[e.k].toLowerCase().replace('long-range', 'long range') + (e.lvl >= 2 ? ' destroyed' : ' damaged'), { key: 'sys' + e.k + e.lvl, gap: 4 }); } break;
       case 'pdead':
         if (mine(e)) { fxl.push(e); AU.death(); say('Ship destroyed', { urgent: true, gap: 2 }); }

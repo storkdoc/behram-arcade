@@ -22,4 +22,6 @@ const nov = out['campaign NOVICE sk0.35'], cmdr = out['campaign COMMANDER sk1'];
 let fail = 0; const check = (c, m) => { if (!c) { fail++; console.error('FAIL', m); } else console.log('ok', m); };
 check(parseInt(nov.win) >= 50, 'a sloppy novice bot wins Novice at least half the time');
 check(parseInt(cmdr.win) <= 50, 'even the sharp bot loses Commander at least half the time');
+check(parseFloat(cmdr.min) >= 2.5, 'Commander is hard but not a 90-second wipeout (sharp bot lasts 2.5+ min on average)');
+check(parseInt(out['campaign WARRIOR sk1'].win) >= 25, 'the sharp bot wins Warrior at least a quarter of the time');
 process.exit(fail ? 1 : 0);
