@@ -9,6 +9,11 @@ Homage to Parker Brothers' *Reactor* (1982). A teaching model, not an engineerin
 - [ ] tests/page.test.mjs (playwright desktop/iPhone/iPad), tools/thumb.mjs → thumb.png
 - [ ] games.js entry (slug 'reactor', title 'MELTDOWN'), push, verify live
 
+## Where to work (after the 2026-10-28 shared-checkout reset)
+Work in the separate worktree /workspace/meltdown-wt (branch meltdown-work, based on origin/main).
+Commit there; `git pull --rebase origin main`; `git push origin meltdown-work:main`. Never reset/stash /workspace/arcade.
+The physics + content are already on origin (805f88f).
+
 ## Repo rules
 Other workers share this checkout. Stage ONLY games/reactor and games.js. Never `git add -A`,
 never stash/reset others' files. Commit, then `git pull --rebase` (or push from a separate worktree).
