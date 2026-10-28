@@ -93,6 +93,26 @@
     fanfare: function () { if (!ensure() || !started) return; var t = ctx.currentTime; [523.3, 659.3, 784.0, 1046.5, 784.0, 1046.5, 1318.5].forEach(function (f, i) { bell(f, t + i * 0.11, 0.2); tone(f / 2, t + i * 0.11, 0.3, 'triangle', 0.06); }); },
     levelup: function () { if (!ensure() || !started) return; var t = ctx.currentTime; [392, 523.3, 659.3, 784, 1046.5, 1318.5, 1568].forEach(function (f, i) { bell(f, t + i * 0.06, 0.18); }); },
     tick: function () { if (!ensure() || !started) return; tone(2000, ctx.currentTime, 0.02, 'square', 0.02); },
+    calliope: function () { // a faint, out-of-tune, winding-down circus calliope sting (hallway mural)
+      if (!ensure() || !started || muted) return; var t = ctx.currentTime + 0.05;
+      var out = ctx.createGain(), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.7;
+      out.gain.value = 0.16; lp.connect(out); out.connect(sfxBus);
+      var lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.2; lg.gain.value = 7; lfo.connect(lg); lfo.start(t); lfo.stop(t + 3.6);
+      // E minor waltz fragment, each note a little later and flatter than the last
+      var notes = [659.3, 622.3, 659.3, 523.3, 493.9, 440, 415.3], at = 0, dt = 0.2;
+      notes.forEach(function (f, i) {
+        var fl = f * Math.pow(0.994, i), dur = dt * (i === notes.length - 1 ? 4.5 : 1.3);
+        [[fl, 'square', 0.05], [fl * 1.006, 'triangle', 0.09], [fl / 2, 'triangle', 0.04]].forEach(function (v) {
+          var o = ctx.createOscillator(), g = ctx.createGain(); o.type = v[1]; o.frequency.value = v[0]; lg.connect(o.frequency);
+          g.gain.setValueAtTime(0.0001, t + at); g.gain.exponentialRampToValueAtTime(v[2], t + at + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+          o.connect(g); g.connect(lp); o.start(t + at); o.stop(t + at + dur + 0.05);
+        });
+        at += dt; dt *= 1.16;
+      });
+      // low uneasy oom-pah at the start and a dissonant drone under the last note
+      tone(164.8, t, 0.3, 'triangle', 0.08, out); tone(246.9, t + 0.4, 0.25, 'triangle', 0.05, out);
+      tone(87.3, t + at - dt / 1.16, 1.6, 'sawtooth', 0.025, out, 0.3); tone(82.4, t + at - dt / 1.16, 1.6, 'sine', 0.06, out, 0.3);
+    },
     page: function () { // overhead page "ding"
       if (!ensure() || !started) return; var t = ctx.currentTime; bell(784, t, 0.18); bell(988, t + 0.18, 0.18); bell(1175, t + 0.36, 0.18);
     }

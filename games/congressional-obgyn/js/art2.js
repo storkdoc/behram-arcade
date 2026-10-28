@@ -1,53 +1,96 @@
-/* CONGRESSIONAL OB GYN — art part 2: the clinic hallway hub with exam-room doors and an
- * ORIGINAL whimsical circus mural (made for this game; not a copy of any painting). */
+/* CONGRESSIONAL OB GYN — art part 2: the clinic hallway hub with exam-room doors and the clinic's
+ * real hallway circus mural (photo reproduction, used with Dr. Behram's permission). */
 (function () {
   'use strict';
   var A = window.COBArt;
   var H = 600, SEG_DOOR = 280;
 
-  A.mural = function (x, y, w, h) {
-    var s = '<g class="mural" transform="translate(' + x + ',' + y + ')">';
-    s += '<rect x="-16" y="-16" width="' + (w + 32) + '" height="' + (h + 32) + '" fill="#6b4a1f"/><rect x="-12" y="-12" width="' + (w + 24) + '" height="' + (h + 24) + '" fill="url(#h_gold)"/><rect x="-3" y="-3" width="' + (w + 6) + '" height="' + (h + 6) + '" fill="#3d2a10"/>';
-    s += '<clipPath id="h_mclip"><rect width="' + w + '" height="' + h + '"/></clipPath><g clip-path="url(#h_mclip)">';
-    s += '<rect width="' + w + '" height="' + h + '" fill="#bfa04a"/><rect width="' + w + '" height="' + h * 0.5 + '" fill="#7fb4dc"/>';
-    s += '<path d="M0 ' + h * 0.5 + ' Q' + w * 0.25 + ' ' + h * 0.46 + ' ' + w * 0.5 + ' ' + h * 0.5 + ' T' + w + ' ' + h * 0.5 + ' V' + h + ' H0Z" fill="#c9a24c"/>';
-    for (var g = 0; g < 40; g++) s += '<path d="M' + (g * 37 % w) + ' ' + (h * 0.55 + (g * 53 % (h * 0.42))) + ' l6 -3" stroke="#a8842f" stroke-width="2"/>';
-    // clouds (naive)
-    s += '<g fill="#fff" opacity=".9"><ellipse cx="70" cy="40" rx="30" ry="9"/><ellipse cx="92" cy="34" rx="18" ry="8"/><ellipse cx="210" cy="60" rx="24" ry="6"/></g>';
-    // smiling sun
-    s += '<g transform="translate(' + (w - 62) + ',52)"><g class="sunrays">' + Array.apply(null, Array(12)).map(function (_, i) { return '<path d="M0 -40 L5 -30 L-5 -30Z" fill="#f2a516" transform="rotate(' + i * 30 + ')"/>'; }).join('') + '</g>' +
-      '<circle r="27" fill="#f8b81c" stroke="#a65d0c" stroke-width="2"/><path d="M-12 -5 q4 -5 8 0 M4 -5 q4 -5 8 0" stroke="#7a3d06" stroke-width="2.4" fill="none"/><path d="M-11 7 q11 11 22 0" stroke="#7a3d06" stroke-width="2.6" fill="none"/><circle cx="-14" cy="4" r="3.5" fill="#f07b2c" opacity=".6"/><circle cx="14" cy="4" r="3.5" fill="#f07b2c" opacity=".6"/></g>';
-    // big top tent
-    s += '<g transform="translate(36,' + (h * 0.24) + ')"><path d="M0 92 L70 0 L140 92Z" fill="#f3e6c8" stroke="#3a2710" stroke-width="2"/>';
-    for (var t = 0; t < 4; t++) s += '<path d="M70 0 L' + (10 + t * 35) + ' 92 L' + (27 + t * 35) + ' 92Z" fill="#c8323b"/>';
-    s += '<path d="M70 0 v-14" stroke="#3a2710" stroke-width="2"/><path d="M70 -14 l16 5 -16 5z" fill="#2b6cb0"/><rect x="58" y="62" width="24" height="30" fill="#2a1a0a"/></g>';
-    // bunting
-    s += '<path d="M0 14 Q' + w / 2 + ' 46 ' + w + ' 14" stroke="#3a2710" stroke-width="1.5" fill="none"/>';
-    for (var b = 1; b < 12; b++) { var bx = b * w / 12, by = 14 + 32 * (1 - Math.pow((bx - w / 2) / (w / 2), 2)); s += '<path d="M' + (bx - 8) + ' ' + (by - 1) + ' L' + (bx + 8) + ' ' + (by - 1) + ' L' + bx + ' ' + (by + 15) + 'Z" fill="' + ['#d9423e', '#2f7bbd', '#f2c230', '#3b9c5a'][b % 4] + '"/>'; }
-    // circus wagon with friendly lion
-    var wx = w * 0.36, wy = h * 0.42;
-    s += '<g transform="translate(' + wx + ',' + wy + ')"><rect x="-8" y="-18" width="166" height="20" rx="4" fill="#d8a52c" stroke="#3a2710" stroke-width="2"/><path d="M-8 -18 q83 -30 166 0" fill="#c8323b" stroke="#3a2710" stroke-width="2"/>' +
-      '<rect x="0" y="2" width="150" height="108" fill="#8e1f2a" stroke="#3a2710" stroke-width="2"/><rect x="10" y="12" width="130" height="88" fill="#3b1a12"/>' +
-      '<g transform="translate(75,62)"><circle r="34" fill="#c9771c"/>' + Array.apply(null, Array(16)).map(function (_, i) { return '<ellipse cx="0" cy="-32" rx="7" ry="12" fill="#b4601a" transform="rotate(' + i * 22.5 + ')"/>'; }).join('') +
-      '<circle r="22" fill="#f0b94a"/><circle cx="-8" cy="-5" r="3" fill="#2a1a0a"/><circle cx="8" cy="-5" r="3" fill="#2a1a0a"/><path d="M-4 4 h8 l-4 5z" fill="#6b3a1a"/><path d="M-8 11 q8 7 16 0" stroke="#6b3a1a" stroke-width="2" fill="none"/><circle cx="-16" cy="-17" r="6" fill="#f0b94a"/><circle cx="16" cy="-17" r="6" fill="#f0b94a"/></g>';
-    for (var bar = 0; bar < 8; bar++) s += '<rect x="' + (14 + bar * 17.5) + '" y="12" width="4" height="88" fill="#e6c25a"/>';
-    s += '<circle cx="28" cy="122" r="20" fill="none" stroke="#3a2710" stroke-width="4"/><circle cx="122" cy="122" r="20" fill="none" stroke="#3a2710" stroke-width="4"/>' +
-      [0, 45, 90, 135].map(function (a) { return '<path d="M28 102 v40" stroke="#3a2710" stroke-width="2" transform="rotate(' + a + ' 28 122)"/><path d="M122 102 v40" stroke="#3a2710" stroke-width="2" transform="rotate(' + a + ' 122 122)"/>'; }).join('') + '</g>';
-    // ringmaster (top hat, red coat)
-    var rx = w * 0.84, ry = h * 0.47;
-    s += '<g transform="translate(' + rx + ',' + ry + ')"><rect x="-13" y="-62" width="26" height="30" fill="#1b1b22"/><rect x="-20" y="-34" width="40" height="5" fill="#1b1b22"/><rect x="-13" y="-42" width="26" height="5" fill="#c8323b"/>' +
-      '<circle cy="-16" r="14" fill="#f1d3b3" stroke="#3a2710" stroke-width="1.5"/><path d="M-9 -8 q9 6 18 0" stroke="#3a2710" stroke-width="2" fill="none"/><path d="M-10 -12 q4 4 9 0 q5 4 10 0" stroke="#3a2710" stroke-width="2.2" fill="none"/><circle cx="-5" cy="-20" r="1.8"/><circle cx="5" cy="-20" r="1.8"/>' +
-      '<path d="M-22 0 L22 0 L28 70 L-28 70Z" fill="#b5212d" stroke="#3a2710" stroke-width="2"/><path d="M0 0 L-8 40 L0 70 L8 40Z" fill="#f4ecdc"/><circle cx="0" cy="22" r="2" fill="#d8a52c"/><circle cx="0" cy="34" r="2" fill="#d8a52c"/>' +
-      '<rect x="-14" y="70" width="10" height="44" fill="#1b1b22"/><rect x="4" y="70" width="10" height="44" fill="#1b1b22"/><path d="M22 10 L48 -16" stroke="#3a2710" stroke-width="3"/><circle cx="49" cy="-17" r="3" fill="#f4ecdc"/></g>';
-    // acrobat on a ball
-    var ax = w * 0.15, ay = h * 0.74;
-    s += '<g transform="translate(' + ax + ',' + ay + ')"><circle r="24" fill="#2f7bbd" stroke="#3a2710" stroke-width="2"/><path d="M-24 0 h48 M0 -24 v48" stroke="#f2c230" stroke-width="4"/>' +
-      '<g class="wobble"><path d="M0 -24 L-8 -66 M0 -24 L8 -66" stroke="#3a2710" stroke-width="5"/><rect x="-11" y="-98" width="22" height="34" rx="6" fill="#f2c230" stroke="#3a2710" stroke-width="2"/><circle cy="-108" r="10" fill="#c98d5e" stroke="#3a2710" stroke-width="1.5"/><path d="M-10 -112 q10 -12 20 0" fill="#3a2710"/>' +
-      '<path d="M-10 -92 L-36 -112 M10 -92 L36 -112" stroke="#3a2710" stroke-width="4"/><circle cx="-38" cy="-118" r="5" fill="#d9423e"/><circle cx="38" cy="-118" r="5" fill="#3b9c5a"/><circle cx="0" cy="-138" r="5" fill="#2f7bbd"/></g></g>';
-    // little dog through a hoop
-    s += '<g transform="translate(' + (w * 0.62) + ',' + (h * 0.86) + ')"><circle r="20" fill="none" stroke="#c8323b" stroke-width="5"/><ellipse cx="-4" cy="0" rx="16" ry="7" fill="#f4ecdc" stroke="#3a2710" stroke-width="1.5"/><circle cx="14" cy="-5" r="7" fill="#f4ecdc" stroke="#3a2710" stroke-width="1.5"/><path d="M-18 0 l-10 -6" stroke="#3a2710" stroke-width="2"/></g>';
-    s += '<rect width="' + w + '" height="' + h + '" fill="url(#h_varnish)"/></g></g>';
-    return s;
+  /* The clinic's own hallway mural (surreal circus painting), reproduced from a photo with Dr. Behram's
+   * permission: perspective-corrected crop in assets/mural.webp (720x1000), drawn in a gold frame with a
+   * picture light. Subtle "alive" overlays in image-native coords: the sun's face tilts, the hanging figure
+   * sways, the eyeball on the wagon wheel follows the player (A.muralAlive), and the lamp flickers. */
+  var MURAL_SRC = 'assets/mural.webp', MW = 720, MH = 1000;
+  A.MURAL_SRC = MURAL_SRC;
+  try { (new Image()).src = MURAL_SRC; } catch (e) {} // warm the cache before the hallway opens
+  A.mural = function (cx, top, h) {
+    var k = h / MH, w = MW * k, x = cx - w / 2, img = '<image href="' + MURAL_SRC + '" width="' + MW + '" height="' + MH + '" preserveAspectRatio="none"/>';
+    var s = '<g class="mural" data-mural="1">';
+    // wall shadow + carved gold frame (outer moulding, bead, inner lip)
+    var f = 17;
+    s += '<rect x="' + (x - f + 6) + '" y="' + (top - f + 10) + '" width="' + (w + 2 * f) + '" height="' + (h + 2 * f) + '" rx="2" fill="#1e2830" opacity=".28" filter="url(#mu_blur)"/>';
+    s += '<rect x="' + (x - f) + '" y="' + (top - f) + '" width="' + (w + 2 * f) + '" height="' + (h + 2 * f) + '" rx="2" fill="url(#mu_gold)" stroke="#4a3412" stroke-width="1.5"/>';
+    s += '<rect x="' + (x - f + 4) + '" y="' + (top - f + 4) + '" width="' + (w + 2 * f - 8) + '" height="' + (h + 2 * f - 8) + '" fill="none" stroke="url(#mu_gold2)" stroke-width="3"/>';
+    s += '<rect x="' + (x - f + 9) + '" y="' + (top - f + 9) + '" width="' + (w + 2 * f - 18) + '" height="' + (h + 2 * f - 18) + '" fill="none" stroke="#f3d98a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".75"/>';
+    s += '<rect x="' + (x - 4) + '" y="' + (top - 4) + '" width="' + (w + 8) + '" height="' + (h + 8) + '" fill="#3a2a10"/>';
+    // the painting, in native 720x1000 coordinates
+    s += '<g transform="translate(' + x.toFixed(2) + ',' + top + ') scale(' + k.toFixed(5) + ')">' + img;
+    // sun: the face slowly tilts and leers
+    s += '<g clip-path="url(#mu_sunclip)"><rect x="500" y="13" width="140" height="140" fill="#7ca3ba"/><g transform="translate(570,83)"><g class="mu-sun"><image href="' + MURAL_SRC + '" x="-570" y="-83" width="' + MW + '" height="' + MH + '" preserveAspectRatio="none"/></g></g></g>';
+    s += '<circle class="mu-sunglow" cx="570" cy="83" r="74" fill="url(#mu_sunglow)"/>';
+    // hanging figure sways on its pole
+    s += '<g clip-path="url(#mu_hangclip)"><g transform="translate(268,22)"><g class="mu-hang"><image href="' + MURAL_SRC + '" x="-268" y="-22" width="' + MW + '" height="' + MH + '" preserveAspectRatio="none" mask="url(#mu_hangmask)"/></g></g></g>';
+    // eyeball at the wheel hub (iris follows the player)
+    s += '<circle class="mu-eye" cx="237" cy="640" r="15.5" fill="url(#mu_eyewhite)"/><g class="mu-iris" style="transform:translate(-6px,0)"><circle cx="237" cy="640" r="8.6" fill="#1f2c63"/><circle cx="237" cy="640" r="4.2" fill="#05060c"/><circle cx="234" cy="636.5" r="1.9" fill="#fff" opacity=".85"/></g>';
+    s += '<circle cx="237" cy="640" r="15.5" fill="none" stroke="#5a4a3a" stroke-width="1.2" opacity=".6"/>';
+    // varnish sheen, lamp pool and flicker
+    s += '<rect width="' + MW + '" height="' + MH + '" fill="url(#mu_varnish)"/><rect width="' + MW + '" height="' + MH + '" fill="url(#mu_lamp)"/>';
+    s += '<rect class="mu-flicker" width="' + MW + '" height="' + MH + '" fill="#07090c" opacity="0"/></g>';
+    // picture light (brass arm + hood) and its glow
+    var lw = w * 0.55, lx = cx - lw / 2, ly = top - f - 14;
+    s += '<path d="M' + (cx - 10) + ' ' + (top - f + 2) + ' v-8 M' + (cx + 10) + ' ' + (top - f + 2) + ' v-8" stroke="#7b5b22" stroke-width="3"/>';
+    s += '<rect x="' + lx + '" y="' + ly + '" width="' + lw + '" height="9" rx="4.5" fill="url(#mu_brass)" stroke="#5b4214" stroke-width="1"/>';
+    s += '<path class="mu-beam" d="M' + (lx + 4) + ' ' + (ly + 8) + ' L' + (lx + lw - 4) + ' ' + (ly + 8) + ' L' + (x + w + 6) + ' ' + (top + h * 0.6) + ' L' + (x - 6) + ' ' + (top + h * 0.6) + 'Z" fill="url(#mu_beam)"/>';
+    // small brass title plaque on the frame
+    s += '<rect x="' + (cx - 14) + '" y="' + (top + h + f - 9) + '" width="28" height="6" rx="1" fill="url(#mu_brass)" stroke="#5b4214" stroke-width=".6"/>';
+    s += '<rect class="mu-hit" x="' + (x - f) + '" y="' + (top - f) + '" width="' + (w + 2 * f) + '" height="' + (h + 2 * f) + '" fill="transparent"/>';
+    return s + '</g>';
+  };
+  A.muralDefs = function () {
+    return '<filter id="mu_blur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="7"/></filter>' +
+      '<linearGradient id="mu_gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0cf7a"/><stop offset=".22" stop-color="#a77c2c"/><stop offset=".5" stop-color="#e2bd62"/><stop offset=".78" stop-color="#7d5a1c"/><stop offset="1" stop-color="#c99d45"/></linearGradient>' +
+      '<linearGradient id="mu_gold2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6e4f18"/><stop offset=".5" stop-color="#f6dc8c"/><stop offset="1" stop-color="#6e4f18"/></linearGradient>' +
+      '<linearGradient id="mu_brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1d690"/><stop offset="1" stop-color="#8a6424"/></linearGradient>' +
+      '<linearGradient id="mu_beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff4cf" stop-opacity=".30"/><stop offset="1" stop-color="#fff4cf" stop-opacity="0"/></linearGradient>' +
+      '<radialGradient id="mu_lamp" cx=".5" cy="-.05" r=".85"><stop offset="0" stop-color="#fff6d8" stop-opacity=".16"/><stop offset=".6" stop-color="#fff6d8" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></radialGradient>' +
+      '<linearGradient id="mu_varnish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".10"/></linearGradient>' +
+      '<radialGradient id="mu_sunglow"><stop offset=".72" stop-color="#ffb43a" stop-opacity="0"/><stop offset=".82" stop-color="#ffb43a" stop-opacity=".35"/><stop offset="1" stop-color="#ffb43a" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="mu_eyewhite" cx=".38" cy=".4" r=".7"><stop offset="0" stop-color="#f4f1f4"/><stop offset=".7" stop-color="#d9d2da"/><stop offset="1" stop-color="#a99fa6"/></radialGradient>' +
+      '<clipPath id="mu_sunclip"><circle cx="570" cy="83" r="59"/></clipPath>' +
+      '<clipPath id="mu_hangclip"><rect x="230" y="0" width="78" height="215"/></clipPath>' +
+      '<radialGradient id="mu_hangfade"><stop offset="0" stop-color="#fff"/><stop offset=".62" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>' +
+      '<mask id="mu_hangmask" maskUnits="userSpaceOnUse" x="-80" y="-30" width="160" height="240"><ellipse cx="0" cy="82" rx="30" ry="112" fill="url(#mu_hangfade)"/></mask>';
+  };
+  /* Bring the hallway mural to life: the eyeball's iris follows the mouse (or the middle of the visible
+   * hallway on touch screens), and a faint calliope sting plays when the mural is hovered, tapped or
+   * scrolled into the centre of the view (at most once every 45 s). Safe to call after every redraw. */
+  var lastSting = -1e9, ptr = null;
+  window.addEventListener('pointermove', function (ev) { if (ev.pointerType === 'mouse') { ptr = [ev.clientX, ev.clientY]; if (A._muLook) A._muLook(); } }, { passive: true });
+  A.muralAlive = function (root, scroller, sting) {
+    var m = root && root.querySelector('.mural'); if (!m) return;
+    var iris = m.querySelector('.mu-iris'), eye = m.querySelector('.mu-eye'), raf = 0;
+    function look() {
+      raf = 0; if (!iris.isConnected) return;
+      var e = eye.getBoundingClientRect(); if (!e.width) return;
+      var ex = e.left + e.width / 2, ey = e.top + e.height / 2;
+      var tx, ty;
+      if (ptr) { tx = ptr[0]; ty = ptr[1]; } else { var sr = (scroller || document.documentElement).getBoundingClientRect(); tx = sr.left + sr.width / 2; ty = sr.top + sr.height * 0.8; }
+      var dx = tx - ex, dy = ty - ey, d = Math.sqrt(dx * dx + dy * dy) || 1, r = Math.min(6.2, d / 10);
+      iris.style.transform = 'translate(' + (dx / d * r).toFixed(2) + 'px,' + (dy / d * r * 0.8).toFixed(2) + 'px)';
+    }
+    A._muLook = function () { if (!raf) raf = requestAnimationFrame(look); };
+    A._muSting = function () { var t = Date.now(); if (t - lastSting < 45000 || !sting) return; lastSting = t; try { sting(); } catch (e) {} };
+    m.addEventListener('pointerenter', function (ev) { if (ev.pointerType === 'mouse') A._muSting(); });
+    m.addEventListener('click', function () { A._muSting(); });
+    if (scroller && !scroller._muBound) {
+      scroller._muBound = true;
+      scroller.addEventListener('scroll', function () {
+        if (A._muLook) A._muLook();
+        var mm = scroller.querySelector('.mural .mu-hit'); if (!mm) return;
+        var e = mm.getBoundingClientRect(), sr = scroller.getBoundingClientRect(), c = e.left + e.width / 2;
+        if (c > sr.left + sr.width * 0.3 && c < sr.left + sr.width * 0.7 && A._muSting) A._muSting();
+      }, { passive: true });
+    }
+    A._muLook();
   };
 
   function door(x, r) {
@@ -86,7 +129,7 @@
       '<linearGradient id="h_varnish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient>' +
       '<radialGradient id="h_light" cx=".5" cy="0" r=".9"><stop offset="0" stop-color="#fffbe8" stop-opacity=".55"/><stop offset="1" stop-color="#fffbe8" stop-opacity="0"/></radialGradient>' +
       '<radialGradient id="h_exitglow"><stop offset="0" stop-color="#3dff7a" stop-opacity=".55"/><stop offset="1" stop-color="#3dff7a" stop-opacity="0"/></radialGradient>' +
-      '<linearGradient id="h_refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>';
+      '<linearGradient id="h_refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>' + A.muralDefs() + '</defs>';
     s += '<rect width="' + W + '" height="' + H + '" fill="url(#h_wall)"/>';
     // ceiling with tiles and lights
     s += '<rect width="' + W + '" height="62" fill="#eef0f1"/>';
@@ -112,7 +155,7 @@
     for (var i = 0; i < rooms.length; i++) { order.push(['door', rooms[i]]); if (i === 1) order.push(['mural']); if (i === 3) order.push(['exit']); }
     order.forEach(function (o) {
       if (o[0] === 'door') { doors.push({ num: o[1].num, x: x + SEG_DOOR / 2 }); s += door(x, o[1]); x += SEG_DOOR; }
-      else if (o[0] === 'mural') { s += A.mural(x + 40, 112, 380, 300); s += '<rect x="' + (x + 180) + '" y="436" width="100" height="10" fill="#fff" opacity=".0"/>'; x += 460; }
+      else if (o[0] === 'mural') { s += A.mural(x + 230, 100, 330); x += 460; }
       else {
         s += '<polygon points="' + (x + 30) + ',62 ' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 70) + ',150" fill="#e6eaee"/><rect x="' + (x + 30) + '" y="62" width="170" height="408" fill="none"/>' +
           '<polygon points="' + (x + 30) + ',62 ' + (x + 70) + ',150 ' + (x + 70) + ',380 ' + (x + 30) + ',484" fill="#c2cfdb"/><polygon points="' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="#b3c2d0"/>' +

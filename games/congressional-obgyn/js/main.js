@@ -338,6 +338,7 @@
       $$('.door', inner).forEach(function (d) { d.addEventListener('click', function () { openPatient(patientInRoom(+d.getAttribute('data-room'))); }); });
       $$('.door-tag', inner).forEach(function (d) { d.addEventListener('click', function () { openPatient(patientInRoom(+d.getAttribute('data-room'))); }); });
       layoutHall();
+      if (A.muralAlive) A.muralAlive(inner, $('#hall'), function () { S.sfx.calliope(); });
     }
     drawHallStates();
   }

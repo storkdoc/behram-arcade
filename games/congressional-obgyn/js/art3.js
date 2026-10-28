@@ -80,9 +80,9 @@
       '<ellipse cx="170" cy="400" rx="80" ry="70" fill="#4f8a3f"/><ellipse cx="320" cy="390" rx="70" ry="80" fill="#3f7533"/><ellipse cx="250" cy="200" rx="50" ry="10" fill="#fff" opacity=".7"/>';
     for (var bl = 154; bl < 270; bl += 12) s += '<rect x="104" y="' + bl + '" width="272" height="8" fill="#f2f2ee" opacity=".92"/>';
     s += '<rect x="238" y="154" width="4" height="252" fill="#fafbfc"/></g>';
-    // framed original circus print + anatomy poster
-    s += '<g transform="translate(470,150)"><rect width="150" height="190" fill="url(#' + p + 'gold)" stroke="#6b4a1f" stroke-width="4"/><rect x="10" y="10" width="130" height="170" fill="#7fb4dc"/><rect x="10" y="100" width="130" height="80" fill="#c9a24c"/>' +
-      '<path d="M30 140 L75 60 L120 140Z" fill="#f3e6c8"/><path d="M75 60 L55 140 L65 140Z M75 60 L85 140 L95 140Z" fill="#c8323b"/><circle cx="118" cy="36" r="13" fill="#f8b81c"/></g>';
+    // small framed print of the clinic's hallway circus mural + anatomy poster
+    s += '<g transform="translate(470,140)"><rect x="4" y="6" width="150" height="206" fill="#000" opacity=".18"/><rect width="150" height="206" fill="url(#' + p + 'gold)" stroke="#6b4a1f" stroke-width="3"/><rect x="9" y="9" width="132" height="188" fill="#2a1d0b"/>' +
+      '<image href="' + (A.MURAL_SRC || 'assets/mural.webp') + '" x="12" y="12" width="126" height="182" preserveAspectRatio="xMidYMid slice"/><rect x="12" y="12" width="126" height="182" fill="#fff" opacity=".06"/></g>';
     s += '<g transform="translate(1290,130)"><rect width="170" height="230" rx="4" fill="#fff" stroke="#c3ccd5" stroke-width="3"/><text x="85" y="26" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#2c4a66">YOUR PREGNANCY</text>' +
       [0, 1, 2].map(function (i) { return '<circle cx="' + (40 + i * 45) + '" cy="' + (80 + i * 4) + '" r="' + (10 + i * 7) + '" fill="#f5c6d3"/><path d="M' + (36 + i * 45) + ' ' + (80 + i * 4) + ' q4 -' + (5 + i * 2) + ' ' + (6 + i * 2) + ' 0" stroke="#c0567a" stroke-width="2" fill="none"/>'; }).join('') +
       '<rect x="20" y="130" width="130" height="5" rx="2" fill="#dfe6ee"/><rect x="20" y="145" width="110" height="5" rx="2" fill="#dfe6ee"/><rect x="20" y="160" width="120" height="5" rx="2" fill="#dfe6ee"/><rect x="20" y="190" width="70" height="20" rx="4" fill="#f28cb1"/></g>';

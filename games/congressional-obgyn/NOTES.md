@@ -17,7 +17,13 @@ mastery (spaced repetition), daily challenge, badges, local leaderboard. Instruc
 - js/bank.js — question bank (26 topics, 54 cases, 257 questions). Correct option is listed FIRST in source; shuffled at runtime.
 - js/access.js — PIN hash + HMAC student codes (offline). tests/access.test.js
 - js/core.js — scoring / levels / mastery / selection (pure). tests/core.test.js
-- js/audio.js — WebAudio synth. js/art1-3.js — SVG art (building, hallway + original circus mural, exam room, patients).
+- js/audio.js — WebAudio synth (+ calliope sting for the mural). js/art1-3.js — SVG art (building, hallway + clinic circus mural, exam room, patients).
+- Hallway mural = the clinic's REAL circus painting (Dr. Behram sanctioned it, 2026-10-28): assets/mural.webp (720x1000, ~80 KB) is a
+  perspective-corrected crop of just the painted canvas from his photo (no wall/people; the hallway photo with students is NEVER used).
+  A.mural (art2.js) draws it in a gold frame with a picture light; overlays in 720x1000 image coords: sun face tilts (.mu-sun), hanging
+  figure sways (.mu-hang, feathered mask), eyeball at the wheel hub follows the mouse / hallway view (A.muralAlive, main.js drawHall),
+  lamp flicker (.mu-flicker/.mu-beam). Calliope sting (S.sfx.calliope) on hover/tap/scroll-into-centre, max once per 45 s.
+  Exam-room wall print (art3.js) uses the same image.
 - js/main.js — UI, screens, input (keys/mouse/touch/gamepad), particles.
 
 ## Access-code scheme

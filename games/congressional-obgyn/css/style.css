@@ -29,6 +29,14 @@ body.in-hud #home { display: none; }
 .flag { transform-origin: 1482px 540px; animation: flag 2.4s ease-in-out infinite; } @keyframes flag { 50% { transform: skewY(4deg) scaleX(.94); } }
 .sunrays { animation: spin 40s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 .wobble { animation: wob 3s ease-in-out infinite; transform-origin: 0 -24px; } @keyframes wob { 50% { transform: rotate(4deg); } }
+/* hallway circus mural: slow, slightly sinister life */
+.mu-sun { animation: muSun 13s ease-in-out infinite alternate; transform-origin: 0 0; } @keyframes muSun { 0% { transform: rotate(-5deg) scale(1); } 55% { transform: rotate(3deg) scale(1.035); } 100% { transform: rotate(7deg) scale(.99); } }
+.mu-sunglow { animation: muGlow 6s ease-in-out infinite alternate; opacity: .4; } @keyframes muGlow { to { opacity: .95; } }
+.mu-hang { animation: muHang 5.2s ease-in-out infinite alternate; transform-origin: 0 0; } @keyframes muHang { from { transform: rotate(-1.3deg); } to { transform: rotate(1.3deg); } }
+.mu-iris { transition: transform .35s ease-out; }
+.mu-flicker { animation: muFlick 11s steps(1, end) infinite; } @keyframes muFlick { 0%, 86% { opacity: 0; } 87% { opacity: .38; } 88% { opacity: .05; } 89.5% { opacity: .3; } 91% { opacity: 0; } 96% { opacity: .12; } 97% { opacity: 0; } }
+.mu-beam { animation: muBeam 11s steps(1, end) infinite; } @keyframes muBeam { 0%, 86% { opacity: 1; } 87% { opacity: .15; } 88% { opacity: .9; } 89.5% { opacity: .25; } 91% { opacity: 1; } 96% { opacity: .6; } 97% { opacity: 1; } }
+.mural .mu-hit { cursor: pointer; }
 .ledglow { animation: pulse 1.6s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .05; } }
 .door-urgent .ledglow { animation-duration: .7s; }
 .exit-text { filter: drop-shadow(0 0 6px #3dff7a); }
