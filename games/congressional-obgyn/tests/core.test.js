@@ -1,0 +1,23 @@
+// node games/congressional-obgyn/tests/core.test.js
+global.window = undefined; const C = require('../js/core.js');
+global.window = global; require('../js/bank.js'); const BANK = global.COB_BANK;
+let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
+ok(C.scoreAnswer(true, 5, 1).total === 150, 'fast correct = 150');
+ok(C.scoreAnswer(true, 40, 1).total === 100, 'slow correct = 100');
+ok(C.scoreAnswer(true, 5, 3).total === 225 && C.scoreAnswer(true, 5, 5).total === 300 && C.scoreAnswer(true, 5, 8).total === 450, 'streak multipliers 1.5/2/3');
+ok(C.scoreAnswer(true, 5, 1, true).total === 75, 'lifeline halves');
+ok(C.scoreAnswer(false, 1, 0).total === 0, 'wrong = 0');
+ok(C.grade(0.95) === 'A' && C.grade(0.85) === 'B' && C.grade(0.5) === 'F', 'grades');
+ok(C.levelProgress(0).name === 'MS3' && C.levelProgress(2600).name === 'Intern' && C.levelProgress(40000).name === 'Attending', 'levels');
+const s = C.newSave(); const day = 300;
+let topics = C.pickDay(BANK, s, day, 6, 0, C.rng(1));
+ok(topics.length === 6 && new Set(topics).size === 6 && topics.every(t => t.tier === 0), 'MS3 day: 6 distinct tier-0 topics');
+ok(topics.filter(t => t.cat === 'OB').length >= 2 && topics.filter(t => t.cat === 'GYN').length >= 2, 'OB/GYN mix');
+C.updateMastery(s, 'pap', 1, day); ok(s.mastery.pap.box === 1 && s.mastery.pap.due === day + 1, 'mastery up + due tomorrow');
+C.updateMastery(s, 'pap', 0.4, day + 1); ok(s.mastery.pap.box === 0, 'mastery down on poor score');
+const d1 = C.dailyPlan(BANK, day), d2 = C.dailyPlan(BANK, day), d3 = C.dailyPlan(BANK, day + 1);
+ok(JSON.stringify(d1.map(x => x.topic.id + x.caseIdx)) === JSON.stringify(d2.map(x => x.topic.id + x.caseIdx)), 'daily challenge deterministic');
+ok(JSON.stringify(d1.map(x => x.topic.id)) !== JSON.stringify(d3.map(x => x.topic.id)), 'daily challenge changes by day');
+const qs = C.buildQuestions(BANK[0].cases[0]); ok(qs.every(q => q.opts.filter(o => o.correct).length === 1), 'exactly one correct option after shuffle');
+let firstCount = 0; for (let i = 0; i < 400; i++) { const q = C.buildQuestions(BANK[0].cases[0])[0]; if (q.opts[0].correct) firstCount++; } ok(firstCount > 40 && firstCount < 160, 'correct answer position randomized (' + firstCount + '/400 first)');
+console.log(fail ? fail + ' FAILED' : 'ALL CORE TESTS PASSED'); process.exit(fail ? 1 : 0);
