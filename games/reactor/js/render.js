@@ -89,7 +89,7 @@ void main(){
   float above = smoothstep(uLevel - 0.05, uLevel + 0.05, vW.y);
   float th = uHeat * (0.35 + 0.65 * above) * (0.5 + 0.5 * f);
   c += mix(vec3(0.7, 0.1, 0.0), vec3(1.0, 0.92, 0.75), clamp(th, 0.0, 1.0)) * th * 1.6;
-  c += vec3(0.06, 0.25, 1.0) * uCher * f * (1.0 - above) * 0.22;
+  c += vec3(0.05, 0.3, 1.0) * uCher * (0.25 + f) * (1.0 - above) * 0.42;
   c *= 1.0 - 0.45 * uDamage * (1.0 - clamp(th, 0.0, 1.0));
   gl_FragColor = vec4(c, 1.0);
 #include <colorspace_fragment>
@@ -138,7 +138,7 @@ void main(){ float d = 0.45 + 0.55 * abs(vN.z); vec3 c = mix(uHot, uCold, smooth
 const BACK_FS = `uniform float uTime, uRed; varying vec3 vW;
 float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main(){ vec2 p = vW.xy; float panel = step(0.97, fract(p.x / 3.0)) + step(0.98, fract(p.y / 2.0)) * 0.6;
-  float n = hh(floor(p * 6.0)) * 0.04; vec3 c = vec3(0.045, 0.05, 0.065) + n - panel * 0.02;
+  float n = hh(floor(p * 3.0)) * 0.008; vec3 c = vec3(0.03, 0.035, 0.048) + n - panel * 0.015;
   float glow = exp(-pow((p.x - 2.0) / 9.0, 2.0) - pow((p.y - 1.5) / 7.0, 2.0)); c += vec3(0.02, 0.04, 0.08) * glow;
   c = mix(c, c + vec3(0.25, 0.0, 0.0) * glow, uRed);
   gl_FragColor = vec4(c, 1.0);
@@ -498,7 +498,7 @@ export class Render {
     const rb = this.mode === 'RBMK';
     const n = clamp(s.n, 0, 50), Q = clamp(s.Q, 0, 50);
     // core visuals
-    const F = this.fuelU, glow = n < 0.01 ? 0.03 + 4 * n : 0.07 + 0.38 * Math.sqrt(Math.min(Q, 9)) + 0.5 * Math.max(0, Math.min(Q, 9) - 1.1); F.uGlow.value = lerp(F.uGlow.value, glow, 1 - Math.exp(-dt * 8));
+    const F = this.fuelU, glow = n < 0.01 ? 0.03 + 4 * n : 0.05 + 0.22 * Math.sqrt(Math.min(Q, 9)) + 0.6 * Math.max(0, Math.min(Q, 9) - 1.1); F.uGlow.value = lerp(F.uGlow.value, glow, 1 - Math.exp(-dt * 8));
     const heat = clamp((Math.max(s.TclPk, s.Tup || 0) - 650) / 1500, 0, 1.4); F.uHeat.value = heat;
     const cher = clamp((n < 0.02 ? (Math.log10(Math.max(n, 1e-6)) + 6) / 4 * 0.35 : 0.35 + 0.65 * Math.sqrt(Math.min(n, 4))) + 0.25 * Math.sqrt(s.decay || 0), 0, 2.2);
     F.uCher.value = cher; this.cherU.uI.value = lerp(this.cherU.uI.value, cher * 1.0, 1 - Math.exp(-dt * 6)); this.cherFU.uI.value = this.cherU.uI.value * 0.25; this.cherU.uVoid.value = s.voidCore;

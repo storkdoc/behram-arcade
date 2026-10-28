@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'reactor',
+    title: 'MELTDOWN',
+    tagline: 'You are the reactor operator. Hold the grid demand, ride out the faults and keep the core covered. A homage to Parker Brothers\' Reactor (1982).',
+    description: "A nuclear power plant control-room game built on a real (teaching-grade) reactor physics model. The main view is a cut-away of a pressurized water reactor: fuel that glows with blue Cherenkov light, nine banks of control rods that slide in and out, coolant you can watch flow from the core through the steam generator to the turbine, a pressurizer, heat shimmer, steam and alarm lighting. A full console sits beside it with analog gauges (power, log power, startup rate, temperature, pressure, DNB ratio, subcooling, SG level, decay heat, cladding temperature), a 30-light annunciator and a live reactivity budget showing control rods, boron, Doppler, moderator and xenon in pcm. Under the hood, six-group point kinetics separates prompt from delayed neutrons, alongside fuel and coolant thermal-hydraulics, iodine-xenon poisoning, decay heat, boron, pressurizer and steam plant, reactor trips and emergency core cooling. In a shift you follow the grid dispatcher while random faults (pump trips, a stuck-open relief valve, feedwater loss, dropped rods, grid loss, steam leaks) escalate as you go. Each fault opens a short lesson on why it happens, with its real history: Three Mile Island, Chernobyl and Fukushima. Training walks you from a cold shutdown core to criticality and power. The Neutron Lab lets you step reactivity in dollars and watch delayed neutrons save you, or switch them off and see prompt criticality. Seven drills replay famous situations, including TMI-2, the Fukushima station blackout and the Chernobyl Unit 4 night test in an RBMK model. Grades run from S to F, and your career goes from Trainee to Senior Reactor Operator. TEACHING MODEL — NOT AN ENGINEERING SIMULATOR. All sound is synthesized.",
+    thumb: 'games/reactor/thumb.png',
+    added: '2026-10-28',
+    genre: 'SIMULATION',
+    year: '1982 REMIX',
+    controls: '↑/↓ or W/S move rods (hold) · C auto rods · ←/→ grid load (hold) · B/N borate/dilute · SPACE acknowledges alarms / continues · ENTER twice or held = SCRAM · R reset trip · T latch turbine (double-press trips it) · 1-4 coolant pumps · O/K relief valve and block valve · I/J safety injection and HPI · F steam dumps · X time warp · V zoom to core · P or ESC pause · H controls · mouse: hold the on-screen buttons, hold SCRAM 0.6 s · gamepad: d-pad rods/load, A acknowledge, hold B SCRAM, X warp, Y auto rods, LB/RB boron, Start pause',
+    touch: 'hold RODS OUT/IN and LOAD −/+ in the bottom bar, hold SCRAM to trip, use the CORE / COOLANT / STEAM / SAFETY tabs for the console · works on iPhone and iPad in portrait and landscape',
+    accent: '#4fb4ff'
+  },
+  {
     slug: 'congressional-obgyn',
     title: 'CONGRESSIONAL OB GYN',
     tagline: 'Clinic day at Fallsgrove Plaza with Dr. Behram. Pick an exam room, read the chart and work each patient up through board-style questions.',

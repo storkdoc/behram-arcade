@@ -4,10 +4,18 @@ Homage to Parker Brothers' *Reactor* (1982). A teaching model, not an engineerin
 
 ## Status
 - [x] js/sim.js: physics core. `node games/reactor/tests/sim.test.js` passes 45/45.
-- [ ] content.js (faults, scenarios, tutorial, concept/why cards, history)
-- [ ] audio.js, render.js (three.js cross-section + 8-bit bloom), ui.js, main.js, index.html, css
-- [ ] tests/page.test.mjs (playwright desktop/iPhone/iPad), tools/thumb.mjs → thumb.png
-- [ ] games.js entry (slug 'reactor', title 'MELTDOWN'), push, verify live
+- [x] content.js (faults, scenarios, tutorial, concept/why cards, history)
+- [x] audio.js, render.js (three.js cross-section + 8-bit bloom), ui.js, main.js, index.html, css
+- [x] tests/page.test.mjs (playwright desktop/iPhone/iPad), tools/thumb.mjs → thumb.png
+- [x] games.js entry (slug 'reactor', title 'MELTDOWN'), push, verify live
+
+## Testing
+- `python3 -m http.server 8765 --directory <worktree>` then
+  `node games/reactor/tests/page.test.mjs http://localhost:8765/games/reactor/ [--shots dir]` (ONLY=desktop|iphone-portrait|iphone-landscape|ipad|webkit-iphone)
+- `node games/reactor/tests/sim.test.js` (physics, 47 checks); `BASE=http://localhost:8765/ node tests/landing.test.js`
+- Thumbnail: `node games/reactor/tools/thumb.mjs`
+- Gotcha fixed: CSS `.rbmk{display:none}` matched body.rbmk itself (blank page in the RBMK drill). Mode classes on body must be scoped.
+- SCRAM hold uses wall-clock time (slow frames on iPad would otherwise never reach 0.6 s).
 
 ## Where to work (after the 2026-10-28 shared-checkout reset)
 Work in the separate worktree /workspace/meltdown-wt (branch meltdown-work, based on origin/main).
