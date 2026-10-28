@@ -42,3 +42,7 @@ Run tests: python3 -m http.server 8095 (repo root) ; NODE_PATH=/workspace/tools/
 
 ## Early census (v1 tasks, before the spec update; for reference)
 symbolic train 0.99 / held 0.14 (huge gap); memory held 0.49; transformer(gated) held 0.22; bayes 0.25; gp 0.52(v0 tasks); spiking ~0.
+
+## Ship status (2026-10-28)
+- Pushed to origin/main as b15b169 (single squashed GENESIS commit; earlier local WIP commits f8cc82d/d6bb0b2/04c5b16 were dropped from local main by another worker's `git reset`, their content is all in b15b169). data/.cache.json is ignored and not in the tree.
+- Live: https://storkdoc.github.io/behram-arcade/games/meta-arena/ — tests/page.test.cjs ALL PASS against the live URL (desktop incl. browser-bred gen 5, iPhone 13 portrait + landscape), landing carousel lists GENESIS with no console errors.
