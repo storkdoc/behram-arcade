@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'meta-arena',
+    title: 'GENESIS',
+    tagline: 'Two AI designers invent rival ways to learn. THE REAPER tests them on tasks nobody has seen, and only the winning method survives.',
+    description: "A meta-evolution arena where the contestants are learning methods, not players. Brain A, PROMETHEUS the structuralist, and Brain B, SIBYL the empiricist, propose learning paradigms: rule induction, memory lookup, a transformer-like next-token predictor, a spiking network, and open-ended inventions such as Bayesian structure averaging, in-lifetime program evolution and a relational recoder, plus hybrids bred by crossover. A protected WILD CARD slot is reserved for radical ideas, which still have to earn their score. Every design is born knowing nothing and has to learn each task by trial and error. The problem generator builds a fresh battery every generation: 12 unseen task families across arithmetic, pattern, logic, planning, games, memory and language-like tasks. Each is run plain and again with every symbol relabelled to a strange glyph and the layout permuted. THE REAPER scores +1 for a right answer and −2 for a wrong one, then combines problems solved, speed to a solution and transfer under the scramble. That score is the only selection pressure: the winner's genome seeds both brains' next generation and everything else is suppressed. Watch all five designs learn the same task side by side in a live learning race, re-executed in a sandboxed worker and checked against the archive. Then call THE REAPER's verdict, explore the lineage tree, the paradigm map, per-task heatmaps and an honest audit, and read every genome, rationale and critique. Keep evolving in your browser with built-in mutation and crossover, or plug in your own LLM key to let a live model propose new designs. It can propose, but it never judges. All sound is synthesized.",
+    thumb: 'games/meta-arena/thumb.png',
+    added: '2026-10-28',
+    genre: 'SIMULATION',
+    year: 'META-EVOLUTION',
+    controls: 'SPACE runs or pauses the live learning race (on the Evolve tab: breeds a generation) · ENTER calls THE REAPER\'s verdict · ←/→ change contest · ↑/↓ change generation · X scrambled version · F speed · A auto-advance · 1-4 switch views · I info · M sound · ESC closes · mouse: click a design for its genome card · gamepad: A run/pause, X or Y verdict, d-pad contest and generation, LB/RB speed, B close',
+    touch: 'tap RUN, VERDICT, SCRAMBLE and the contest chips · tap any design, lineage node or map point for its genome card · works on iPhone and iPad in portrait and landscape',
+    accent: '#ffb347'
+  },
+  {
     slug: 'living-chess',
     title: 'THE LIVING BOARD',
     tagline: 'Chess where every piece is alive, afraid and dreaming. Hover over one and it will beg, warn or advise you before you move.',

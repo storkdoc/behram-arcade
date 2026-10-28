@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#04060c">
+<meta name="description" content="GENESIS: a meta-evolution arena. Two AI designers invent different learning paradigms, THE REAPER scores how they generalize to fresh unseen tasks, and the winner's method seeds the next generation.">
+<title>GENESIS: Meta-Evolution Arena</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <a id="home" href="../../index.html" title="Back to the arcade">← Arcade</a>
+  <div id="brand"><h1>GENESIS</h1><p>meta-evolution arena</p></div>
+  <nav id="views" role="tablist">
+    <button class="view on" data-view="arena" title="Arena: watch a generation learn a fresh task live (1)">Arena</button>
+    <button class="view" data-view="lineage" title="Lineage tree of every design (2)">Lineage</button>
+    <button class="view" data-view="map" title="Paradigm map and per-task scores (3)">Map</button>
+    <button class="view" data-view="evolve" title="Breed new generations in your browser (4)">Evolve</button>
+  </nav>
+  <div id="dock">
+    <button id="bInfo" class="ib" title="How GENESIS works (I)" aria-label="How it works">?</button>
+    <button id="bSnd" class="ib" title="Sound on/off (M)" aria-label="Sound">♪</button>
+  </div>
+</header>
+
+<main>
+  <section id="vArena" class="pane on">
+    <div id="genbar">
+      <button id="gPrev" class="nav" aria-label="Previous generation">‹</button>
+      <div id="gInfo"><b id="gNum">GEN 1</b> <span id="gTitle"></span></div>
+      <button id="gNext" class="nav" aria-label="Next generation">›</button>
+    </div>
+    <div id="carousel" role="listbox" aria-label="Contest carousel"></div>
+    <div id="stageWrap"><canvas id="lab" aria-label="The five designs of this generation learning the same fresh task"></canvas></div>
+    <div id="ctl">
+      <button id="bPlay" class="big" title="Play / pause the live run (SPACE)">▶ RUN</button>
+      <button id="bScr" class="chip" title="Scrambled version of the task (X)">SCRAMBLE</button>
+      <button id="bSpeed" class="chip" title="Speed (F)">1×</button>
+      <button id="bAuto" class="chip on" title="Auto-advance through the carousel (A)">AUTO</button>
+      <button id="bReap" class="big red" title="THE REAPER's verdict for this generation (ENTER)">☠ VERDICT</button>
+    </div>
+    <div id="hint">SPACE run/pause · ENTER Reaper verdict · ←/→ contest · ↑/↓ generation · X scramble · F speed · click a design for its genome</div>
+  </section>
+
+  <section id="vLineage" class="pane">
+    <canvas id="tree" aria-label="Lineage tree"></canvas>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section id="vMap" class="pane scroll">
+    <div class="cols">
+      <div class="card"><h3>Paradigm map <small>plain solved S → · scrambled solved X ↑ · size = speed Q</small></h3><canvas id="map" aria-label="Paradigm map"></canvas><p class="note">Above the diagonal a design does better when every symbol is relabelled; far below it, it was reading surface details. The line links each generation's winner.</p></div>
+      <div class="card"><h3>Per-task scores <small id="hmGen"></small></h3><div id="heat"></div><p class="note">Fraction solved per family (THE REAPER: +1 right, −2 wrong, 0 abstain, floored at 0). ▪ plain · ▫ scrambled. Sealed tasks were never used for selection.</p></div>
+    </div>
+    <div class="card"><h3>Post-hoc audit <small>same designs on 4 more fresh batteries (not used for selection)</small></h3><div id="audit"></div></div>
+  </section>
+
+  <section id="vEvolve" class="pane scroll">
+    <div class="cols">
+      <div class="card">
+        <h3>Continue evolution</h3>
+        <p>Breed the next generation from the last REAPER verdict, run all five designs in sandboxed workers on a freshly generated battery (12 unseen task families, plain + scrambled), and let THE REAPER select. Nothing but the score selects.</p>
+        <div class="row"><button id="bBreed" class="big">⚗ BREED GEN <span id="nextGen">5</span></button>
+          <label class="tog"><input type="checkbox" id="useLLM"> use live LLM for A1, B1 and the WILD CARD</label></div>
+        <div class="row"><button id="bAuto5" class="chip">run 5 generations</button><button id="bStop" class="chip">stop</button><button id="bReset" class="chip">forget browser generations</button></div>
+        <div id="prog"></div>
+        <pre id="elog" aria-live="polite"></pre>
+      </div>
+      <div class="card">
+        <h3>Live LLM <small>optional · your own key</small></h3>
+        <p>Any OpenAI-compatible endpoint (xAI, OpenAI, a local server). The key stays in <b>this browser's localStorage only</b> and is sent only to the endpoint below. The LLM can only propose designs (a genome edit or new code) and write critiques for the log; THE REAPER alone decides who survives. Its code runs in a sandboxed worker with no network and a timeout.</p>
+        <label>Endpoint<input id="lEnd" placeholder="https://api.x.ai/v1" autocomplete="off"></label>
+        <label>Model<input id="lModel" placeholder="grok-4" autocomplete="off"></label>
+        <label>API key<input id="lKey" type="password" placeholder="sk-… / xai-…" autocomplete="off"></label>
+        <div class="row"><button id="lSave" class="chip">save in this browser</button><button id="lForget" class="chip">forget key</button><span id="lStat"></span></div>
+        <p class="note">Without a key, evolution continues with the built-in operators (mutation, crossover, heresy). Every design shows where it came from: <span class="o-off">offline LLM (agent)</span>, <span class="o-op">built-in operator</span> or <span class="o-live">live LLM</span>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside id="drawer" class="hidden" role="dialog" aria-label="Design card"><button class="x" id="dClose" aria-label="Close">✕</button><div id="dBody"></div></aside>
+<div id="verdict" class="overlay hidden" role="dialog" aria-label="THE REAPER's verdict"><div class="ov"><canvas id="skull" width="160" height="160"></canvas><div id="vBody"></div><button class="big" id="vClose">CONTINUE (ENTER)</button></div></div>
+<div id="info" class="overlay hidden" role="dialog" aria-label="How GENESIS works"><div class="ov wide" id="infoBody"></div></div>
+<div id="err" class="hidden" role="alert"><span id="errMsg">Something went wrong.</span><button id="errReload">RELOAD</button></div>
+<script>
+  (function () {
+    function show(m) { var e = document.getElementById('err'); if (!e) return; document.getElementById('errMsg').textContent = 'GENESIS hit an error: ' + m; e.className = ''; }
+    window.addEventListener('error', function (ev) { show(ev.message || 'script error'); });
+    window.addEventListener('unhandledrejection', function (ev) { show((ev.reason && ev.reason.message) || String(ev.reason)); });
+    document.getElementById('errReload').onclick = function () { location.reload(); };
+    window.__genesisErr = show;
+  })();
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
