@@ -189,11 +189,12 @@ const DRILLS = [
     setup(s, g) { g.demandPlan = [{ v: 0.6, at: 4 }]; g.at(20, () => { s.stuck[4] = true; g.alarm('ROD DEVIATION'); }); },
     goal: 'Within 5 % of 60 % electrical output and no trip at t = 140 s.',
     check(s, g) { if (s.scram) return 'fail'; if (s.t > 140) return Math.abs(s.MWe / 1000 - 0.6) < 0.05 ? 'pass' : 'fail'; } },
-  { id: 'sbo', name: 'STATION BLACKOUT', sub: 'Fukushima: decay heat with no AC power', concept: 'decay', len: 420, diff: 1, history: 'fukushima',
-    brief: 'An earthquake cuts the grid and the reactor scrams. The diesels start, then a tsunami floods them. Batteries are draining. Keep water on the core until power is restored at 7:00.',
-    setup(s, g) { s.offsite = false; s.dg.forEach(d => d.failP = 0); g.at(45, () => { s.dg.forEach(d => { d.flooded = true; d.st = 'failed'; }); g.alarm('DIESELS FLOODED'); g.cine('TSUNAMI — DIESELS LOST', 'red'); }); g.at(420, () => { s.offsite = true; s.dg.forEach(d => { d.flooded = false; d.st = 'off'; }); g.alarm('OFFSITE POWER RESTORED'); }); g.drillActs = ['shed', 'truck', 'sgdump']; },
-    goal: 'No core damage (clad below 1204 °C) when power returns at 7:00.',
-    check(s, g) { if (s.damage > 0.001 || s.TclPk > 1204) return 'fail'; if (s.t > 420) return 'pass'; } },
+  { id: 'sbo', name: 'STATION BLACKOUT', sub: 'Fukushima: decay heat with no AC power', concept: 'decay', len: 1700, warp: 4, diff: 1, history: 'fukushima',
+    brief: 'An earthquake cuts the grid and the reactor scrams. The diesels start, and then a tsunami floods them. Batteries are already low, and the coolant-pump seals will start leaking. Power returns at plant time 28:20. Plant clock ×4.<br><br>Hint: decay heat goes where you send it. <b>Open the steam-generator atmospheric dumps</b> to cool and depressurize the plant so the accumulators can inject. Shed DC loads to keep the steam-driven feed pump alive. When the SG pressure is below 1 MPa, a fire truck can feed it.',
+    setup(s, g) { s.offsite = false; s.battery = 0.55; s.dg.forEach(d => d.failP = 0); g.at(45, () => { s.dg.forEach(d => { d.flooded = true; d.st = 'failed'; }); g.alarm('DIESELS FLOODED'); g.cine('TSUNAMI: DIESELS LOST', 'red'); });
+      g.at(1700, () => { s.offsite = true; s.dg.forEach(d => { d.flooded = false; d.st = 'off'; }); g.alarm('OFFSITE POWER RESTORED'); }); g.drillActs = ['shed', 'sgdump', 'truck']; },
+    goal: 'No core damage (clad below 1204 °C) when power returns at 28:20.',
+    check(s, g) { if (s.damage > 0.001 || s.TclPk > 1204) return 'fail'; if (s.t > 1700) return 'pass'; } },
   { id: 'slb', name: 'STEAM LINE BREAK', sub: 'Overcooling and return to power', concept: 'temp', len: 150, diff: 1,
     brief: 'A main steam line ruptures outside containment. Isolate the break and stop the overcooling before the cold water returns the core to power.',
     setup(s, g) { g.at(6, () => { s.slb = 0.9; g.alarm('STEAM FLOW HIGH'); }); },
@@ -217,8 +218,9 @@ const DRILLS = [
     setup(s, g) { g.drillActs = ['test', 'refuse']; },
     init: () => ({ type: 'RBMK', power: 0.0625, xe: S.xenonRun(1, S.X_EQ1, t => t < 10 * 3600 ? 0.5 : 0.07, 11 * 3600, 60), rods: 0.13 }),
     post(s) { s.tripsBypassed = true; s.xeFrozen = true; s.rodAuto = true; s.powerSet = 0.0625; },
-    goal: 'Choose safety: restore ORM ≥ 15 (rods IN) before any test, or refuse the test. Never press AZ-5 with ORM below 15.',
-    check(s, g) { if (s.exploded) return 'fail'; if (g.refused) return 'pass'; if (s.ORM >= 15 && s.t > 20 && !g.testStarted) return 'pass'; if (g.testStarted && s.t - g.testT > 60 && !s.exploded) return 'pass'; if (s.t > 300) return 'fail'; } },
+    goal: 'Choose safety: refuse the test, or drive rods IN until ORM ≥ 15 (which shuts the unit down). If the test runs, the supervisor presses AZ-5 36 s in, so the ORM had better be ≥ 15 by then.',
+    tick(s, g) { if (g.testStarted && !s.scram && s.t - g.testT > 36) { S.doScram(s, 'AZ-5'); g.cine('AZ-5 PRESSED', 'red'); } },
+    check(s, g) { if (s.exploded) return 'fail'; if (g.refused) return 'pass'; if (!g.testStarted && s.ORM >= 15 && s.t > 3) return 'pass'; if (g.testStarted && s.t - g.testT > 55) return 'pass'; if (s.t > 300) return 'fail'; } },
 ];
 
 /* ---------- tutorial ---------- */
@@ -231,7 +233,7 @@ const TUTORIAL = [
   { t: 'SYNC THE TURBINE', concept: 'heatsink', b: 'Raise power above 10 %, then press <b>T</b> to latch the turbine. Then <b>→</b> raises load. With rods on <b>AUTO (C)</b> the control system follows the turbine for you. Reach <b>40 % electrical output</b>.', check: (s) => s.MWe > 400, auto: 'turb' },
   { t: 'COOLANT FLOW', concept: 'flow', b: 'Four pumps drive water through the core. Trip pump 4 with the <b>4</b> key and watch flow and the <b>DNBR</b> fall. Then press <b>4</b> again to restart it.', check: (s, g) => g.tut.p4off && s.pumps[3].on && s.pumps[3].w > 0.9 },
   { t: 'PRESSURE', concept: 'pressure', b: 'The pressurizer holds 15.5 MPa so water stays liquid at 320 °C. Open the PORV with <b>O</b> for a few seconds, watch the pressure fall and the tail-pipe temperature rise, then close it again.', check: (s, g) => g.tut.porvCycled && !s.porvCmd },
-  { t: 'TEMPERATURE FEEDBACK', concept: 'temp', b: 'Set rods to MANUAL (<b>C</b>), then raise turbine load with <b>→</b>. Pulling more steam cools the water, and negative feedback raises reactor power <i>by itself</i>, with no rod motion. Reach 60 %.', check: (s) => s.n > 0.58 },
+  { t: 'TEMPERATURE FEEDBACK', concept: 'temp', b: 'Set rods to MANUAL (<b>C</b>), then raise turbine load with <b>→</b>. Pulling more steam cools the water, and negative feedback raises reactor power <i>by itself</i>, with no rod motion. Raise reactor power by 10 points.', check: (s, g) => { if (s.rodAuto || g.tut.n0 == null) { g.tut.n0 = s.n; return false; } return s.n > g.tut.n0 + 0.1; } },
   { t: 'SCRAM & DECAY HEAT', concept: 'decay', b: 'Now <b>SCRAM</b>: hold <b>Enter</b> (or the guarded button) for about half a second. Watch neutron power fall in seconds, then the long −80 s tail, while <b>decay heat</b> stays at a few % and has to be cooled.', check: (s) => s.scram && s.scramT > 25 },
   { t: 'YOU ARE QUALIFIED (ALMOST)', concept: null, b: 'That is the core of it. Try the <b>NEUTRON LAB</b> to see prompt criticality, run the <b>DRILLS</b> to relive real events, and work a <b>SHIFT</b> to climb from Trainee to Senior Reactor Operator.', wait: 'space' },
 ];

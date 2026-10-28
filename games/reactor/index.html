@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05070b">
+<title>MELTDOWN — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.RXFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'MELTDOWN hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.RX && window.RX.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) RXFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) RXFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!window.RX) RXFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.'); }, 25000);
+})();
+</script>
+<script src="js/sim.js"></script>
+<script src="js/content.js"></script>
+<script src="js/audio.js"></script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<a id="home" href="../../">← ARCADE</a>
+
+<div id="app">
+  <!-- ============ VIEW: the reactor cross-section ============ -->
+  <div id="view">
+    <canvas id="gl"></canvas>
+    <div id="labels"></div>
+    <div id="hud">
+      <div class="hl"><span id="hmode">FREE RUN</span><span id="hclock">0:00</span><span id="hscore"></span></div>
+      <div class="hr"><div id="hpow">100%</div><div id="hmwe"><span id="mwe">0</span> / <span id="dem">0</span> MWe<div class="dbar"><i id="dbarv"></i><b id="dbard"></b></div></div></div>
+    </div>
+    <div id="teach">TEACHING MODEL — NOT AN ENGINEERING SIMULATOR</div>
+    <div id="cine"></div>
+    <div id="toasts"></div>
+    <div id="faults"></div>
+    <div id="tutbox"></div>
+    <div id="drillbar"></div>
+    <div id="hint"></div>
+    <div id="qbar">
+      <button class="qb hold" data-hold="out" title="Withdraw rods (↑ / W)">RODS<br>▲ OUT</button>
+      <button class="qb hold" data-hold="in" title="Insert rods (↓ / S)">RODS<br>▼ IN</button>
+      <button class="qb" data-act="auto" id="qauto" title="Automatic rod control (C)">AUTO<br>RODS</button>
+      <button class="qb hold" data-hold="loadDn" title="Lower turbine load (←)">LOAD<br>−</button>
+      <button class="qb hold" data-hold="loadUp" title="Raise turbine load (→)">LOAD<br>+</button>
+      <button class="qb" data-act="ack" id="qack" title="Acknowledge alarms (Space)">ACK</button>
+      <button class="qb" data-act="warp" id="qwarp" title="Time warp (X)">×1</button>
+      <button class="qb" data-act="pause" title="Pause (P / Esc)">❚❚</button>
+      <button class="qb scram" id="qscram" title="SCRAM: hold, or press twice (Enter)"><span>SCRAM</span><i id="scramfill"></i></button>
+    </div>
+  </div>
+
+  <!-- ============ CONSOLE ============ -->
+  <div id="console">
+    <div id="tabs"><button class="tab on" data-tab="core">CORE</button><button class="tab" data-tab="cool">COOLANT</button><button class="tab" data-tab="steam">STEAM</button><button class="tab" data-tab="safety">SAFETY</button></div>
+    <div id="annun"></div>
+    <section class="sec on" data-tab="core">
+      <h3>REACTOR CORE <small>neutrons · rods · reactivity</small></h3>
+      <div class="gauges" id="g-core"></div>
+      <div class="rx"><div class="rxh">REACTIVITY (pcm) <span id="rxtot"></span></div><div id="rxbars"></div></div>
+      <div class="rods"><div class="rxh">CONTROL RODS <span id="rodtxt"></span></div><div id="rodbars"></div></div>
+      <div class="btns">
+        <button class="cb hold" data-hold="out">RODS OUT ▲</button><button class="cb hold" data-hold="in">RODS IN ▼</button><button class="cb" data-act="auto" id="bauto">AUTO RODS</button>
+        <button class="cb hold pwr" data-hold="borate">BORATE +B</button><button class="cb hold pwr" data-hold="dilute">DILUTE −B</button><button class="cb" data-act="reset" id="breset">RESET TRIP</button>
+      </div>
+      <div class="ro" id="ro-core"></div>
+    </section>
+    <section class="sec" data-tab="cool">
+      <h3>REACTOR COOLANT <small>flow · pressure · boiling margin</small></h3>
+      <div class="gauges" id="g-cool"></div>
+      <div class="btns">
+        <button class="cb pump" data-act="pump0">RCP 1</button><button class="cb pump" data-act="pump1">RCP 2</button><button class="cb pump" data-act="pump2">RCP 3</button><button class="cb pump" data-act="pump3">RCP 4</button>
+        <button class="cb" data-act="porv" id="bporv">PORV</button><button class="cb" data-act="block" id="bblock">BLOCK VLV</button><button class="cb" data-act="si" id="bsi">SAFETY INJ</button><button class="cb" data-act="hpi" id="bhpi">HPI 100%</button>
+      </div>
+      <div class="ro" id="ro-cool"></div>
+    </section>
+    <section class="sec" data-tab="steam">
+      <h3>STEAM &amp; TURBINE <small>heat sink · load</small></h3>
+      <div class="gauges" id="g-steam"></div>
+      <div class="btns">
+        <button class="cb hold" data-hold="loadDn">LOAD −</button><button class="cb hold" data-hold="loadUp">LOAD +</button><button class="cb" data-act="turb" id="bturb">TURBINE</button>
+        <button class="cb" data-act="msiv" id="bmsiv">MSIV</button><button class="cb" data-act="afw" id="bafw">AUX FEED</button><button class="cb" data-act="dump" id="bdump">ATM DUMP</button>
+      </div>
+      <div class="ro" id="ro-steam"></div>
+    </section>
+    <section class="sec" data-tab="safety">
+      <h3>SAFETY SYSTEMS <small>power · decay heat · containment</small></h3>
+      <div class="gauges" id="g-safe"></div>
+      <div class="btns"><button class="cb" data-act="dg" id="bdg">START DIESELS</button><button class="cb" data-act="focus" id="bfocus">VIEW: PLANT</button><button class="cb" data-act="labels" id="blabels">LABELS: ON</button><button class="cb" data-act="help">HELP</button></div>
+      <div class="ro" id="ro-safe"></div>
+    </section>
+    <section class="sec lab" data-tab="lab">
+      <h3>NEUTRON LAB <small>prompt vs delayed neutrons</small></h3>
+      <canvas id="labchart"></canvas>
+      <div class="labro" id="labro"></div>
+      <div class="btns" id="labbtns">
+        <button class="cb" data-lab="0.1">+0.1 $</button><button class="cb" data-lab="0.5">+0.5 $</button><button class="cb" data-lab="0.9">+0.9 $</button><button class="cb hot" data-lab="1.0">+1.0 $</button><button class="cb hot" data-lab="1.2">+1.2 $</button>
+        <button class="cb" data-lab="-0.5">−0.5 $</button><button class="cb" data-lab="-5">SCRAM −5 $</button><button class="cb" data-lab="zero">ρ = 0</button>
+        <button class="cb" data-lab="delayed" id="labdel">DELAYED: ON</button><button class="cb" data-lab="fb" id="labfb">FEEDBACK: OFF</button><button class="cb" data-lab="slow" id="labslow">SPEED ×1</button><button class="cb" data-lab="reset">RESET</button>
+      </div>
+      <div class="labtxt" id="labtxt"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ SCREENS ============ -->
+<div id="loading" class="screen show"><div class="lt">MELTDOWN</div><div class="lbar"><i id="lprog"></i></div><div class="lsub" id="lmsg">FILLING THE PRIMARY LOOP…</div></div>
+
+<div id="title" class="screen">
+  <div class="tblock">
+    <div class="tsub">BEHRAM ARCADE PRESENTS</div>
+    <h1 class="tt">MELT<span>DOWN</span></h1>
+    <div class="ttag">You are the reactor operator. Keep the lights on. Keep the core covered.</div>
+    <div class="trank" id="trank"></div>
+  </div>
+  <div class="menu">
+    <button class="btn big" data-act="shift">START SHIFT</button>
+    <div class="row2"><button class="btn" data-act="tutorial">TRAINING</button><button class="btn" data-act="drills">DRILLS</button></div>
+    <div class="row2"><button class="btn" data-act="lab">NEUTRON LAB</button><button class="btn" data-act="handbook">HANDBOOK</button></div>
+    <div class="chips" id="diffs"></div>
+    <div class="row2"><button class="btn small" data-act="sound" id="bsound">SOUND: ON</button><button class="btn small" data-act="help">CONTROLS</button></div>
+  </div>
+  <div class="tfoot">A homage to <i>Reactor</i> (Parker Brothers, 1982). TEACHING MODEL — NOT AN ENGINEERING SIMULATOR.</div>
+</div>
+
+<div id="drills" class="screen"><div class="panel wide"><div class="ph"><span>DRILLS — REAL ACCIDENTS, REPLAYED</span><button class="btn x" data-act="back">✕</button></div><div id="drilllist"></div></div></div>
+
+<div id="brief" class="screen"><div class="panel wide"><div class="ph"><span id="brt"></span><button class="btn x" data-act="back">✕</button></div><div class="howtxt" id="brb"></div><button class="btn big" data-act="godrill">BEGIN</button></div></div>
+
+<div id="card" class="screen"><div class="panel wide card"><div class="ctag" id="ctag"></div><div class="ch" id="ch"></div><div class="cb2" id="cbody"></div><div class="cfoot"><button class="btn" id="cmore" data-act="cardmore">HISTORY</button><button class="btn big" data-act="cardok">CONTINUE (Space)</button></div></div></div>
+
+<div id="handbook" class="screen"><div class="panel wide"><div class="ph"><span>OPERATOR'S HANDBOOK</span><button class="btn x" data-act="back">✕</button></div><div class="chips" id="hbtabs"></div><div class="howtxt" id="hbbody"></div></div></div>
+
+<div id="pause" class="screen"><div class="panel"><div class="ph"><span>PAUSED</span></div>
+  <button class="btn big" data-act="resume">RESUME</button>
+  <button class="btn" data-act="help">CONTROLS</button><button class="btn" data-act="handbook">HANDBOOK</button>
+  <button class="btn small" data-act="sound" id="bsound2">SOUND: ON</button>
+  <button class="btn small" data-act="quit">QUIT TO TITLE</button></div></div>
+
+<div id="end" class="screen"><div class="panel wide"><div class="ph"><span id="endt">SHIFT COMPLETE</span></div><div class="grade" id="endg">A</div><div class="howtxt" id="endb"></div>
+  <div class="row2"><button class="btn big" data-act="next" id="bnext">NEXT SHIFT</button><button class="btn" data-act="quit">TITLE</button></div></div></div>
+
+<div id="help" class="screen"><div class="panel wide"><div class="ph"><span>CONTROLS</span><button class="btn x" data-act="back">✕</button></div><div class="howtxt">
+  <p>Keep generator output (MWe) on the grid's demand and keep the core cooled while faults strike. Each fault pauses once with a concept card the first time you see it.</p>
+  <table class="keys">
+    <tr><td>↑ / W &nbsp; ↓ / S</td><td>withdraw / insert control rods (hold)</td></tr>
+    <tr><td>← / →</td><td>turbine load down / up (hold)</td></tr>
+    <tr><td>C</td><td>automatic rod control on / off</td></tr>
+    <tr><td>B / N</td><td>borate / dilute (hold)</td></tr>
+    <tr><td>1 2 3 4</td><td>reactor coolant pumps on / off</td></tr>
+    <tr><td>O · K</td><td>PORV open / close · PORV block valve</td></tr>
+    <tr><td>I · J</td><td>safety injection on / reset · HPI throttle</td></tr>
+    <tr><td>T · M</td><td>turbine latch / trip · main steam isolation valves</td></tr>
+    <tr><td>U · F</td><td>auxiliary feedwater · steam-generator atmospheric dumps</td></tr>
+    <tr><td>G · R</td><td>start emergency diesels · reset reactor trip</td></tr>
+    <tr><td>Space</td><td>acknowledge alarms / continue</td></tr>
+    <tr><td>Enter</td><td><b>SCRAM</b> (hold ½ s, or press twice)</td></tr>
+    <tr><td>X · P / Esc</td><td>time warp · pause</td></tr>
+    <tr><td>V · L · H</td><td>core close-up · labels · this help</td></tr>
+    <tr><td>Gamepad</td><td>D-pad rods / load · A ack · hold B = SCRAM · X warp · Y auto rods · LB/RB borate/dilute · Start pause</td></tr>
+    <tr><td>Touch</td><td>the bar under the reactor; console tabs below or beside it. Hold SCRAM.</td></tr>
+  </table>
+  <p class="small">Time is compressed: xenon runs ×120 and decay heat ×4, and the rods move faster than real rods, so a whole shift fits in ten minutes. Teaching model, not an engineering simulator.</p>
+</div></div></div>
+</body>
+</html>
