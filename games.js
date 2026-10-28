@@ -229,13 +229,13 @@ window.ARCADE_GAMES = [
     slug: 'tube-shooter',            // folder name under games/
     title: 'VORTEX',
     tagline: 'Vector tube shooter',
-    description: 'Ride the rim of 16 neon tube webs and blast Flippers, Tankers, Spikers, Fuseballs and Pulsars before they reach you. Superzapper, warp, spikes, a synth soundtrack for every level and an arcade-style "Rate Yourself" level select.',
+    description: 'Ride the rim of 16 neon tube webs and blast Flippers, Tankers, Spikers, Fuseballs and Pulsars, plus four new foes: blinking Phasers, shielded Wardens, homing Sparks and Mine Layers whose rim mines wall off lanes. Analog rim steering, a lightning Superzapper, warp, spikes, a synth soundtrack for every level and an arcade-style "Rate Yourself" level select.',
     thumb: 'games/tube-shooter/thumb.png',
     added: '2026-10-24',             // YYYY-MM-DD
     genre: 'SHOOTER',
     year: '1981 STYLE',
-    controls: '← → move · SPACE fire (hold) · ENTER superzapper · P pause · M sound/music',
-    touch: 'drag or circle the spinner · hold FIRE · ZAP · ◀ ▶ arrow mode · ‖ pause',
+    controls: 'mouse aims around the rim (click fire, right-click zap) · ← → move · SPACE fire (hold) · ENTER superzapper · F smart autofire · gamepad stick · P pause · M sound/music',
+    touch: 'drag along the rim or spin the knob · hold the FIRE zone · AUTO fire · ZAP · ◀ ▶ arrow mode · ‖ pause',
     accent: '#ff47e6'
   },
 ];

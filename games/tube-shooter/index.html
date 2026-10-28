@@ -64,12 +64,48 @@
   body[data-ts="game"] #tpause, body[data-ts="paused"] #tpause, body.touch #tmute, body.touch.fsok #tfs{display:flex}
   body[data-ts="initials"] #tkeys{display:grid}
   body[data-ts="initials"] #tfs, body[data-ts="initials"] #tmute{display:none}
+  /* v4: rim-tracking zone over the tube, big fire pad, smart auto-fire toggle, finger ring */
+  #tc #trim{z-index:4}
+  #tc #tfz{z-index:5;align-items:flex-end;justify-content:center;padding-bottom:6px}
+  #tc #tfz span{font:700 10px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.3em;color:#ff47e6;opacity:.35}
+  #tc #tfz.on{background:radial-gradient(ellipse at 60% 70%, rgba(255,71,230,.16), transparent 70%)}
+  #tc #tauto{font-size:10px;letter-spacing:.04em}
+  #tc #tauto.lit{--c:#2bff4c;--g:43,255,76;opacity:.85}
+  #tc #tring{left:0;top:0;width:60px;height:60px;border-radius:50%;border:1.5px solid rgba(54,230,255,.55);box-shadow:0 0 14px rgba(54,230,255,.35);
+    pointer-events:none;z-index:5;will-change:transform}
+  body[data-ts="game"] #trim, body[data-ts="game"] #tfz, body[data-ts="game"] #tauto{display:flex}
+  body[data-ts="game"] #tring.on{display:block}
+  /* error banner (never a blank screen) */
+  #errbar{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:50;max-width:min(92vw,560px);
+    display:flex;gap:12px;align-items:center;padding:10px 12px 10px 16px;border:1.5px solid #ff3a3a;border-radius:10px;background:rgba(20,0,4,.92);
+    color:#ffd0d0;font:600 12px/1.35 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 0 18px rgba(255,58,58,.45);cursor:default}
+  #errbar b{color:#ff6a6a;letter-spacing:.12em}
+  #errbar span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
+  #errbar button{flex:none;font:800 13px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;color:#000;background:#ffe81a;border:0;border-radius:7px;padding:11px 14px;cursor:pointer}
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
 <div id="crt"></div>
 <a id="back" href="../../index.html">&#9664; BACK TO ARCADE</a>
+<script>
+/* error banner: any uncaught error / rejection shows a message + RELOAD instead of a frozen or blank screen */
+window.__vortexError = function (m) {
+  try {
+    if (document.getElementById('errbar')) return;
+    var d = document.createElement('div'); d.id = 'errbar';
+    d.innerHTML = '<div><b>VORTEX HIT AN ERROR</b><br><span></span></div><button type="button">RELOAD</button>';
+    d.querySelector('span').textContent = String(m || 'unknown error').slice(0, 220);
+    var b = d.querySelector('button'), go = function (e) { e.preventDefault(); e.stopPropagation(); location.reload(); };
+    b.addEventListener('click', go); b.addEventListener('touchend', go);
+    d.addEventListener('pointerdown', function (e) { e.stopPropagation(); }, true);
+    (document.body || document.documentElement).appendChild(d);
+    document.body && document.body.classList.add('showcursor');
+  } catch (e) {}
+};
+addEventListener('error', function (e) { window.__vortexError((e.message || 'script error') + (e.lineno ? ' (line ' + e.lineno + ')' : '')); });
+addEventListener('unhandledrejection', function (e) { var r = e.reason; window.__vortexError(r && r.message ? r.message : r); });
+</script>
 <script src="game.js"></script>
 </body>
 </html>
