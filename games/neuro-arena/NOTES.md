@@ -301,6 +301,48 @@ understanding in these short runs. echo/dots/rps have no probe (no reflex-wrong 
 Tests after the fixes (Oct 27 10:30 EDT): page.test.cjs ALL PASS; live game smoke in Chromium + WebKit, desktop + iPhone
 viewport, no errors; Lab understanding panels checked in both engines.
 
+## Growing lexicon for Word completion (Oct 28 2026; js/lexicon.js, commit 261b15a)
+The lexicon was a fixed curated list (643 PUZZLE5 words, same order each cycle). Now it grows:
+- **Source**: the 643 curated words (same seeded order as before) + 2,014 common ENABLE 5-letter words (`COMMON5` in words5.js; Zipf >= 3.0 in wordfreq, CC BY-SA 4.0; slurs/vulgar words removed) = 2,657 words, ranked by index.
+- **Held-out set**: 300 words never admitted (100 curated words of rank >= 200 + 200 extras). Every 10 generations the champion is tested on 100 held-out items ("new words") and 100 items from the 50 most-shown words ("familiar"), using the current level's gap positions. Pink line = new, dotted lime = familiar on the chart.
+- **Pool**: starts at max(25, level n) words. Caps per level 40/40/60/150/400/unbounded. Each word keeps [shown, correct, EMA accuracy (alpha 0.15)].
+- **Draw**: 80% weighted from the active pool with weight 1/(1+shown/12), so repeats are de-emphasised; 20% uniform from retired words (review). Gap positions come from the level, or with 25% probability from the level below.
+- **Retirement** after each generation: shown >= 24 and EMA >= 0.7 (mastered), or shown >= 60 (worn out). If the pool is over the cap, the most-shown words are retired too.
+- **Admission**: at least 3 never-seen words per generation, in source order. Target pool = min(cap, max(start, kept) + 3).
+- **Stats**: the UI line `#lexStat` shows active / seen of 2,357 / retired / +new this cycle / repeat share / 300 held out, plus new vs familiar %. Also in the Lab CSV (lex_*, new_word_acc, familiar_word_acc, first_sight_acc, familiar_live_acc) and the JSON export. State persists in the save; old saves get a fresh lexicon at their level.
+- **Unchanged**: curriculum levels, per-level thresholds, level benchmarks, Reaper valid-alternate acceptance, and the understanding/ablation metrics.
+- **Control**: `opts.lexicon='static'` (`LEX=static` in evochoice.mjs) keeps the old fixed list and still records the stats.
+
+**Tests.** tests/lexicon.test.mjs passes (300 simulated cycles):
+- words seen grew 28 → 175 → 475 → 925;
+- at least 3 new words every cycle;
+- the pool stayed within the cap;
+- 0 held-out words were drawn;
+- repeat share over the last 100 cycles was 0.7%, against 40.9% for the fixed list;
+- a real 3-generation Evolution round-tripped through save and restore.
+
+page.test passes, the smoke runs pass in Chromium and WebKit on desktop and phone (a watch duel, then a reload keeps the lexicon), and the live deploy serves lexicon.js.
+
+**Early results.** Three seeds per condition, K=1, Limited reflex, Lamarckian, 30-s duels, about 57-68 generations. The test sets are 100 items, so each number is about ±9 points. The reflex letter-frequency guess on held-out items is 23% at level 1 and 25% at level 2.
+
+| condition | new words, last test | familiar words | level-1 benchmark | level-ups |
+|---|---|---|---|---|
+| growing | 25 / 29 / 28% | 36 / 38 / 52% | 54-64% | none |
+| fixed | 17 / 14 / 21% | 40 / 52 / 36% | 41-68% | 2 of 3 seeds (gen 37, gen 51) |
+
+What this shows:
+- With the growing lexicon, new-word accuracy sits at the frequency-guess level (about 23-25%) and holds there.
+- With the fixed list, new-word accuracy falls below that guess as the brains memorise (s2 is at 14-16% while its familiar accuracy is 52-60%).
+- So the growth removes memorisation and the generalisation gap, but nothing has learned spelling rules beyond the reflex guess yet.
+- Growth also slows the level-1 pass: no growing run has levelled up so far.
+
+**Caveats:**
+- The familiar set is the current top-50 most-shown words, so it moves over time.
+- At cap 40 with rotation, no word reached 20 showings, so there is little live "familiar" data.
+- Level benchmarks are still the first n curated words.
+- The association tiles still come from the 643 curated words.
+- The held-out curated words are more common than the held-out extras.
+
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and
