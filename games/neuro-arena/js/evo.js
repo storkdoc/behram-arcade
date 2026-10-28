@@ -6,6 +6,8 @@ import { Match, COURT } from './arena.js';
 import { GENES, GENE, gen0Genome, copyGenome, copyWeights } from './genome.js';
 import { CONTEST, runChoiceDuel, reaper, CURR, levelThr, initGenomeUX, priorAcc, benchSet, probeSet } from './contests.js';
 import { mutateUX, classCounts, unitKey, unitClass } from './understand.js';
+import { lexNew, lexJob, lexUpdate, lexTests, LEX } from './lexicon.js';
+import { wdOf } from './contests.js';
 // the contest descriptor the understanding layer uses (Pong has its own)
 export const uxC = id => !id || id === 'pong' ? PONG_UX : CONTEST[id];
 
@@ -80,13 +82,15 @@ export const winnerOf = st => st.score[0] !== st.score[1] ? (st.score[0] > st.sc
 export class Evolution {
   constructor(opts = {}, state = null) {
     this.opts = { ...DEFAULTS, ...opts };
-    if (state) { Object.assign(this, state); this.rnd = mulberry32((this.seedCounter = (this.seedCounter || 1) + 1) * 977); return; }
+    if (state) { Object.assign(this, state); this.rnd = mulberry32((this.seedCounter = (this.seedCounter || 1) + 1) * 977); this.lexInit(); return; }
     this.gen = 0; this.seedCounter = 1; this.nextId = 2;
     this.champ = { id: 1, genome: initGenomeUX(uxC(this.opts.contest), gen0Genome(), this.opts.reflex ?? 1, this.opts.uxSeed), weights: null, born: 0, n: 0, fit: 0, bench: null, scores: [] };
     if (this.opts.wiring === 'designed') delete this.champ.genome.ux;
     this.history = []; this.hof = []; this.log = []; this.best = null;
-    this.rnd = mulberry32(12345);
+    this.rnd = mulberry32(12345); this.lexInit();
   }
+  // Word completion: the growing lexicon (lexicon.js); a save from before it starts one at its current level
+  lexInit() { const C = CONTEST[this.opts.contest]; if (C && C.lex && !this.lex) { this.lex = lexNew(this.level || 0); if (this.opts.lexicon === 'static') this.lex.static = true; } this._lj = null; }   // 'static' = the old fixed list (counted and tested, never grown: the control condition)
   // make a challenger from the champion (or a Hall-of-Fame rematch)
   spawn() {
     const o = this.opts, c = this.champ;
@@ -110,6 +114,8 @@ export class Evolution {
     if (C && C.levels && j.level < last && this.gen - (this.lastProbe ?? -99) >= 10) { this.lastProbe = this.gen; j.probe = last; }
     // the Understanding probe every 10 generations (ablations every 100) on the champion's synapses
     if (((C && C.probe) || ((!C || C.kind !== 'choice') && c.genome.ux)) && this.gen - (this.lastUP ?? -99) >= 10) { this.lastUP = this.gen; j.uprobe = true; if (c.genome.ux && this.gen - (this.lastAbl ?? -999) >= 100) { this.lastAbl = this.gen; j.ablate = true; } }
+    if (this.lex) { if (!this.lex.static) j.lex = this._lj || (this._lj = lexJob(this.lex));
+      if (this.gen - (this.lastLexT ?? -99) >= LEX.testEvery) { this.lastLexT = this.gen; j.lexT = lexTests(this.lex, j.level); } }
     if (side === 0) Object.assign(j, { gA: c.genome, wA: c.weights, gB: child.genome, wB: child.weights });
     else Object.assign(j, { gA: child.genome, wA: child.weights, gB: c.genome, wB: c.weights });
     return j;
@@ -173,13 +179,19 @@ export class Evolution {
     const pr = results.find(r => r && r.probe); if (pr) this.fullAcc = pr.probe.acc;
     const ur = results.find(r => r && r.up); if (ur) { this.uAcc = ur.up.acc; this.uOpen = ur.up.openSide ?? null; this.uHit = ur.up.hit ?? null; if (ur.up.ablate) { this.uAbl = { gen: this.gen, ...ur.up.ablate }; this.uRead = { gen: this.gen, units: ur.up.units, readout: ur.up.readout }; } }
     if (out.some(e => e.newChamp)) this.lastProbe = -99;
+    // growing lexicon: fold in the per-word counts, retire, admit (one cycle per batch of generations)
+    let lc = null;
+    if (this.lex) { const wds = results.map((r, k) => r && (r.wd || (r.stats && r.stats.wd ? wdOf(r.stats.wd, jobs[k].side) : null)));
+      lc = lexUpdate(this.lex, wds, lv0, this.gen, children.length); this._lj = null;
+      const lt = results.find(r => r && r.lexT); if (lt) this.lexAcc = { gen: this.gen, ...lt.lexT }; }
     if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= levelThr(C, this.level || 0) && (this.level || 0) < C.levels.length - 1) {
       const passed = this.champ.bench.acc;
       this.level = (this.level || 0) + 1; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = []; this.lastProbe = -99; this.bestAcc = 0;   // 'best ever' is per level
       const last = out[out.length - 1]; if (last) { last.levelUp = this.level; last.passed = passed; }
       (this.levelUps = this.levelUps || []).push({ gen: this.gen, level: this.level });
     }
-    for (const e of out) { e.level = lv0; if (C && C.levels) e.fullAcc = lv0 === C.levels.length - 1 ? e.champAccNow : this.fullAcc ?? null;
+    for (const e of out) { if (lc) { e.lexAct = lc.act; e.lexSeen = lc.seen; e.lexRet = lc.ret; e.newAcc = this.lexAcc ? this.lexAcc.newAcc : null; e.famAcc = this.lexAcc ? this.lexAcc.famAcc : null; }
+      e.level = lv0; if (C && C.levels) e.fullAcc = lv0 === C.levels.length - 1 ? e.champAccNow : this.fullAcc ?? null;
       // understanding metrics: probe accuracy, beyond-reflex (full-task accuracy minus the reflex's guess on the same items), layer census
       if (C && C.probe) { e.uAcc = this.uAcc ?? null; const fa = C.levels ? e.fullAcc : e.champAccNow; e.beyond = fa != null ? fa - priorAcc(C, benchSet(C, C.levels ? C.levels.length - 1 : 0)) : null; }
       // Pong: probe = serves won outright against the statue; beyond-reflex = how much more often a return beats the
@@ -187,6 +199,7 @@ export class Evolution {
       if ((!C || C.kind !== 'choice') && this.champ.genome.ux) { e.uAcc = this.uAcc ?? null; e.openSide = this.uOpen ?? null; e.uHit = this.uHit ?? null; e.beyond = this.uOpen != null ? this.uOpen - pongPrior().probe.openSide : null;
         const ai = results.map((r, k) => r && r.aim && r.aim[jobs[k].side]).filter(Boolean), ret = ai.reduce((a, x) => a + x.ret, 0); e.duelWinners = ret ? ai.reduce((a, x) => a + x.won, 0) / ret : null; }
       if (this.champ.genome.ux) e.cls = classCounts(uxC(o.contest), this.champ.genome.ux); }
+    if (lc && out.length) { const e = out[out.length - 1]; Object.assign(e, { lexNew: lc.newN, lexRetN: lc.retN, lexRep: lc.rep, freshAcc: lc.fresh, famLive: lc.fam }); }
     return out;
   }
   toHof(c) {
@@ -200,7 +213,7 @@ export class Evolution {
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
     return { v: STORE_V, tl: TRIAL_LOOP, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, uAcc: this.uAcc ?? null, uOpen: this.uOpen ?? null, uHit: this.uHit ?? null, uAbl: this.uAbl || null, uRead: this.uRead || null, lastUP: this.lastUP ?? -99, lastAbl: this.lastAbl ?? -999, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+      lex: this.lex || null, lexAcc: this.lexAcc || null, lastLexT: this.lastLexT ?? -99, bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, uAcc: this.uAcc ?? null, uOpen: this.uOpen ?? null, uHit: this.uHit ?? null, uAbl: this.uAbl || null, uRead: this.uRead || null, lastUP: this.lastUP ?? -99, lastAbl: this.lastAbl ?? -999, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {

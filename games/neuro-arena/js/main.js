@@ -1,5 +1,6 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
 import { Evolution, quantW, dequantW, BENCH_N, PROBE_P, pongPrior } from './evo.js';
+import { lexJob, lexSummary, LEX } from './lexicon.js';
 import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt, uPrep } from './contests.js';
 import { cLayout } from './cbrain.js';
 import { Stage } from './stage.js';
@@ -190,7 +191,7 @@ function ensurePool(K) {
   while (pool.length > K) pool.pop().terminate();
 }
 let ridC = 0;
-const runOn = (w, job) => new Promise(r => { const rid = ++ridC; w.busy = { rid, r }; w.postMessage(job.t === 'bench' ? { ...job, rid } : { t: 'duel', job, rid }); });
+const runOn = (w, job) => new Promise(r => { const rid = ++ridC; w.busy = { rid, r }; w.postMessage(job.t === 'bench' || job.t === 'lexbench' ? { ...job, rid } : { t: 'duel', job, rid }); });
 const cloneW = w => w ? (w.W ? { ...w, W: new Float32Array(w.W) } : new Float32Array(w)) : null;
 const copyJob = j => ({ ...j, wA: cloneW(j.wA), wB: cloneW(j.wB) });
 
@@ -221,7 +222,7 @@ function startWatch() {
 }
 function startPlay() {
   const c = evo.champ, ep = ui.epoch;
-  const job = { gA: c.genome, wA: c.weights, gB: c.genome, wB: null, seed: (Math.random() * 1e9) >>> 0, matchSec: 1e6, lamarck: false, side: 0, contest: C.id, size: evo.opts.size };
+  const job = { gA: c.genome, wA: c.weights, gB: c.genome, wB: null, seed: (Math.random() * 1e9) >>> 0, matchSec: 1e6, lamarck: false, side: 0, contest: C.id, size: evo.opts.size, level: evo.level || 0, lex: evo.lex ? lexJob(evo.lex) : undefined };
   ui.live = { kind: 'play', job, ep, pending: true, champSide: 0, contest: C.id };
   lastTickT = performance.now(); getLive().postMessage({ t: 'live', job: copyJob(job), mode: 'play' });
   if (isChoice()) { stage.setContest(C); stage.names = [roleName(0), 'YOU']; buildAnswers(); }
@@ -297,9 +298,10 @@ async function benchWatch(lv, r) {
   $('clock').textContent = `THE REAPER is judging: ${isChoice() ? benchSet(C).length + ' frozen items' : BENCH_N + ' benchmark serves'}…`;
   ensurePool(Math.max(2, pool.length));
   const bm = w => ({ t: 'bench', g: w === r.wA ? job.gA : job.gB, w, contest: job.contest, size: job.size, level: job.level || 0 });
-  const [bA, bB] = await Promise.all([runOn(pool[0], bm(r.wA)), runOn(pool[1], bm(r.wB))]);
+  const cs = job.side, lt = job.lexT ? { t: 'lexbench', g: cs === 0 ? job.gA : job.gB, w: cloneW(cs === 0 ? job.wA : job.wB), contest: job.contest, size: job.size, T: job.lexT } : null;   // growing lexicon: new vs familiar words (pre-duel champion)
+  const [bA, bB] = await Promise.all([runOn(pool[0], bm(r.wA)), runOn(pool[1], bm(r.wB))]), lexT = lt ? await runOn(pool[0], lt) : null;
   if (evo !== ev0 || lv.ep !== ui.epoch || ui.mode !== 'watch') return;
-  const out = evo.record([lv.child], [job], [{ stats: r.stats, wA: lam ? r.wA : null, wB: lam ? r.wB : null, bench: [bA, bB] }]);
+  const out = evo.record([lv.child], [job], [{ stats: r.stats, wA: lam ? r.wA : null, wB: lam ? r.wB : null, bench: [bA, bB], lexT }]);
   onGenerations(out, lv.child);
   setTimeout(() => { if (ui.mode === 'watch' && lv.ep === ui.epoch) startWatch(); }, 2600);
 }
@@ -422,8 +424,15 @@ function updateStatus() {
     ? `Benchmark ${pct(champAcc(evo))} right${b ? ` · Reaper ${b.score} of ${b.max} pts (✓${b.correct}${C.valid && b.alt != null ? `, ${b.alt} via an alternate valid word` : ''} ✗${b.wrong} –${b.abstain})` : ''} on ${benchSet(C).length} frozen items${b && b.seqAcc != null ? ` · whole sequences ${pct(b.seqAcc)}` : ''}${b && b.bal != null ? ` · balanced ${pct(b.bal)} · always “${C.labels[0]}” ${pct(b.base)}` : ''}${C.levels && evo.fullAcc != null && (evo.level || 0) < C.levels.length - 1 ? ` · full task ${pct(evo.fullAcc)}` : ''} · best ever${C.levels ? ' (this level)' : ''} ${pct(evo.bestAcc || 0)} · chance ${pct(chanceOf(C))}${lvTxt(C)}`
     : `Benchmark ${pct(c.fit)} of ${BENCH_N} standard serves · best ever ${pct(evo.best ? evo.best.fit : 0)} · random ${pct(RANDOM_HIT)}<br>Mean rally (20 duels) ${recentRally().toFixed(1)} hits`;
   $('stat').innerHTML = `<b>${C.icon} ${C.name} · generation ${evo.gen}</b><br>${nn} neurons per brain<br>Champion #${c.id} · born gen ${c.born} · defended ${Math.max(0, c.n - 1)}×<br>` +
-    `${bl}<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
+    `${bl}${lexLine()}<br>Throne changes ${nc} · from copy errors ${nb}<br>` +
     `Hall of Fame ${evo.hof.map(x => '#' + x.id + ' ' + Math.round((x.bench ? (x.bench.acc ?? x.fit) : x.fit) * 100) + '%').join(', ') || '–'}<br>Inheritance <b>${evo.opts.lamarck ? 'Lamarckian' : 'Darwinian'}</b> · copy errors <b>${(evo.opts.rate * 100).toFixed(1)}%</b>`;
+}
+// the growing lexicon (Word completion): pool size, words seen, retired, new this cycle; new vs familiar accuracy
+function lexLine() {
+  const s = evo.lex && lexSummary(evo.lex); if (!s) return '';
+  const a = evo.lexAcc;
+  return `<br><span id="lexStat">Lexicon: <b>${s.active}</b> active · ${s.seen} seen of ${s.source - s.held} · ${s.retired} retired · +${s.newThisCycle} new this cycle${s.repeatShare != null ? ` · repeats ${pct(s.repeatShare)}` : ''} · ${s.held} held out` +
+    (a ? `<br>New words ${pct(a.newAcc)} vs familiar ${a.famAcc != null ? pct(a.famAcc) : '–'} (gen ${a.gen})` : '') + '</span>';
 }
 function renderLog() {
   const items = evo.log.slice(0, 40).map(e => {
@@ -552,7 +561,9 @@ function drawChart() {
           for (const e of H) { const v = e[key]; if (v == null) continue; const y = Y(Math.max(0, Math.min(1, v))); if (!on) { x.moveTo(X(e.gen), y); on = true; } else x.lineTo(X(e.gen), y); } x.stroke(); x.setLineDash([]); return on; };
         x.setLineDash([2, 4]); x.strokeStyle = 'rgba(255,159,67,.55)'; x.beginPath(); x.moveTo(pl, Y(C._fullPrior)); x.lineTo(w - pr, Y(C._fullPrior)); x.stroke(); x.setLineDash([]);
         x.fillStyle = 'rgba(255,159,67,.8)'; x.fillText(`reflex guess ${Math.round(C._fullPrior * 1000) / 10}%`, w - pr - 92, Y(C._fullPrior) - 3); x.fillStyle = '#7f93b8';
-        if (line('uAcc', '#7ff6ff', [5, 3]) | line('beyond', '#ff9f43', [])) lgU = ' · dashed aqua = understanding probe · orange = beyond-reflex'; }
+        if (line('uAcc', '#7ff6ff', [5, 3]) | line('beyond', '#ff9f43', [])) lgU = ' · dashed aqua = understanding probe · orange = beyond-reflex';
+        // growing lexicon: held-out (never trained) words vs the most-practised words; the gap = memorisation
+        if (line('newAcc', '#ff6bd6', []) | line('famAcc', '#c8ff5a', [1, 2])) lgU += ' · pink = new words · dotted lime = familiar words'; }
       x.font = '9px -apple-system, system-ui, sans-serif'; const lg0 = 'level benchmark (colour = level) · cyan = full task';
       const items = (lg0 + lgU).split(' · '), lines = [];   // wrap the legend on narrow charts
       for (const it of items) { const l = lines.length ? lines[lines.length - 1] + ' · ' + it : it; if (lines.length && x.measureText(l).width <= iw - 4) lines[lines.length - 1] = l; else lines.push(it); }
@@ -819,6 +830,7 @@ $('labJSON').onclick = () => {
     history: evo.history.map(e => ({ gen: e.gen, lam: e.lam !== false, champId: e.champId, childId: e.childId, champAccNow: e.champAccNow, childAcc: e.childAcc ?? e.childBench, reaper: e.reaper, newChamp: e.newChamp, errors: e.errors, wErrors: e.wErrors, duel: e.score, seg: e.seg, level: e.level, fullAcc: e.fullAcc, probeAcc: e.uAcc, beyondReflex: e.beyond, units: e.cls, openSide: e.openSide, duelWinners: e.duelWinners })),
     understanding: !isChoice() ? (D => ({ reflex: evo.champ.genome.ux ? ['Full', 'Limited', 'None'][evo.champ.genome.ux.reflex ?? 1] : 'designed wiring', probeServes: D._probe.length, probeTrackerWinRate: D._probePrior, trackerOpenSideRate: D._fullPrior, ablation: evo.uAbl || null, readout: evo.uRead || null }))(uxD())
       : C.probe ? (uPrep(C), { reflex: evo.champ.genome.ux ? ['Full', 'Limited', 'None'][evo.champ.genome.ux.reflex ?? 1] : 'designed wiring', probeItems: C._probe.length, probeReflexAcc: C._probePrior, fullReflexAcc: C._fullPrior, ablation: evo.uAbl || null, readout: evo.uRead || null }) : null,
+    lexicon: evo.lex ? { rules: LEX, summary: lexSummary(evo.lex), newVsFamiliar: evo.lexAcc || null, cycles: evo.lex.h } : null,
     weights: evo.lab || [], dopamine: tr ? { A: { level: ord(tr.lvl[0]), pulses: ord(tr.pul[0]) }, B: { level: ord(tr.lvl[1]), pulses: ord(tr.pul[1]) } } : null,
     ratesHz: Object.fromEntries(LAB.AREA_NAMES.map((n, i) => [n, +lab.rates[i].toFixed(2)])), champion: { id: evo.champ.id, genome: evo.champ.genome, bench: evo.champ.bench } };
   download(`neuro-arena-${C.id}-lab.json`, JSON.stringify(data), 'application/json'); toast('Lab data exported as JSON');

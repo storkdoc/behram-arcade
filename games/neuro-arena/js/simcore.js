@@ -3,7 +3,8 @@
 import { Brain, mulberry32, L, N, AREA_DEF } from './brain.js';
 import { Match } from './arena.js';
 import { runDuel, benchmark, pongUnderstanding } from './evo.js';
-import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, understandingReport, itemsAt, chanceAt, baseAt, levelName, DEC, drawItem } from './contests.js';
+import { CONTEST, ChoiceMatch, makeBrain, choiceBenchmark, understandingReport, itemsAt, chanceAt, baseAt, levelName, DEC, drawItem, lexBench } from './contests.js';
+import { lexDraw } from './lexicon.js';
 
 // choice brains can be larger than the 2,800-cell display: map every real cell onto the display cell of its area
 // (a display cell lights if any of the real cells it stands for spiked)
@@ -32,7 +33,7 @@ function startChoiceLive(m) {
   const job = m.job, C = CONTEST[job.contest], size = job.size || 2800;
   const A = makeBrain(C, job.gA, job.wA, size), B = m.mode === 'play' ? null : makeBrain(C, job.gB, job.wB, size);
   let rs = job.seed >>> 0 || 7; const rnd = () => { rs ^= rs << 13; rs ^= rs >>> 17; rs ^= rs << 5; return (rs >>> 0) / 4294967296; };
-    const match = new ChoiceMatch(C, m.mode === 'play' ? [{ brain: A }, { human: true }] : [{ brain: A }, { brain: B }], () => drawItem(C, job.level, rnd),
+    const match = new ChoiceMatch(C, m.mode === 'play' ? [{ brain: A }, { human: true }] : [{ brain: A }, { brain: B }], job.lex ? () => lexDraw(job.lex, job.level, rnd, C.mixOld) : () => drawItem(C, job.level, rnd),
     m.mode === 'play' ? { humanMs: 3000, iti: 900 } : { iti: Math.round(TRIAL_VIEW_ITI * (m.slow || 1)) });
   live = { m, job, A, B, match, choice: true, C, lastPol: -1e9, done: false, limit: m.mode === 'play' ? Infinity : job.matchSec * 1000, aPrev: [new Uint32Array(8), new Uint32Array(8)], maps: [dispMap(A), B ? dispMap(B) : null], evN: 0 };
 }
@@ -84,6 +85,8 @@ return e => {
     postMessage({ t: 'duel', rid: m.rid, res }, tr);
   } else if (m.t === 'bench') {
     postMessage({ t: 'bench', rid: m.rid, res: m.contest && m.contest !== 'pong' ? choiceBenchmark(CONTEST[m.contest], m.g, m.w, m.size, m.level || 0) : benchmark(m.g, m.w) });
+  } else if (m.t === 'lexbench') {   // growing lexicon: held-out vs familiar words for the champion
+    postMessage({ t: 'lexbench', rid: m.rid, res: lexBench(CONTEST[m.contest], m.g, m.w, m.size, m.T) });
   } else if (m.t === 'ablate') {   // the Understanding probe + knock-outs, and what each evolved unit has learned to drive
     const C = CONTEST[m.contest];
     postMessage({ t: 'ablate', rid: m.rid, res: !m.contest || m.contest === 'pong' ? pongUnderstanding(m.g, m.w, true) : understandingReport(C, m.g, m.w, m.size, true) });

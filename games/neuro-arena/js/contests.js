@@ -5,6 +5,7 @@
 import { mulberry32 } from './brain.js';
 import { ChoiceBrain } from './cbrain.js';
 import { PUZZLE5, DICT5 } from './words5.js';
+import { W5, TXL, itemOf, lexDraw } from './lexicon.js';
 import { ctxSyms, ctxOf, UX_SRC, initUX, unitClass } from './understand.js';
 
 const D = n => Array.from({ length: n }, (_, k) => String(k));
@@ -17,15 +18,10 @@ const W1 = [...new Set(WORDS.map(w => w[0]))].sort(), W2 = [...new Set(WORDS.map
    e.g. "the gap is 1st and the 2nd letter is I". THE REAPER accepts ANY letter that makes a word of DICT5 (8,636
    five-letter words), so _IGHT -> N is as right as L. Item: [p, [q*26+l...], answer, 'L_GHT', word, valid letters, rank] */
 const AZ = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-const W5 = (() => { const r = mulberry32(55), a = [...PUZZLE5]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; })();
-const W5ITEMS = []; for (let rk = 0; rk < W5.length; rk++) { const w = W5[rk]; for (let p = 0; p < 5; p++) {
-  const syms = []; for (let q = 0; q < 5; q++) if (q !== p) syms.push(q * 26 + AZ.indexOf(w[q]));
-  const valid = AZ.filter(c => DICT5.has(w.slice(0, p) + c + w.slice(p + 1))).join('');
-  W5ITEMS.push([p, syms, AZ.indexOf(w[p]), w.slice(0, p) + '_' + w.slice(p + 1), w, valid, rk]); } }
+// W5 (the 643 curated words in their seeded order) and the item builder now live in lexicon.js (the growing lexicon)
+const W5ITEMS = []; for (let rk = 0; rk < W5.length; rk++) for (let p = 0; p < 5; p++) W5ITEMS.push(itemOf(rk, p));
 const W5TILES = (() => { const s = new Set(); for (const it of W5ITEMS) for (const x of it[1]) s.add(it[0] * 1000 + x); return [...s].sort((a, b) => a - b).map(v => [Math.floor(v / 1000), v % 1000]); })();
-// curriculum: few words with the LAST letter missing -> few words, any position -> more words -> all words, any position
-// (smaller steps than before: the last letter, then the last two, then any; pos = the blank positions allowed)
-const TXL = [{ n: 25, pos: [4] }, { n: 25, pos: [3, 4] }, { n: 25 }, { n: 80 }, { n: 200 }, { n: W5.length }];
+// curriculum levels (TXL, lexicon.js): the last letter missing, then the last two, then any; level benchmarks = the first n curated words
 /* the understanding layer for Word completion (understand.js): units over the gap position (src 0) and the
    (place, letter) inputs (src 1). The reflex = the gap position alone (it can only learn S, R, A, E, E: the most
    common letter for each place). Unit classes: 'neighbor' = the gap + a letter right next to it ("Q at 1 + gap at
@@ -128,8 +124,8 @@ export const CONTESTS = [
   { id: 'evenodd', name: 'Even or odd', icon: '🎲', kind: 'choice', hidden: true, blurb: 'Rapid fire: is the number even (E) or odd (O)? 0–9, then 0–99, then 0–999 as the brains pass 80%.',
     n: [10, 10], labels: ['E', 'O'], rf: [0.35, 0.35], marg: 0.4, levels: [9, 99, 999], inLevel: (it, L) => it[4] <= L, levelName: L => `0–${L}`,
     all: () => Array.from({ length: 1000 }, (_, v) => [v % 10, Math.floor(v / 10) % 10, v % 2, String(v), v]) },
-  { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 7, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). Starts with 25 words and the last letter missing, grows to all ${PUZZLE5.length} words with any letter missing.`,
-    n: [5, 130], split: 0.2, currThr: [0.8, 0.6, 0.42, 0.38, 0.33], mixOld: 0.25, trial: { thinkMs: 700 }, aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5,
+  { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 7, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). The lexicon grows: it starts with 25 words and the last letter missing; every generation at least 3 never-seen words join (out of 2,357), words learned or seen too often retire to review, and 300 held-out words test spelling rules on words never trained.`,
+    n: [5, 130], split: 0.2, currThr: [0.8, 0.6, 0.42, 0.38, 0.33], mixOld: 0.25, trial: { thinkMs: 700 }, aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5, lex: true,
     levels: [0, 1, 2, 3, 4, 5], inLevel: (it, L) => it[6] < TXL[L].n && (!TXL[L].pos || TXL[L].pos.includes(it[0])), levelName: txName,
     chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26, ...TX_UX,
     all: () => W5ITEMS },
@@ -299,6 +295,7 @@ export class ChoiceMatch {
     this.t = 0; this.phase = 'iti'; this.pt = this.T.iti; this.trials = 0; this.events = []; this.item = null; this.onJudge = opts.onJudge || null;
     const n = players.length; this.n = n; this.hasHuman = players.some(p => p.human);
     this.st = { score: Array(n).fill(0), ok: Array(n).fill(0), bad: Array(n).fill(0), abst: Array(n).fill(0), right: Array(n).fill(0), alt: Array(n).fill(0), first: Array(n).fill(0), lat: Array(n).fill(0), latN: Array(n).fill(0) };
+    if (contest.lex) this.st.wd = {};   // growing lexicon: per word [times shown, right (player 0), right (player 1)]
     this.seg = []; this.segAcc = { r: Array(n).fill(0), n: 0, t: 0 };
     this.hist = players.map(() => ({ c: null, right: false, streak: 0, conf: null, first: false }));   // KNOW YOURSELF / YOUR ENEMY inputs
   }
@@ -335,6 +332,7 @@ export class ChoiceMatch {
       st.score[k] += j.s; st.ok[k] += j.ok; st.bad[k] += j.bad; st.abst[k] += j.abst; const right = !j.bad && !j.abst && j.ok === j.max; if (right) { st.right[k]++; this.segAcc.r[k]++; if (j.alt) st.alt[k]++; }
       if (o.t != null) { st.lat[k] += o.t; st.latN[k]++; }
     }
+    if (st.wd) { const w = this.item[4], a = st.wd[w] || (st.wd[w] = [0, 0, 0]); a[0]++; res.forEach((o, k) => { if (k < 2 && !o.j.bad && !o.j.abst && o.j.ok === o.j.max) a[k + 1]++; }); }
     const rt = res.map(o => !o.j.bad && !o.j.abst && o.j.ok === o.j.max ? o.t : Infinity), fk = rt.indexOf(Math.min(...rt));
     if (rt[fk] < Infinity) st.first[fk]++;
     res.forEach((o, k) => { const h = this.hist[k], right = !o.j.bad && !o.j.abst && o.j.ok === o.j.max, b = this.P[k].brain;
@@ -425,20 +423,28 @@ export function runChoiceDuel(job) {
   const A = makeBrain(C, job.gA, job.wA, size), B = makeBrain(C, job.gB, job.wB, size), r = mulberry32(job.seed);
   // understanding fixes (Evolution opts): train only on neighbour-predictive puzzles (bigram stage) ...
   const NT = (job.nbrStage || job.probeMix) && C.nbrTrain ? C.nbrTrain() : null;
-  const m = new ChoiceMatch(C, [{ brain: A }, { brain: B }], job.nbrStage && NT ? () => NT.all[Math.floor(r() * NT.all.length)] : () => drawItem(C, job.level, r));
+  const m = new ChoiceMatch(C, [{ brain: A }, { brain: B }], job.nbrStage && NT ? () => NT.all[Math.floor(r() * NT.all.length)] : job.lex ? () => lexDraw(job.lex, job.level, r, C.mixOld) : () => drawItem(C, job.level, r));
   // the champion's synapses as they were before this duel, on the FULL task (the last level): tracks progress on the
   // real problem even while the curriculum benchmark restarts at every level
   const cg = job.side === 0 ? job.gA : job.gB, cw = job.side === 0 ? job.wA : job.wB;
   const probe = job.probe != null ? choiceBenchmark(C, cg, cw, size, job.probe) : null;
   // the frozen Understanding probe (and, when asked, the ablations) for the champion's pre-duel synapses
   const up = job.uprobe && probeSet(C).length ? understandingReport(C, cg, cw, size, job.ablate) : null;
+  // growing lexicon: the champion (frozen, pre-duel synapses) on held-out words vs its most-practised words
+  const lexT = job.lexT ? lexBench(C, cg, cw, size, job.lexT) : null;
   m.stepMs(Math.round(job.matchSec * 1000));
   const st = m.stats(); st.score = [...st.score];
   const wA = A.exportWeights(), wB = B.exportWeights();
   // ... and select on probe-style puzzles: 40 of them join the frozen benchmark THE REAPER compares
   const bset = job.probeMix && NT ? benchSet(C, job.level).concat(NT.mix) : null;
   const bench = job.bench === false ? null : [choiceBenchmark(C, job.gA, wA, size, job.level, bset), choiceBenchmark(C, job.gB, wB, size, job.level, bset)];
-  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, probe: probe && { acc: probe.acc, alt: probe.alt, level: probe.level }, up };
+  return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, probe: probe && { acc: probe.acc, alt: probe.alt, level: probe.level }, up, lexT, wd: st.wd ? wdOf(st.wd, job.side) : null };
+}
+// per-word counts for the champion's side: { WORD: [shown, champion right] }
+export const wdOf = (wd, side) => { const o = {}; for (const w in wd) o[w] = [wd[w][0], wd[w][1 + (side | 0)]]; return o; };
+export function lexBench(C, g, w, size, T) {
+  const h = choiceBenchmark(C, g, w, size, 0, T.held), f = T.fam.length ? choiceBenchmark(C, g, w, size, 0, T.fam) : null, sub = (set, b, pred) => { let n = 0, k = 0; set.forEach((it, i) => { if (pred(it)) { n++; if (b.vec[i] === 1) k++; } }); return n ? k / n : null; };
+  return { newAcc: h.acc, famAcc: f ? f.acc : null, newCurated: sub(T.held, h, it => it[6] < W5.length), newExtra: sub(T.held, h, it => it[6] >= W5.length), n: [T.held.length, T.fam.length] };
 }
 /* Understanding probe accuracy (+ ablations: knock out unit classes and re-measure the probe and the full task).
    ablate: true -> 'all units', 'self', 'enemy', 'self+enemy', the contest's neighbour classes, 'reflex' */
