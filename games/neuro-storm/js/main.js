@@ -3,6 +3,7 @@ import { Net, DT, PHYS, NET, DEFAULTS, relEnd } from './sim.js';
 import { OrbitCam } from './cam.js';
 import { Render2D } from './render2d.js';
 import { Scope, Raster } from './scope.js';
+import { installPadKeys } from './padkeys.js';
 
 const Q = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
@@ -217,8 +218,8 @@ function bindUI() {
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
     const k = e.key;
-    if (k === ' ') { e.preventDefault(); togglePause(); }
-    else if (k === '.' || k === 'ArrowRight' && e.target.type !== 'range') { togglePause(true); advance(0.5); harvest(0.05); }
+    if (k === 'p' || k === 'P') togglePause();   // SPACE stimulates (js/padkeys.js)
+    else if (k === '.') { togglePause(true); advance(0.5); harvest(0.05); }
     else if (k === 'r' || k === 'R') { stopDemo(); resetSim(); }
     else if (k === 'd' || k === 'D') S.demo ? stopDemo() : runDemo();
     else if (k === 'e' || k === 'E') { S.mode = S.mode === 'tap' ? 'train' : 'tap'; syncUI(); }
@@ -325,7 +326,11 @@ function loop(now) {
     if (Q.has('thumb')) { document.body.classList.add('hideui', 'thumb'); S.hidden = true; }
     // warm up 200 ms so the resting state is settled
     for (let k = 0; k < 200 / DT; k++) net.step(); net.spikeLog.length = 0;
-    window.NS = { net, S, R, cam, stimulate, select, pick, resetSim, defaults, setP, setSpeed, runDemo, stopDemo, advance, harvest, raster, togglePause, inject, ready: true, renderer: R.kind, N };
+    const pad = installPadKeys({ pick, select, stimulate: i => stimulate(i), special: i => stimulate(i, { scale: 3, color: 0x7fffb0 }), stopDemo,
+      isTrain: () => S.mode === 'train', hold: i => { S.hold = i == null ? null : { i, next: net.t }; }, togglePause, reset: () => { stopDemo(); resetSim(); },
+      demo: () => (S.demo ? stopDemo() : runDemo()), speed: f => setSpeed(S.speed * f), rotate: (dx, dy) => cam.rotate(dx, dy), zoom: f => cam.zoom(f), release: () => cam.release(),
+      center: () => { const o = viewOffset(); return { x: innerWidth / 2 - o.x, y: innerHeight / 2 - o.y }; }, caption });
+    window.NS = { pad, net, S, R, cam, stimulate, select, pick, resetSim, defaults, setP, setSpeed, runDemo, stopDemo, advance, harvest, raster, togglePause, inject, ready: true, renderer: R.kind, N };
     requestAnimationFrame(t => { lastT = t; loop(t); });
     if (!Q.has('thumb')) caption(`${isTouch ? 'Tap' : 'Click'} any neuron to stimulate it, or press <b>★ Demo</b> for a guided tour.`, 7);
   } catch (e) {

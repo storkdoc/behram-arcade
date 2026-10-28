@@ -19,7 +19,7 @@
   <a id="home" href="../../index.html" title="Back to the arcade">← Arcade</a>
   <div id="brand"><h1>NEURO STORM</h1><p>a virtual cortex of <span id="ncount">4000</span> spiking neurons</p></div>
   <div id="dock">
-    <button id="bPlay" class="ib" title="Pause / play (Space)" aria-label="Pause">❚❚</button>
+    <button id="bPlay" class="ib" title="Pause / play (P)" aria-label="Pause">❚❚</button>
     <button id="bDemo2" class="ib txt" title="Run the guided demo (D)">★ Demo</button>
     <button id="bCtl" class="ib" title="Controls" aria-label="Controls">☰</button>
     <button id="bInfo2" class="ib" title="Physiology notes (I)" aria-label="Info">i</button>
@@ -47,7 +47,7 @@
   </select></label>
   <p class="fine dense-only" id="synInfo">Six layers, 7 cell types, ~1,900 synapses per neuron on average</p>
   <div class="row btns">
-    <button id="bPlay2" title="Space">❚❚ Pause</button>
+    <button id="bPlay2" title="P">❚❚ Pause</button>
     <button id="bStep" title="Step 0.5 ms (.)">Step +0.5 ms</button>
     <button id="bReset" title="R">⟲ Reset</button>
   </div>
@@ -74,7 +74,7 @@
     <label class="dense-only"><input type="checkbox" id="cCut"> Cutaway (C)</label>
     <label class="dense-only"><input type="checkbox" id="cLobe"> Lobes</label>
   </div>
-  <p class="keys">Keys: <b>Space</b> pause · <b>.</b> step · <b>R</b> reset · <b>D</b> demo · <b>E</b> electrode · <b>A</b> rotate · <b>T</b> threshold · <b>[ ]</b> speed · <b>I</b> info · <b>H</b> hide panels · <span class="dense-only"><b>L</b> layer view · <b>C</b> cutaway ·</span> Shift-click inspects without stimulating</p>
+  <p class="keys">Keys: <b>arrows</b> aim the reticle · <b>Space</b> stimulates the neuron under it (hold in 50 Hz mode) · <b>Enter</b> special volley (thalamic → L4) · <b>Shift+arrows</b> rotate · <b>+ / −</b> zoom · <b>P</b> pause · <b>.</b> step · <b>R</b> reset · <b>D</b> demo · <b>E</b> electrode · <b>A</b> rotate · <b>T</b> threshold · <b>[ ]</b> speed · <b>I</b> info · <b>H</b> hide panels · <span class="dense-only"><b>L</b> layer view · <b>C</b> cutaway ·</span> Shift-click inspects without stimulating.<br>Gamepad: left stick aims, <b>A</b> stimulates, <b>X</b>/<b>B</b> special volley, right stick rotates, <b>LT/RT</b> zoom, <b>Y</b> demo, <b>LB/RB</b> speed, <b>START</b> pause, <b>BACK</b> reset.</p>
 </section>
 
 <section id="insp" class="glass" aria-label="Neuron inspector">

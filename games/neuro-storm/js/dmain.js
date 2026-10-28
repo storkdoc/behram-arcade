@@ -6,6 +6,7 @@ import { ColumnView } from './column.js';
 import { buildDense, TIERS, BLOCK_MS, CLASSES, LAYERS, synPerNeuron, K } from './dense.js';
 import { GpuNet, NG } from './gpunet.js';
 import { DenseRender3D } from './renderdense.js';
+import { installPadKeys } from './padkeys.js';
 
 const Q = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
@@ -199,8 +200,8 @@ export async function startDense(tierId, why) {
     if (e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
     if (e.target.tagName === 'SELECT') return;
     const k = e.key;
-    if (k === ' ') { e.preventDefault(); togglePause(); }
-    else if (k === '.' || k === 'ArrowRight' && e.target.type !== 'range') { togglePause(true); runBlocks(Math.round(0.5 / BLOCK_MS)); }
+    if (k === 'p' || k === 'P') togglePause();   // SPACE stimulates (js/padkeys.js)
+    else if (k === '.') { togglePause(true); runBlocks(Math.round(0.5 / BLOCK_MS)); }
     else if (k === 'r' || k === 'R') { stopDemo(); resetSim(); }
     else if (k === 'd' || k === 'D') S.demo ? stopDemo() : runDemo();
     else if (k === 'e' || k === 'E') { S.mode = S.mode === 'tap' ? 'train' : S.mode === 'train' ? 'thal' : 'tap'; syncUI(); }
@@ -308,7 +309,11 @@ export async function startDense(tierId, why) {
   // warm-up: 100 ms so the resting state settles
   runBlocks(Math.round(100 / BLOCK_MS));
   raster.clear(); raster.lastBin = undefined; S.quiet = true; S.waveT0 = -1; net.resetWave();
-  window.NS = { net, S, R, cam, stimulate, select, pick, resetSim, defaults, setP, setSpeed, runDemo, stopDemo, advance, runBlocks, raster, togglePause, inject, setCut, setView, ready: true, renderer: 'dense', N, tier: tier.id, msPerBlock: () => msPerBlock, column };
+  const pad = installPadKeys({ pick, select, stimulate: i => stimulate(i), special: i => stimulate(i, { kind: 1, color: 0x7fffb0 }), stopDemo,
+    isTrain: () => S.mode === 'train', hold: i => { S.hold = i == null ? null : { i, next: net.t }; }, togglePause, reset: () => { stopDemo(); resetSim(); },
+    demo: () => (S.demo ? stopDemo() : runDemo()), speed: f => setSpeed(S.speed * f), rotate: (dx, dy) => cam.rotate(dx, dy), zoom: f => cam.zoom(f), release: () => cam.release(),
+    center: () => { const o = viewOffset(); return { x: innerWidth / 2 - o.x, y: innerHeight / 2 - o.y }; }, caption });
+  window.NS = { pad, net, S, R, cam, stimulate, select, pick, resetSim, defaults, setP, setSpeed, runDemo, stopDemo, advance, runBlocks, raster, togglePause, inject, setCut, setView, ready: true, renderer: 'dense', N, tier: tier.id, msPerBlock: () => msPerBlock, column };
   requestAnimationFrame(t => { lastT = t; loop(t); });
   if (!Q.has('thumb')) caption(`${isTouch ? 'Tap' : 'Click'} the cortex to stimulate it, or press <b>★ Demo</b> for a guided tour.`, 7);
   void K;

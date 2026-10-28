@@ -146,3 +146,13 @@ body.loading::after { content: 'Building the cortex…'; position: fixed; inset:
 
 @media (max-width: 1700px) { #iSyn { display: none !important; } }
 #iName { min-width: 60px; flex-shrink: 1; }
+
+/* keyboard / gamepad reticle (js/padkeys.js) */
+#reticle { position: fixed; left: -22px; top: -22px; width: 44px; height: 44px; pointer-events: none; z-index: 5; will-change: transform; }
+#reticle i { position: absolute; inset: 0; border: 2px solid rgba(255, 211, 106, 0.9); border-radius: 50%; box-shadow: 0 0 10px rgba(255, 211, 106, 0.55), inset 0 0 8px rgba(255, 211, 106, 0.3); }
+#reticle b { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ffd36a; }
+#reticle.hit i { animation: retHit 0.35s ease-out; } #reticle.spec i { animation: retSpec 0.5s ease-out; } #reticle.miss i { animation: retMiss 0.3s ease-out; }
+@keyframes retHit { from { transform: scale(0.6); border-color: #fff; } to { transform: scale(1); } }
+@keyframes retSpec { from { transform: scale(1.8); border-color: #7fffb0; box-shadow: 0 0 22px #7fffb0; } to { transform: scale(1); } }
+@keyframes retMiss { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-5px); } 70% { transform: translateX(5px); } }
+body.hideui.thumb #reticle { display: none; }

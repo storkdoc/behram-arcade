@@ -104,7 +104,7 @@ window.ARCADE_GAMES = [
     added: '2026-10-24',
     genre: 'SIMULATION',
     year: 'NEUROSCIENCE',
-    controls: 'click a neuron to stimulate it · SHIFT-click to inspect without stimulating · drag to rotate · scroll or trackpad pinch to zoom · SPACE pause · . step 0.5 ms · [ ] slower/faster · E electrode mode (hold for 50 Hz) · D guided demo · R reset · I physiology notes · H hide panels',
+    controls: 'click a neuron to stimulate it · SHIFT-click to inspect without stimulating · drag to rotate · scroll or trackpad pinch to zoom · arrows aim the reticle · SPACE stimulates the aimed neuron · ENTER special volley · SHIFT+arrows rotate · + / - zoom · P pause · . step 0.5 ms · [ ] slower/faster · E electrode mode (hold click or SPACE for 50 Hz) · D guided demo · R reset · I physiology notes · H hide panels · gamepad: left stick aims, A stimulates, X/B volley, right stick rotates, triggers zoom, Y demo, START pause',
     touch: 'tap a neuron to stimulate it · drag to rotate · pinch to zoom · ☰ opens the controls drawer (stimulus, excitation, inhibition, noise, speed) · ★ Demo for a guided tour · Inspect then tap to watch a cell without stimulating · works portrait and landscape on iPhone and iPad',
     accent: '#2ec8ff'
   },
