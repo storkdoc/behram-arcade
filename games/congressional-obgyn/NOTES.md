@@ -32,7 +32,20 @@ folic acid, osteoporosis), CDC US MEC/US SPR 2024, ASRM, NAMS 2022/2023, ABM 202
 Deliberately avoided contested items: RhIG <12 wk change, BV partner treatment (2025 StepUp trial vs CDC), routine 3rd-tri syphilis
 (state-dependent), septum resection, Makena (withdrawn). Fixed: pneumococcal distractor (now recommended at 50 since 2024) replaced.
 
+## Gameplay facts
+- Clinic day: 6 patients (3 at 8:30 AM, others check in at ~30/75/125 s, or earlier if nobody is waiting), 4 exam rooms, rooms cleaned 7 s after a visit.
+  Waiting time counts at full speed in the hallway and ×0.35 during an encounter, and lowers patient hearts after 60 s.
+- Daily Challenge: dailyPlan(day) seeded, 5 patients. Practice: one case from Topic Mastery (XP counts; no leaderboard).
+- Saves: localStorage cob.v1 (progress), cob.access ({code} or {t: instructor token}), cob.mute, cob.music.
+- Debug hook: window.COB.debug (day, enc, save, screen(), title(), summary()), used by tests and tools/thumb.mjs.
+
+## Tests
+node tests/access.test.js · node tests/core.test.js · (serve repo root on :8090) NODE_PATH=/workspace/tools/node_modules node tests/page.test.js
+page.test: wrong/expired code UI, expired screen on relaunch, wrong PIN, PIN 0232 -> code + another, student code unlocks + rechecked on reload,
+full 6-patient keyboard day -> summary/grade/XP/board/badges/mastery, iPhone touch encounters, no console errors. All pass (2026-10-28).
+Thumbnail: node tools/thumb.mjs 8090
+
 ## Status
 - [x] bank (26 topics), access + tests, core + tests, audio, art (building, hallway, room, patients)
-- [ ] index.html / css / main.js UI
-- [ ] page tests (desktop + iPhone), thumb.png, games.js entry, deploy + live check
+- [x] index.html / css / main.js UI; page tests pass desktop + iPhone; thumb.png; games.js entry
+- [ ] (ideas) more cases per topic; real-device iOS check by the user
