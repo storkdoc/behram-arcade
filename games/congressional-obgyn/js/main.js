@@ -120,7 +120,7 @@
   function onKey(k, e) {
     S.unlock();
     var typing = document.activeElement && document.activeElement.tagName === 'INPUT';
-    if (typing && !/^(Enter|Escape|ArrowUp|ArrowDown|Tab)$/.test(k)) return false;
+    if (typing && !/^(Enter|Escape|ArrowUp|ArrowDown|Tab)$/.test(k) && !(cur === 'gate' && !modalOpen() && /^[iI]$/.test(k))) return false;
     var h = modalOpen() ? keyHandlers.modal : keyHandlers[cur];
     if (h && h(k, e)) return true;
     switch (k) {
@@ -183,7 +183,7 @@
         else { S.sfx.wrong(); $('#code-err').textContent = r.reason === 'expired' ? 'That code\u2019s 6 weeks are over. Ask Dr. Behram for a new code.' : r.reason === 'format' ? 'Codes look like CONG-XXXX-XXXX.' : 'That code isn\u2019t valid. Check it and try again.'; inp.classList.remove('pop'); void inp.offsetWidth; }
       });
     };
-    keyHandlers.gate = function (k) { if (k === 'Enter' && document.activeElement === inp) { $('#code-go').click(); return true; } if (k === 'i' || k === 'I') { if (document.activeElement !== inp) { instructor(); return true; } } return false; };
+    keyHandlers.gate = function (k) { if (k === 'Enter' && document.activeElement === inp) { $('#code-go').click(); return true; } if (k === 'i' || k === 'I') { inp.blur(); instructor(); return true; } /* I is not in the code alphabet */ return false; };
     $('#instr').onclick = instructor;
   }
 
