@@ -133,3 +133,67 @@ Live checks after pushing: `star-raider/js/sim.js` serves `bareKill: 0.5` and th
    fewer to `far`/`letters` (133 letters vs 40 bigram today).
 5. **Pong**: beyond-reflex is about 0 and openSide is 64%. Reward returns aimed at the open side directly in the duel score.
 6. Run add5, evenodd, text3, simon2 and tug next time, at 2 seeds, when the box is less loaded.
+
+## 2026-10-29 (day 2): gameplay evaluation
+
+Headless Playwright (Chrome, SwiftShader) at 1440×900 and iPhone 14 (390×844), local server and then live. Space is the
+main action and Enter the special. Feedback hosts (textdb.dev, ntfy.sh) were blocked during tests so no real feedback was posted.
+
+### Findings by game
+- **Congressional OB GYN**: there are 257 questions. A 28-question spot check found them all accurate. The flow and the
+  accuracy-based grade are fair. The PIN and the student codes work: code generation was tested through
+  `tests/testpin.js`, and the PIN stays a salted hash. Problems found:
+  - The correct option is the **longest one in 74% of questions**. That is a test-wiseness cue, so balance option lengths
+    when questions are next edited.
+  - On iPhone, the Next button sits partly below the fold.
+  - The PIN is still in the git history, so Dr. Behram should rotate it.
+  - Fixed: the iPhone answer-tap timeout.
+- **VORTEX (tube-shooter)**: a scripted bot reaches levels 5-10. Most deaths come from enemy shots, then spikes and rim
+  grabs, and they cluster at L5 and L8+. Before today a shot death showed no cause and no warning. The heat-limit
+  touch failures from day 1 were a test race: a warp happened between the snapshots of the ▶ tap check. That check now
+  retries, and vortex-touch passes on all 4 devices.
+- **MELTDOWN (reactor)**: the sim tests pass 47/47. After a trip the shift could not be recovered, because xenon plus the
+  instant withdrawal of the shutdown bank left no path back. Forced repair trips were also scored as lost grid
+  accuracy, so the grade depended on luck (a D). Both are fixed below. A competent restart takes about 170 s and needs
+  boron dilution.
+- **Star Raider**: the numbers match day 1. A sloppy bot scores Pilot at 25%, which may be harsh for casual players. Not changed.
+- **All 21 games (smoke test)**: clean on desktop and iPhone. Every game loads with no console or page errors, and every
+  game includes the new MoodSticker. planet-guardian desktop had one screenshot timeout, with no errors.
+- **Landing archive.json error**: not reproduced. The landing test passes, `games/meta-arena/data/archive.json` returns
+  200 locally and live, and the relative fetch resolves from `games/meta-arena/index.html`.
+- **Neuro Arena** (same seeds as day 1; the results are identical because none of the day 1 recommendations was
+  implemented):
+  - divisor: 12 generations, champion 34→73%. Full task 3%→39% against the 66% reflex prior. 0 reaps after
+    generation 1.
+  - text: 15 generations, champion 10→52%. Full task 20% against 25%. 0 reaps, plateau from generation 4.
+  - rps: saturated at 100%.
+  - **Honest-science correction to day 1**: the full-task score *rises* from generation 1. It starts at 3% because the
+    default reflex is Limited (capped at 20% of wMax). The brain is not "unlearning" the prior; it starts below the
+    prior and climbs. Day 1 recommendation 1 (a reflex floor) would therefore reject every child. Compare instead
+    against a like-for-like baseline: the capped Limited reflex alone, with the brain silenced. The real problem is
+    that selection is not acting (0 reaps), so recommendation 2 still stands.
+
+### Changes (pushed to origin/main, verified live)
+- `4a35578` Congressional: rescue for the iPhone answer tap. The plain-text PIN was removed from the tests and NOTES,
+  and `tests/testpin.js` was added.
+- `b2c75fe` MELTDOWN: a trip can now be recovered. The shutdown bank withdraws slowly (0.08/s) and holds while the
+  period is under 20 s. Grid accuracy is not scored while the crew repairs a tripping fault, and the end screen shows
+  this as "Off grid for crew repairs (not scored)". The reset toast now explains xenon (pull rods ↑, dilute boron N).
+  Test: `games/reactor/tests/restart.test.mjs`.
+- `e7b1ec6` VORTEX (Tempest): a warning for incoming shots. The claw's lane rim glows red when an enemy shot is within
+  0.35 of the rim. After each death the game names the cause, and for the first 2 deaths of each kind it adds a tip
+  (shot, grab, spike, spark, mine, fuse). The MoodSticker "lose" line is kept. Test: `tests/vortex-tips.test.js`
+  (desktop and iPhone). The vortex-touch ▶ check was also made race-free.
+
+Regression after rebasing on `c33d910` (MoodSticker): vortex-tips, v4, waves, rim and touch pass, as do reactor
+restart, the Congressional access/core/page tests (desktop and iPhone) and landing. mood-sticker passes 46. Its 8
+failures are only the textdb/ntfy delivery checks, which were blocked on purpose.
+
+Live checks: the live `reactor/js/main.js`, `tube-shooter/game.js`, `congressional-obgyn/js/main.js` and
+`assets/js/mood-sticker.js` serve the new code. Against https://storkdoc.github.io/behram-arcade/, restart.test.mjs
+gives ALL PASS and vortex-tips.test.js gives ALL PASSED.
+
+### For tomorrow
+1. Neuro Arena: add a like-for-like Limited-reflex baseline to the report, and make selection act (see day 1 recommendation 2).
+2. Congressional: balance option lengths, and keep Next above the fold on iPhone.
+3. Star Raider: consider a gentler Pilot threshold for casual players.
