@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a1f5c">
+<title>FEUD &amp; DELIVERY — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner with RELOAD instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.FEUDFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'FEUD & DELIVERY hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.FEUD && window.FEUD.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) FEUDFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  addEventListener('unhandledrejection', function (e) { if (!booted()) FEUDFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')); });
+  setTimeout(function () { if (!booted()) FEUDFatal('The game did not start (scripts failed to load). Check your connection and reload.'); }, 25000);
+  /* block pinch / double-tap zoom (iOS ignores user-scalable=no) */
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+  var lastTouch = 0; document.addEventListener('touchend', function (e) { var t = Date.now(); if (t - lastTouch < 320 && e.target && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); var el = e.target.closest && e.target.closest('button, a, [data-nav]'); if (el && !el.disabled) el.click(); } lastTouch = t; }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+</script>
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<div id="set" aria-hidden="true">
+  <div class="wall"></div><div class="sign">FALLSGROVE PLAZA · CONGRESSIONAL OB GYN · STUDIO 2</div>
+  <div class="door l"></div><div class="door r"></div>
+  <div class="curtain l"></div><div class="curtain r"></div><div class="valance"></div>
+  <div class="floor"></div>
+  <div class="beams"><i></i><i></i><i></i><i></i></div>
+</div>
+<canvas id="fx"></canvas>
+<a id="home" href="../../">←<span> ARCADE</span></a>
+<div id="top" class="hidden">
+  <span id="chip-round" class="chip round"></span><span id="chip-mult" class="chip mult"></span>
+  <button id="btn-host" class="icon" title="Host override (H)" aria-label="Host override">HOST</button>
+  <button id="btn-mute" class="icon" title="Sound (M)" aria-label="Sound">🔊</button>
+</div>
+<main id="screens">
+  <section id="s-loading" class="screen show center"><div class="load-card"><div class="load-logo">Feud &amp; Delivery</div><div class="load-bar"><i></i></div><div>Warming up the studio…</div></div></section>
+  <section id="s-gate" class="screen center"></section>
+  <section id="s-title" class="screen center"></section>
+  <section id="s-setup" class="screen center scroll"></section>
+  <section id="s-help" class="screen scroll"></section>
+  <section id="s-game" class="screen"></section>
+  <section id="s-pearls" class="screen scroll"></section>
+  <section id="s-fm" class="screen"></section>
+  <section id="s-results" class="screen center"></section>
+</main>
+<div id="bigx"></div>
+<div id="cameo"><div class="cb"></div><img src="assets/patient-confused.webp" alt=""></div>
+<div id="hostpanel" class="hidden"></div>
+<div id="modal" class="hidden"></div>
+<div id="toasts"></div>
+<button class="instructor-btn hidden" id="instr">INSTRUCTOR</button>
+
+<script src="../congressional-obgyn/js/access.js"></script>
+<script src="js/rounds.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/banter.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/main.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

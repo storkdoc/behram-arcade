@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'feud-and-delivery',
+    title: 'FEUD & DELIVERY',
+    tagline: 'Dr. Behram hosts the game show where the top answers are differential diagnoses. Buzz in, name the most likely causes and steal the board.',
+    description: "A game-show teaching game for medical, PA and other clinical students, hosted by a cartoon Dr. Steven Behram of Congressional OB GYN. Each round names an OB or GYN presentation, such as postpartum fever, third-trimester bleeding or a pelvic mass, and hides its 4 to 6 most likely diagnoses on a lit-up board, with points that show their approximate relative likelihood. Two players or teams buzz in for the face-off. The winner chooses to play or pass, the controlling side names diagnoses until the board is cleared or they take three strikes, and the other side then gets one chance to steal the bank. Rounds 3 and 4 pay double and triple. Type answers freely: autocomplete, abbreviations, synonyms and typo-tolerant matching accept 'BV', 'endometrioma' or 'pre-eclampsia' just as well as the full name. Playing solo, you face the Night Float team, a simulated rival who buzzes, answers and tries to steal. The winner plays Fast Money: two players, five presentations, a ticking clock and 200 points to win. After each round, Reveal All shows every answer with a teaching pearl, its basis (ACOG, CDC, ASRM and standard texts) and any ties. A host panel lets an instructor accept an answer, add a strike, reveal tiles or end a round. 47 rounds in all. Expect banter, sad trombones, a confused (fictional) patient cameo, a slow-motion third strike and the odd clearly labelled bonus joke tile, while joke answers always score zero. Points are for teaching and are not survey data. Students play with the same six-week access code as Congressional OB GYN. All sound is synthesized.",
+    thumb: 'games/feud-and-delivery/thumb.png',
+    added: '2026-10-29',
+    genre: 'GAME SHOW',
+    year: 'OB/GYN CLERKSHIP',
+    controls: 'A / L buzz for the left / right player (SPACE buzzes in 1-player) · type a diagnosis, ↑/↓ pick a suggestion, ENTER says it · SPACE is the main button (continue, play), ENTER the special (pass, skip) · TAB passes in Fast Money · H host panel · I instructor · gamepad: pad 1 buzzes for the left side and pad 2 for the right (one pad: LB / RB), A continues, B special, Start host panel · mouse: click the BUZZ buttons and on-screen buttons',
+    touch: 'tap BUZZ on your podium, type answers with the on-screen keyboard and tap a suggestion or SAY IT · works on iPhone and iPad in portrait and landscape',
+    accent: '#ffc83d'
+  },
+  {
     slug: 'reactor',
     title: 'MELTDOWN',
     tagline: 'You are the reactor operator. Hold the grid demand, ride out the faults and keep the core covered. A homage to Parker Brothers\' Reactor (1982).',
