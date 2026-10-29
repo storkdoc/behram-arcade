@@ -83,7 +83,7 @@
     App.G = null; App.paused = false; Sound.silence(); if (document.pointerLockElement) document.exitPointerLock();
     useWorld(App.attract); go('title');
   }
-  function go(s) { App.screen = s; App.focus = 0; App.paused = false; document.body.classList.toggle('ingame', s === 'play' || s === 'vsready'); }
+  function go(s) { window.MoodSticker && window.MoodSticker.screen(s); App.screen = s; App.focus = 0; App.paused = false; document.body.classList.toggle('ingame', s === 'play' || s === 'vsready'); }
   function banner(text, t, col) { App.msg = { text, col: col || null }; App.msgT = t || 1.5; }
 
   /* ---------------- input ---------------- */

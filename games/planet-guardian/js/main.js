@@ -89,7 +89,7 @@
   }
   function hotspot(id, rect, fn) { App.hits.push({ id, label: id, x: rect.x, y: rect.y, w: rect.w, h: rect.h, fn, focusable: false }); }
   function activate(b) { if (!b) return; Sound.unlock(); Sound.play('click'); if (b.fn) b.fn(); }
-  function go(screen) { App.screen = screen; App.focus = 0; App.paused = false; }
+  function go(screen) { window.MoodSticker && window.MoodSticker.screen(screen); App.screen = screen; App.focus = 0; App.paused = false; }
   function panel(ux, uy, uw, uh) { rr(Math.round(X(ux)), Math.round(Y(uy)), Math.round(uw * R.s), Math.round(uh * R.s), R.s * 3); ctx.fillStyle = 'rgba(4,6,20,0.62)'; ctx.fill(); ctx.lineWidth = Math.max(1, R.dpr | 0); ctx.strokeStyle = 'rgba(255,150,90,0.18)'; ctx.stroke(); }
 
   /* ---------------- game flow ---------------- */
@@ -270,7 +270,7 @@
 
   /* ---------------- end of a game ---------------- */
   function endGame() {
-    if (!G || G.phase !== 'over') return;
+    if (!G || G.phase !== 'over') return; window.MoodSticker && window.MoodSticker.event(qualifies(G.score) ? 'win' : 'lose');
     Sound.thrust(0);
     if (App.vs) { go(App.vs.rivalOver || App.vs.rivalLeft ? 'vsend' : 'vswait'); return; }
     if (qualifies(G.score)) { App.initials = { s: ['A', 'A', 'A'], i: 0 }; go('initials'); } else { App.newHi = -1; go('scores'); }

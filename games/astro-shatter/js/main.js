@@ -93,7 +93,7 @@
   }
   function hotspot(id, rect, fn) { App.hits.push({ id, label: id, x: rect.x, y: rect.y, w: rect.w, h: rect.h, fn, focusable: false }); }
   function activate(b) { if (!b) return; Sound.unlock(); Sound.play('click'); if (b.fn) b.fn(); }
-  function go(screen) { const was = App.screen === 'play'; App.screen = screen; App.focus = screen === 'select' ? 9 : 0; App.paused = false; if (was !== (screen === 'play') && App.touch && L.portrait) { doResize(); if (G && G.attract && screen !== 'play') attract(G.wave); } }
+  function go(screen) { window.MoodSticker && window.MoodSticker.screen(screen); const was = App.screen === 'play'; App.screen = screen; App.focus = screen === 'select' ? 9 : 0; App.paused = false; if (was !== (screen === 'play') && App.touch && L.portrait) { doResize(); if (G && G.attract && screen !== 'play') attract(G.wave); } }
 
   /* ---------------- game flow ---------------- */
   let G = null;
@@ -300,7 +300,7 @@
 
   /* ---------------- end of a game ---------------- */
   function endGame() {
-    if (!G || G.phase !== 'over') return;
+    if (!G || G.phase !== 'over') return; window.MoodSticker && window.MoodSticker.event(qualifies(G.score) ? 'win' : 'lose');
     Sound.silence();
     if (App.vs) { go(App.vs.rivalOver || App.vs.rivalLeft ? 'vsend' : 'vswait'); return; }
     if (qualifies(G.score)) { App.initials = { s: ['A', 'A', 'A'], i: 0 }; go('initials'); }

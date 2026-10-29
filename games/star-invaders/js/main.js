@@ -86,7 +86,7 @@
   }
   function hotspot(id, rect, fn) { App.hits.push({ id, label: id, x: rect.x, y: rect.y, w: rect.w, h: rect.h, fn, focusable: false }); }
   function activate(b) { if (!b) return; Sound.unlock(); Sound.play('click'); if (b.fn) b.fn(); }
-  function go(screen) { App.screen = screen; App.focus = 0; App.paused = false; }
+  function go(screen) { window.MoodSticker && window.MoodSticker.screen(screen); App.screen = screen; App.focus = 0; App.paused = false; }
 
   /* ---------------- game flow ---------------- */
   let G = null;
@@ -249,7 +249,7 @@
 
   /* ---------------- end of a game ---------------- */
   function endGame() {
-    if (!G || G.phase !== 'over') return;
+    if (!G || G.phase !== 'over') return; window.MoodSticker && window.MoodSticker.event(qualifies(G.score) ? 'win' : 'lose');
     Sound.ufo(false);
     if (App.vs) { go(App.vs.rivalOver || App.vs.rivalLeft ? 'vsend' : 'vswait'); return; }
     if (qualifies(G.score)) { App.initials = { s: ['A', 'A', 'A'], i: 0 }; go('initials'); }

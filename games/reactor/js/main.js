@@ -133,6 +133,7 @@ function show(id) {
   document.body.classList.toggle('playing', !id);
 }
 function setMode(m) {
+  window.MoodSticker && window.MoodSticker.screen(m);
   mode = m; document.body.dataset.mode = m; $('toasts').innerHTML = '';
   document.body.classList.toggle('lab', m === 'lab');
   document.body.classList.toggle('rbmk', s.type.name === 'RBMK');

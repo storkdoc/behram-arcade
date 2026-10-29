@@ -32,6 +32,7 @@
   /* ---------- screens ---------- */
   var cur = 'loading';
   function show(id, hud) {
+    window.MoodSticker && window.MoodSticker.screen(id);
     $$('.screen').forEach(function (s) { s.classList.toggle('show', s.id === 's-' + id); });
     cur = id; document.body.classList.toggle('in-hud', !!hud); $('#hud').classList.toggle('hidden', !hud);
     focusIdx = -1; setTimeout(function () { if (!isTouch) autoFocus(); }, 30);
@@ -494,6 +495,7 @@
     if (day.streak === 5 && C.award(save, 'streak5')) badgeToast('streak5'); if (day.streak === 10 && C.award(save, 'streak10')) badgeToast('streak10');
     if (day.fast >= 5 && C.award(save, 'speed')) badgeToast('speed');
     var r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+    window.MoodSticker && window.MoodSticker.event(ok ? (day.streak >= 3 ? 'big' : 'start') : 'hit');
     if (ok) { S.sfx.correct(day.streak); burst(r.left + 20, r.top + r.height / 2, 26 + Math.min(40, day.streak * 4), 'spark'); setMood(day.streak >= 3 ? 'happy' : 'calm'); }
     else { S.sfx.wrong(); setMood('worried'); }
     hud({ score: day.score, streak: day.streak }); renderEnc();
@@ -516,7 +518,7 @@
     var p = enc.p, n = enc.qs.length, ok = enc.res.filter(function (r) { return r.ok; }).length, acc = ok / n;
     var st = C.stars(acc), ht = C.hearts(acc, p.wait), perfect = ok === n;
     var bonus = perfect ? 150 : 0; day.score += bonus; enc.pts += bonus;
-    p.result = { stars: st, hearts: ht, acc: acc, pts: enc.pts, ok: ok, n: n }; p.state = 'done';
+    p.result = { stars: st, hearts: ht, acc: acc, pts: enc.pts, ok: ok, n: n }; p.state = 'done'; window.MoodSticker && window.MoodSticker.event(perfect ? 'win' : acc < 0.5 ? 'lose' : 'big');
     if (ht < 5) day.heartsAll = false;
     day.results.push({ topic: p.topic.id, t: p.topic.t, cat: p.topic.cat, name: p.c.n, stars: st, hearts: ht, ok: ok, n: n, pts: enc.pts });
     var m = C.updateMastery(save, p.topic.id, acc, TODAY); m.correct = (m.correct || 0) + ok; m.total = (m.total || 0) + n;
@@ -551,7 +553,7 @@
 
   /* ---------- day summary ---------- */
   function summary() {
-    if (!day) return title(); clearInterval(qTimer);
+    if (!day) return title(); clearInterval(qTimer); window.MoodSticker && window.MoodSticker.event('win');
     var acc = day.total ? day.correct / day.total : 0, gr = C.grade(acc), oldLvl = C.levelOf(save.xp);
     var allSeen = day.patients.every(function (p) { return p.state === 'done'; });
     save.xp += day.score; save.stats.days++; var newLvl = C.levelOf(save.xp);

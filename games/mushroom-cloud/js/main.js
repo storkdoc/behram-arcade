@@ -32,6 +32,7 @@ let globe = null, acc = 0, last = performance.now(), hudT = 0;
 
 /* ============================== screens ============================== */
 function go(name) {
+  window.MoodSticker && window.MoodSticker.screen(name);
   app.screen = name;
   for (const id of ['loading', 'title', 'select', 'brief', 'online', 'modal', 'end']) $(id).classList.toggle('show', id === name || (name === 'play-modal' && id === 'modal'));
   document.body.classList.toggle('playing', name === 'play' || name === 'play-modal' || name === 'end');

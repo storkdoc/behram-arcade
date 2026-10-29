@@ -111,7 +111,7 @@
   }
   function hotspot(id, r, fn) { App.hits.push({ id, label: id, x: r.x, y: r.y, w: r.w, h: r.h, fn, focusable: false }); }
   function activate(b) { if (!b) return; Sound.unlock(); Sound.play('click'); if (b.fn) b.fn(); }
-  function go(screen) { App.screen = screen; App.focus = 0; App.paused = false; }
+  function go(screen) { window.MoodSticker && window.MoodSticker.screen(screen); App.screen = screen; App.focus = 0; App.paused = false; }
   function panel(ux, uy, uw, uh) { rr(Math.round(X(ux)), Math.round(Y(uy)), Math.round(uw * R.s), Math.round(uh * R.s), R.s * 3); ctx.fillStyle = 'rgba(6,8,16,0.74)'; ctx.fill(); ctx.lineWidth = Math.max(1, R.dpr | 0); ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.stroke(); }
 
   /* ---------------- game flow ---------------- */
@@ -369,7 +369,7 @@
 
   /* ---------------- end of game / initials / code entry ---------------- */
   function endGame() {
-    if (!G || App.demo) return; Sound.silence(); exitLock();
+    if (!G || App.demo) return; window.MoodSticker && window.MoodSticker.event(G.finished && G.pos && G.pos <= 3 ? 'win' : 'lose'); Sound.silence(); exitLock();
     const circ = CIRC.find(c => c.id === App.circuit) || CIRC[0];
     App.result = { score: G.score, circuit: circ.name, grid: G.mode === 'race' ? G.grid : 0, pos: G.finished ? G.pos : 0, passes: G.passes, best: G.best, reason: G.reason, mode: G.mode, rec: LAPS[App.circuit], qual: G.qualTime || 0 };
     if (qualifies(G.score)) { App.initials = { s: lastName().padEnd(3, 'A').slice(0, 3).split(''), i: 0 }; go('initials'); } else go('results');

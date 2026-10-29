@@ -30,6 +30,7 @@ async function boot() {
   go('title');
 }
 function go(name) {
+  window.MoodSticker && window.MoodSticker.screen(name);
   app.screen = name; document.querySelectorAll('.screen').forEach(s => s.classList.toggle('show', s.id === name));
   $('hud').hidden = !(name === 'play' || name === 'pause'); if (name === 'title') renderTitle();
   setTimeout(focusFirst, 30);

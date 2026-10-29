@@ -25,6 +25,9 @@ arcade/
 1. Create `games/<slug>/index.html` (self-contained: no CDN, relative paths only).
    Include a back link to the picker: `<a href="../../index.html">◀ BACK TO ARCADE</a>`
    and `<link rel="icon" href="data:,">` to avoid a favicon 404.
+   Add the shared feedback sticker in `<head>`, before the game's own scripts:
+   `<script src="../../assets/js/mood-sticker.js"></script>` and, where easy, call
+   `MoodSticker.screen('play')` / `MoodSticker.event('big'|'stall'|'win'|'lose')` (see FEEDBACK.md).
 2. Save a 16:10 gameplay screenshot as `games/<slug>/thumb.png` (≈660×412 or larger).
 3. Add one entry at the top of the array in `games.js`:
 

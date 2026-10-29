@@ -670,7 +670,7 @@ function beginZoom(from, dur, full) {
   spawnTimer = 1.4; state = 'zoom'; Sound.play('zoom');
 }
 function startWarp() {
-  state = 'warp'; warp = { t: 0 }; eshots = []; player.z = 0;
+  state = 'warp'; warp = { t: 0 }; eshots = []; player.z = 0; window.MoodSticker && window.MoodSticker.event('big'); window.MoodSticker && window.MoodSticker.screen('warp');
   Sound.play('warp');
   if (bonusPending > 0) { addScore(bonusPending); msg('BONUS ' + bonusPending, 2.4, 0.42, '#fff', 4.5); Sound.play('bonus'); bonusPending = 0; }
   if (spikes.some(s => s > 0.02)) msg('AVOID SPIKES', 2.0, 0.58, pal.spike, 4);
@@ -679,7 +679,7 @@ function killPlayer(kind, captor) {
   if (invincible || !player.alive) return;
   player.alive = false; eshots = [];
   death = { kind, t: 0, captor, exploded: false, inWarp: state === 'warp' };
-  state = 'dying';
+  state = 'dying'; window.MoodSticker && window.MoodSticker.event('hit');
   if (kind === 'capture') Sound.play('capture'); else explodePlayer();
 }
 function explodePlayer() {
@@ -689,7 +689,7 @@ function explodePlayer() {
 }
 function finishDeath() {
   lives--;
-  if (lives <= 0) { state = 'gameover'; gameOverT = 0; Sound.hum(0); return; }
+  if (lives <= 0) { state = 'gameover'; gameOverT = 0; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
   if (death.inWarp) { beginLevel(level + 1); return; }
   // remaining enemies return to the far end
   for (const e of enemies) pool.unshift(e.type === 'tanker' ? { type: 'tanker', cargo: e.cargo } : { type: e.type });
@@ -1381,7 +1381,7 @@ function update(dt) {
     case 'zoom':
       zoom.t += dt / zoom.dur; handleMove(dt);
       camZ = zoom.from * (1 - easeOut3(Math.min(1, zoom.t)));
-      if (zoom.t >= 1) { camZ = 0; state = 'play'; }
+      if (zoom.t >= 1) { camZ = 0; state = 'play'; window.MoodSticker && window.MoodSticker.screen('play'); }
       break;
     case 'play':
       handleMove(dt); handleFire(dt);
