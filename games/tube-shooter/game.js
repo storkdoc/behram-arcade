@@ -370,6 +370,8 @@ const Sound = {
       case 'tick': this.tone('square', 900, 900, 0.03, 0.05); break;
       case 'select': this.tone('square', 660, 1320, 0.14, 0.08); break;
       case 'fuse': this.noise(0.25, 0.2, 7000, 2000, 2); break;
+      case 'swarm': [196, 247, 294].forEach((f, i) => this.tone('sawtooth', f, f * 0.7, 0.09, 0.05, i * 0.055)); break;
+      case 'pack': [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone('square', f, f, 0.07, 0.065, i * 0.045)); this.noise(0.3, 0.1, 8000, 2500, 3); break;
       case 'bonus': [392, 523, 659, 784].forEach((f, i) => this.tone('triangle', f, f, 0.14, 0.12, i * 0.1)); break;
     }
   }
@@ -553,7 +555,7 @@ if (!Array.isArray(hiscores)) hiscores = [['VTX', 50000, 20], ['ACE', 40000, 17]
 let bestLevel = store.get('bestLevel', 1);
 const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0, heat: 0, overheat: false, pos: 0.5, aim: 0.5 };
 let enemies = [], pool = [], eshots = [], pshots = [], fx = [], msgs = [], spikes = [], mines = [], shards = [], bolts = [];
-let zfx = null, seenTypes = new Set(), bumpT = 0;
+let zfx = null, seenTypes = new Set(), bumpT = 0, packClears = 0;
 let shotsFired = 0;
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
 let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
@@ -645,7 +647,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 /* ============================== flow ============================== */
 function startGame() {
   fireLock = true;
-  score = 0; lives = 3; nextLife = 20000; seenTypes = new Set(); startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
+  score = 0; lives = 3; nextLife = 20000; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
   Sound.play('start');
   beginLevel(startLevel);
@@ -660,6 +662,8 @@ function beginLevel(L) {
   beginZoom(-18, 1.5, true);
   msg('LEVEL ' + L, 2.2, 0.5, '#fff', 5.5);
   if (L > startLevel) msg('SUPERZAPPER RECHARGE', 2.2, 0.6, pal.claw, 3);
+  waveReset(waveKind(L));
+  if (wave.kind !== 'stream') { const W = WAVES[wave.kind]; msg('WAVE: ' + W.name, 2.6, 0.67, W.col, 2.8); if (!seenWaves.has(wave.kind)) { seenWaves.add(wave.kind); msg(W.tip, 2.8, 0.72, '#ffffff', 1.4); } }
 }
 function beginZoom(from, dur, full) {
   view = computeView(web); camZ = from; zoom = { t: 0, dur, from, full };
@@ -689,7 +693,7 @@ function finishDeath() {
   if (death.inWarp) { beginLevel(level + 1); return; }
   // remaining enemies return to the far end
   for (const e of enemies) pool.unshift(e.type === 'tanker' ? { type: 'tanker', cargo: e.cargo } : { type: e.type });
-  enemies = []; eshots = []; pshots = []; mines = [];
+  enemies = []; eshots = []; pshots = []; mines = []; waveReset();
   player.alive = true; player.z = 0; placeClaw(player.lane, 0);
   beginZoom(-7, 0.9, false);
 }
@@ -966,6 +970,7 @@ function killEnemy(e, byShot) {
   // disintegration: line shards in the enemy's colour (a big cloud for zapped enemies, a few for normal kills)
   shardBurst(c, c[2], [enemyColor(e), '#ffffff', zapped ? '#7df9ff' : enemyColor(e)], zapped ? 22 : 7, zapped ? 1.25 : 0.7);
   if (zapped) boltTo(c);
+  if (e.pack) packKill(e, zapped);
   if (e.type === 'tanker' && byShot) { splitTanker(e); Sound.play('tanker'); } else Sound.play(zapped ? 'zkill' : 'hit');
 }
 function startFlip(e, dir, dur) {
@@ -1288,21 +1293,74 @@ function updEnemies(dt) {
   }
   enemies = enemies.filter(e => !e.dead);
 }
+/* Wave formations (v5): every level from 3 on has a spawn pattern, named at the level intro, so waves differ in
+   rhythm and geometry, not only in enemy mix. The enemy pool and count are unchanged; only WHERE and WHEN they enter.
+   - STREAM: one at a time, random lane (the classic feel).
+   - SWARM:  packs of 3 in adjacent lanes, then a long lull. Destroy a whole pack with shots (not the Superzapper) for
+             a PACK CLEAR bonus of 200 per member.
+   - PINCER: pairs that enter on both sides of the claw (about a quarter of the web away), converging on you.
+   - SPIRAL: entries sweep around the web lane by lane at a steady beat, so you can read the next lane and pre-aim. */
+const WAVES = {
+  stream: { name: 'STREAM', tip: '' },
+  swarm: { name: 'SWARM', tip: 'PACKS OF 3. SHOOT A WHOLE PACK FOR A BONUS', col: '#ff9a3c' },
+  pincer: { name: 'PINCER', tip: 'THEY ENTER ON BOTH SIDES OF YOU', col: '#ff5ad1' },
+  spiral: { name: 'SPIRAL', tip: 'ENTRIES SWEEP AROUND THE WEB. PRE-AIM THE NEXT LANE', col: '#5affc8' },
+};
+const WAVE_CYCLE = ['swarm', 'stream', 'pincer', 'spiral', 'stream', 'swarm', 'spiral', 'pincer'];
+const waveKind = L => L < 3 ? 'stream' : WAVE_CYCLE[(L - 3) % WAVE_CYCLE.length];
+let wave = { kind: 'stream', q: [], sweep: 0, sdir: 1, packs: {}, packId: 0, log: [] }, seenWaves = new Set();
+function waveReset(kind) { wave = { kind: kind || wave.kind, q: [], sweep: randi(0, web.n - 1), sdir: Math.random() < 0.5 ? -1 : 1, packs: {}, packId: 0, log: [] }; }
+function uniqLanes(ls) { const out = []; for (const l of ls) { const w = wrapLane(l); if (!out.includes(w)) out.push(w); } return out; }
+function planWave() {
+  const n = web.n, g = LP.spawnGap, room = LP.maxActive - enemies.length;
+  const single = () => wave.q.push({ lane: randi(0, n - 1), gap: g * rand(0.6, 1.3) });
+  if (wave.kind === 'swarm' && pool.length >= 2 && room >= 2) {
+    const c = randi(0, n - 1); let ls = uniqLanes([c, c - 1, c + 1]);
+    if (ls.length < 3 && !web.closed) ls = uniqLanes(c <= 0 ? [0, 1, 2] : [n - 1, n - 2, n - 3]);
+    ls = ls.slice(0, Math.min(3, pool.length, room));
+    const id = ++wave.packId; wave.packs[id] = { n: ls.length, left: ls.length, clean: true };
+    ls.forEach((l, i) => wave.q.push({ lane: l, pack: id, gap: i < ls.length - 1 ? 0.14 : g * rand(2.2, 2.7) }));
+  } else if (wave.kind === 'pincer' && pool.length >= 2 && room >= 2) {
+    const off = Math.max(2, Math.round(n / 4)) + randi(0, 1), pl = player.lane;
+    let ls = uniqLanes([pl - off, pl + off]);
+    if (!web.closed) ls = uniqLanes([clamp(pl - off, 0, n - 1), clamp(pl + off, 0, n - 1)]);
+    ls.forEach((l, i) => wave.q.push({ lane: l, gap: i < ls.length - 1 ? 0.06 : g * rand(1.7, 2.1) }));
+  } else if (wave.kind === 'spiral') {
+    const step = n >= 14 ? 2 : 1;
+    let l = wave.sweep + wave.sdir * step;
+    if (web.closed) l = wrapLane(l);
+    else if (l < 0 || l > n - 1) { wave.sdir = -wave.sdir; l = clamp(wave.sweep + wave.sdir * step, 0, n - 1); }
+    wave.sweep = l; wave.q.push({ lane: l, gap: g * rand(0.78, 0.9) });
+  } else single();
+}
 function spawnEnemies(dt) {
   spawnTimer -= dt;
   if (spawnTimer > 0 || !pool.length || zap.active) return;
   if (enemies.length >= LP.maxActive) return;
-  const p = pool.shift();
-  const lane = randi(0, web.n - 1);
-  const e = makeEnemy(p.type, p.type === 'fuseball' ? randi(0, web.closed ? web.n - 1 : web.n) : lane, 1, p.cargo);
-  enemies.push(e);
+  if (!wave.q.length) planWave();
+  const s = wave.q.shift(), p = pool.shift();
+  const e = makeEnemy(p.type, p.type === 'fuseball' ? randi(0, web.closed ? web.n - 1 : web.n) : s.lane, 1, p.cargo);
+  if (s.pack && wave.packs[s.pack]) e.pack = s.pack;
+  enemies.push(e); wave.log.push({ t: T, lane: s.lane, type: p.type, pack: s.pack || 0 }); if (wave.log.length > 80) wave.log.shift();
+  if (s.pack && wave.packs[s.pack] && !wave.packs[s.pack].started) { wave.packs[s.pack].started = true; Sound.play('swarm'); }
   if (e.type === 'spark') Sound.play('sparkspawn');
   const ne = NEWE[e.type];
   if (ne && !seenTypes.has(e.type)) {   // first one this game: name it and say how to beat it
     seenTypes.add(e.type); Sound.play('newenemy');
     msg('NEW: ' + ne.name, 3.2, 0.25, ne.col, 3.4); msg(ne.tip, 3.2, 0.31, '#ffffff', 1.5);
   }
-  spawnTimer = LP.spawnGap * rand(0.6, 1.3);
+  spawnTimer = s.gap;
+}
+// a pack member died: a pack destroyed entirely by the player's own shots (or a lured spark chain) pays a bonus
+function packKill(e, zapped) {
+  const P = wave.packs[e.pack]; if (!P) return;
+  if (zapped) P.clean = false;
+  if (--P.left > 0) return;
+  delete wave.packs[e.pack];
+  if (!P.clean || P.n < 2) return;
+  const b = 200 * P.n; addScore(b); packClears++;
+  msg('PACK CLEAR +' + b, 1.6, 0.4, WAVES.swarm.col, 3.2); Sound.play('pack');
+  const c = centerOf(e); shardBurst(c, c[2], [WAVES.swarm.col, '#ffffff', '#ffe81a'], 16, 1);
 }
 
 /* ============================== state updates ============================== */
@@ -2340,6 +2398,12 @@ window.VORTEX = {
   shotsFired: () => shotsFired,
   muted: () => Sound.muted,
   fps: () => Math.round(fps),
+  wave: () => ({ kind: wave.kind, queued: wave.q.length, packs: Object.keys(wave.packs).length, packClears, log: wave.log.slice() }),
+  waveKind: L => waveKind(L),
+  kill(id, zapped) { const e = enemies.find(e => e.id === id); if (!e) return false; if (zapped) zap.kill = true; killEnemy(e, !zapped); zap.kill = false; enemies = enemies.filter(e => !e.dead); return true; },
+  score: () => score,
+  playerLane: () => player.lane,
+  webInfo: () => ({ n: web.n, closed: web.closed }),
   gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); },
 };
 })();

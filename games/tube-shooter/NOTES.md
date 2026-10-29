@@ -44,6 +44,21 @@ This is a Tempest-style vector tube shooter. It is plain **Canvas 2D plus Web Au
   - sparks: min(1+⌊(L−7)/3⌋, 5)
   - layers: min(1+⌊(L−8)/6⌋, 2)
 
+## Wave formations (v5, 2026-10-29)
+Every level from 3 on has a spawn **formation**. The enemy pool (types and count, `poolCounts`) is unchanged; only where
+and when enemies enter changes. The level intro shows `WAVE: <NAME>` (first time per game also a one-line tip).
+- Cycle from L3 (`WAVE_CYCLE`, `waveKind(L)`): SWARM, STREAM, PINCER, SPIRAL, STREAM, SWARM, SPIRAL, PINCER (repeats). L1-2 are STREAM.
+- **STREAM**: one entry at a time in a random lane (the old behaviour), gap `spawnGap * 0.6-1.3`.
+- **SWARM**: packs of 3 in adjacent lanes 0.14 s apart (open webs shift the pack inward), then a lull of `spawnGap * 2.2-2.7`.
+  Kill every member of a pack with your own shots (or a lured Spark chain) for **PACK CLEAR +200 per member**; a pack
+  touched by the Superzapper pays nothing. Sounds `swarm` (pack enters) and `pack` (clear).
+- **PINCER**: pairs 0.06 s apart on both sides of the claw, `max(2, round(n/4)) + 0-1` lanes away, gap `spawnGap * 1.7-2.1`.
+- **SPIRAL**: entries step 2 lanes (1 on webs under 14 lanes) around the web at `spawnGap * 0.78-0.9`; open webs bounce at the ends. Readable, so you can pre-aim.
+- Average entry rate per enemy is about the same as STREAM (0.8-0.95 x spawnGap). `maxActive` still caps the field; a pack never plans more members than there is room for.
+- Fuseballs keep their own random rail. On a death the queued formation and packs are reset (enemies go back to the pool).
+- Hooks: `VORTEX.wave()` (kind, queued, packs, packClears, spawn log), `waveKind(L)`, `kill(id, zapped)`, `score()`, `playerLane()`, `webInfo()`.
+- Test: `games/tube-shooter/tests/vortex-waves.test.js` (desktop + iPhone 14; geometry and timing of each formation, PACK CLEAR paid by shots and not by the Superzapper, live intro, 25 s of real level-8 play, no console errors).
+
 ## Superzapper (v4)
 - **First use (big):**
   - `zfx` timeline of about 1.3 s: jagged electric arcs race down every rail (the head reaches the far end at 0.34 s), then flicker and fade.
@@ -75,11 +90,12 @@ This is a Tempest-style vector tube shooter. It is plain **Canvas 2D plus Web Au
   - Console errors.
 - **Root regression tests** (`tests/vortex-rim.test.js`, `tests/vortex-touch.test.js`) still pass.
   - Known flake: "▶ tap = one sub-position" depends on headless timing (the finger can be down longer than 140 ms at around 10 fps).
-  - The landing-page section of `vortex-touch` currently fails because another worker rewrote the landing page (no `a.card[data-slug]`). That is unrelated to this game.
+  - Fixed 2026-10-29: the intermittent `vortex-touch` failures "heat limit still applies to touch FIRE" and "ZAP fires the superzapper" were a test bug. The test emptied the field without `__noWarp`, so the game warped to the next level and FIRE/ZAP were measured during the warp and zoom-in (ZAP only works in play). Reproduced on unmodified code (2 FAIL), 131/131 PASS twice after the fix.
 - **Run:**
   ```
   python3 -m http.server 8137                                  # from the repo root
   NODE_PATH=/path/to/node_modules node games/tube-shooter/tests/vortex-v4.test.js http://localhost:8137 [shotDir]
+  NODE_PATH=/path/to/node_modules node games/tube-shooter/tests/vortex-waves.test.js http://localhost:8137 [shotDir]
   ```
 
 ## Repo etiquette

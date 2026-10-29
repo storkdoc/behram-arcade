@@ -268,7 +268,7 @@ window.ARCADE_GAMES = [
     slug: 'tube-shooter',            // folder name under games/
     title: 'VORTEX',
     tagline: 'Vector tube shooter',
-    description: 'Ride the rim of 16 neon tube webs and blast Flippers, Tankers, Spikers, Fuseballs and Pulsars, plus four new foes: blinking Phasers, shielded Wardens, homing Sparks and Mine Layers whose rim mines wall off lanes. Analog rim steering, a lightning Superzapper, warp, spikes, a synth soundtrack for every level and an arcade-style "Rate Yourself" level select.',
+    description: 'Ride the rim of 16 neon tube webs and blast Flippers, Tankers, Spikers, Fuseballs and Pulsars, plus four new foes: blinking Phasers, shielded Wardens, homing Sparks and Mine Layers whose rim mines wall off lanes. Waves come in formations (Swarm packs with a Pack Clear bonus, Pincer pairs that flank you, sweeping Spirals). Analog rim steering, a lightning Superzapper, warp, spikes, a synth soundtrack for every level and an arcade-style "Rate Yourself" level select.',
     thumb: 'games/tube-shooter/thumb.png',
     added: '2026-10-24',             // YYYY-MM-DD
     genre: 'SHOOTER',

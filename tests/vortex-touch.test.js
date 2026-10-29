@@ -122,7 +122,9 @@ async function run(browser, name, device) {
 
   // multi-touch: hold FIRE while spinning
   const fire = await center('#tfire');
-  await page.evaluate(() => VORTEX.emptyField());
+  // __noWarp: an empty field would otherwise warp to the next level mid-test, and FIRE heat / ZAP (play state only) would be
+  // measured during the warp and zoom-in (the old intermittent 'heat limit' and 'ZAP fires' failures)
+  await page.evaluate(() => { window.__noWarp = true; VORTEX.emptyField(); });
   a = await st();
   const shots0 = await page.evaluate(() => VORTEX.shotsFired());
   await T('touchStart', [{ x: fire.x, y: fire.y, id: 2 }]);
@@ -145,7 +147,8 @@ async function run(browser, name, device) {
   const en0 = (await st()).enemies;
   await tapEl('#tzap'); await sleep(900);
   s = await st();
-  check(s.zapUses === 1 && s.enemies < en0, `ZAP fires the superzapper (zapUses=${s.zapUses}, enemies ${en0} -> ${s.enemies})`);
+  check(s.zapUses === 1 && s.enemies < en0, `ZAP fires the superzapper (zapUses=${s.zapUses}, enemies ${en0} -> ${s.enemies}, state ${s.state})`);
+  await page.evaluate(() => { window.__noWarp = false; });
 
   // pause / resume
   await tapEl('#tpause'); await sleep(150);
