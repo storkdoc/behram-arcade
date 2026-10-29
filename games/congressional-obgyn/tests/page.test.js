@@ -1,12 +1,14 @@
 // Browser test: NODE_PATH=/workspace/tools/node_modules node games/congressional-obgyn/tests/page.test.js [baseURL]
 // Serve the repo root first: python3 -m http.server 8090
 const { chromium } = require('playwright-core');
+const TP = require('./testpin.js'); // the real PIN is never in the repo (COB_PIN env, else a test PIN)
 const BASE = (process.argv[2] || 'http://localhost:8090') + '/games/congressional-obgyn/';
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
 const ARGS = ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'];
 const IPHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' };
 async function page(b, opts) {
   const ctx = await b.newContext(opts); const pg = await ctx.newPage(); pg.errs = [];
+  if (!TP.real) await ctx.route('**/congressional-obgyn/js/access.js*', r => r.fulfill({ contentType: 'text/javascript', body: TP.patchedAccessSource() }));
   pg.on('pageerror', e => pg.errs.push('pageerror ' + e.message)); pg.on('console', m => { if (m.type() === 'error') pg.errs.push(m.text()); });
   await pg.goto(BASE); await pg.waitForFunction(() => window.COB && COB.booted, null, { timeout: 15000 }); return pg;
 }
@@ -42,7 +44,7 @@ async function playEncounter(pg, touch, wrongFirst) {
   await pg.click('body', { position: { x: 5, y: 400 } }); await pg.keyboard.press('i'); await pg.waitForTimeout(200);
   for (const d of '1111') await pg.keyboard.press(d); await pg.waitForTimeout(500);
   ok(/Incorrect PIN/.test(await pg.textContent('#modal')), 'wrong PIN rejected');
-  for (const d of '0232') await pg.keyboard.press(d); await pg.waitForSelector('#bigcode', { timeout: 4000 });
+  for (const d of TP.PIN) await pg.keyboard.press(d); await pg.waitForSelector('#bigcode', { timeout: 4000 });
   const code = (await pg.textContent('#bigcode')).trim();
   ok(/^CONG-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(code), 'instructor PIN shows code ' + code);
   ok(/through .*2026|through .*2027/.test(await pg.textContent('#modal')), 'expiry shown');

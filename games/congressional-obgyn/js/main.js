@@ -98,6 +98,32 @@
   /* ---------- focus / spatial navigation ---------- */
   var focusIdx = -1, isTouch = false;
   addEventListener('touchstart', function () { isTouch = true; clearFocus(); }, { passive: true });
+  /* Tap rescue: on touch screens a tap that lands just after a screen re-renders (Next -> new question, door -> room)
+     can deliver pointerdown/pointerup but no click (seen in mobile Chrome; the old page test timed out on it). If a
+     touch/pen press starts and ends on the same button without moving and no click follows within 300 ms, click it
+     ourselves; a late real click on the same element is then swallowed so nothing fires twice. */
+  (function () {
+    var SEL = 'button, [data-nav], .door, .door-tag, .srow[data-room], .tile', down = null, rescued = null;
+    function tgt(e) { return e.target && e.target.closest ? e.target.closest(SEL) : null; }
+    document.addEventListener('pointerdown', function (e) { down = e.pointerType === 'mouse' ? null : { el: tgt(e), x: e.clientX, y: e.clientY, t: performance.now() }; }, { capture: true, passive: true });
+    document.addEventListener('pointercancel', function () { down = null; }, { capture: true, passive: true });
+    document.addEventListener('pointerup', function (e) {
+      var d = down; down = null; if (!d || !d.el || e.pointerType === 'mouse') return;
+      if (tgt(e) !== d.el || Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12 || performance.now() - d.t > 800) return;
+      var el = d.el, got = false, onc = function (ev) { if (tgt(ev) === el) got = true; };
+      document.addEventListener('click', onc, true);
+      setTimeout(function () {
+        document.removeEventListener('click', onc, true);
+        if (got || !document.contains(el) || el.disabled || el.offsetParent === null) return;
+        rescued = { el: el, t: performance.now() }; if (typeof el.click === 'function') el.click(); else el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      }, 300);
+    }, { capture: true, passive: true });
+    document.addEventListener('click', function (e) {
+      if (!rescued || !e.isTrusted) return; var t = tgt(e);
+      if (t === rescued.el && performance.now() - rescued.t < 1500) { e.stopImmediatePropagation(); e.preventDefault(); }
+      else if (performance.now() - rescued.t >= 1500) rescued = null;
+    }, true);
+  })();
   function root() { return modalOpen() ? $('#modal') : $('#s-' + cur); }
   function navEls() { return $$('[data-nav]', root()).filter(function (e) { return e.offsetParent !== null && !e.disabled && !e.classList.contains('gone'); }); }
   function clearFocus() { $$('.focus').forEach(function (e) { e.classList.remove('focus'); }); }

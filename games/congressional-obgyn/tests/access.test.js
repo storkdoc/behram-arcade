@@ -1,12 +1,18 @@
 // node games/congressional-obgyn/tests/access.test.js
-const A = require('../js/access.js');
+// The real instructor PIN is never written in this repo. Set COB_PIN to test it; otherwise the PIN check runs against
+// a throwaway test PIN whose salted hash is swapped into an in-memory copy of access.js (see tests/testpin.js).
+const T = require('./testpin.js');
+const A = T.loadAccess();
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
 (async () => {
   const today = A.nyDay();
-  ok(await A.checkPin('0232'), 'PIN 0232 accepted');
-  ok(!(await A.checkPin('0233')) && !(await A.checkPin('')) && !(await A.checkPin('2320')), 'wrong PINs rejected');
+  ok(await A.checkPin(T.PIN), 'instructor PIN accepted (' + (T.real ? 'real PIN from COB_PIN' : 'test PIN') + ')');
+  const wrong = ['', '0000', '9999', T.PIN.slice(1) + T.PIN[0], String((+T.PIN + 1) % 10000).padStart(4, '0')].filter(w => w !== T.PIN);
+  let wrongOk = 0; for (const w of wrong) if (await A.checkPin(w)) wrongOk++;
+  ok(wrongOk === 0, 'wrong PINs rejected (' + wrong.length + ' tried)');
   const src = require('fs').readFileSync(__dirname + '/../js/access.js', 'utf8');
-  ok(!/0232/.test(src), 'PIN not stored in plain text');
+  ok(/PIN_SALT = '[0-9a-f]{16,}'/.test(src) && /PIN_HASH = '[0-9a-f]{64}'/.test(src), 'only a salted SHA-256 hash is stored');
+  if (T.real) ok(T.scanFor(T.PIN).length === 0, 'real PIN not written in plain text anywhere in the game folder ' + JSON.stringify(T.scanFor(T.PIN)));
   const c0 = await A.makeCode(today);
   ok(/^CONG-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(c0.code), 'format ' + c0.code);
   const r0 = await A.checkCode(c0.code, today);

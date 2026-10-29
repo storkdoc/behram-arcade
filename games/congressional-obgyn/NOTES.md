@@ -46,10 +46,18 @@ Deliberately avoided contested items: RhIG <12 wk change, BV partner treatment (
 - Debug hook: window.COB.debug (day, enc, save, screen(), title(), summary()), used by tests and tools/thumb.mjs.
 
 ## Tests
+The real instructor PIN is never written in the repo (not in tests or notes). Tests use a throwaway test PIN whose hash is
+swapped into an in-memory copy of access.js (tests/testpin.js); set COB_PIN=<pin> to test the real one.
 node tests/access.test.js · node tests/core.test.js · (serve repo root on :8090) NODE_PATH=/workspace/tools/node_modules node tests/page.test.js
-page.test: wrong/expired code UI, expired screen on relaunch, wrong PIN, PIN 0232 -> code + another, student code unlocks + rechecked on reload,
+page.test: wrong/expired code UI, expired screen on relaunch, wrong PIN, instructor PIN -> code + another, student code unlocks + rechecked on reload,
 full 6-patient keyboard day -> summary/grade/XP/board/badges/mastery, iPhone touch encounters, no console errors. All pass (2026-10-28).
 Thumbnail: node tools/thumb.mjs 8090
+
+## Touch: tap rescue (2026-10-29)
+main.js has a capture-phase 'tap rescue': if a touch/pen press starts and ends on the same button without moving and the
+browser delivers no click within 300 ms, it clicks the element itself, and swallows a late real click on it. Reason: in mobile
+Chrome a tap that lands ~100 ms after a re-render (Next -> new question, door -> room) produced pointerdown/up/touchend but no
+click; that was the iPhone page-test timeout. Human-timed taps (300 ms after render, 90 ms press) did not miss even before.
 
 ## Status
 - [x] bank (26 topics), access + tests, core + tests, audio, art (building, hallway, room, patients)
