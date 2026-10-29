@@ -167,7 +167,13 @@ async function run(browser, name, device) {
   s = await st(); check(s.touchMode === 'arrows' && !!(await center('#tright')) && !(await center('#tknob')), 'MODE toggles to ◀ ▶ arrow buttons');
   await page.evaluate(() => { VORTEX.setLane(VORTEX.state.lane, 0); });
   await page.evaluate(() => { const e = document.getElementById('tright'); e.addEventListener('pointerdown', () => window.__pd = performance.now()); e.addEventListener('pointerup', () => window.__pu = performance.now()); });
-  a = await st(); await tapEl('#tright'); await sleep(80); b = await st();
+  // retry if a level transition (warp end / new web resets the lane) lands inside the tap window: a test race, not a game bug (Day 2)
+  for (let k = 0; k < 4; k++) {
+    await page.evaluate(() => { VORTEX.setLane(VORTEX.state.lane, 0); });
+    a = await st(); await tapEl('#tright'); await sleep(80); b = await st();
+    if (a.level === b.level && a.web === b.web && a.state === b.state) break;
+    await sleep(1500);
+  }
   const held = await page.evaluate(() => Math.round(window.__pu - window.__pd));
   const tapSteps = ((pos(a) - pos(b)) % 48 + 48) % 48;
   check(tapSteps === 1 || (held >= 130 && tapSteps === 2), `▶ tap = one sub-position clockwise (like →; repeat starts after 0.14 s, finger down ${held} ms) ${a.lane}:${a.sub} -> ${b.lane}:${b.sub}`);

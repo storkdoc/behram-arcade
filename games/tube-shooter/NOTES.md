@@ -100,3 +100,14 @@ and when enemies enter changes. The level intro shows `WAVE: <NAME>` (first time
 
 ## Repo etiquette
 Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.js` for this game's card text). Never `git add -A`, stash or reset.
+
+## Day 2 eval (2026-10-29): shot warning + death tips
+- Bot playtests: most deaths were enemy "shot" (then spike, capture), clustered at L5 (Warden debut) and L8+.
+- Incoming-shot warning: an enemy shot in the last 35 % (SHOT_WARN_Z) of the claw's own lane lights that lane's rim edge
+  and the near rail ends red, brighter as it closes (drawShotWarn, additive glow). Cue only, no gameplay change.
+- Death cause + tip: after each lost life a one-line cause ("HIT BY AN ENEMY SHOT", "GRABBED AT THE RIM", ...) and,
+  the first two times per cause per game, a short tip (DEATH_TIPS in game.js).
+- Hooks: VORTEX.shotWarn(), shotWarnFrames(), addEShot(lane, z), messages().
+- Test: `node games/tube-shooter/tests/vortex-tips.test.js http://localhost:PORT` (desktop + iPhone).
+- tests/vortex-touch.test.js: the "▶ tap = one sub-position" check retries when a warp/new web lands inside the tap
+  window (it reset the lane 4:0 -> 1:0 on iPhone portrait: a test race, not a game bug).

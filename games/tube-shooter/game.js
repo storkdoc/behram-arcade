@@ -647,6 +647,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 /* ============================== flow ============================== */
 function startGame() {
   fireLock = true;
+  deathTipCount = {};
   score = 0; lives = 3; nextLife = 20000; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
   Sound.play('start');
@@ -687,9 +688,27 @@ function explodePlayer() {
   const f = player.vis, E0 = railF(f), E1 = railF(f + 1);
   fx.push({ x: (E0[0] + E1[0]) / 2, y: (E0[1] + E1[1]) / 2, zw: player.z * LL, t: 0, dur: 1.5, size: 0.75, rays: 30, colors: RAINBOW, seed: Math.random() * 6, big: true });
 }
+// Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
+const DEATH_TIPS = {
+  shot: ['HIT BY AN ENEMY SHOT', 'RED RIM = SHOT INCOMING. SHOOT IT OR STEP ASIDE'],
+  capture: ['GRABBED AT THE RIM', 'SHOOT THEM BEFORE THEY GRAB, OR SUPERZAP'],
+  spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
+  zap: ['PULSAR ZAP', 'LEAVE A LANE THAT FLASHES WHITE'],
+  spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
+  mine: ['MINE', 'SHOOT MINES ON THE WAY UP, BEFORE THEY ARM'],
+  fuse: ['FUSEBALL', 'DODGE THEM ON THE RIM. SHOOT THEM MID-JUMP'],
+};
+let deathTipCount = {};
+function deathTip(kind) {
+  const d = DEATH_TIPS[kind]; if (!d) return;
+  msg(d[0], 2.6, 0.62, pal.eshot || '#f44', 3);
+  deathTipCount[kind] = (deathTipCount[kind] || 0) + 1;
+  if (deathTipCount[kind] <= 2) msg(d[1], 3.2, 0.69, '#ffffff', 1.4);   // the tip only the first two times per cause
+}
 function finishDeath() {
   lives--;
   if (lives <= 0) { state = 'gameover'; gameOverT = 0; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
+  if (death) deathTip(death.kind);
   if (death.inWarp) { beginLevel(level + 1); return; }
   // remaining enemies return to the far end
   for (const e of enemies) pool.unshift(e.type === 'tanker' ? { type: 'tanker', cargo: e.cargo } : { type: e.type });
@@ -1481,6 +1500,26 @@ function drawWeb(color, laneColor, highlight = true) {
     ctx.stroke();
   }
 }
+// Day 2 eval: incoming-shot warning. An enemy shot in the last 35 % of the claw's own lane lights the lane's rim edge
+// and the near ends of its rails red, brighter as it closes. Purely a cue: it does not change the shot.
+const SHOT_WARN_Z = 0.35;
+let shotWarnFrames = 0;   // frames on which the warning was drawn (test hook)
+function shotWarnLevel() {
+  if (state !== 'play' || !player.alive) return 0;
+  let w = 0; for (const s of eshots) if (!s.dead && s.lane === player.lane && s.z < SHOT_WARN_Z) w = Math.max(w, 1 - s.z / SHOT_WARN_Z);
+  return w;
+}
+function drawShotWarn() {
+  const w = shotWarnLevel(); if (w <= 0) return;
+  shotWarnFrames++;
+  const l = player.lane, a = rail(l), b = rail(l + 1), z = LL * 0.22;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = (0.35 + 0.55 * w) * (0.75 + 0.25 * Math.sin(T * 40));
+  ctx.strokeStyle = '#ff2a2a'; ctx.lineWidth = LW(1.4 + 2.2 * w);
+  ctx.shadowColor = '#ff3030'; ctx.shadowBlur = 14 * DPR * w;
+  ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); seg3(a[0], a[1], 0, a[0], a[1], z); seg3(b[0], b[1], 0, b[0], b[1], z); ctx.stroke();
+  ctx.restore();
+}
 function drawPulseLanes() {
   if (pulseAmt <= 0) return;
   for (const e of enemies) {
@@ -1847,6 +1886,7 @@ function drawGameScene() {
   const showClaw = state === 'play' || state === 'warp' || (state === 'zoom' && zoom.t > 0.78) || (state === 'dying' && !death.exploded);
   drawWeb(webColor, showClaw && state !== 'dying' ? pal.lane : null, true);
   drawPulseLanes();
+  drawShotWarn();
   drawSpikes();
   drawMines();
   for (const e of enemies) drawEnemy(e);
@@ -2390,6 +2430,10 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
   deathKind: () => death ? death.kind : null,
+  shotWarn: () => shotWarnLevel(),
+  shotWarnFrames: () => shotWarnFrames,
+  addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
+  messages: () => msgs.map(m => m.text),
   // touch-test helpers (CSS px)
   selectIdx: () => select.idx,
   selectBoxes: () => selRects.map(r => ({ x: (r[0] + r[2] / 2) / DPR, y: (r[1] + r[3] / 2) / DPR, idx: r[4] })),
