@@ -90,8 +90,8 @@
   /* ---------- Dr. Behram ---------- */
   var FACE = 'assets/behram-face.jpg', BUST = 'assets/behram.webp';
   function faceImg(cls) { return '<img class="face ' + (cls || '') + '" src="' + FACE + '" alt="Dr. Behram" draggable="false">'; }
-  var GREET = ['Good morning, doctor! We have a full clinic today.', 'Read the chart, think it through, then commit.', 'Every patient teaches you something. Let\u2019s go!', 'Board questions are just patients on paper.', 'Remember: always ask about the last menstrual period.'];
-  var PRAISE = ['Excellent!', 'Exactly right.', 'That\u2019s it, nicely done.', 'Spot on, doctor.', 'Textbook.', 'You\u2019ve got it.', 'Beautiful reasoning.'];
+  var GREET = ['Good morning! We have a full clinic today.', 'Read the chart, think it through, then commit.', 'Every patient teaches you something. Let\u2019s go!', 'Board questions are just patients on paper.', 'Remember: always ask about the last menstrual period.'];
+  var PRAISE = ['Excellent!', 'Exactly right.', 'That\u2019s it, nicely done.', 'Spot on.', 'Textbook.', 'You\u2019ve got it.', 'Beautiful reasoning.'];
   var NUDGE = ['Not quite, here\u2019s the key point.', 'Close, but let\u2019s look again.', 'Good try. Here\u2019s how I think about it.', 'This one trips up a lot of people.'];
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
@@ -167,7 +167,7 @@
     var h = '<div class="gate-card">' + faceImg('') .replace('class="face ', 'style="width:84px;height:84px" class="face ') +
       '<div class="t-pre" style="margin-top:10px">CONGRESSIONAL OB GYN · CLINIC DAY</div>' +
       (expired ? '<h2>Access ended</h2><p>Your 6-week access has ended, ask Dr. Behram for a new code.</p>' + (info && info.expiresDay != null ? '<p style="opacity:.7;font-size:12px">Code ' + esc(info.code || '') + ' expired ' + esc(X.fmtDay(info.expiresDay)) + '.</p>' : '')
-        : '<h2>Welcome, student doctor</h2><p>Enter the access code Dr. Behram gave you. Codes look like <b>CONG-XXXX-XXXX</b> and work for six weeks.</p>') +
+        : '<h2>Welcome, student</h2><p>Enter the access code Dr. Behram gave you. Codes look like <b>CONG-XXXX-XXXX</b> and work for six weeks.</p>') +
       '<input id="codein" class="codein" data-nav data-default maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CONG-XXXX-XXXX" aria-label="Access code">' +
       '<div class="err" id="code-err"></div>' +
       '<button class="btn primary" id="code-go" data-nav style="width:100%;justify-content:center">Unlock the clinic</button>' +
@@ -239,7 +239,7 @@
       '<div class="t-pre">FALLSGROVE PLAZA · ROCKVILLE, MARYLAND</div>' +
       '<h1 class="t-h1">Congressional <b>OB GYN</b></h1><div class="t-sub">Clinic Day with Dr. Behram</div>' +
       '<div class="t-tag">Pick an exam room, read the chart, and work each patient up through board-style questions. Fast, accurate care earns stars, streaks and happy patients.</div>' +
-      '<label class="t-name">Student doctor <input id="nm" data-nav maxlength="18" placeholder="Your name" value="' + esc(save.name) + '"></label>' +
+      '<label class="t-name">Student name <input id="nm" data-nav maxlength="18" placeholder="Your name" value="' + esc(save.name) + '"></label>' +
       '<div class="t-menu"><button class="btn primary" id="go" data-nav data-default>▶ Start Clinic Day <span class="k">SPACE</span></button>' +
       '<div class="t-row"><button class="btn gold" id="dly" data-nav>★ Daily Challenge' + (dailyDone ? ' ✓' : '') + '</button><button class="btn teal" id="mst" data-nav>Topic Mastery' + (dueN ? ' · ' + dueN + ' due' : '') + '</button></div>' +
       '<div class="t-row"><button class="btn ghost" id="brd" data-nav>Leaderboard</button><button class="btn ghost" id="bdg" data-nav>Badges ' + nBad + '/' + C.BADGES.length + '</button></div>' +
@@ -506,7 +506,7 @@
     if (enc.practice) { var ol = C.levelOf(save.xp); save.xp += enc.pts; if (C.levelOf(save.xp) > ol) toast('Promoted to <b>' + esc(C.levelProgress(save.xp).title) + '</b>!', '🎓'); }
     persist(); hud({ score: day.score });
     enc.done = true; setMood(acc >= 0.75 ? 'happy' : acc >= 0.5 ? 'calm' : 'sad');
-    var thanks = acc >= 0.999 ? 'Thank you so much, doctor. I feel so much better!' : acc >= 0.75 ? 'Thanks, that really helps.' : acc >= 0.5 ? 'Okay\u2026 I think I understand.' : 'I\u2019m still a little confused.';
+    var thanks = acc >= 0.999 ? 'Thank you so much. I feel so much better!' : acc >= 0.75 ? 'Thanks, that really helps.' : acc >= 0.5 ? 'Okay\u2026 I think I understand.' : 'I\u2019m still a little confused.';
     $('#s-enc').innerHTML = '<div class="enc-left">' + chartCard(p) + '</div><div class="enc-panel" id="panel" style="text-align:center">' +
       '<div class="t-pre" style="color:#5a6f84">ENCOUNTER COMPLETE · ' + esc(p.topic.t.toUpperCase()) + '</div>' +
       '<div class="bigstars">' + [0, 1, 2].map(function (i) { return '<span class="' + (i < st ? 'on' : '') + '" style="animation-delay:' + (0.2 + i * 0.25) + 's">★</span>'; }).join('') + '</div>' +
@@ -556,7 +556,7 @@
   }
 
   /* ---------- mastery / leaderboard / badges / help ---------- */
-  var TIERN = ['MS3', 'Intern', 'Resident', 'Chief'];
+  var TIERN = ['Student', 'Intern', 'Resident', 'Chief'];
   function pageShell(id, h2, body) {
     setScene('building', building());
     var s = $('#s-' + id); s.innerHTML = '<div class="page"><div class="page-hd"><button class="btn ghost small" data-nav data-back id="bk-' + id + '">← Back</button><h2>' + h2 + '</h2></div><div class="page-body">' + body + '</div></div>';
@@ -588,7 +588,7 @@
     pageShell('help', 'How to play', '<div class="help"><h3 style="margin-top:0">A day at Congressional OB GYN</h3>Patients check in to the waiting room and are roomed into Exam 1–4. Each door shows the patient, her chief complaint and whether she is OB (pink chart) or GYN (teal chart). The status light turns amber, then red, the longer she waits.' +
       '<h3>Encounters</h3>Read the chart, then answer ' + '4–6 board-style questions that walk through the visit: history, workup, diagnosis and management. Dr. Behram explains every answer. Stuck? <b>Ask Dr. Behram</b> removes wrong options for half points (3 per day).' +
       '<h3>Scoring</h3>100 points per correct answer + up to 50 speed bonus (answer within 8 seconds for the full bonus). Streaks multiply points: ×1.5 at 3, ×2 at 5, ×3 at 8. A perfect encounter adds 150. Stars come from accuracy; patient hearts from accuracy and how long she waited. The day ends with a letter grade (A ≥ 90%).' +
-      '<h3>Progress</h3>XP promotes you MS3 → Intern → Resident → Chief → Attending, unlocking harder topics. Topic Mastery schedules reviews with spaced repetition. The Daily Challenge is the same 5 patients for everyone each day.' +
+      '<h3>Progress</h3>XP promotes you Student → Intern → Resident → Chief → Attending, unlocking harder topics. Topic Mastery schedules reviews with spaced repetition. The Daily Challenge is the same 5 patients for everyone each day.' +
       '<h3>Controls</h3><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>1</kbd>–<kbd>4</kbd> pick a room · <kbd>1</kbd>–<kbd>5</kbd> answer · <kbd>Space</kbd> continue · <kbd>Enter</kbd> Ask Dr. Behram · <kbd>Esc</kbd> back · <kbd>M</kbd> sound · <kbd>N</kbd> music. Touch and gamepads work too (A = continue, X/Y = ask, B = back).' +
       '<p style="font-size:12px;color:#5a6f84;margin-top:14px">Patients are fictional. Content is for teaching and reflects common US guidelines (ACOG, CDC, ASCCP, USPSTF) as of 2026; always confirm with current guidance. Not medical advice.</p></div>');
   }

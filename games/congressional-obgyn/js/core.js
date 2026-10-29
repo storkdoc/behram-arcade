@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   var LEVELS = [
-    { n: 'MS3', xp: 0, title: 'Third-year medical student' },
+    { n: 'Student', xp: 0, title: 'Clinical Student' },
     { n: 'Intern', xp: 2500, title: 'PGY-1 Intern' },
     { n: 'Resident', xp: 8000, title: 'OB/GYN Resident' },
     { n: 'Chief', xp: 18000, title: 'Chief Resident' },

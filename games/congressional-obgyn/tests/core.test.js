@@ -8,10 +8,10 @@ ok(C.scoreAnswer(true, 5, 3).total === 225 && C.scoreAnswer(true, 5, 5).total ==
 ok(C.scoreAnswer(true, 5, 1, true).total === 75, 'lifeline halves');
 ok(C.scoreAnswer(false, 1, 0).total === 0, 'wrong = 0');
 ok(C.grade(0.95) === 'A' && C.grade(0.85) === 'B' && C.grade(0.5) === 'F', 'grades');
-ok(C.levelProgress(0).name === 'MS3' && C.levelProgress(2600).name === 'Intern' && C.levelProgress(40000).name === 'Attending', 'levels');
+ok(C.levelProgress(0).name === 'Student' && C.levelProgress(2600).name === 'Intern' && C.levelProgress(40000).name === 'Attending', 'levels');
 const s = C.newSave(); const day = 300;
 let topics = C.pickDay(BANK, s, day, 6, 0, C.rng(1));
-ok(topics.length === 6 && new Set(topics).size === 6 && topics.every(t => t.tier === 0), 'MS3 day: 6 distinct tier-0 topics');
+ok(topics.length === 6 && new Set(topics).size === 6 && topics.every(t => t.tier === 0), 'Student-level day: 6 distinct tier-0 topics');
 ok(topics.filter(t => t.cat === 'OB').length >= 2 && topics.filter(t => t.cat === 'GYN').length >= 2, 'OB/GYN mix');
 C.updateMastery(s, 'pap', 1, day); ok(s.mastery.pap.box === 1 && s.mastery.pap.due === day + 1, 'mastery up + due tomorrow');
 C.updateMastery(s, 'pap', 0.4, day + 1); ok(s.mastery.pap.box === 0, 'mastery down on poor score');
