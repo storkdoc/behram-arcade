@@ -285,6 +285,7 @@ function tickDemand(h) {
 }
 
 /* ---------- per-step game logic ---------- */
+const SD_RATE = 0.08, SD_HOLD_PERIOD = 20;
 function controls(h) {
   let rc = 0; if (held.has('out')) rc += 1; if (held.has('in')) rc -= 1; s.rodCmd = rc;
   if (rc && s.runaway && rc < 0) s.runaway = 0;
@@ -293,7 +294,10 @@ function controls(h) {
     const dl = (held.has('loadUp') ? 1 : 0) - (held.has('loadDn') ? 1 : 0);
     if (dl) s.turb.load = clamp(s.turb.load + dl * 0.03 * h, 0.05, 1.0);
   }
-  if (g.sdWithdraw && !s.scram) { s.sd = Math.max(0, s.sd - 0.25 * h); if (s.sd <= 0) g.sdWithdraw = false; }
+  // Shutdown bank withdrawal after a trip reset. At the old 0.25/s the subcritical power rose on a <10 s period and
+  // re-tripped the plant on HIGH STARTUP RATE within ~1.3 s, every time, so no shift could recover from a trip
+  // (Day 2 eval). Withdraw more slowly and hold while the startup period is short, as an operator would.
+  if (g.sdWithdraw && !s.scram) { if (!(s.period > 0 && s.period < SD_HOLD_PERIOD)) s.sd = Math.max(0, s.sd - SD_RATE * h); if (s.sd <= 0) g.sdWithdraw = false; }
   if (s.type.name === 'RBMK' && held.size && (rc)) s.powerSet = s.n;   // manual rod motion moves the regulator set point
 }
 function gameStep(h) {
@@ -305,7 +309,13 @@ function gameStep(h) {
   if (mode === 'drill' && drill) { if (drill.tick) drill.tick(s, g); }
   if (mode === 'shift' || mode === 'drill') {
     const mw = s.MWe / 1000, acc = clamp(1 - Math.abs(mw - g.demand) * 5, 0, 1);
-    g.accSum += acc * h; g.accN += h;
+    // Fairness (Day 2 eval): a fault that forces an automatic trip (loss of feed, offsite power, turbine)
+    // used to wreck the grade by luck of the draw. While the crew is still repairing it and the unit is
+    // off the grid, grid accuracy is not scored; the clock restarts once the crew finishes.
+    const excused = mode === 'shift' && (s.scram || s.turb.tripped || !s.turb.synced) && g.faults.some(f => f.def.repair && !f.repaired);
+    if (excused !== !!g.excused) { g.excused = excused; if (excused) toast('Unit off the grid while the crew repairs: grid accuracy is paused, not scored. Restart when they finish.', 'blue', 7000); }
+    if (excused) g.excusedT = (g.excusedT || 0) + h;
+    else { g.accSum += acc * h; g.accN += h; }
     if (mode === 'shift' && s.turb.synced) g.score += 10 * acc * h * g.D.mult * (1 + g.level * 0.25);
   }
   if (mode === 'title' && s.scram) startAttract();
@@ -360,7 +370,7 @@ function shiftEnd(damaged) {
   const rank1 = rankOf(prefs.xp);
   AU.sfx(damaged ? 'bad' : 'good');
   endScreen(damaged ? 'CORE DAMAGE — SHIFT OVER' : `SHIFT ${g.shiftNo} COMPLETE`, grade,
-    `<table class="keys"><tr><td>Grid accuracy</td><td>${Math.round(acc * 100)} %</td></tr><tr><td>Faults resolved</td><td>${g.resolved}</td></tr><tr><td>Reactor trips</td><td>${g.trips}</td></tr><tr><td>Safety injections</td><td>${g.sis}</td></tr><tr><td>Score</td><td>${Math.round(g.score)}</td></tr><tr><td>XP</td><td>+${xp} → ${prefs.xp} (${rank1.t})</td></tr></table>` +
+    `<table class="keys"><tr><td>Grid accuracy</td><td>${Math.round(acc * 100)} %</td></tr>${g.excusedT > 1 ? `<tr><td>Off grid for crew repairs (not scored)</td><td>${Math.round(g.excusedT)} s</td></tr>` : ''}<tr><td>Faults resolved</td><td>${g.resolved}</td></tr><tr><td>Reactor trips</td><td>${g.trips}</td></tr><tr><td>Safety injections</td><td>${g.sis}</td></tr><tr><td>Score</td><td>${Math.round(g.score)}</td></tr><tr><td>XP</td><td>+${xp} → ${prefs.xp} (${rank1.t})</td></tr></table>` +
     (rank1 !== rank0 ? `<p class="hintp">PROMOTED: ${rank1.t}</p>` : '') + (damaged ? `<p>${C.CONCEPTS.eccs.b[0]}</p>` : '<p>The next shift starts from this plant state, faults come faster and harder.</p>'), !damaged, 'NEXT SHIFT');
 }
 function drillEnd(pass) {
@@ -395,7 +405,7 @@ function act(a, el) {
     case 'ack': if (ann.ack()) AU.sfx('relay'); break;
     case 'warp': warpIdx = (warpIdx + 1) % WARPS.length; AU.sfx('relay'); break;
     case 'auto': if (s.scram) { AU.sfx('deny'); break; } s.rodAuto = !s.rodAuto; if (s.runaway) s.runaway = 0; if (s.type.name === 'RBMK') s.powerSet = s.n; AU.sfx(s.rodAuto ? 'on' : 'off'); break;
-    case 'reset': if (S.resetScram(s)) { g.sdWithdraw = true; toast('Trip reset: shutdown bank withdrawing. Pull rods to restart.', 'blue'); } else { AU.sfx('deny'); toast(s.scram ? 'Trip reset needs power below 2 % (wait for it to fall)' : 'Reactor is not tripped', '', 3000); } break;
+    case 'reset': if (S.resetScram(s)) { g.sdWithdraw = true; toast('Trip reset: shutdown bank withdrawing. Pull rods (↑) to restart. If it stays subcritical with the rods out, xenon is building after the trip: dilute boron (N).', 'blue', 9000); } else { AU.sfx('deny'); toast(s.scram ? 'Trip reset needs power below 2 % (wait for it to fall)' : 'Reactor is not tripped', '', 3000); } break;
     case 'porv': s.porvCmd = !s.porvCmd; if (s.porvCmd) g.tut.porvOpened = true; else if (g.tut.porvOpened) g.tut.porvCycled = true; AU.sfx(s.porvCmd ? 'on' : 'off'); break;
     case 'block': s.blockCmd = s.blockCmd > 0.5 ? 0 : 1; AU.sfx(s.blockCmd ? 'on' : 'off'); break;
     case 'si': if (!s.si || s.siBlocked) { s.si = true; s.siBlocked = false; s.events.push({ k: 'si', t: s.t }); scram('MANUAL SAFETY INJECTION'); }

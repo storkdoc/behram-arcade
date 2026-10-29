@@ -52,3 +52,13 @@ never stash/reset others' files. Commit, then `git pull --rebase` (or push from 
 
 ## Time compression (disclose in game)
 xenon x120, decay heat x4, rods ~7x real speed, optional player warp x1/x4/x16.
+
+## Shift recovery fix (Day 2 eval, 2026-10-29)
+- Bug: after any trip, RESET withdrew the shutdown bank at 0.25/s; subcritical power rose on a <10 s period and
+  re-tripped on HIGH STARTUP RATE ~1.3 s later, every time, so no shift could recover from a trip (one fault = grade D).
+  Now SD_RATE 0.08/s and the withdrawal holds while 0 < period < 20 s (main.js controls()).
+- After a trip, xenon (x120 clock) keeps the core subcritical with rods fully out for minutes; the reset toast now
+  tells the player to dilute boron (N). A careful restart (rods + dilution) reaches 8 % in ~170 s plant time.
+- Fairness: while an unrepaired crew-repair fault has the unit off the grid, grid accuracy is not scored
+  (g.excusedT, shown on the end screen).
+- Test: `node games/reactor/tests/restart.test.mjs http://localhost:PORT/games/reactor/` (fails on the old code).
