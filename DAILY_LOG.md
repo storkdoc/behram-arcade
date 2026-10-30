@@ -197,3 +197,26 @@ gives ALL PASS and vortex-tips.test.js gives ALL PASSED.
 1. Neuro Arena: add a like-for-like Limited-reflex baseline to the report, and make selection act (see day 1 recommendation 2).
 2. Congressional: balance option lengths, and keep Next above the fold on iPhone.
 3. Star Raider: consider a gentler Pilot threshold for casual players.
+
+### Trackball Football: you can't run for a touchdown every play anymore (`816c6bd`)
+- **Root cause**: a human ball carrier at full trackball spin was faster than every CPU defender (RB about 9.9 yd/s
+  vs Pro defenders' 8.4, plus a free juke speed burst every second), and he could cut instantly. Defenders just
+  chased the runner instead of taking angles, nobody kept the edge or stayed deep, and mashing escaped about half
+  of all wraps. Sideline sweeps and QB scrambles scored 100% of the time at every level.
+- **Fix**: defenders now take intercept angles (Rookie defenders' angles are sloppier), keep contain, and leave a
+  deep safety. The CPU dives from 1–2 yd, gang tackles are harder to escape, and wrap escapes depend on spin, luck
+  and fatigue. A carrier fades after about 3 s and only cuts sharply while juking. The juke is now a timed fake: it
+  works from 1.3–2.2 yd ("FAKED HIM OUT!") and juking in open space wastes energy. The CPU learns your run, outside
+  and scramble tendencies (stuff, man or spy calls and a cheating safety) and shows a banner telling you to mix in a
+  pass. The same rules apply to both teams and to 2P.
+- **Naive run-exploit TD rate (headless bots)**:
+  - Rookie: 63.6% → 0.7%
+  - Pro: 43.9% → 0.3%
+  - All-Pro: 29.9% → 0%
+- **Skilled "evasive" bot** (well-timed jukes), before → after:
+  - Rookie: 72% → about 5%
+  - Pro: 43% → about 5%
+  - All-Pro: 18% → 0%
+- Long breakaways still happen. Pro sweeps average about 5–11 yd.
+- Tests: new `games/trackball-football/tests/run-defense.test.js` (pure Node), ALL PASSED. game.test.js and
+  mp.test.js are ALL PASS.
