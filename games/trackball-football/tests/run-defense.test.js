@@ -63,7 +63,8 @@ function runPlay(strat, playKey, opts) {
         else if (opts.juke !== false && G.t - jukeT > 1.02) {
           let near = 99; for (const q of G.pl) if (q.team !== team && q.st === 'ok' && q.eng < 0) near = Math.min(near, Math.hypot(q.x - me.x, q.y - me.y));
           // naive bots juke whenever anybody is close; the evasive bot waits for the 1.3-2.2 yd sweet spot
-          if (strat === 'evasive' ? near > 1.3 && near < 2.2 : near < 3.2) { inp[team].aP = true; jukeT = G.t; }
+          // (opts.jukeWhen: a custom trigger, e.g. the helmet-cam bot that only jukes on what the HELMET CAM shows it)
+          if (opts.jukeWhen ? opts.jukeWhen(G, me, team, near) : strat === 'evasive' ? near > 1.3 && near < 2.2 : near < 3.2) { inp[team].aP = true; jukeT = G.t; }
         }
       }
       if (two) { // scripted human defender: chases with the selected man, presses to grab the closest, dives in range

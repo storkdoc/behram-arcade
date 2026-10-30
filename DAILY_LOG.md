@@ -274,6 +274,17 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
   post-duel benchmark from the same duel and double copy errors), for choice contests only; Pong excluded after it
   crowned a worse champion. CSV columns plateau / plateau_stag / champ_post_duel_acc. lexicon + page tests pass.
 
+- **Trackball Football: HELMET CAM**, an optional second view from your own man's facemask: the carrier on
+  offense, your defender on defense. It sits next to the broadcast view (side by side on Mac and phone landscape,
+  stacked on a phone held upright). Toggle with V, the HELMET CAM button, gamepad Y, pause or Options; saved,
+  off by default.
+  - Intent cues come straight from the AI's state (`S.it`), only for men in view: pursuit angles, CONTAIN EDGE,
+    DEEP SAFETY, BLITZ, a flashing "!" in the real dive window, blocker assignments, routes, blind-side warnings,
+    and the D's key read.
+  - The AI is byte-identical to before (seeded check).
+  - A cue-only juke bot scores 0-1.3% TDs against a 9.6-19.2% limit; run-defense is unchanged.
+  - New `tests/helmet-cam.test.js`. game, mp, run-defense and helmet-cam tests all pass.
+
 ### For tomorrow
 1. Neuro Arena: repeat plateau on/off on 3+ seeds; add the like-for-like Limited-reflex (brain silenced) baseline.
 2. Congressional: keep balancing (still 72% longest); check the iPhone landscape encounter layout.

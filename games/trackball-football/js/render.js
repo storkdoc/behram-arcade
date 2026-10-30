@@ -26,23 +26,34 @@ const Render = (() => {
   const quality = { level: 2 };
 
   /* ---------------- camera ---------------- */
-  function layout(w, h, dpr, rect, mobile) {
-    W = w; H = h; DPR = dpr; cam.rect = rect;
+  function layout(w, h, dpr, rect, mobile, opt) {
+    const resized = w !== W || h !== H || dpr !== DPR || !vignette;
+    W = w; H = h; DPR = dpr; cam.rect = rect; cam.split = !!(opt && opt.split);
     const fitK = rect.h / (FIELD_W * Math.sin(cam.p) + 9);
     const portrait = rect.h > rect.w;
-    const kmin = mobile ? (portrait ? rect.w / 25 : rect.w / 38) : rect.w / 46;
+    const kmin = (opt && opt.kDiv) ? rect.w / opt.kDiv : mobile ? (portrait ? rect.w / 25 : rect.w / 38) : rect.w / 46;
     let k = Math.max(fitK, kmin); k = Math.min(k, rect.w / 22);
     cam.k = k; cam.F = k * cam.D; cam.followY = k > fitK * 1.02;
     cam.cx = rect.x + rect.w / 2; cam.cy = rect.y + rect.h * (cam.followY ? 0.55 : 0.57);
-    buildVignette();
+    if (resized) buildVignette();
   }
-  function proj(x, y, z) {
+  function projB(x, y, z) {
     const cp = Math.cos(cam.p), sp = Math.sin(cam.p);
     const dx = x - cam.tx, dy = y - (cam.ty + cam.D * cp), dz = (z || 0) - cam.D * sp;
     const depth = -dy * cp - dz * sp, up = -dy * sp + dz * cp;
     return [cam.cx + cam.F * dx / depth, cam.cy - cam.F * up / depth, depth];
   }
+  /* the projection used by the drawing helpers: the broadcast camera, or (inside withView) another camera such as the helmet cam */
+  let proj = projB;
   const pxAt = (y, z) => cam.F / (-(y - (cam.ty + cam.D * Math.cos(cam.p))) * Math.cos(cam.p) - ((z || 0) - cam.D * Math.sin(cam.p)) * Math.sin(cam.p));
+  const scaleB = (x, y) => pxAt(y), toCamB = () => TO_CAM_B, TO_CAM_B = [0, 1];
+  let scaleAt = scaleB, toCamAt = toCamB, frozen = false;
+  /** draw with another camera: v = { proj(x,y,z) -> [sx,sy,depth], scale(x,y) -> px per yard, toCam(x,y) -> unit ground vector toward the camera } */
+  function withView(v, fn) {
+    const sv = [proj, scaleAt, toCamAt, frozen];
+    proj = v.proj; scaleAt = v.scale; toCamAt = v.toCam; frozen = true;
+    try { return fn(); } finally { [proj, scaleAt, toCamAt, frozen] = sv; }
+  }
   function follow(S, dt, snap, mine) {
     if (!S) return;
     const b = S.b; let fx = b[0], fy = b[1];
@@ -300,16 +311,16 @@ const Render = (() => {
 
   /* ---------------- players ---------------- */
   function drawShadow(ctx, x, y, tilt, fa) {
-    const sc = pxAt(y);
+    const sc = scaleAt(x, y);
     // contact shadow + two faint floodlight shadows
     const dirs = [[0.55, 0.5, 0.11], [-0.6, 0.45, 0.09]];
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.fillStyle = 'rgba(0,0,0,0.1)'; const ga = ctx.globalAlpha; // (the helmet cam fades men right in front of the lens)
     for (const [dx, dy, a] of dirs) {
       const L = 1.7 + tilt, n = Math.hypot(dx, dy), ux = dx / n, uy = dy / n, px = -uy * 0.24, py = ux * 0.24;
       const p = [proj(x + px, y + py), proj(x + ux * L + px * 0.6, y + uy * L + py * 0.6), proj(x + ux * L - px * 0.6, y + uy * L - py * 0.6), proj(x - px, y - py)];
-      ctx.globalAlpha = a / 0.1; ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = ga * a / 0.1; ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]); ctx.closePath(); ctx.fill();
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = ga;
     const c = proj(x + Math.cos(fa) * tilt * 0.8, y + Math.sin(fa) * tilt * 0.8);
     const rx = sc * (0.48 + tilt * 0.5), ry = rx * 0.55;
     const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], rx);
@@ -320,6 +331,7 @@ const Render = (() => {
     const q = S.pl[i], team = i < 7 ? 0 : 1, T = TEAM[team], A = anim[i];
     const x = q[0], y = q[1], fa = q[2], spd = q[3], st = q[4];
     // gait + pose (client-side)
+    if (frozen) dt = 0; // a second view of the same frame: don't advance the animation twice
     A.ph += spd * dt * Math.PI * 2 / (1.5 + spd * 0.11);
     const tiltTarget = st === 1 ? 1.45 : st === 2 ? 1.15 : st === 5 ? 0.7 : st === 3 ? 0.42 : Math.min(0.32, spd * 0.03);
     A.tilt += (tiltTarget - A.tilt) * Math.min(1, dt * (st === 1 ? 7 : 9));
@@ -336,10 +348,11 @@ const Render = (() => {
       if (!noTilt) { cc = c - drop * Math.min(1, c / 1.0); aa = a * ct + cc * stt; cc = -a * stt + cc * ct; }
       return proj(x + fw[0] * aa + sd[0] * b, y + fw[1] * aa + sd[1] * b, Math.max(0.04, cc));
     };
-    const sc = pxAt(y);
+    const sc = scaleAt(x, y), tc = toCamAt(x, y);
     drawShadow(ctx, x, y, A.tilt > 0.8 ? 1.2 : 0, fa);
-    // which side is nearer the camera (+y)
-    const nearSide = sd[1] > 0 ? 1 : -1;
+    // which side is nearer the camera (+y for the broadcast camera)
+    const sdC = sd[0] * tc[0] + sd[1] * tc[1], fwC = fw[0] * tc[0] + fw[1] * tc[1];
+    const nearSide = sdC > 0 ? 1 : -1;
     const legs = [], arms = [];
     for (const s of [-1, 1]) {
       const p = ph + (s > 0 ? Math.PI : 0), fwdF = Math.sin(p) * amp, lift = Math.max(0, Math.cos(p)) * amp * 0.45;
@@ -387,12 +400,12 @@ const Render = (() => {
     L([0, 0.3, 1.53], [0, -0.3, 1.53], 0.25, T.jersey);
     L([0.02, 0.18, 1.6], [0.02, -0.18, 1.6], 0.12, 'rgba(255,255,255,0.18)');
     // jersey number (front and back), when the chest or back faces the camera
-    const face = Math.abs(sd[0]); // side axis along screen x => chest faces camera
+    const face = Math.abs(sd[0] * tc[1] - sd[1] * tc[0]); // side axis across the view => chest faces camera
     if (sc > 7 && face > 0.35 && A.tilt < 0.9) {
       const o = P(0.12, 0, 1.3), ox = P(0.12, 0.1, 1.3), oy = P(0.12, 0, 1.2);
       let vx = [ox[0] - o[0], ox[1] - o[1]]; if (vx[0] < 0) vx = [-vx[0], -vx[1]];
       const vy = [oy[0] - o[0], oy[1] - o[1]];
-      ctx.save(); ctx.setTransform(DPR * vx[0] / 10 * 0.55, DPR * vx[1] / 10 * 0.55, DPR * vy[0] / 10 * 0.55, DPR * vy[1] / 10 * 0.55, DPR * o[0], DPR * o[1]);
+      ctx.save(); ctx.transform(vx[0] / 10 * 0.55, vx[1] / 10 * 0.55, vy[0] / 10 * 0.55, vy[1] / 10 * 0.55, o[0], o[1]);
       ctx.font = `800 70px ${DFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.lineWidth = 9; ctx.strokeStyle = T.numEdge; ctx.strokeText(String(q[5]), 0, 0); ctx.fillStyle = T.num; ctx.fillText(String(q[5]), 0, 0);
       ctx.restore();
@@ -406,20 +419,26 @@ const Render = (() => {
     // center stripe
     { const a = P(0.17, 0, 1.86), b = P(-0.15, 0, 1.9), m = P(0.02, 0, 1.97); ctx.strokeStyle = T.stripe; ctx.lineWidth = Math.max(0.6, 0.045 * sc); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(m[0], m[1], b[0], b[1]); ctx.stroke(); }
     // facemask (when the face is not turned away)
-    if (fw[1] > -0.55 && A.tilt < 1.2) {
+    if (fwC > -0.55 && A.tilt < 1.2) {
       const f1 = P(0.19, 0.09, 1.76), f2 = P(0.19, -0.09, 1.76), f3 = P(0.18, 0.08, 1.69), f4 = P(0.18, -0.08, 1.69), f5 = P(0.2, 0, 1.79), f6 = P(0.17, 0, 1.66);
       ctx.strokeStyle = '#cfd3da'; ctx.lineWidth = Math.max(0.6, 0.03 * sc); ctx.beginPath();
       ctx.moveTo(f1[0], f1[1]); ctx.lineTo(f2[0], f2[1]); ctx.moveTo(f3[0], f3[1]); ctx.lineTo(f4[0], f4[1]); ctx.moveTo(f5[0], f5[1]); ctx.lineTo(f6[0], f6[1]); ctx.stroke();
     }
     // helmet decal (X or O) on the side facing us
-    if (sc > 9 && Math.abs(sd[1]) > 0.45) {
+    if (sc > 9 && Math.abs(sdC) > 0.45) {
       const d = P(-0.02, nearSide * 0.12, 1.79);
       ctx.font = `900 ${(hr * 0.95).toFixed(1)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = T.stripe; ctx.fillText(T.sym, d[0], d[1] + hr * 0.05);
     }
     // the ball, when carried
     if (info.hasBall) { const h = arms.find(a => a.s === info.ballSide).hand; const bp = P(h[0] + 0.05, h[1] * 0.6, h[2] + 0.02); drawBallAt(ctx, bp[0], bp[1], sc, Math.atan2(P(0.3, 0, 1.2)[1] - P(0, 0, 1.2)[1], P(0.3, 0, 1.2)[0] - P(0, 0, 1.2)[0]), 0); }
-    A.x = x; A.y = y; A.head = hc; A.sc = sc;
+    if (!frozen) { A.x = x; A.y = y; A.head = hc; A.sc = sc; }
+  }
+  function playerInfo(S, i) {
+    const b = S.b, holder = b[3] === 0 ? b[4] : -1;
+    const team = i < 7 ? 0 : 1, slot = i % 7, offense = team === S.off;
+    const role = offense ? OFF_ROLE[slot] : DEF_ROLE[slot];
+    return { role, hasBall: holder === i, ballSide: 1, qbHold: holder === i && role === 'QB' && offense && !S.thrown && S.ph === 'live' && S.kind === 'pass', thr: 0 };
   }
   function drawBallAt(ctx, sx, sy, sc, ang, spin) {
     const L = Math.max(2.2, 0.2 * sc), Wd = L * 0.6;
@@ -508,6 +527,12 @@ const Render = (() => {
   /* ---------------- frame ---------------- */
   const roleCache = [];
   function draw(ctx, S, dt, me) {
+    if (!cam.split) return draw0(ctx, S, dt, me);
+    // split screen: keep the broadcast view inside its own rectangle
+    ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.beginPath(); ctx.rect(cam.rect.x, cam.rect.y, cam.rect.w, cam.rect.h); ctx.clip();
+    try { draw0(ctx, S, dt, me); } finally { ctx.restore(); }
+  }
+  function draw0(ctx, S, dt, me) {
     t += dt;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const sh = cam.shake > 0 ? cam.shake * 4 : 0;
@@ -519,7 +544,7 @@ const Render = (() => {
     drawLines(ctx, S);
     if (!S) return;
     drawPosts(ctx);
-    drawMarkersUnder(ctx, S, me);
+    if (api.under) api.under(ctx, S, me);
     // players + ball, far to near
     const order = []; for (let i = 0; i < 14; i++) order.push(i); order.sort((a, b) => S.pl[a][1] - S.pl[b][1]);
     const b = S.b, holder = b[3] === 0 ? b[4] : -1;
@@ -537,10 +562,9 @@ const Render = (() => {
     drawSelFlash(ctx, S);
     // vignette, fireworks
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.drawImage(vignette, 0, 0, W, H);
+    if (cam.split) ctx.drawImage(vignette, cam.rect.x, cam.rect.y, cam.rect.w, cam.rect.h); else ctx.drawImage(vignette, 0, 0, W, H);
     drawFireworks(ctx, dt);
   }
-  function drawMarkersUnder(ctx, S, me) { }
   /** Space on defense jumped you to a new man: a quick contracting highlight ring on him */
   let selF = null;
   function selFlash(i) { selF = { i, t0: t }; }
@@ -602,5 +626,8 @@ const Render = (() => {
     }
   }
 
-  return { cam, quality, layout, proj, pxAt, follow, draw, spawn, selFlash, drawTrackball, drawBallAt, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, anim, parts };
+  const api = { cam, quality, layout, proj: (x, y, z) => proj(x, y, z), pxAt, follow, draw, spawn, selFlash, drawTrackball, drawBallAt, drawPlayer, playerInfo, withView, under: null,
+    tex: () => { if (!crowdTex[0]) buildTextures(); return { crowd: crowdTex, grass: grassTile }; },
+    get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, get t() { return t; }, anim, parts };
+  return api;
 })();
