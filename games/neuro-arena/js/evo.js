@@ -11,7 +11,16 @@ import { wdOf } from './contests.js';
 // the contest descriptor the understanding layer uses (Pong has its own)
 export const uxC = id => !id || id === 'pong' ? PONG_UX : CONTEST[id];
 
-export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800 };
+/* PLATEAU RULE (Oct 29 2026). In Lamarckian mode the champion keeps its best-benchmarked synapses, so after n duels its
+   bar is the MAXIMUM of n noisy lifetimes, while a challenger gets one lifetime (winner's curse). Measured Oct 28-29:
+   divisor and simon champions froze at a lucky 73% snapshot for 20+ generations while every lifetime (champion's and
+   challengers') ended at 53-72%: selection stopped acting. After `plateau` generations without a new champion or a
+   better champion snapshot, a challenger is judged against the champion's OWN post-duel benchmark from the same duel
+   (same items, same learning time: a fair paired test, still with THE REAPER's margin + sign test), and copy errors in
+   the genome and understanding wiring are `plateauRate`x larger. The champion's stored snapshot goes to the Hall of
+   Fame when it is dethroned (and can come back through the HoF rematch), so nothing is lost; the champion line can
+   dip, and 'best ever' is unchanged. plateau: 0 = off (the old rule). */
+export const DEFAULTS = { rate: 0.02, matchSec: 30, lamarck: true, contest: 'pong', size: 2800, plateau: 8, plateauRate: 2 };
 export const TRIAL_LOOP = 3;   // 3: + the understanding layer (genome.ux); choice-contest saves from an older trial loop / layout are not restored
 export const STORE_V = 3;   // v3: one evolution per contest (v2 Pong saves are migrated)
 
@@ -97,14 +106,16 @@ export class Evolution {
     const hof = this.hof[0];
     if (hof && this.gen - (this.lastRM || 0) >= 25 && c.n >= 3 && hof.fit > c.fit + 0.06 && hof.id !== c.id && (hof.weights || !o.lamarck) && (this.lastRM = this.gen) >= 0)
       return { id: hof.id, genome: { ...hof.genome }, weights: hof.weights && o.lamarck ? cloneW(hof.weights) : null, errors: [], wErrors: 0, parent: c.id, hof: true, born: hof.born };
-    const { genome, errors } = copyGenome(c.genome, o.rate, this.rnd);   // copy errors go into the CHILD's copy only
-    if (c.genome.ux) genome.ux = mutateUX(uxC(o.contest), c.genome.ux, o.rate * (o.uxRate || 1), this.rnd, errors);   // the understanding layer's wiring
+    const hm = this.onPlateau() ? (o.plateauRate || 1) : 1;   // plateau: larger copy errors in the genes and the understanding wiring
+    const { genome, errors } = copyGenome(c.genome, o.rate * hm, this.rnd);   // copy errors go into the CHILD's copy only
+    if (c.genome.ux) genome.ux = mutateUX(uxC(o.contest), c.genome.ux, o.rate * (o.uxRate || 1) * hm, this.rnd, errors);   // the understanding layer's wiring
     let weights = null, wErrors = 0;
     if (o.lamarck && c.weights) { const isObj = !!c.weights.W, r = copyWeights(isObj ? c.weights.W : c.weights, o.rate, this.rnd, genome.wMax); weights = isObj ? { ...c.weights, W: r.w } : r.w; wErrors = r.n;
       // Pong: a rewired unit starts with fresh synapses (NaN = 'initialise' for Brain.initPlastic)
       if (!isObj && genome.ux) { const NM = PLASTIC.NM, a0 = GRID.GF[0] * GRID.GF[1]; genome.ux.units.forEach((u, k) => { if (unitKey(u) !== unitKey(c.genome.ux.units[k])) for (let x = 0; x < 2; x++) { const a = a0 + 2 * k + x; for (let m = 0; m < NM; m++) if (weights[a * NM + m] >= 0) weights[a * NM + m] = NaN; } }); } }
     return { id: this.nextId++, genome, weights, errors, wErrors, parent: c.id, born: this.gen + 1 };
   }
+  onPlateau() { const o = this.opts; return !!(o.lamarck && o.plateau > 0 && (o.contest || 'pong') !== 'pong' && (this.stag || 0) >= o.plateau); }   // choice contests only: in Pong (Oct 30, 1 seed) it crowned a worse champion (44% -> 28%; off: 48%)
   job(child) {
     const c = this.champ, side = this.rnd() < 0.5 ? 0 : 1;   // random sides: no court bias
     const j = { side, seed: (this.seedCounter++ * 2654435761) >>> 0, matchSec: this.opts.matchSec, lamarck: this.opts.lamarck, contest: this.opts.contest || 'pong', size: this.opts.size || 2800, level: this.level || 0, nbrStage: !!this.opts.nbrStage && this.gen < (this.opts.nbrGens || 1e9), probeMix: !!this.opts.probeMix, aimR: this.opts.aimR || 0, statue: !!this.opts.statue && this.gen < (this.opts.statueGens || 1e9) };
@@ -130,7 +141,7 @@ export class Evolution {
      returns the history entries */
   record(children, jobs, results) {
     if (!Array.isArray(children)) { children = [children]; jobs = [jobs]; results = [results]; }
-    const o = this.opts, c = this.champ, out = [], prevBench = c.bench ? c.fit : null;
+    const o = this.opts, c = this.champ, out = [], prevBench = c.bench ? c.fit : null, plat = this.onPlateau();
     // 1. the champion's own lifetime learning
     let ref = c.bench && o.lamarck ? { bench: c.bench, w: c.weights } : null;
     children.forEach((child, k) => {
@@ -148,13 +159,14 @@ export class Evolution {
       const st = results[k].stats, cs = jobs[k].side, ks = 1 - cs, bk = results[k].bench[ks], bc = results[k].bench[cs];
       this.gen++;
       // Lamarckian: compare with the champion's kept synapses (deterministic score); Darwinian: with the champion copy in the same duel
-      const cmp = o.lamarck ? c.bench : bc;
+      // (plateau rule: the champion's post-duel score from this same duel, see DEFAULTS)
+      const cmp = o.lamarck && !plat ? c.bench : bc;
       // Darwinian lifetimes are stochastic: picking the luckiest of K lives would crown noise, so also demand a 3-serve margin over the champion's mean
       const v = reaper(cmp, bk, o.contest || 'pong');
       const clear = v.reaped && (o.lamarck || F(bk) >= c.fit + 0.06);
       v.reaped = clear; v.champId = c.id; v.childId = child.id;
       const e = { gen: this.gen, champBench: c.fit, childBench: F(bk), reaper: v, contest: o.contest || 'pong', childAcc: bk.acc, champAcc: cmp.acc, champHit: st.hitRate[cs], childHit: st.hitRate[ks], rally: st.rally, score: [st.score[cs], st.score[ks]],
-        childWon: winnerOf(st) === ks, clear, champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false, seg: st.seg, cs, prevBench };
+        childWon: winnerOf(st) === ks, clear, plateau: plat, stag: this.stag || 0, champPost: bc.acc, champId: c.id, childId: child.id, errors: child.errors, wErrors: child.wErrors, hof: !!child.hof, newChamp: false, beneficial: false, seg: st.seg, cs, prevBench };
       if (clear && S(bk) > bestH) { bestH = S(bk); bestK = k; }
       out.push(e);
     });
@@ -163,8 +175,10 @@ export class Evolution {
       this.toHof(c);
       const nc = { id: child.id, genome: child.genome, weights: o.lamarck ? (ks === 0 ? results[bestK].wA : results[bestK].wB) : null, born: child.born ?? this.gen,
         n: 0, bench: bk, fit: F(bk), scores: [F(bk)], parent: child.parent, errors: child.errors };
-      this.champ = nc; out[bestK].newChamp = true; out[bestK].beneficial = child.errors.length > 0 || child.wErrors > 0;
+      this.champ = nc; out[bestK].newChamp = true; out[bestK].plateauCrown = plat; out[bestK].beneficial = child.errors.length > 0 || child.wErrors > 0;
     }
+    // plateau counter: generations since the last new champion or a better champion snapshot
+    this.stag = bestK >= 0 || (prevBench != null && this.champ.fit > prevBench) || prevBench == null ? 0 : (this.stag || 0) + children.length;
     if (!this.best || this.champ.fit > this.best.fit) this.best = { id: this.champ.id, fit: this.champ.fit, gen: this.gen, genome: { ...this.champ.genome } };
     for (const e of out) {
       e.champFit = this.champ.fit; e.bestFit = this.best.fit; e.lam = !!o.lamarck;
@@ -186,7 +200,7 @@ export class Evolution {
       const lt = results.find(r => r && r.lexT); if (lt) this.lexAcc = { gen: this.gen, ...lt.lexT }; }
     if (C && C.levels && this.champ.bench && (this.champ.bench.level ?? 0) === (this.level || 0) && this.champ.bench.acc >= levelThr(C, this.level || 0) && (this.level || 0) < C.levels.length - 1) {
       const passed = this.champ.bench.acc;
-      this.level = (this.level || 0) + 1; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = []; this.lastProbe = -99; this.bestAcc = 0;   // 'best ever' is per level
+      this.level = (this.level || 0) + 1; this.stag = 0; this.champ.bench = null; this.champ.fit = 0; this.champ.scores = []; this.lastProbe = -99; this.bestAcc = 0;   // 'best ever' is per level
       const last = out[out.length - 1]; if (last) { last.levelUp = this.level; last.passed = passed; }
       (this.levelUps = this.levelUps || []).push({ gen: this.gen, level: this.level });
     }
@@ -213,7 +227,7 @@ export class Evolution {
   serialize(withWeights = true) {
     const q = c => c && c.weights && withWeights ? quantW(c.weights, c.genome.wMax) : null;
     return { v: STORE_V, tl: TRIAL_LOOP, opts: this.opts, gen: this.gen, lastRM: this.lastRM || 0, seedCounter: this.seedCounter, nextId: this.nextId, best: this.best,
-      lex: this.lex || null, lexAcc: this.lexAcc || null, lastLexT: this.lastLexT ?? -99, bestAcc: this.bestAcc || 0, fullAcc: this.fullAcc ?? null, uAcc: this.uAcc ?? null, uOpen: this.uOpen ?? null, uHit: this.uHit ?? null, uAbl: this.uAbl || null, uRead: this.uRead || null, lastUP: this.lastUP ?? -99, lastAbl: this.lastAbl ?? -999, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
+      lex: this.lex || null, lexAcc: this.lexAcc || null, lastLexT: this.lastLexT ?? -99, bestAcc: this.bestAcc || 0, stag: this.stag || 0, fullAcc: this.fullAcc ?? null, uAcc: this.uAcc ?? null, uOpen: this.uOpen ?? null, uHit: this.uHit ?? null, uAbl: this.uAbl || null, uRead: this.uRead || null, lastUP: this.lastUP ?? -99, lastAbl: this.lastAbl ?? -999, level: this.level || 0, levelUps: this.levelUps || [], lab: (this.lab || []).slice(-1500), champ: { ...this.champ, weights: q(this.champ) }, hof: this.hof.map((h, k) => ({ ...h, weights: k < 2 ? q(h) : null })),
       history: this.history.slice(-3000).map(h => ({ ...h, errors: h.errors.slice(0, 6), seg: h.seg && h.seg.slice(0, 12) })) };
   }
   static restore(s) {

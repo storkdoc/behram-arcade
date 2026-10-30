@@ -1,6 +1,6 @@
 // Headless evolution for any contest, through the same worker core (simcore) and Evolution code as Turbo mode.
 // usage: node tests/evochoice.mjs <contest> [rounds=10] [K=6] [lamarck=1] [matchSec=30] [size=2800] [seed=12345] [reflex=1 (0 Full, 1 Limited, 2 None)] [wiring=evolved|designed]
-// env ABL=<every> runs the understanding ablation every <every> rounds and at the end (logged as {abl})
+// env PLAT=<gens> plateau rule (0 = off, default Evolution DEFAULTS.plateau); env ABL=<every> runs the understanding ablation every <every> rounds and at the end (logged as {abl})
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 const here = fileURLToPath(import.meta.url);
@@ -18,7 +18,7 @@ if (!isMainThread) {
   // puzzles in the benchmark, 3x unit-wiring mutation, aimed-winner reward, statue curriculum for STG generations)
   const FX = (process.env.FIX || '').split(',');
   const evo = new Evolution({ contest: id, size: +size, lamarck: !!+lam, matchSec: +matchSec, reflex: +reflex, wiring, uxSeed: +rs,
-    nbrStage: FX.includes('nbr'), nbrGens: +(process.env.NBRG || 40), probeMix: FX.includes('mix'), uxRate: FX.includes('rate') ? 3 : 1, aimR: FX.includes('aim') ? 1.5 : 0, statue: FX.includes('statue'), statueGens: +(process.env.STG || 1e9), lexicon: process.env.LEX || 'grow' }); evo.rnd = mulberry32(+rs);
+    nbrStage: FX.includes('nbr'), nbrGens: +(process.env.NBRG || 40), probeMix: FX.includes('mix'), uxRate: FX.includes('rate') ? 3 : 1, aimR: FX.includes('aim') ? 1.5 : 0, statue: FX.includes('statue'), statueGens: +(process.env.STG || 1e9), lexicon: process.env.LEX || 'grow', ...(process.env.PLAT != null ? { plateau: +process.env.PLAT } : {}) }); evo.rnd = mulberry32(+rs);
   const ABL = +(process.env.ABL || 0); const { classCounts, unitName, unitClass } = await import('../js/understand.js');
   const pool = Array.from({ length: +K }, () => new Worker(here));
   let rid = 0; const run = (w, m) => new Promise(r => { const id = ++rid; const f = d => { if (d.rid === id) { w.off('message', f); r(d.res); } }; w.on('message', f); w.postMessage({ ...m, rid: id }); });
@@ -33,7 +33,7 @@ if (!isMainThread) {
     const res = await Promise.all(pool.map((w, i) => run(w, { t: 'duel', job: jobs[i] })));
     const out = evo.record(kids, jobs, res);
     const last = out[out.length - 1];
-    console.log(JSON.stringify({ round: r, gen: evo.gen, wallS: Math.round((Date.now() - t0) / 1000), champAcc: last.champAccNow, best: evo.bestAcc, kids: out.map(e => e.childAcc), reaped: out.filter(e => e.newChamp).length, level: last.level, fullAcc: last.fullAcc, uAcc: last.uAcc, beyond: last.beyond, cls: last.cls, ...(last.lexSeen != null ? { lex: { act: last.lexAct, seen: last.lexSeen, ret: last.lexRet, new: last.lexNew, rep: last.lexRep, fresh: last.freshAcc, famLive: last.famLive }, newAcc: last.newAcc, famAcc: last.famAcc, lexAcc: evo.lexAcc } : {}), ...(id === 'pong' ? { hit: evo.champ.bench && evo.champ.bench.hit, openSide: last.openSide, uHit: last.uHit, duelWinners: last.duelWinners } : {}) }));
+    console.log(JSON.stringify({ round: r, gen: evo.gen, wallS: Math.round((Date.now() - t0) / 1000), champAcc: last.champAccNow, best: evo.bestAcc, kids: out.map(e => e.childAcc), reaped: out.filter(e => e.newChamp).length, plateau: out.some(e => e.plateau), champPost: out.map(e => e.champPost), level: last.level, fullAcc: last.fullAcc, uAcc: last.uAcc, beyond: last.beyond, cls: last.cls, ...(last.lexSeen != null ? { lex: { act: last.lexAct, seen: last.lexSeen, ret: last.lexRet, new: last.lexNew, rep: last.lexRep, fresh: last.freshAcc, famLive: last.famLive }, newAcc: last.newAcc, famAcc: last.famAcc, lexAcc: evo.lexAcc } : {}), ...(id === 'pong' ? { hit: evo.champ.bench && evo.champ.bench.hit, openSide: last.openSide, uHit: last.uHit, duelWinners: last.duelWinners } : {}) }));
     if (ABL && r % ABL === 0 && r < +rounds) await ablate(r);
   }
   if (ABL) await ablate('end');

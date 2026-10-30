@@ -358,3 +358,17 @@ copy-error effects by gene, every Reaper verdict, Lamarck vs Darwin per contest,
 - Word completion at the full 643-word level plateaus around the position-frequency baseline (≈20–25% vs 25%):
   the brain clearly learns words in the small levels (25 words: 2–8% → 50–88%) but at full size its 2 cells per
   conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much (700 ms think: ≈25%).
+
+## Plateau rule (2026-10-30, finished from the Oct 29 draft)
+Lamarckian champions keep their best-benchmarked synapses, so the champion's bar is the max of many noisy lifetimes
+(winner's curse) and selection stopped acting (0 reaps for 20+ gens on divisor/simon/text). After `plateau` (8)
+generations with no new champion and no better snapshot, a challenger is judged against the champion's own post-duel
+benchmark from the same duel (paired, still THE REAPER's margin + sign test) and copy errors are doubled. Choice
+contests only (Pong excluded, see below). CSV columns: plateau, plateau_stag, champ_post_duel_acc; toast "Plateau broken".
+evochoice (`PLAT=0|8 ABL=0 node tests/evochoice.mjs <contest> 10 4`, seed 12345, 40 gens, ONE seed each, so small evidence):
+| contest | plateau off | plateau on (8) |
+| divisor | champ 73%, full 40%, 0 reaps | champ 80%, full 44%, 1 reap |
+| simon   | champ 67%, full 33%, 0 reaps | champ 78%, full 47%, 1 reap |
+| text    | champ 40%, full 12%, 0 reaps | champ 38%, full 14%, 1 reap |
+| pong    | champ 48%, 0 reaps           | champ 44% -> 28% after a plateau crown (best kept 44%) -> excluded |
+Next: repeat on 3+ seeds before trusting the effect; add the like-for-like Limited-reflex baseline (brain silenced).

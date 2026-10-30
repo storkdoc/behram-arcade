@@ -248,7 +248,8 @@ function onGenerations(out, child) {
   trackWeights(out); save(); drawChart(); renderLog(); renderGenome(); updateStatus(); updateNames();
   const nc = out.find(e => e.newChamp), lu = out.find(e => e.levelUp);
   if (lu && C.levels) toast(`Curriculum: the champion passed ${pct(lu.passed ?? 0.9)} → LEVEL ${lu.levelUp + 1}: ${C.levelName(C.levels[lu.levelUp])}. Harder test: a score drop is expected (the brain did not forget).`, 7000);
-  if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
+  if (nc && nc.plateauCrown && ui.mode !== 'turbo') toast(`Plateau broken: #${nc.childId} beat the champion's post-duel score in the same duel (the old champion's best snapshot goes to the Hall of Fame)`, 5000);
+  else if (nc && ui.mode !== 'turbo') toast(nc.beneficial ? `New champion #${nc.childId}: ${nc.errors.length} copy error${nc.errors.length === 1 ? '' : 's'} paid off` : `New champion #${nc.childId}`);
   if (ui.mode === 'turbo') {
     $('tGen').textContent = evo.gen; $('tRate').textContent = ui.gps.toFixed(2);
     const v = out[out.length - 1] && out[out.length - 1].reaper;
@@ -438,7 +439,8 @@ function renderLog() {
   const items = evo.log.slice(0, 40).map(e => {
     const er = e.errors || [], v = e.reaper, duel = `duel ${e.score[1]}–${e.score[0]}`;
     const bm = v ? `Reaper ${v.score[1]} vs ${v.score[0]} pts (${pct(e.childAcc ?? e.childBench)} vs ${pct(e.champAcc ?? e.champBench)})` : `bench ${pct(e.childBench)} vs ${pct(e.champBench)}`;
-    const res = e.newChamp ? `${duel} · ${bm} → reaped, champion` : `${duel} · ${bm}${v && v.margin > 0 ? ' (not significant)' : ''}`;
+    const pl = e.plateau ? ` · plateau (${e.stag} gens): bar = champion's post-duel ${pct(e.champPost)}` : '';
+    const res = (e.newChamp ? `${duel} · ${bm} → reaped, champion` : `${duel} · ${bm}${v && v.margin > 0 ? ' (not significant)' : ''}`) + pl;
     const genes = er.map(x => `<span class="gn ${x.kind}" title="${x.kind} copy error">${GENE[x.key]?.label || x.key}: ${fmtGene(x.key, x.from)}→${fmtGene(x.key, x.to)}</span>`).join('');
     const w = e.wErrors ? ` · ${e.wErrors.toLocaleString()} synapse copy errors` : '';
     const head = e.hof ? 'Hall of Fame rematch' : `<span class="ce">${er.length} copy error${er.length === 1 ? '' : 's'}</span>${w}`;
