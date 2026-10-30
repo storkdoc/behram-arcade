@@ -73,6 +73,7 @@ const Sound = (() => {
       case 'kick': osc('sine', 140, t, 0.12, 0.7, { to: 50 }); noise(t, 0.06, 0.45, 2500, 'lowpass'); break;
       case 'bounce': osc('sine', 180, t, 0.07, 0.2, { to: 90 }); break;
       case 'juke': case 'switch': osc('triangle', 660, t, 0.05, 0.06); break;
+      case 'fake': cheer(0.3, 0.9); osc('triangle', 880, t, 0.06, 0.08, { to: 1320 }); break; // a juke fakes a tackler out
       case 'break': cheer(0.45, 1.4); osc('sawtooth', 220, t, 0.25, 0.08, { to: 440, lp: 1200 }); break;
       case 'td': cheer(1, 4.5); horn(t + 0.2); break;
       case 'fg': cheer(0.8, 3); break;

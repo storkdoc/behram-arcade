@@ -36,6 +36,23 @@ until friction stops it.
 - Online, the host decides; the guest's press carries the time-to-arrival it saw on its own screen (checked
   against the link lag), so guest timing feels the same as local.
 
+## Run defense
+Running the ball is no longer a free touchdown. Defenders now play the angle the way real ones do:
+- **Pursuit angles**: each defender aims at the point where he can meet the carrier, not where the carrier is now. If
+  nobody can catch the runner, the closest one cuts him off at the goal line. Rookie defenders take sloppier angles.
+- **Containment and a deep safety**: on every run, one defender keeps outside leverage on the side the carrier is
+  heading, and the safety stays over the top. Sweeps get turned back inside and long runs get caught from behind.
+- **Gang tackles**: the CPU dives from 1–2 yd. Every extra tackler makes mashing out of a wrap harder, and so does
+  being tired. Escape odds also depend on how you spin and on a bit of luck.
+- **Carrier fatigue and cuts**: a runner reaches top speed more slowly and fades after about 3 s with the ball. Hard
+  cuts are only quick during a juke.
+- **The juke is a timed move**, not a free speed boost. Press it as a defender closes from about 1.3–2.2 yd and he may
+  bite ("FAKED HIM OUT!"). Juking in open space just tires you out. Rookie defenders bite most often and All-Pro
+  defenders least.
+- **The defense learns**: the CPU keys on your runs, outside runs and QB scrambles. It calls more stuff, man and spy
+  defenses, cheats a safety down, and tells you when it is keying. Mixing in passes keeps it honest.
+- The same rules apply to both teams and to both humans in two-player games.
+
 ## Modes
 - **Play vs Computer**: Rookie, Pro or All-Pro, with 1:30, 2:30 or 4:00 halves (Options).
 - **Two-Player Game (Online)**: shows "Call your buddy…" and a backup room code, then waits.
@@ -56,4 +73,5 @@ From the repo root, with `python3 -m http.server 8080` running and `playwright-c
 ```
 node games/trackball-football/tests/game.test.js   # feel, CPU rules checker, flip, picks, iPhone touch, other games
 node games/trackball-football/tests/mp.test.js     # online flow + play-call and flip secrecy (fake PeerJS transport)
+node games/trackball-football/tests/run-defense.test.js # pure Node, no server: run-exploit bots must stay under TD-rate caps
 ```

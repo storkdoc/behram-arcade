@@ -13,10 +13,23 @@ const HASH = [MID_Y - 3.1, MID_Y + 3.1];
 const BASE_V = { C: 6.4, LG: 6.4, RG: 6.4, QB: 7.6, RB: 8.6, WR: 8.9, DT: 6.7, DE: 7.4, LB: 8.0, CB: 8.8, S: 8.6 };
 let HUMAN_TOP = 1.0; // human-steered player's top speed at full trackball spin (x command magnitude, max 1.15)
 const SKILL = [ // rookie / pro / all-pro (applied to the CPU team; human teammates play at "pro")
-  { spd: 0.87, react: 0.42, tackle: 0.72, shed: 3.2, acc: 2.2, esc: 0.55, read: 2.0, cover: 0.55, int: 0.18 },
-  { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3 },
-  { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42 },
+  { spd: 0.87, react: 0.42, tackle: 0.72, shed: 3.2, acc: 2.2, esc: 0.55, read: 2.0, cover: 0.55, int: 0.18, angle: 0.65, dive: 0.6, bite: 0.36, learn: 0.6, chase: 1.09 },
+  { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3, angle: 0.85, dive: 0.8, bite: 0.45, learn: 0.8, chase: 1 },
+  { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42, angle: 1.0, dive: 1.0, bite: 0.32, learn: 1.0, chase: 1 },
 ];
+// angle: how well pursuit leads the runner (0 = chase his back, 1 = true intercept course) · dive: CPU ankle-tackle dives ·
+// bite: chance a well-timed juke fakes a defender out · learn: how hard the defense keys on a runner's habits ·
+// chase: run-pursuit hustle (rookies are slow in coverage but still run to the ball)
+/* The ball carrier (human or CPU, either team): the trackball can't make him outrun physics.
+   He tops out at his position's speed (spinning harder than "full" adds nothing with the ball), he can't turn a
+   sprint on a dime (cuts cost momentum unless you juke), and he tires on a long run. */
+const RUN = {
+  top: 1.0,                 // human carrier's top speed x his position speed (non-carriers may still go up to 1.15)
+  acc: 15, cutAcc: 34,      // carrier acceleration (yd/s^2): a sharp cut at full speed takes ~0.6 s; during a juke it's crisp
+  tireAfter: 3, tireSpan: 4, tireMin: 0.92, // after 3 s carrying he fades to 92% of top speed over the next 4 s
+  juke: { cd: 1.1, burst: 0.32, boost: 1.1, near: 0.9, far: 2.7, whiff: 3.6, stun: 0.5 }, // a juke fakes out a man 0.9-2.7 yd away; with nobody near it's a wasted plant
+  mash: 0.035, spin: 0.75,  // breaking a wrap: each Space mash and the trackball spin (x a per-tackle luck of 0.6-1.45, usually low)
+};
 // timed-press interceptions (defensive ACTION while a pass is in the air). e = press time minus ball arrival (s, < 0 = early).
 const INT = {
   perfect: 0.12, early: 0.32, late: 0.22,   // PERFECT window is +-0.12 s; odds taper to nothing at 0.32 s early / 0.22 s late
@@ -55,7 +68,8 @@ const Sim = (() => {
       pl: [], ball: { x: 35, y: MID_Y, z: 0.3, vx: 0, vy: 0, vz: 0, st: 'dead', holder: -1, kind: '', t: 0, T: 0, tgt: -1 },
       picks: [null, null], pflip: [false, false], formFlip: [false, false], lag: [0, 0], pend: [false, false], selT: 0, ctl: [3, 10], aim: [-1, -1], wrap: null,
       ev: [], evSeq: 0, banner: null, bannerSeq: 0, calls: null, kind: '', over: false, thrown: false, crossed: false, run: false, runT: 0,
-      playT: 0, result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
+      playT: 0, cv: { x: 0, y: 0 }, edgeI: -1, edgeSide: 1, deepI: -1, scram: false, keyBite: 1,
+      key: [0, 1].map(() => ({ run: 0, out: 0, scr: 0, side: 0, n: 0, said: '' })), result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
     };
     for (let i = 0; i < 14; i++) G.pl.push({ i, team: teamOf(i), slot: i % 7, role: '', num: 0, x: 0, y: 0, vx: 0, vy: 0, fa: 0, st: 'ok', lat: 1, recov: 0, stT: 0, eng: -1, engT: 0, shedNeed: 2, noEng: 0, maxv: 7, as: null, wp: 0, route: null, tcd: 0, imm: 0, dv: 0, lastShed: -1 });
     setPossession(0, 35, false);
@@ -96,6 +110,9 @@ const Sim = (() => {
     G.pflip = [false, false]; G.formFlip = [false, false];
     resetPlayers(); placeFormation(false);
     for (let t = 0; t < 2; t++) if (!G.human[t]) { G.picks[t] = cpuPick(t); G.pflip[t] = cpuFlip(t, G.picks[t]); G.pend[t] = true; }
+    { const k = G.key[G.off], dh = G.human[1 - G.off], tag = k.scr > 0.55 ? 'THE QB SCRAMBLE' : k.out > 0.6 ? 'THE OUTSIDE RUN' : k.run > 0.7 ? 'THE RUN' : '';
+      if (tag && tag !== k.said && !dh && G.human[G.off] && k.n >= 3) { k.said = tag; banner('DEFENSE KEYS ON ' + tag, 'Mix in a pass to keep them honest', '#8fd3ff', 2.4); }
+      else if (!tag) k.said = ''; }
     const d = dirOf(G.off);
     G.ctl[G.off] = G.off * 7 + 3;
     const def = 1 - G.off; G.ctl[def] = def * 7 + 3;
@@ -129,6 +146,10 @@ const Sim = (() => {
     }
     const w = togo > 8 ? { man: 2, zone: 3, blitz: 1.5, stuff: 0.6, prevent: 1.5 } : togo <= 3 ? { man: 2, zone: 1, blitz: 2.5, stuff: 3.5, prevent: 0.2 } : { man: 3, zone: 2.5, blitz: 2, stuff: 1.8, prevent: 0.6 };
     if (G.half === 2 && G.clock < 30 && G.score[team] > G.score[1 - team]) w.prevent += 3;
+    // keyed on the run: crash it if it goes inside, keep everything in front (zone, no blitz) if it bounces outside,
+    // and send pressure with a spy at a scrambling QB
+    const K = keyOf(team); w.stuff += 3 * K.run * (1 - K.out); w.zone += 2.5 * K.out; w.man += K.run + 1.5 * K.scr;
+    w.blitz = Math.max(0.2, w.blitz + 1.5 * K.scr - 1.6 * K.out); w.prevent *= 1 - 0.6 * K.run;
     return wpick(w);
   }
   function wpick(w) { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
@@ -139,6 +160,8 @@ const Sim = (() => {
     G.phase = 'live'; G.t = 0; G.playT = 0; G.kind = op.kind; G.op = op; G.dp = dp;
     G.calls = [op.name + (G.pflip[G.off] ? ' (FLIP)' : ''), dp.name + (G.pflip[1 - G.off] ? ' (FLIP)' : '')];
     G.thrown = false; G.crossed = false; G.run = false; G.runT = 0; G.wrap = null; G.result = null; G.stats.plays++;
+    G.scram = false; G.caught = false; G.edgeI = G.deepI = -1; G.cv.x = G.cv.y = 0;
+    const K = keyOf(1 - G.off); G.keyBite = 1 - 0.35 * K.run; // a defense that has seen your runs doesn't bite on fakes as easily
     const d = dirOf(G.off), off = G.off, def = 1 - off;
     // the FLIP calls take effect: both formations line up mirrored (online this is the first time anyone sees them)
     G.formFlip = G.pflip.slice();
@@ -156,8 +179,10 @@ const Sim = (() => {
         else if (Array.isArray(r)) { p.as = 'route'; p.route = r.map(q => W(q[0], q[1], fl)); }
         else p.as = p.slot === 4 ? 'blk' : 'route', p.route = p.route || [W(OFF_FORM[p.slot][0] + 20, OFF_FORM[p.slot][1], fl)];
       } else {
-        const a = dp.a[p.slot]; p.as = a[0]; p.asArg = a;
-        if (a[0] === 'zone') p.zone = W(a[1], a[2], fl);
+        let a = dp.a[p.slot]; const K = keyOf(def);
+        if (p.slot === 3 && K.scr > 0.3 && (a[0] === 'zone' || a[0] === 'man') && !(G.human[def])) a = ['spy']; // he keeps scrambling: the MLB spies the QB
+        p.as = a[0]; p.asArg = a;
+        if (a[0] === 'zone') p.zone = W(a[1] - (p.role === 'S' ? 6 * K.run : 0), a[2], fl); // a safety who has seen the run cheats down
         // man coverage is by side: when only one team flipped, the corners take the receiver now on their side
         if (a[0] === 'man') p.manT = off * 7 + (cross && a[1] >= 5 ? 11 - a[1] : a[1]);
       }
@@ -185,6 +210,18 @@ const Sim = (() => {
     const d = hyp(q.x - p.x, q.y - p.y), lead = clamp(d / Math.max(1, speed) * 0.75, 0, 1.3);
     return moveTo(p, q.x + q.vx * lead, q.y + q.vy * lead, speed);
   }
+  /** a ball carrier's legs: 1 fresh, down to RUN.tireMin on a long run */
+  function tire(p) { return 1 - (1 - RUN.tireMin) * clamp(((p.carryT || 0) - RUN.tireAfter) / RUN.tireSpan, 0, 1); }
+  /** earliest point where a chaser at speed s can meet a runner at (c) moving with velocity v; null if he can't */
+  function meetPoint(p, c, v, s) {
+    const rx = c.x - p.x, ry = c.y - p.y, a = v.x * v.x + v.y * v.y - s * s, b = 2 * (rx * v.x + ry * v.y), cc = rx * rx + ry * ry;
+    let t = -1;
+    if (Math.abs(a) < 1e-6) t = b < 0 ? -cc / b : -1;
+    else { const disc = b * b - 4 * a * cc; if (disc >= 0) { const q = Math.sqrt(disc), t1 = (-b - q) / (2 * a), t2 = (-b + q) / (2 * a); t = Math.min(t1 > 0 ? t1 : 1e9, t2 > 0 ? t2 : 1e9); if (t > 1e8) t = -1; } }
+    return t > 0 && t < 6 ? { x: c.x + v.x * t, y: c.y + v.y * t, t } : null;
+  }
+  /** the defense's keys on this offense's habits (0..1), weighted by how well the defending side learns */
+  function keyOf(def) { const k = G.key[1 - def], L = sk(def).learn; return { run: k.run * L, out: k.out * L, scr: k.scr * L, side: k.side * L }; }
   function eligible(team) { return [4, 5, 6].map(s => P(team * 7 + s)); }
   function openness(r, team) {
     let m = 99; for (const q of teamPl(1 - team)) { if (q.st === 'down') continue; m = Math.min(m, hyp(q.x - r.x, q.y - r.y)); } return m;
@@ -203,7 +240,7 @@ const Sim = (() => {
   }
   function giveBall(p, how) {
     const b = G.ball; b.st = 'held'; b.holder = p.i; b.kind = ''; b.tgt = -1;
-    G.ctl[p.team] = p.i;
+    G.ctl[p.team] = p.i; p.carryT = 0; G.cv.x = p.vx; G.cv.y = p.vy;
     if (p.team !== G.off || p.role !== 'QB') { G.run = true; }
     if (how) ev(how, p.x, p.y);
   }
@@ -279,7 +316,7 @@ const Sim = (() => {
     }
     if (p.y < 4) vy += (4 - p.y) * 0.35; if (p.y > FIELD_W - 4) vy -= (p.y - FIELD_W + 4) * 0.35;
     if (vx * d < 0.25) vx = d * 0.25;
-    const n = hyp(vx, vy) || 1, sp = p.maxv * (p.role === 'QB' ? 1 : 0.97); return { x: vx / n * sp, y: vy / n * sp };
+    const n = hyp(vx, vy) || 1, sp = p.maxv * (p.role === 'QB' ? 1 : 0.97) * tire(p); return { x: vx / n * sp, y: vy / n * sp };
   }
   function aiQB(p) {
     const s = sk(p.team), d = dirOf(p.team), def = 1 - p.team;
@@ -320,10 +357,25 @@ const Sim = (() => {
       return { x: 0, y: 0 };
     }
     // run (or scramble / catch) detected: pursue after the reaction delay
-    if (G.run && c && G.t - G.runT > s.react * (p.as === 'zone' ? 1.3 : 1)) return pursue(p, c, p.maxv * 1.04);
+    const K = keyOf(p.team), react = s.react * (p.as === 'zone' ? 1.3 : 1) * (1 - 0.25 * K.run - 0.3 * K.out);
+    if (G.run && c && G.t - G.runT > react) return pursueRun(p, c, s);
+    if (G.scram && c && c.role === 'QB' && p.as !== 'man' && G.t - G.scram > react) return pursueRun(p, c, s);
     const qb = P(off * 7 + 3);
     switch (p.as) {
-      case 'rush': { const tgt = c || qb; return pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1)); }
+      case 'rush': {
+        const tgt = c || qb;
+        if (p.role === 'S' && G.t < 0.75) return moveTo(p, p.x - d * 3, p.y, p.maxv * 0.35); // a safety blitz is delayed: he reads run/pass first, so a run still has someone over the top
+        if (p.role === 'DE' && G.t > 0.25 && (G.kind === 'pass' || K.out > 0.35)) { // ends rush with outside leverage (vs the pass, or once he keeps bouncing runs outside): no escaping around them
+          // (that leaves the inside softer: a defense keyed on the edge can be gashed up the middle)
+          const side = Math.sign(p.y - G.ballY) || 1, w = 1.4 + 2.2 * K.out, dd = hyp(tgt.x - p.x, tgt.y - p.y);
+          if (dd > 2.2) return moveTo(p, tgt.x + tgt.vx * 0.3, tgt.y + tgt.vy * 0.3 + side * Math.min(w, dd * 0.5), p.maxv);
+        }
+        return pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1));
+      }
+      case 'spy': { // mirror the QB from 4.5 yd off the ball, then come up the moment he takes off
+        if (G.t < 0.4) return { x: 0, y: 0 };
+        return moveTo(p, G.los + d * 4.5, qb.y + qb.vy * 0.25, p.maxv);
+      }
       case 'fill': {
         if (G.kind === 'run' && c) return pursue(p, c, p.maxv);
         if (G.t < 1.1) return moveTo(p, G.los + d * 0.8, G.ballY + (p.slot === 6 ? 3 : -1) * (p.lat || 1), p.maxv);
@@ -343,8 +395,47 @@ const Sim = (() => {
     }
     return { x: 0, y: 0 };
   }
+  /** who sets the edge and who stays over the top this step (from the defense's point of view) */
+  function assignPursuit(c) {
+    const d = dirOf(c.team), side = Math.abs(G.cv.y) > 1.2 ? Math.sign(G.cv.y) : (Math.sign(c.y - G.ballY) || (c.y < MID_Y ? -1 : 1));
+    let e = null, es = -1e9, dp = null, ds = -1e9;
+    for (const q of teamPl(1 - c.team)) {
+      if (q.st === 'down' || q.eng >= 0 || (G.human[q.team] && G.ctl[q.team] === q.i)) continue;
+      const ahead = (q.x - c.x) * d; if (ahead < -1) continue;
+      const out = (q.y - c.y) * side - hyp(q.x - c.x, q.y - c.y) * 0.25;
+      if (out > es) { es = out; e = q; }
+      const deep = ahead + (q.role === 'S' ? 4 : 0) - Math.abs(q.y - c.y) * 0.3;
+      if (deep > ds) { ds = deep; dp = q; }
+    }
+    if (dp === e) { // the same man can't do both: the next-deepest stays home
+      dp = null; ds = -1e9;
+      for (const q of teamPl(1 - c.team)) { if (q === e || q.st === 'down' || q.eng >= 0 || (G.human[q.team] && G.ctl[q.team] === q.i)) continue; const ahead = (q.x - c.x) * d; if (ahead < -1) continue; const deep = ahead + (q.role === 'S' ? 4 : 0) - Math.abs(q.y - c.y) * 0.3; if (deep > ds) { ds = deep; dp = q; } }
+    }
+    G.edgeI = e ? e.i : -1; G.edgeSide = side; G.deepI = dp ? dp.i : -1;
+  }
+  /** run pursuit: take an intercept angle (not his back), one man sets the edge, one stays over the top, everybody
+      else converges; a man who can't catch him races to where he'll cross the goal line. CPU tacklers in range dive. */
+  function pursueRun(p, c, s) {
+    const d = dirOf(c.team), goal = goalX(c.team), spd = p.maxv * s.chase, dist = hyp(c.x - p.x, c.y - p.y), K = keyOf(p.team);
+    const closing = ((p.vx - c.vx) * (c.x - p.x) + (p.vy - c.vy) * (c.y - p.y)) / (dist || 1);
+    if (p.st === 'ok' && dist > 1.05 && dist < 2.1 && closing < 3.5 && c.imm <= 0 && !G.wrap && Math.random() < s.dive * 3 * STEP) { dive(p, c); return { x: p.vx, y: p.vy }; }
+    if (dist < 2.4) return moveTo(p, c.x + G.cv.x * 0.12, c.y + G.cv.y * 0.12, spd);
+    // where is he going? his recent heading, leaned toward the goal line he wants
+    const top = (G.human[c.team] && G.ctl[c.team] === c.i ? BASE_V[c.role] * RUN.top * HUMAN_TOP : c.maxv) * tire(c);
+    const vm = Math.max(hyp(G.cv.x, G.cv.y), top * 0.8), v = { x: G.cv.x * 0.7 + d * vm * 0.3, y: G.cv.y * 0.7 };
+    const m = meetPoint(p, c, v, spd);
+    let tx, ty;
+    if (m) { tx = m.x; ty = m.y; }
+    else { const tg = clamp((goal - c.x) * d / Math.max(3, v.x * d), 0, 6); tx = goal - d * 1.5; ty = c.y + v.y * tg; } // can't catch him: cut him off at the goal line
+    if ((tx - goal) * d > 0) { const k = (goal - c.x) / ((tx - c.x) || 1e-6); tx = goal; ty = c.y + (ty - c.y) * clamp(k, 0, 1); }
+    // lesser defenders take flatter angles (they aim a little behind the ideal spot, up to ~1 yd for a rookie)
+    { const L = hyp(tx - c.x, ty - c.y) || 1, lag = (1 - s.angle) * Math.min(3, L * 0.25); tx -= (tx - c.x) / L * lag; ty -= (ty - c.y) / L * lag; }
+    if (p.i === G.edgeI && dist > 3) ty += G.edgeSide * clamp(dist * 0.22, 0.8, 3) * (1 + K.out); // keep outside leverage: force him back inside
+    if (p.i === G.deepI && (p.x - c.x) * d > 1) { const cush = clamp(dist * 0.4, 0, 6); if ((tx - c.x) * d < cush) tx = c.x + d * cush; } // over the top
+    return moveTo(p, tx, clamp(ty, 0.8, FIELD_W - 0.8), spd);
+  }
   // interception return: the original offense becomes the tacklers
-  function aiChase(p) { const c = carrier(); if (!c) return { x: 0, y: 0 }; return pursue(p, c, p.maxv); }
+  function aiChase(p) { const c = carrier(); if (!c) return { x: 0, y: 0 }; return pursueRun(p, c, sk(p.team)); }
 
   /* ---------------- per-step update ---------------- */
   let inputs = [null, null];
@@ -416,8 +507,8 @@ const Sim = (() => {
       if (inp.aP) {
         if (c && c.i === me.i) {
           if (me.role === 'QB' && t === off && G.kind === 'pass' && !G.thrown && !G.crossed) { const r = P(G.aim[t] >= 0 ? G.aim[t] : bestAim(me)); throwTo(me, r, 0.35); }
-          else if (G.wrap && G.wrap.c === me.i) { if (G.t - (me.mashT || -9) > 0.15) { me.mashT = G.t; G.wrap.m -= 0.06; ev('grunt', me.x, me.y); } }
-          else if (me.imm <= 0 && G.t - (me.jukeT || -9) > 1.0) { me.jukeT = G.t; me.burst = 0.45; ev('juke', me.x, me.y); }
+          else if (G.wrap && G.wrap.c === me.i) { if (G.t - (me.mashT || -9) > 0.15) { me.mashT = G.t; G.wrap.m -= RUN.mash / Math.max(1, G.wrap.tk.length * 0.8); ev('grunt', me.x, me.y); } }
+          else if (me.imm <= 0 && G.t - (me.jukeT || -9) > RUN.juke.cd) juke(me);
         } else if (t !== (c ? c.team : off)) defPress(t, me, inp);
       }
       if (inp.bP) {
@@ -436,7 +527,10 @@ const Sim = (() => {
         G.ctl[off] = rb.i; G.run = true; G.runT = G.t; ev('pitch', qb.x, qb.y);
       }
     }
-    if (c0 && c0 === qb && !G.crossed && (qb.x - G.los) * d > 0.6) { G.crossed = true; if (!G.run) { G.run = true; G.runT = G.t; } }
+    if (c0 && c0 === qb && !G.crossed && (qb.x - G.los) * d > 0.6) { G.crossed = true; qb.carryT = 0; if (!G.run) { G.run = true; G.runT = G.t; } }
+    // a QB who leaves the pocket (wide, or stepping up at the line) is scrambling: the rush and the zones come up for him
+    if (c0 && c0 === qb && G.kind === 'pass' && !G.thrown && !G.scram && G.t > 0.5 && (Math.abs(qb.y - G.ballY) > 6.5 || (qb.x - G.los) * d > -1.6)) G.scram = G.t;
+    if (c0 && G.run) assignPursuit(c0);
     // aim (for a human QB)
     if (G.human[off] && c0 === qb && G.kind === 'pass' && !G.thrown && G.ctl[off] === qb.i) updAim(off, qb);
     // ---- desired velocities
@@ -451,11 +545,15 @@ const Sim = (() => {
         const cm = inputs[p.team], role = p.role, f = (role === 'C' || role === 'LG' || role === 'RG' || role === 'DT') ? 0.86 : role === 'DE' ? 0.92 : 1;
         const top = BASE_V[role] * f * HUMAN_TOP;
         w = { x: cm.x * top, y: cm.y * top };
+        if (p === c0) { // with the ball: capped at his position speed (and tiring), however hard the ball is spun
+          const cap = BASE_V[role] * RUN.top * HUMAN_TOP * tire(p), m = hyp(w.x, w.y);
+          if (m > cap) { w.x *= cap / m; w.y *= cap / m; }
+        }
         p.hm = cm.m || 0;
       } else if (p.team === off) w = (c0 && c0.team !== off) ? aiChase(p) : aiOffense(p);
       else w = (c0 && c0.team === def) ? (c0 === p ? aiCarrier(p) : aiBlock(p, c0)) : aiDefense(p);
       if (p.st === 'stun') { p.stT -= dt; if (p.stT <= 0) p.st = 'ok'; w = { x: w.x * 0.3, y: w.y * 0.3 }; }
-      if (p.burst > 0) { p.burst -= dt; w = { x: w.x * 1.18, y: w.y * 1.18 }; }
+      if (p.burst > 0) { p.burst -= dt; w = { x: w.x * RUN.juke.boost, y: w.y * RUN.juke.boost }; }
       wants.push(w);
     }
     // ---- move (blocks and wrap-ups restrain)
@@ -465,8 +563,10 @@ const Sim = (() => {
       if (p.eng >= 0) continue;
       if (G.wrap && (G.wrap.c === p.i || G.wrap.tk.includes(p.i))) continue;
       const human = G.human[p.team] && G.ctl[p.team] === p.i;
-      integrate(p, w, dt, p.st === 'down' ? 20 : human ? 24 : 14);
+      const acc = p === c0 ? (p.burst > 0 ? RUN.cutAcc : human ? RUN.acc : 14) : human ? 24 : 14;
+      integrate(p, w, dt, p.st === 'down' ? 20 : acc);
     }
+    { const c = carrier(); if (c) { c.carryT = (c.carryT || 0) + dt; const k = Math.min(1, dt * 5); G.cv.x += (c.vx - G.cv.x) * k; G.cv.y += (c.vy - G.cv.y) * k; } }
     updBlocks(dt, wants);
     updWrap(dt, wants);
     separate();
@@ -545,6 +645,22 @@ const Sim = (() => {
     for (const p of teamPl(t)) { if (p.i === G.ctl[t] || p.st === 'down') continue; const dd = hyp(p.x - ref.x, p.y - ref.y); if (dd < bd) { bd = dd; best = p; } }
     if (best) { G.ctl[t] = best.i; ev('switch', best.x, best.y, { t }); }
   }
+  /** ball carrier's juke: a sharp plant-and-cut. Timed when a tackler is 0.9-2.7 yd away and coming, it can fake him
+      out of his shoes (he stumbles and can't tackle for a moment). Too early or too late, it's just a cut; with nobody
+      near it's a wasted plant that costs legs. */
+  function juke(me) {
+    const J = RUN.juke; me.jukeT = G.t; me.burst = J.burst; ev('juke', me.x, me.y);
+    let q = null, qd = 1e9;
+    for (const o of teamPl(1 - me.team)) { if (o.st !== 'ok' || o.eng >= 0) continue; const dd = hyp(o.x - me.x, o.y - me.y); if (dd < qd) { qd = dd; q = o; } }
+    if (!q || qd > J.whiff) { me.carryT = (me.carryT || 0) + 0.7; return; }
+    if (qd < J.near || qd > J.far) return;
+    const s = sk(q.team), hq = G.human[q.team] && G.ctl[q.team] === q.i;
+    // a defender coming at you bites; one trailing behind doesn't care. Sweet spot ~1.3-2.2 yd
+    const closing = ((q.vx - me.vx) * (me.x - q.x) + (q.vy - me.vy) * (me.y - q.y)) / qd;
+    const sweet = qd >= 1.3 && qd <= 2.2 ? 1 : 0.6;
+    const pBite = (hq ? 0.35 : s.bite) * sweet * (closing > 1 ? 1 : 0.35) * (G.keyBite || 1);
+    if (Math.random() < pBite) { q.st = 'stun'; q.stT = J.stun; q.tcd = J.stun + 0.15; ev('fake', q.x, q.y); if (!G.banner) banner('FAKED HIM OUT!', '', '#7cff7a', 0.8); }
+  }
   function dive(p, tgt) {
     const dx = tgt.x + tgt.vx * 0.22 - p.x, dy = tgt.y + tgt.vy * 0.22 - p.y, n = hyp(dx, dy) || 1;
     p.st = 'dive'; p.stT = 0.34; p.vx = dx / n * 10.5; p.vy = dy / n * 10.5; p.fa = Math.atan2(dy, dx); p.eng = -1;
@@ -619,7 +735,7 @@ const Sim = (() => {
       else if (closing > 7.2) instant = Math.random() < 0.55 * s.tackle - spin * 0.15;
       if (sack) instant = instant || Math.random() < 0.45;
       if (instant) return tackle(c, q, closing > 7.2 || q.st === 'dive');
-      G.wrap = { c: c.i, m: 0.42, tk: [q.i], t: 0 };
+      G.wrap = { c: c.i, m: 0.42, tk: [q.i], t: 0, luck: 0.6 + 0.85 * Math.random() ** 2 }; // most wrap-ups are square; now and then it's only a shoestring grab
       ev('hit', c.x, c.y);
     }
   }
@@ -630,10 +746,10 @@ const Sim = (() => {
     let T = 0;
     for (const i of W.tk) {
       const q = P(i), hq = G.human[q.team] && G.ctl[q.team] === q.i && inputs[q.team];
-      T += hq ? 0.55 + (inputs[q.team].m || 0) * 1.3 : 0.15 + 0.95 * sk(q.team).tackle;
+      T += hq ? 0.55 + (inputs[q.team].m || 0) * 1.3 : 0.5 + 0.5 * sk(q.team).tackle;
     }
     const hc = G.human[c.team] && G.ctl[c.team] === c.i && inputs[c.team];
-    const E = hc ? 0.1 + (inputs[c.team].m || 0) * 1.05 : sk(c.team).esc * (c.role === 'QB' ? 0.8 : 1.15) * rand(0.6, 1.4);
+    const E = (hc ? (0.1 + Math.min(1, inputs[c.team].m || 0) * RUN.spin) * W.luck : sk(c.team).esc * (c.role === 'QB' ? 0.8 : 1.15) * rand(0.6, 1.4)) * (0.6 + 0.4 * tire(c));
     W.m += (T - E) * dt * 1.3;
     W.T = T; W.E = E;
     // the pile drags along the carrier's intended direction
@@ -809,8 +925,19 @@ const Sim = (() => {
   }
 
   /* ---------------- end of a play: the rules ---------------- */
+  /** the defense remembers how this offense moved the ball: runs vs passes, outside vs inside, QB scrambles */
+  function learn(r) {
+    const k = G.key[G.off], a = 0.34, mix = (f, v) => { k[f] += (v - k[f]) * a; };
+    if (G.kind !== 'run' && G.kind !== 'pass') return;
+    const c = carrier(), ran = G.run && !G.thrown && !G.caught && !G.intercepted && c && c.team === G.off && r.y != null;
+    k.n++;
+    if (!ran) { mix('run', 0); mix('scr', 0); k.out *= 0.8; return; } // throwing it keeps them honest
+    const lat = r.y - G.ballY, out = Math.abs(lat) > 8 || r.y < 6 || r.y > FIELD_W - 6;
+    mix('run', 1); mix('out', out ? 1 : 0); mix('scr', c.role === 'QB' && G.kind === 'pass' ? 1 : 0); mix('side', Math.abs(lat) > 4 ? Math.sign(lat) : 0);
+  }
   function endPlay(r) {
     if (G.phase !== 'live') return;
+    if (r.type === 'td' || r.type === 'tackle' || r.type === 'oob' || r.type === 'incomplete') learn(r);
     G.phase = 'result'; G.t = 0; G.result = r; G.wrap = null;
     const b = G.ball, off = G.off, d = dirOf(off), def = 1 - off;
     ev('whistle');
@@ -926,5 +1053,7 @@ const Sim = (() => {
       over: G.over ? 1 : 0, ex: r2(G.excite), t: r2(G.t), fgok: offenseChoices().some(p => p.id === 'fg') ? 1 : 0, gid: G.gid,
     };
   }
-  return { get G() { return G; }, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier(), formPos: p => formPos(p), closestDef, INT, intOdds, intTiming, intDist };
+  /** tests: put the ball on a spot for `team` and start the play-call screen */
+  function testSpot(team, x, y) { setPossession(team, x, true); G.ballY = y; placeFormation(true); beginSelect(); }
+  return { get G() { return G; }, testSpot, RUN, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier(), formPos: p => formPos(p), closestDef, INT, intOdds, intTiming, intDist };
 })();
