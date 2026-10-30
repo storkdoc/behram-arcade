@@ -31,6 +31,10 @@ const Helmet = (() => {
     ball: { t: 'BALL HAWK', c: '#7cff7a' }, cover: { t: 'COVER', c: '#5fd0ff' }, engaged: { t: 'ENGAGED', c: '#a8adb8' },
     block: { t: 'BLOCK', c: '#7cff7a' }, lead: { t: 'LEAD BLOCK', c: '#7cff7a' }, route: { t: 'ROUTE', c: '#8fe8ff' }, catch: { t: 'BALL!', c: '#8fe8ff' },
     run: { t: 'RUNNING', c: '#ffd23c' }, qb: { t: 'QB', c: '#ffffff' }, scram: { t: 'SCRAMBLE', c: '#ffd23c' },
+    // SELL OUT counter assignments (straight from the sim's counter call)
+    eblitz: { t: 'EDGE BLITZ', c: '#ff3d6a', threat: 1 }, scrape: { t: 'SCRAPE', c: '#ff8a2a', threat: 1 }, ccrash: { t: 'CORNER CRASH', c: '#ff3d6a', threat: 1 },
+    rotate: { t: 'ROTATE DOWN', c: '#ff8a2a', threat: 1 }, gap: { t: 'SHOOT GAP', c: '#ff3d6a', threat: 1 }, pinch: { t: 'PINCH', c: '#ff3d6a', threat: 1 },
+    blitz: { t: 'BLITZ', c: '#ff3d6a', threat: 1 }, sniff: { t: 'SNIFF SCREEN', c: '#ff8a2a', threat: 1 }, jump: { t: 'JUMP ROUTE', c: '#ffb04a' }, bracket: { t: 'BRACKET', c: '#c9a0ff' },
   };
   const wrapA = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
   /** the player the helmet cam rides with (the man `me` controls), or -1 */
@@ -533,6 +537,13 @@ const Helmet = (() => {
       ctx.fillStyle = 'rgba(4,8,18,0.72)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, ly, tw, hh, hh / 2) : ctx.rect(x, ly, tw, hh); ctx.fill();
       ctx.strokeStyle = 'rgba(143,211,255,0.7)'; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = '#8fd3ff'; ctx.textAlign = 'left'; ctx.fillText(lab, x + fs * 0.7, ly + hh / 2 + 0.5);
+    }
+    if (S.ctr && (S.ph === 'live' || S.ph === 'result')) { // the defense sold out: which counter it called
+      const lab = 'D SOLD OUT: ' + S.ctr[0];
+      ctx.font = `800 ${fs}px ${DFONT}`; const tw = ctx.measureText(lab).width + fs * 1.4, hh = fs * 1.7, x = rect.x + 10, ly = rect.y + rect.h - hh - 10;
+      ctx.fillStyle = 'rgba(30,8,4,0.78)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, ly, tw, hh, hh / 2) : ctx.rect(x, ly, tw, hh); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,154,60,0.8)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#ff9a3c'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(lab, x + fs * 0.7, ly + hh / 2 + 0.5);
     }
     ctx.restore(); // clip
     // border

@@ -83,6 +83,10 @@ const Sound = (() => {
       case 'perfect': noise(t, 0.16, 0.22, 900, 'bandpass', 1.5, { to: 2200 }); osc('sine', 1320, t, 0.18, 0.12); osc('sine', 1980, t + 0.04, 0.2, 0.07); break;
       case 'flip': osc('triangle', 600, t, 0.07, 0.09, { to: 900 }); break;
       case 'aww': aww(); break;
+      // SELL OUT: a murmur and two low notes when the defense shows it has read you; a thud and a roar when it's right; a groan when it's burned
+      case 'tell': noise(t, 0.9, 0.12, 700, 'bandpass', 0.7, { a: 0.3 }); osc('triangle', 196, t, 0.22, 0.09, { lp: 900 }); osc('triangle', 185, t + 0.24, 0.32, 0.09, { lp: 900 }); break;
+      case 'stuffed': noise(t, 0.2, 0.6, 1300, 'lowpass'); osc('sine', 75, t, 0.28, 0.65, { to: 34 }); osc('square', 330, t + 0.12, 0.12, 0.06, { lp: 1500 }); osc('square', 247, t + 0.26, 0.24, 0.06, { lp: 1500 }); cheer(0.7, 2); break;
+      case 'burned': aww(); osc('sawtooth', 262, t, 0.35, 0.05, { to: 523, lp: 1600 }); break;
       case 'firstdown': cheer(0.3, 1.2); break;
       case 'horn': horn(t); break;
       case 'tick': osc('square', 1200, t, 0.03, 0.05); break;

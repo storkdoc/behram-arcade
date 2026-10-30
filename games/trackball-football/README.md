@@ -81,6 +81,14 @@ Running the ball is no longer a free touchdown. Defenders now play the angle the
   defenders least.
 - **The defense learns**: the CPU keys on your runs, outside runs and QB scrambles. It calls more stuff, man and spy
   defenses, cheats a safety down, and tells you when it is keying. Mixing in passes keeps it honest.
+- **Mix up your plays — the defense learns.** It tracks which play you call (and which way you flip it), with recent
+  calls counting most, and spots simple patterns like alternating two plays. Once it is confident (Pro: about 3 of the
+  last 4) it may SELL OUT: call the counter built for that play (edge blitz vs the sweep, run blitz vs the dive,
+  jump-the-route vs the slants, brackets vs the post and the bomb, a sniffer vs the screen). Read right, the play usually
+  dies for a loss, a sack or a pick; read wrong, it leaves big holes. It never sees your current call, only your history.
+  A pre-snap "DEFENSE READS IT!" tell is usually real and sometimes a bluff. Rookie learns slowly and leaks; All-Pro
+  learns fastest. The CPU offense scouts itself and varies its calls; a human defender gets a scouting line and can
+  SELL OUT too. In two-player games both players see the same history-based lines.
 - The same rules apply to both teams and to both humans in two-player games.
 
 ## Modes
@@ -104,5 +112,6 @@ From the repo root, with `python3 -m http.server 8080` running and `playwright-c
 node games/trackball-football/tests/game.test.js   # feel, CPU rules checker, flip, picks, iPhone touch, other games
 node games/trackball-football/tests/mp.test.js     # online flow + play-call and flip secrecy (fake PeerJS transport)
 node games/trackball-football/tests/run-defense.test.js # pure Node, no server: run-exploit bots must stay under TD-rate caps
+node games/trackball-football/tests/play-counter.test.js # pure Node: repeat/alternate/random/anti-adaptive bots vs the learning defense (GAMES=n)
 node games/trackball-football/tests/helmet-cam.test.js # cues == AI state, "!" == real dive window, balance; toggle/persist/render (NOBROWSER=1: Node part only)
 ```

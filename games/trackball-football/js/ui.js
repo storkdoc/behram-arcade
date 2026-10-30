@@ -193,6 +193,10 @@ const UI = (() => {
         if (a[0] === 'rush') arrow([[px, py], [X(-4.2), M(p[1] * 0.3)]], '#ff6a6a', false, 1.8);
         else if (a[0] === 'fill') arrow([[px, py], [X(0.5), M(p[1] * 0.5 + (i === 6 ? 3 : -1))]], '#ffb04a', false, 1.8);
         else if (a[0] === 'man') { const t = OFF_FORM[flip && (a[1] === 5 || a[1] === 6) ? 11 - a[1] : a[1]]; arrow([[px, py], [X(t[0] + 4), Y(t[1])]], '#ffffff', true, 1.3); } // flipped corners trade receivers
+        else if (a[0] === 'crash') arrow([[px, py], [X(Math.max(-6, a[1])), M(a[2])]], '#ff4a4a', false, 2.2); // fires at the snap
+        else if (a[0] === 'jump') { const t = OFF_FORM[a[1]]; arrow([[px, py], [X(a[2]), M(a[3])]], '#ffb04a', false, 1.8); ctx.strokeStyle = 'rgba(255,176,74,0.55)'; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(a[2]), M(a[3])); ctx.lineTo(X(t[0] + 2), M(t[1])); ctx.stroke(); ctx.setLineDash([]); }
+        else if (a[0] === 'bracket') { const t = OFF_FORM[a[1]]; arrow([[px, py], [X(Math.min(t[0] + 12 + a[2], 30)), M(t[1] * 0.85)]], '#c9a0ff', false, 1.6); }
+        else if (a[0] === 'spy') arrow([[px, py], [X(-1), M(0)]], '#ffb04a', true, 1.4);
         else if (a[0] === 'zone') { const zx = X(Math.min(a[1], 30)), zy = M(a[2]); ctx.fillStyle = 'rgba(120,200,255,0.22)'; ctx.beginPath(); ctx.ellipse(zx, zy, w * 0.11, h * 0.15, 0, 0, 7); ctx.fill(); arrow([[px, py], [zx, zy]], 'rgba(160,220,255,0.9)', false, 1.3); }
         sym(defSym, px, py, defCol, r);
       });
@@ -232,13 +236,17 @@ const UI = (() => {
     // cards
     for (let k = 0; k < n; k++) {
       const c = k % cols, r = Math.floor(k / cols), x = px + gap + c * (cw + gap), y = py + headH + gap + r * (ch + gap);
-      const pl = list[k], sel = k === Sel.idx, locked = Sel.locked && sel;
+      let pl = list[k]; const sel = k === Sel.idx, locked = Sel.locked && sel;
+      // SELL OUT: draw the counter for the play the scouting report expects (from past calls only)
+      const rfP = pl.counter && S.sx && S.sx[2] !== '' && S.sx[2] != null ? OFFENSE[S.sx[2]] : null, rfC = rfP && typeof COUNTER !== 'undefined' && COUNTER[rfP.id];
+      if (pl.counter && !offense) pl = rfC ? Object.assign({}, pl, { a: rfC.a, sub: 'VS ' + rfP.name }) : Object.assign({}, pl, { sub: 'NO READ YET' });
       ctx.fillStyle = sel ? 'rgba(255,210,60,0.18)' : 'rgba(255,255,255,0.05)'; rr(ctx, x, y, cw, ch, 8); ctx.fill();
       if (sel) { ctx.strokeStyle = locked ? '#7cff7a' : '#ffd23c'; ctx.lineWidth = 2.5; ctx.stroke(); }
       const dh = ch - (sm ? 18 : 26);
       diagram(ctx, pl, x + 4, y + 4, cw - 8, dh - 6, offense, me === 1, T.sym, TEAM[1 - me].sym, me ? '#ffcc33' : '#ff5a6e', null, !!Sel.flip);
       const z = fit(ctx, pl.name, cw - 10, 800, sm ? 11 : 15, DFONT);
       text(ctx, pl.name, x + cw / 2, y + dh + (sm ? 6 : 9), f(800, z, DFONT), sel ? '#ffe27a' : '#eef');
+      if (pl.sub) text(ctx, pl.sub, x + cw - 8, y + 12, f(900, fit(ctx, pl.sub, cw - 16, 900, sm ? 8 : 11, DFONT), DFONT), '#ff9a3c', 'right');
       if (locked) { ctx.save(); ctx.translate(x + cw / 2, y + dh / 2); ctx.rotate(-0.15); text(ctx, 'LOCKED IN', 0, 0, f('italic 900', sm ? 14 : 22, DFONT), '#7cff7a'); ctx.restore(); }
       hits.push({ x, y, w: cw, h: ch, label: 'PLAY:' + pl.id, fn: () => { if (!App.paused) opts.onCard(k); }, focusable: false });
     }
@@ -253,7 +261,12 @@ const UI = (() => {
     if (!Sel.locked && opts.onFlip) hits.push({ x: bx - 4, y: by - 4, w: bw + 8, h: bh + 8, label: 'FLIP', fn: () => opts.onFlip(), focusable: false });
     const fw = pw2 - 20 - bw - gap * 2, fcx = Math.round(px + 10 + fw / 2);
     if (Sel.locked) { const s = cpu || oppLocked ? 'HERE WE GO\u2026' : 'LOCKED IN · WAITING FOR YOUR OPPONENT\u2026'; text(ctx, s, fcx, fy, f(800, fit(ctx, s, fw, 800, sm ? 11 : 14, DFONT), DFONT), '#7cff7a'); }
-    else text(ctx, opts.hint, fcx, fy, f(700, fit(ctx, opts.hint, fw, 700, sm ? 10 : 13, DFONT), DFONT), '#aab3d8');
+    else {
+      // scouting line: the offense is warned when its habit is showing; the defense gets the report on the offense's habits
+      const scl = S.sx && S.hum[me] ? S.sx[offense ? 0 : 1] : '';
+      if (scl) text(ctx, scl, fcx, fy, f(800, fit(ctx, scl, fw, 800, sm ? 10 : 13, DFONT), DFONT), '#ff9a3c');
+      else text(ctx, opts.hint, fcx, fy, f(700, fit(ctx, opts.hint, fw, 700, sm ? 10 : 13, DFONT), DFONT), '#aab3d8');
+    }
   }
 
   return { beginFrame, button, handleKeys, tap, text, rr, f, fit, logo, hud, bannerDraw, callsDraw, wrapMeter, selectPanel, diagram, resetFocus, clockStr, get hits() { return prevHits; }, get liveHits() { return hits; }, kbd: false };

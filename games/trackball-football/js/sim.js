@@ -13,9 +13,20 @@ const HASH = [MID_Y - 3.1, MID_Y + 3.1];
 const BASE_V = { C: 6.4, LG: 6.4, RG: 6.4, QB: 7.6, RB: 8.6, WR: 8.9, DT: 6.7, DE: 7.4, LB: 8.0, CB: 8.8, S: 8.6 };
 let HUMAN_TOP = 1.0; // human-steered player's top speed at full trackball spin (x command magnitude, max 1.15)
 const SKILL = [ // rookie / pro / all-pro (applied to the CPU team; human teammates play at "pro")
-  { spd: 0.87, react: 0.42, tackle: 0.72, shed: 3.2, acc: 2.2, esc: 0.55, read: 2.0, cover: 0.55, int: 0.18, angle: 0.65, dive: 0.6, bite: 0.36, learn: 0.6, chase: 1.09 },
-  { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3, angle: 0.85, dive: 0.8, bite: 0.45, learn: 0.8, chase: 1 },
-  { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42, angle: 1.0, dive: 1.0, bite: 0.32, learn: 1.0, chase: 1 },
+  { spd: 0.87, react: 0.42, tackle: 0.72, shed: 3.2, acc: 2.2, esc: 0.55, read: 2.0, cover: 0.55, int: 0.18, angle: 0.65, dive: 0.6, bite: 0.36, learn: 0.6, chase: 1.12 },
+  { spd: 0.95, react: 0.24, tackle: 0.95, shed: 2.3, acc: 1.1, esc: 0.72, read: 1.5, cover: 0.8, int: 0.3, angle: 0.85, dive: 0.8, bite: 0.45, learn: 0.8, chase: 1.1 },
+  { spd: 1.02, react: 0.1, tackle: 1.15, shed: 1.6, acc: 0.45, esc: 0.88, read: 1.1, cover: 1.0, int: 0.42, angle: 1.0, dive: 1.0, bite: 0.32, learn: 1.0, chase: 1.01 },
+];
+/* SCOUTING: how a CPU defense reads a human offense's play calls (rookie / pro / all-pro). It never sees the current
+   call, only the calls made so far: a recency-weighted frequency (memory `decay` per play) blended with an order-1/2
+   pattern model (what followed this call before), so it catches "the same play" and "A, B, A, B" alike.
+   It sells out (calls SELL OUT = the counter) when it has seen `minN` calls and its best guess is >= `conf`, and then
+   only `commit` of the time; `gamble` = sells out on a hunch anyway; `bluff` = flashes the tell without selling out;
+   `sharp` = how hard the counter hits (how early the blitzers fire, how well the jumpers break on the ball). */
+const SCOUT = [
+  { decay: 0.55, minN: 4, conf: 0.66, commit: 0.8, gamble: 0.03, bluff: 0.12, sharp: 0.86 },
+  { decay: 0.62, minN: 3, conf: 0.6, commit: 0.93, gamble: 0.05, bluff: 0.12, sharp: 0.9 },
+  { decay: 0.68, minN: 3, conf: 0.52, commit: 0.96, gamble: 0.07, bluff: 0.12, sharp: 1.0 },
 ];
 // angle: how well pursuit leads the runner (0 = chase his back, 1 = true intercept course) · dive: CPU ankle-tackle dives ·
 // bite: chance a well-timed juke fakes a defender out · learn: how hard the defense keys on a runner's habits ·
@@ -26,7 +37,7 @@ const SKILL = [ // rookie / pro / all-pro (applied to the CPU team; human teamma
 const RUN = {
   top: 1.0,                 // human carrier's top speed x his position speed (non-carriers may still go up to 1.15)
   acc: 15, cutAcc: 34,      // carrier acceleration (yd/s^2): a sharp cut at full speed takes ~0.6 s; during a juke it's crisp
-  tireAfter: 3, tireSpan: 4, tireMin: 0.92, // after 3 s carrying he fades to 92% of top speed over the next 4 s
+  tireAfter: 2.4, tireSpan: 3, tireMin: 0.88, // after 2.4 s carrying he fades to 88% of top speed over the next 3 s (long runs and catch-and-runs get run down)
   juke: { cd: 1.1, burst: 0.32, boost: 1.1, near: 0.9, far: 2.7, whiff: 3.6, stun: 0.5 }, // a juke fakes out a man 0.9-2.7 yd away; with nobody near it's a wasted plant
   mash: 0.035, spin: 0.75,  // breaking a wrap: each Space mash and the trackball spin (x a per-tackle luck of 0.6-1.45, usually low)
 };
@@ -69,7 +80,7 @@ const Sim = (() => {
       picks: [null, null], pflip: [false, false], formFlip: [false, false], lag: [0, 0], pend: [false, false], selT: 0, ctl: [3, 10], aim: [-1, -1], wrap: null,
       ev: [], evSeq: 0, banner: null, bannerSeq: 0, calls: null, kind: '', over: false, thrown: false, crossed: false, run: false, runT: 0,
       playT: 0, cv: { x: 0, y: 0 }, edgeI: -1, edgeSide: 1, deepI: -1, scram: false, keyBite: 1,
-      key: [0, 1].map(() => ({ run: 0, out: 0, scr: 0, side: 0, n: 0, said: '' })), result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
+      key: [0, 1].map(() => ({ run: 0, out: 0, scr: 0, side: 0, n: 0, said: '' })), sc: [0, 1].map(() => ({ h: [] })), read: [null, null], readK: [null, null], ctr: null, hint: null, result: null, gid: Math.floor(Math.random() * 1e9), excite: 0, lastGain: 0, drive: 0, hikeT: 0, stats: { plays: 0, tds: [0, 0] },
     };
     for (let i = 0; i < 14; i++) G.pl.push({ i, team: teamOf(i), slot: i % 7, role: '', num: 0, x: 0, y: 0, vx: 0, vy: 0, fa: 0, st: 'ok', lat: 1, recov: 0, stT: 0, eng: -1, engT: 0, shedNeed: 2, noEng: 0, maxv: 7, as: null, wp: 0, route: null, tcd: 0, imm: 0, dv: 0, lastShed: -1 });
     setPossession(0, 35, false);
@@ -107,9 +118,10 @@ const Sim = (() => {
   function beginSelect() {
     G.phase = 'select'; G.t = 0; G.selT = 14; G.picks = [null, null]; G.pend = [false, false]; G.calls = null; G.kind = ''; G.wrap = null;
     G.ball.st = 'dead'; G.ball.holder = -1; G.ball.x = G.los; G.ball.y = G.ballY; G.ball.z = 0.15; G.thrown = false; G.crossed = false; G.run = false;
-    G.pflip = [false, false]; G.formFlip = [false, false];
+    G.pflip = [false, false]; G.formFlip = [false, false]; G.ctr = null; G.readK = [null, null];
     resetPlayers(); placeFormation(false);
-    for (let t = 0; t < 2; t++) if (!G.human[t]) { G.picks[t] = cpuPick(t); G.pflip[t] = cpuFlip(t, G.picks[t]); G.pend[t] = true; }
+    scoutSelect();
+    for (let t = 0; t < 2; t++) if (!G.human[t]) { const id = cpuPick(t); G.pflip[t] = cpuFlip(t, id); G.picks[t] = id; G.pend[t] = true; if (id === 'read') pickRead(t); }
     { const k = G.key[G.off], dh = G.human[1 - G.off], tag = k.scr > 0.55 ? 'THE QB SCRAMBLE' : k.out > 0.6 ? 'THE OUTSIDE RUN' : k.run > 0.7 ? 'THE RUN' : '';
       if (tag && tag !== k.said && !dh && G.human[G.off] && k.n >= 3) { k.said = tag; banner('DEFENSE KEYS ON ' + tag, 'Mix in a pass to keep them honest', '#8fd3ff', 2.4); }
       else if (!tag) k.said = ''; }
@@ -122,10 +134,15 @@ const Sim = (() => {
     if (G.phase !== 'select' || G.picks[team]) return false;
     const list = team === G.off ? offenseChoices() : DEFENSE;
     if (!list.some(p => p.id === id)) id = list[0].id;
-    G.picks[team] = id; G.pflip[team] = !!flip; G.pend[team] = true; return true;
+    G.picks[team] = id; G.pflip[team] = !!flip; G.pend[team] = true;
+    if (id === 'read' && team !== G.off) { // a SELL OUT lines up with the play it bets on (the FLIP pill doesn't apply)
+      const k = G.readK[team] || (G.read[team] && G.read[team].top); G.readK[team] = k || null;
+      if (k && !COUNTER_SYM[famOf(k)]) G.pflip[team] = flipOf(k);
+    }
+    return true;
   }
   /** the CPU flips its call now and then (never kicks) */
-  function cpuFlip(team, id) { const p = PLAY_BY_ID[id]; return !!p && p.kind !== 'punt' && p.kind !== 'fg' && Math.random() < 0.4; }
+  function cpuFlip(team, id) { if (id === 'read') return G.pflip[team]; const p = PLAY_BY_ID[id]; return !!p && p.kind !== 'punt' && p.kind !== 'fg' && Math.random() < 0.4; }
   function lock(team) { if (G.phase === 'select') G.pend[team] = true; }
   function offenseChoices() {
     const kickDist = Math.abs(goalX(G.off) - G.los) + 17;
@@ -142,7 +159,17 @@ const Sim = (() => {
       if (late && !behind && G.score[team] - G.score[1 - team] <= 2 && kick <= 45) return 'fg';
       const w = togo > 7 ? { dive: 1, sweep: 1.5, slants: 3, post: 3, bomb: 2, screen: 1.5 } : togo <= 3 ? { dive: 4, sweep: 2.5, slants: 2, post: 1, bomb: 0.6, screen: 1 } : { dive: 2.5, sweep: 2, slants: 2.5, post: 2, bomb: 1.2, screen: 1.5 };
       if (toGoal < 12) w.bomb = 0.3;
+      // don't be a tendency: go easy on what it just called, and play against what a scout would guess next
+      const h = G.sc[team].h, l1 = h[h.length - 1], l2 = h[h.length - 2];
+      if (l1 && w[l1.id]) w[l1.id] *= l2 && l2.id === l1.id ? 0.12 : 0.45;
+      const pr = predict(team, SCOUT[1].decay); if (pr.top && pr.conf > 0.4) { const id = famOf(pr.top); if (w[id]) w[id] *= 1 - 0.7 * pr.conf; }
       return wpick(w);
+    }
+    // the scouting report: sell out against the play they keep calling (a bet, never a peek at this call)
+    const R = G.read[team], SC = SCOUT[G.opts.diff];
+    if (R && R.top && !(G.down === 4 && togo > 2)) {
+      if (R.n >= SC.minN && R.conf >= SC.conf && Math.random() < SC.commit) { G.readK[team] = R.top; return 'read'; }
+      if (R.n >= 2 && Math.random() < SC.gamble) { G.readK[team] = wpick(R.P); return 'read'; }
     }
     const w = togo > 8 ? { man: 2, zone: 3, blitz: 1.5, stuff: 0.6, prevent: 1.5 } : togo <= 3 ? { man: 2, zone: 1, blitz: 2.5, stuff: 3.5, prevent: 0.2 } : { man: 3, zone: 2.5, blitz: 2, stuff: 1.8, prevent: 0.6 };
     if (G.half === 2 && G.clock < 30 && G.score[team] > G.score[1 - team]) w.prevent += 3;
@@ -150,15 +177,74 @@ const Sim = (() => {
     // and send pressure with a spy at a scrambling QB
     const K = keyOf(team); w.stuff += 3 * K.run * (1 - K.out); w.zone += 2.5 * K.out; w.man += K.run + 1.5 * K.scr;
     w.blitz = Math.max(0.2, w.blitz + 1.5 * K.scr - 1.6 * K.out); w.prevent *= 1 - 0.6 * K.run;
+    // their run/pass mix (not the play): a pass-happy offense sees more zone and fewer run blitzes, a deep thrower sees
+    // the safeties stay back, a run-first one sees the box loaded
+    const T = mix(G.off, SC.decay);
+    if (T.n >= 3) { w.zone += 2.4 * T.pass * SC.sharp; w.prevent += 1.6 * T.deep * SC.sharp; w.stuff *= 1 - 0.75 * T.pass * SC.sharp; w.blitz *= 1 - 0.6 * T.deep * SC.sharp; w.stuff += 2.5 * (1 - T.pass) * SC.sharp; }
     return wpick(w);
   }
+  /* ---------------- scouting: the offense's play-call habits ---------------- */
+  /** team t's recent run/pass mix (recency-weighted): { n, pass, deep } */
+  function mix(t, decay) {
+    const h = G.sc[t].h; let w = 0, ps = 0, dp = 0;
+    for (let i = 0; i < h.length; i++) { const k = Math.pow(decay, h.length - 1 - i), f = famOf(h[i].k); w += k; if (f !== 'dive' && f !== 'sweep') ps += k; if (f === 'post' || f === 'bomb') dp += k; }
+    return { n: h.length, pass: w ? ps / w : 0.5, deep: w ? dp / w : 0.3 };
+  }
+  const famOf = k => String(k).replace(/[<>]$/, '');
+  const flipOf = k => /<$/.test(k);
+  /** a call as the scout files it: the play, plus which way it went when that matters to the counter */
+  const callKey = (id, flip) => COUNTER_SYM[id] ? id : id + (flip ? '<' : '>');
+  /** what team t (on offense) calls next, from its history only: { n, conf, top, P: {key: p}, pat } */
+  function predict(t, decay) {
+    const h = G.sc[t].h, n = h.length, P = {};
+    if (!n) return { n: 0, conf: 0, top: null, P, pat: false };
+    const F = {}; let fw = 0;
+    for (let i = 0; i < n; i++) { const w = Math.pow(decay, n - 1 - i); F[h[i].k] = (F[h[i].k] || 0) + w; fw += w; }
+    // patterns: what followed the last call before (doubly so when the two calls before it match too)
+    const B = {}, last = h[n - 1].k, last2 = n > 1 ? h[n - 2].k : null; let bw = 0;
+    for (let i = 0; i < n - 1; i++) {
+      if (h[i].k !== last) continue;
+      const w = Math.pow(decay, n - 2 - i) * (i > 0 && h[i - 1].k === last2 ? 1.6 : 1);
+      B[h[i + 1].k] = (B[h[i + 1].k] || 0) + w; bw += w;
+    }
+    const wb = bw / (bw + 0.8);
+    for (const k in F) P[k] = (1 - wb) * F[k] / fw;
+    for (const k in B) P[k] = (P[k] || 0) + wb * B[k] / bw;
+    let top = null, conf = 0; for (const k in P) if (P[k] > conf) { conf = P[k]; top = k; }
+    return { n, conf, top, P, pat: wb > 0.45 && top !== last };
+  }
+  const SC_NAME = k => { const f = famOf(k), p = PLAY_BY_ID[f]; return (COUNTER_SYM[f] || !flipOf(k) ? '' : 'FLIPPED ') + (p ? p.name : f); };
+  /** at each play call: the defense's read of the offense, and the scouting lines both sides see (history only) */
+  function scoutSelect() {
+    const off = G.off, def = 1 - off, SC = SCOUT[G.human[def] ? 1 : G.opts.diff];
+    const R = predict(off, SC.decay); G.read = [null, null]; G.read[def] = R;
+    const h = G.sc[off].h, last4 = h.slice(-4), same = R.top ? last4.filter(e => e.k === R.top).length : 0;
+    const hot = R.top && R.n >= SC.minN && R.conf >= SC.conf;
+    G.hint = { o: '', d: '', rf: '' };
+    if (R.top && R.n >= 2) {
+      const nm = SC_NAME(R.top);
+      G.hint.d = 'SCOUTING: ' + (R.pat ? 'PATTERN SAYS ' + nm : nm + ' · ' + same + ' OF LAST ' + last4.length) + (hot ? ' · SELL OUT IS LIVE' : '');
+      G.hint.rf = OFFENSE.findIndex(p => p.id === famOf(R.top)); // (an index, never a play id on the wire)
+      if (hot) G.hint.o = 'THEY’VE SEEN THIS BEFORE: ' + (R.pat ? 'YOUR PATTERN' : 'YOUR ' + nm) + ' · MIX IT UP';
+    }
+  }
+  /** the CPU defense locked in SELL OUT: line up with the play it is betting on */
+  function pickRead(t) { const k = G.readK[t]; if (k && !COUNTER_SYM[famOf(k)]) G.pflip[t] = flipOf(k); }
   function wpick(w) { let s = 0; for (const k in w) s += w[k]; let r = Math.random() * s; for (const k in w) { r -= w[k]; if (r <= 0) return k; } return Object.keys(w)[0]; }
 
   /* ---------------- the snap ---------------- */
   function snap() {
-    const op = PLAY_BY_ID[G.picks[G.off]], dp = PLAY_BY_ID[G.picks[1 - G.off]];
+    const op = PLAY_BY_ID[G.picks[G.off]]; let dp = PLAY_BY_ID[G.picks[1 - G.off]];
+    // SELL OUT turns into the counter for the play the defense bet on (from history: it never sees this call)
+    G.ctr = null;
+    if (dp.id === 'read') {
+      const t = 1 - G.off, k = G.readK[t] || (G.read[t] && G.read[t].top), C = k && COUNTER[famOf(k)];
+      if (C) { G.ctr = { k, fam: famOf(k), name: C.name, tag: C.tag, by: t, sharp: SCOUT[G.human[t] ? 1 : G.opts.diff].sharp, hit: callKey(op.id, G.pflip[G.off]) === k, scr: keyOf(t).scr > 0.3 };
+        dp = Object.assign({}, dp, { a: C.a, name: C.name }); if (!COUNTER_SYM[G.ctr.fam]) G.pflip[t] = flipOf(k); }
+    }
+    if (op.kind === 'run' || op.kind === 'pass') { const h = G.sc[G.off].h; h.push({ id: op.id, f: !!G.pflip[G.off], k: callKey(op.id, G.pflip[G.off]) }); if (h.length > 14) h.shift(); }
     G.phase = 'live'; G.t = 0; G.playT = 0; G.kind = op.kind; G.op = op; G.dp = dp;
-    G.calls = [op.name + (G.pflip[G.off] ? ' (FLIP)' : ''), dp.name + (G.pflip[1 - G.off] ? ' (FLIP)' : '')];
+    G.calls = [op.name + (G.pflip[G.off] ? ' (FLIP)' : ''), (G.ctr ? 'SELL OUT: ' + dp.name : dp.name + (G.pflip[1 - G.off] ? ' (FLIP)' : ''))];
     G.thrown = false; G.crossed = false; G.run = false; G.runT = 0; G.wrap = null; G.result = null; G.stats.plays++;
     G.scram = false; G.caught = false; G.edgeI = G.deepI = -1; G.cv.x = G.cv.y = 0;
     const K = keyOf(1 - G.off); G.keyBite = 1 - 0.35 * K.run; // a defense that has seen your runs doesn't bite on fakes as easily
@@ -180,11 +266,13 @@ const Sim = (() => {
         else p.as = p.slot === 4 ? 'blk' : 'route', p.route = p.route || [W(OFF_FORM[p.slot][0] + 20, OFF_FORM[p.slot][1], fl)];
       } else {
         let a = dp.a[p.slot]; const K = keyOf(def);
-        if (p.slot === 3 && K.scr > 0.3 && (a[0] === 'zone' || a[0] === 'man') && !(G.human[def])) a = ['spy']; // he keeps scrambling: the MLB spies the QB
-        p.as = a[0]; p.asArg = a;
-        if (a[0] === 'zone') p.zone = W(a[1] - (p.role === 'S' ? 6 * K.run : 0), a[2], fl); // a safety who has seen the run cheats down
+        if (p.slot === 3 && (K.scr > 0.3 || (G.ctr && G.ctr.scr)) && (a[0] === 'zone' || a[0] === 'man' || (G.ctr && a[0] === 'jump')) && !(G.human[def] && !G.ctr)) a = ['spy']; // he keeps scrambling: the MLB spies the QB
+        p.as = a[0]; p.asArg = a; p.jumped = false; p.ctrT = 0;
+        if (a[0] === 'zone') p.zone = W(a[1] - (p.role === 'S' && !G.ctr ? 6 * K.run : 0), a[2], fl); // a safety who has seen the run cheats down
         // man coverage is by side: when only one team flipped, the corners take the receiver now on their side
-        if (a[0] === 'man') p.manT = off * 7 + (cross && a[1] >= 5 ? 11 - a[1] : a[1]);
+        if (a[0] === 'man' || a[0] === 'jump' || a[0] === 'bracket') p.manT = off * 7 + (cross && a[1] >= 5 ? 11 - a[1] : a[1]);
+        if (a[0] === 'crash') { p.zone = W(a[1], a[2], fl); p.ctrT = (1 - G.ctr.sharp) * 0.9; p.noEng = 0.25 + 0.75 * G.ctr.sharp; } // fires at the snap and slips the first block
+        if (a[0] === 'jump') p.zone = W(a[2], a[3], fl);
       }
     }
     const qb = P(off * 7 + 3), c = P(off * 7);
@@ -353,14 +441,16 @@ const Sim = (() => {
     if (b.st === 'air' && b.kind === 'pass') {
       const left = Math.max(0, b.T - b.t), dist = hyp(b.tx - p.x, b.ty - p.y);
       if (dist < left * p.maxv * 1.05 + 1.2 && G.t - b.launch > s.react) return I(p, 'ball', b.tx, b.ty, b.tgt, moveTo(p, b.tx, b.ty, p.maxv));
-      const r = P(b.tgt); return I(p, 'cover', r.x, r.y, r.i, pursue(p, r, p.maxv));
+      // can't get there in time: a cover man on the target trails to the landing spot (tracking the ball, not his back) to tackle at the catch
+      const r = P(b.tgt); if (p.manT === b.tgt || hyp(r.x - p.x, r.y - p.y) < 6) return I(p, 'cover', b.tx, b.ty, r.i, moveTo(p, b.tx, b.ty, p.maxv * 1.04));
+      return I(p, 'cover', r.x, r.y, r.i, pursue(p, r, p.maxv));
     }
     if (c && c.team !== off) { // interception return: everybody on the original offense tackles, we block... just pursue roles swap
       return { x: 0, y: 0 };
     }
     // run (or scramble / catch) detected: pursue after the reaction delay
-    const K = keyOf(p.team), react = s.react * (p.as === 'zone' ? 1.3 : 1) * (1 - 0.25 * K.run - 0.3 * K.out);
-    if (G.run && c && G.t - G.runT > react) return pursueRun(p, c, s);
+    const K = keyOf(p.team), react = p.as === 'crash' ? 0.04 : p.as === 'jump' || p.as === 'bracket' ? 0.1 : s.react * (p.as === 'zone' ? 1.3 : 1) * (1 - 0.25 * K.run - 0.3 * K.out);
+    if (G.run && c && G.t - G.runT > react && !(p.as === 'crash' && G.t < p.ctrT)) return pursueRun(p, c, s);
     if (G.scram && c && c.role === 'QB' && p.as !== 'man' && G.t - G.scram > react) return pursueRun(p, c, s);
     const qb = P(off * 7 + 3);
     switch (p.as) {
@@ -373,6 +463,23 @@ const Sim = (() => {
           if (dd > 2.2) { const cx = tgt.x + tgt.vx * 0.3, cy = tgt.y + tgt.vy * 0.3 + side * Math.min(w, dd * 0.5); return I(p, 'contain', cx, cy, tgt.i, moveTo(p, cx, cy, p.maxv)); }
         }
         return I(p, 'rush', tgt.x, tgt.y, tgt.i, pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1)));
+      }
+      case 'crash': { // counter: fire to the spot at the snap, then hunt the ball (a blitz if it turns out to be a pass)
+        const tag = p.asArg[3], Z = p.zone;
+        if (G.t < p.ctrT) return I(p, tag, Z.x, Z.y, -1, { x: 0, y: 0 });
+        if (!p.jumped && G.t < 1.5 && hyp(Z.x - p.x, Z.y - p.y) > 0.9) return I(p, tag, Z.x, Z.y, -1, moveTo(p, Z.x, Z.y, p.maxv * 1.05));
+        p.jumped = true; const tgt = c || qb; return I(p, tag, tgt.x, tgt.y, tgt.i, pursue(p, tgt, p.maxv));
+      }
+      case 'jump': { // counter: sit on his break point, then undercut him (inside and underneath, between him and the QB)
+        const r = P(p.manT), Z = p.zone;
+        if (!p.jumped && G.t > 0.15 + (1 - (G.ctr ? G.ctr.sharp : 1)) * 0.5) { if (hyp(r.x - Z.x, r.y - Z.y) < 3 || G.t > 1.3) p.jumped = true; else return I(p, 'jump', Z.x, Z.y, r.i, moveTo(p, Z.x, Z.y, p.maxv)); }
+        if (!p.jumped) return I(p, 'jump', p.x, p.y, r.i, { x: 0, y: 0 });
+        const qx = qb.x - r.x, qy = qb.y - r.y, qn = hyp(qx, qy) || 1, ex = r.x + r.vx * 0.3 + qx / qn * 0.8, ey = r.y + r.vy * 0.3 + qy / qn * 0.8;
+        return I(p, 'jump', ex, ey, r.i, moveTo(p, ex, ey, p.maxv * 1.04, 0.1));
+      }
+      case 'bracket': { // counter: over the top of one receiver, nothing gets behind him
+        const r = P(p.manT), ex = r.x + r.vx * 0.45 + d * p.asArg[2] * (G.t < 1.2 ? 1 : 0.75), ey = r.y + r.vy * 0.45;
+        return I(p, 'bracket', ex, ey, r.i, moveTo(p, ex, ey, p.maxv * 1.02, 0.1));
       }
       case 'spy': { // mirror the QB from 4.5 yd off the ball, then come up the moment he takes off
         if (G.t < 0.4) return I(p, 'spy', p.x, p.y, qb.i, { x: 0, y: 0 });
@@ -435,7 +542,7 @@ const Sim = (() => {
     let kind = m ? 'pursue' : 'cutoff';
     // lesser defenders take flatter angles (they aim a little behind the ideal spot, up to ~1 yd for a rookie)
     { const L = hyp(tx - c.x, ty - c.y) || 1, lag = (1 - s.angle) * Math.min(3, L * 0.25); tx -= (tx - c.x) / L * lag; ty -= (ty - c.y) / L * lag; }
-    if (p.i === G.edgeI && dist > 3) { ty += G.edgeSide * clamp(dist * 0.22, 0.8, 3) * (1 + K.out); kind = 'edge'; } // keep outside leverage: force him back inside
+    if (p.i === G.edgeI && dist > 3 && (c.x - G.los) * d < 6) { ty += G.edgeSide * clamp(dist * 0.22, 0.8, 3) * (1 + K.out); kind = 'edge'; } // keep outside leverage: force him back inside
     if (p.i === G.deepI && (p.x - c.x) * d > 1) { const cush = clamp(dist * 0.4, 0, 6); if ((tx - c.x) * d < cush) tx = c.x + d * cush; kind = 'deep'; } // over the top
     return I(p, kind, tx, clamp(ty, 0.8, FIELD_W - 0.8), c.i, moveTo(p, tx, clamp(ty, 0.8, FIELD_W - 0.8), spd));
   }
@@ -468,6 +575,17 @@ const Sim = (() => {
       G.phase = 'presnap'; G.t = 0; G.hikeT = G.human[G.off] ? 5.5 : rand(1.3, 2.2);
       // vs the CPU the flipped formations line up now; online (opts.secret) they stay hidden until the snap
       if (!G.opts.secret) G.formFlip = G.pflip.slice();
+      tell();
+    }
+  }
+  /** the pre-snap tell: a CPU defense that sold out usually can't hide it (defenders creep, the crowd stirs), and now
+      and then it fakes the look when it hasn't. Never in an online game: there it would give away the call. */
+  function tell() {
+    const def = 1 - G.off; G.tellOn = false;
+    if (G.human[def] || G.opts.secret || !G.human[G.off]) return;
+    const sold = G.picks[def] === 'read', R = G.read[def], SC = SCOUT[G.opts.diff];
+    if (sold ? Math.random() < 0.75 : (R && R.n >= 2 && R.conf > 0.34 && Math.random() < SC.bluff)) {
+      G.tellOn = true; banner(Math.random() < 0.5 ? 'DEFENSE READS IT!' : 'THEY’VE SEEN THIS BEFORE', 'The defense is creeping up… or is it a bluff?', '#ff9a3c', 1.7); ev('tell');
     }
   }
   function jog(dt, k) { // walk everyone back to the huddle-less formation
@@ -858,6 +976,10 @@ const Sim = (() => {
       if (dq === p) dq = null; // he missed it; the receiver can still make the catch
     }
     const s = sk(def);
+    // a counter defender who sat on this route gets his hands on it even if the receiver is a step closer
+    if (G.ctr && !(dq && dd < rd - 0.25) && !G.human[def]) for (const q of teamPl(def)) {
+      if ((q.as === 'jump' || q.as === 'bracket') && q.manT === b.tgt && q.st === 'ok' && A.d && A.d[q.i] != null && A.d[q.i] < 1.2 + 0.8 * G.ctr.sharp) { dq = q; dd = Math.min(A.d[q.i], (rd || 1) - 0.3); break; }
+    }
     if (dq && (!r || dd < rd - 0.25) && dq.st !== 'down') {
       const hd = G.human[dq.team] && G.ctl[dq.team] === dq.i;
       let pInt;
@@ -865,6 +987,7 @@ const Sim = (() => {
       else { // CPU defender: a timing-based play on the ball, sharper on higher levels
         const e = gauss() * INT.cpuSig[G.human[off] ? G.opts.diff : 1];
         pInt = intOdds(e, dd, INT.cpu[G.human[off] ? G.opts.diff : 1], false);
+        if (G.ctr && (dq.as === 'jump' || dq.as === 'bracket') && dq.manT === b.tgt) pInt = Math.min(0.5, pInt * (1.1 + 0.4 * G.ctr.sharp)); // he sat on that route
         dq.st = 'lunge'; dq.stT = 0.2; dq.recov = 0; dq.vx *= 0.5; dq.vy *= 0.5; ev('lunge', dq.x, dq.y, { t: dq.team, i: dq.i, g: intGrade(e), cpu: 1 });
       }
       if (Math.random() < pInt) return intercept(dq);
@@ -935,6 +1058,8 @@ const Sim = (() => {
     const k = G.key[G.off], a = 0.34, mix = (f, v) => { k[f] += (v - k[f]) * a; };
     if (G.kind !== 'run' && G.kind !== 'pass') return;
     const c = carrier(), ran = G.run && !G.thrown && !G.caught && !G.intercepted && c && c.team === G.off && r.y != null;
+    { const h = G.sc[G.off].h, e = h[h.length - 1]; // the scout's notes on how it went: run or pass, which side, who got the ball
+      if (e && !e.o) e.o = { run: !!ran, side: r.y != null ? Math.sign(Math.round(r.y - G.ballY)) : 0, tgt: G.thrown && G.ball.tgt >= 0 ? G.ball.tgt % 7 : -1, scr: !!(ran && c.role === 'QB' && G.kind === 'pass') }; }
     k.n++;
     if (!ran) { mix('run', 0); mix('scr', 0); k.out *= 0.8; return; } // throwing it keeps them honest
     const lat = r.y - G.ballY, out = Math.abs(lat) > 8 || r.y < 6 || r.y > FIELD_W - 6;
@@ -1004,7 +1129,34 @@ const Sim = (() => {
         break;
       }
     }
+    if (G.ctr) counterBanner(r, next);
     G.next = next; G.intercepted = false;
+  }
+  /** the payoff of a SELL OUT: STUFFED when the defense guessed right, WIDE OPEN when it guessed wrong */
+  function counterBanner(r, next) {
+    const C = G.ctr, d = dirOf(G.off), g = r.x != null ? (r.x - G.los) * d : 0, turn = next && next.turn;
+    if (!(G.kind === 'run' || G.kind === 'pass') || r.type === 'fg' || r.type === 'punt') return;
+    C.res = '';
+    if (C.hit) {
+      const lost = r.type === 'tackle' && r.team === G.off && g < 0.5, tag = 'THEY READ ' + C.tag;
+      if (r.type === 'tackle' && r.team !== G.off) C.res = 'pick';
+      else if (r.sack) C.res = 'sack';
+      else if (lost) C.res = g < -0.5 ? 'loss' : 'stuff';
+      else if (r.type === 'incomplete') C.res = 'inc';
+      if (!C.res) return;
+      if (C.res === 'pick') banner('PICKED OFF!', 'JUMPED THE ROUTE · ' + tag, '#ff5a4a', 2.4);
+      else if (!turn) {
+        if (C.res === 'sack') banner('SACKED! THEY SAW IT COMING', fmtGain(g) + ' · ' + tag, '#ff8a4a', 2.4);
+        else if (C.res === 'loss') banner('STUFFED FOR A LOSS!', fmtGain(g) + ' · ' + tag, '#ff8a4a', 2.4);
+        else if (C.res === 'stuff') banner('STUFFED!', fmtGain(g) + ' · ' + tag, '#ff8a4a', 2.2);
+        else banner('BLANKETED!', 'INCOMPLETE · ' + tag, '#ff8a4a', 2.2);
+      }
+      ev('stuffed', r.x, r.y);
+    } else if ((r.type === 'tackle' || r.type === 'oob') && r.team === G.off && g >= 9 || r.type === 'td' && r.team === G.off) {
+      C.res = 'burn';
+      if (r.type !== 'td' && !turn) banner('WRONG GUESS! WIDE OPEN', fmtGain(g) + ' · THEY SOLD OUT FOR ' + C.tag.replace(/^THE /, ''), '#7cff7a', 2.4);
+      ev('burned', r.x, r.y);
+    }
   }
   function fmtGain(g) { const n = Math.round(g); return n === 0 ? 'NO GAIN' : n > 0 ? 'GAIN OF ' + n : 'LOSS OF ' + (-n); }
   function downNext(x, y) {
@@ -1060,6 +1212,10 @@ const Sim = (() => {
       it: G.phase === 'live' ? G.pl.map(p => p.itK ? [p.itK, r1(p.itX), r1(p.itY), p.itO == null ? -1 : p.itO] : 0) : null,
       rt: G.phase === 'live' && !G.thrown && G.kind === 'pass' ? G.pl.map(p => p.as === 'route' && p.route && p.wp < p.route.length && p.itK === 'route' ? p.route.slice(p.wp).map(q => [r1(q.x), r1(q.y)]) : 0) : null,
       ky: keyTag(G.off) || null,
+      // counter-defense in play (shown with the calls, after the snap): [name, what it took away]
+      ctr: revealed && G.ctr ? [G.ctr.name, G.ctr.tag] : null,
+      // scouting lines at the play call: built from past calls only. o = warning to the offense, d = report for the defense, rf = index of the expected play
+      sx: G.phase === 'select' && G.hint && (G.hint.o || G.hint.d) ? [G.hint.o, G.hint.d, G.hint.rf] : null,
     };
   }
   const r1 = v => Math.round(v * 10) / 10;
@@ -1067,5 +1223,5 @@ const Sim = (() => {
   function keyTag(off) { const k = G.key[off]; if (!k || k.n < 3) return ''; return k.scr > 0.55 ? 'THE QB SCRAMBLE' : k.out > 0.6 ? 'THE OUTSIDE RUN' : k.run > 0.7 ? 'THE RUN' : ''; }
   /** tests: put the ball on a spot for `team` and start the play-call screen */
   function testSpot(team, x, y) { setPossession(team, x, true); G.ballY = y; placeFormation(true); beginSelect(); }
-  return { get G() { return G; }, testSpot, RUN, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier(), formPos: p => formPos(p), closestDef, INT, intOdds, intTiming, intDist };
+  return { get G() { return G; }, testSpot, predict: (t, dc) => predict(t, dc == null ? SCOUT[1].decay : dc), SCOUT, callKey, RUN, newGame, update, pick, lock, snapshot, offenseChoices, cpuPick, dirOf, endPlay, carrier: () => carrier(), formPos: p => formPos(p), closestDef, INT, intOdds, intTiming, intDist };
 })();

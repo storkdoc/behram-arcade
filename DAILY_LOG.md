@@ -290,3 +290,14 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
 2. Congressional: keep balancing (still 72% longest); check the iPhone landscape encounter layout.
 3. Star Raider: gentler Pilot step for casual players. Fix the flaky vortex-v4 warden test timing.
 4. PIN is still in git history: Dr. Behram should rotate it.
+
+### Trackball Football: mix up your plays, the defense learns (play-counter)
+- The defense tracks the human's play calls (play + flip, with recent calls counting most, plus pairs to catch
+  alternating). Once confident (Pro: about 3 of the last 4) it may SELL OUT and call a counter: EDGE BLITZ (sweep),
+  RUN BLITZ (dive), JUMP THE SLANTS, BRACKET THE POST, DEEP BRACKET + BLITZ (bomb), SNIFF THE SCREEN.
+  It never sees the current call. Pre-snap tell (sometimes a bluff), STUFFED / WIDE OPEN banners and sounds.
+- Symmetric: the CPU offense scouts itself and varies its calls. A human defender gets a scouting line and a SELL OUT card.
+  Both humans see the same history-based lines in 2P. HELMET CAM shows the counter jobs and "D SOLD OUT".
+- Bot sims, Pro: a repeated play or 2-play alternation averages 0.4 yd/play after play 5 (read by play ~4) and
+  scores on 0% of drives. Random / anti-adaptive callers average 10-11 yd/play and score on ~60% of drives.
+- New `tests/play-counter.test.js`. play-counter, run-defense, game, mp and helmet-cam tests all pass.

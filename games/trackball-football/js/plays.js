@@ -44,5 +44,23 @@ const DEFENSE = [
   { id: 'blitz', name: 'BLITZ', desc: 'Send the LB and safety. Press coverage.', a: [['rush'], ['rush'], ['rush'], ['rush'], ['man', 5, 0.8], ['man', 6, 0.8], ['rush']] },
   { id: 'stuff', name: 'RUN STUFF', desc: 'Crash the line, safety comes down', a: [['rush'], ['rush'], ['rush'], ['fill'], ['man', 5, 2.5], ['man', 6, 2.5], ['fill']] },
   { id: 'prevent', name: 'PREVENT', desc: 'Nothing deep. Bend, don\u2019t break.', a: [['rush'], ['rush'], ['rush'], ['zone', 9, 0], ['zone', 22, -12], ['zone', 22, 12], ['zone', 30, 0]] },
+  // SELL OUT: bet on the offense's habit. At the snap it becomes the COUNTER for the play the scouting report
+  // expects (lined up to that play's side). Right, and the play dies; wrong, and the holes it leaves get gashed.
+  { id: 'read', name: 'SELL OUT', desc: 'Bet on their habit: the counter to the play they keep calling', counter: true, a: [['rush'], ['rush'], ['rush'], ['man', 4, 2], ['man', 5, 3], ['man', 6, 3], ['zone', 16, 0]] },
 ];
+/* counter-defenses, one per offensive play. Same assignment language as DEFENSE plus
+     ['crash', f, l, tag]  fire at the snap to a spot (no reading, slips the first block), then hunt the ball
+     ['jump', recv, f, l]  sit on that receiver's break point, then undercut him (better odds to pick it)
+     ['bracket', recv, c]  stay over the top of that receiver, c yards of cushion
+   Spots are in the defense's frame, lined up with the expected call (flipped with it), so +l is the side the
+   sweep, screen and curl go. Each one takes something away and gives something up: see `weak`. */
+const COUNTER = {
+  sweep: { name: 'EDGE BLITZ', tag: 'THE SWEEP', weak: 'the middle and deep', a: [['rush'], ['rush'], ['crash', -3.8, 8.2, 'eblitz'], ['crash', -1.5, 6.5, 'scrape'], ['man', 5, 3], ['crash', -1.8, 12.5, 'ccrash'], ['crash', 2.5, 9.5, 'rotate']] },
+  dive: { name: 'RUN BLITZ', tag: 'THE DIVE', weak: 'the edges and deep', a: [['crash', -2.6, 0, 'gap'], ['crash', -2.8, -1.2, 'pinch'], ['crash', -2.8, 1.6, 'pinch'], ['crash', -2.2, 0.4, 'gap'], ['man', 5, 1.2], ['man', 6, 1.2], ['crash', 0.5, 0.3, 'gap']] },
+  slants: { name: 'JUMP THE SLANTS', tag: 'THE SLANTS', weak: 'deep and the run', a: [['rush'], ['rush'], ['rush'], ['jump', 4, 1.5, 12], ['jump', 5, 6.5, -7.5], ['jump', 6, 6.5, 6.5], ['zone', 10, 0]] },
+  post: { name: 'BRACKET THE POST', tag: 'THE POST', weak: 'the run and the flat', a: [['rush'], ['rush'], ['rush'], ['jump', 4, 3.5, 2.2], ['man', 5, 1.2], ['jump', 6, 9.5, 12.5], ['bracket', 5, 3.5]] },
+  bomb: { name: 'DEEP BRACKET + BLITZ', tag: 'THE BOMB', weak: 'everything short', a: [['rush'], ['rush'], ['rush'], ['crash', -7.5, 0.5, 'blitz'], ['bracket', 5, 5], ['bracket', 6, 5], ['crash', -7, -2, 'blitz']] },
+  screen: { name: 'SNIFF THE SCREEN', tag: 'THE SCREEN', weak: 'deep and the dive', a: [['rush'], ['rush'], ['crash', -3.2, 9.5, 'sniff'], ['crash', -2.6, 10.5, 'sniff'], ['man', 5, 3], ['man', 6, 1.2], ['zone', 12, 0]] },
+};
+const COUNTER_SYM = { dive: 1, slants: 1, bomb: 1 }; // counters that don't care which way the call was flipped
 const PLAY_BY_ID = {}; for (const p of OFFENSE.concat(DEFENSE)) PLAY_BY_ID[p.id] = p;
