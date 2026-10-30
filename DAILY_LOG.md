@@ -220,3 +220,62 @@ gives ALL PASS and vortex-tips.test.js gives ALL PASSED.
 - Long breakaways still happen. Pro sweeps average about 5–11 yd.
 - Tests: new `games/trackball-football/tests/run-defense.test.js` (pure Node), ALL PASSED. game.test.js and
   mp.test.js are ALL PASS.
+
+## 2026-10-30 (day 3): gameplay evaluation + fixes
+
+Yesterday's run was marked failed: its Neuro Arena plateau-rule edits were left uncommitted in an old worktree
+(`/workspace/daily-1029`, untouched). Today they were re-applied in a fresh worktree from `acf46ab`, tested and shipped.
+All work in `/workspace/arcade-daily-2026-10-30`; headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14.
+
+### Player feedback
+`node tools/read-feedback.mjs --json --no-sync`: **0 real submissions** in the last 48 h. All 38 records were TEST
+entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback.jsonl). No ratings or suggestions to act on.
+
+### Findings
+- **All 22 games smoke test**: every game loads on desktop and iPhone with no console or page errors. A few
+  screenshot timeouts (jax-adventures, living-chess, mushroom-cloud, apex-gp on iPhone) were CPU load, not errors.
+- **Congressional OB GYN**: access/core/page tests pass (desktop + iPhone; PIN only as a salted hash, test PIN via
+  testpin.js; 6-week expiry checked). The correct answer was the longest option in 74.3% of 257 questions, up to 4.9×
+  longer than any distractor. On iPhone 14 / SE, after answering, the Next button showed only 7 px above the panel's
+  scroll edge (iPhone 14 landscape: probe could not reach the schedule rows, not investigated further).
+- **VORTEX (Tempest)**: enemy shots are still the #1 death cause; the rim glow warning from day 2 is easy to miss while
+  watching the far end. No haptics existed. Regression suite passes; `vortex-v4` "warden shield" is flaky (failed 1 of
+  2 runs on unmodified origin/main too: a pre-existing test timing flake, not caused by today's change).
+- **MELTDOWN**: sim 47/47, restart test ALL PASS (back above 8% power in 166 s, 0 re-trips).
+- **Star Raider**: sim + war tests pass. Sloppy bot wins campaign Pilot 17% (day 2: 25%): the Pilot step is still
+  steep for casual players. Not changed today.
+- **Neuro Arena** (evochoice, seed 12345, 10 rounds × K=4 = 40 generations, ABL off):
+  | contest | chance | champ start→end | reaps | full task | beyond reflex | notes |
+  | divisor (plateau off / on) | 8% | 22→73% / 22→80% | 0 / 1 | 40% / 44% | −0.26 / −0.22 | |
+  | simon (off / on) | 25% | 41→67% / 41→78% | 0 / 1 | 33% / 47% | +0.07 / +0.21 | |
+  | text (off / on) | 8% | 22→40% / 22→38% | 0 / 1 | 12% / 14% | −0.13 / −0.11 | below letter-frequency |
+  | pong (off / on) | – | 40→48% / 40→44→28% | 0 / 2 | – | – | plateau crown hurt |
+  | add (on) | 5% | 28→78% | 1 | 9% | −0.01 | level 0 |
+  | sub (on) | 10% | 67→88% | 2 | 27% | +0.09 | reached level 3 |
+  | big (on) | 50% | 68→94% | 2 | – | +0.17 | |
+  | pattern (on) | 12.5% | 65→100% | 2 | – | +0.50 | |
+  | echo / dots / rps (on) | – | saturated at 100% | 1 each | – | – | |
+  Understanding layer units (self / enemy) stay ~20–30 / ~20–30 in every contest; text keeps neighbour (42) and bigram (46)
+  units but its full-task score is still below the "commonest letter for that slot" baseline, so it has **not** moved
+  beyond letter-frequency guessing. Divisor's full task (40–44%) is still below the 66% full reflex prior.
+  Versus day 2: plateau-off runs reproduce the day-2 freeze (0 reaps); the plateau rule makes selection act again
+  (1–2 reaps per contest). Single seed each, so treat the gains as suggestive, not proven.
+
+### Changes (pushed to origin/main, verified live)
+- `f294c14` **Congressional OB GYN**: rewrote distractors for the 47 worst questions and trimmed 37 wordy correct
+  options (doses kept where they matter, e.g. the PID regimen). Correct-is-longest 74.3% → 71.6%, max ratio 4.9× → 2.5×,
+  questions with a >1.3× length cue 146 → 101. New lint `tests/bank-cues.test.js`. Next/Finish is now sticky at the
+  bottom of the encounter panel (fully visible on iPhone 14 and SE).
+- `ff1318a` **VORTEX**: gamepad rumble (dual-rumble; Firefox haptics) and touch vibration (Android; iOS has no API)
+  for deaths, captures, Superzapper, hits, warps, life-ups; H toggles (saved). An audible double-blip + light rumble when
+  an enemy shot enters the warning zone of your lane (once per shot). Test `vortex-haptics.test.js` (fake gamepad,
+  desktop + iPhone) passes 3×; tips, waves, rim, touch pass.
+- `c37caa8` **Neuro Arena**: the plateau rule (after 8 stagnant gens, judge challengers against the champion's own
+  post-duel benchmark from the same duel and double copy errors), for choice contests only; Pong excluded after it
+  crowned a worse champion. CSV columns plateau / plateau_stag / champ_post_duel_acc. lexicon + page tests pass.
+
+### For tomorrow
+1. Neuro Arena: repeat plateau on/off on 3+ seeds; add the like-for-like Limited-reflex (brain silenced) baseline.
+2. Congressional: keep balancing (still 72% longest); check the iPhone landscape encounter layout.
+3. Star Raider: gentler Pilot step for casual players. Fix the flaky vortex-v4 warden test timing.
+4. PIN is still in git history: Dr. Behram should rotate it.
