@@ -18,10 +18,13 @@ function loadAccess() {
   new Function('module', 'exports', 'require', patchedAccessSource())(m, m.exports, require);
   return m.exports;
 }
-function scanFor(s) {
-  const hits = [], root = path.join(__dirname, '..');
+function scanFor(s, dir) {
+  const hits = [], root = dir || path.join(__dirname, '..');
+  // A 4-digit PIN collides with ordinary numeric literals (timings, sizes), so flag it only where it looks like a PIN:
+  // as a quoted string (not an SVG geometry attribute like cx=...), or within a few characters of the word 'pin'/'code'.
+  const leak = new RegExp("(?<!\\b(?:c?[xy]|r[xy]?|[xy][12]|width|height|d|points|viewBox)=)['\"`]" + s + "['\"`]|(pin|code)[^\\n]{0,12}\\b" + s + "\\b|\\b" + s + "\\b[^\\n]{0,12}pin", 'i');
   (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); const st = fs.statSync(p);
-    if (st.isDirectory()) walk(p); else if (/\.(js|html|css|md|json|txt|mjs)$/.test(f) && fs.readFileSync(p, 'utf8').includes(s)) hits.push(path.relative(root, p)); } })(root);
+    if (st.isDirectory()) walk(p); else if (/\.(js|html|css|md|json|txt|mjs)$/.test(f) && leak.test(fs.readFileSync(p, 'utf8'))) hits.push(path.relative(root, p)); } })(root);
   return hits;
 }
 module.exports = { PIN, real, patchedAccessSource, loadAccess, scanFor };

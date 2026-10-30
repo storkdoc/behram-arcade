@@ -10,9 +10,9 @@
   var ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 32 symbols, no 0/1/I/O
   var EPOCH = Date.UTC(2026, 0, 1) / 86400000;  // day 0 = 2026-01-01
   var VALID_DAYS = 42;
-  var PIN_SALT = '8a73389d2393875386e56965';
-  var PIN_HASH = 'e1ae9c19f37b8218f1edfe6a101b1fecd7a63e1577bd5fdc06bef18be528bf12';
-  var K = [126,190,96,245,6,95,131,45,102,213,17,244,250,141,169,197,160,217,197,35,101,173,223,5];
+  var PIN_SALT = 'b9cf680280694eaffe85f7f9';
+  var PIN_HASH = 'c2d52d416d2341b631d0841e8b9552dba253eaafd352f73670153acd72c281c7';
+  var K = [108,115,23,1,6,180,221,102,148,220,51,244,38,189,104,102,89,242,203,106,41,16,153,179];
   var keyP = null;
   function enc(s) { return new TextEncoder().encode(s); }
   function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }

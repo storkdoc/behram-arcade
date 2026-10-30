@@ -21,7 +21,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   ok((await A.checkCode((await A.makeCode(today - 43)).code, today)).reason === 'expired', '43-day-old code expired');
   ok(!(await A.checkCode('CONG-2345-6789', today)).ok, 'made-up code rejected');
   // plain-text PIN scan of this game's folder (only meaningful with the real PIN in COB_PIN)
-  const hits = []; (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) walk(p); else if (/\.(js|html|css|md|json|txt|mjs)$/.test(f) && fs.readFileSync(p, 'utf8').includes(T.PIN)) hits.push(path.relative(DIR, p)); } })(DIR);
+  const hits = T.real ? T.scanFor(T.PIN, DIR) : [];
   if (T.real) ok(hits.length === 0, 'real PIN not written anywhere in games/feud-and-delivery ' + JSON.stringify(hits));
   else ok(true, 'PIN scan skipped (set COB_PIN to scan for the real PIN)');
   console.log(fail ? fail + ' FAILED' : 'ALL ACCESS TESTS PASSED'); process.exit(fail ? 1 : 0);

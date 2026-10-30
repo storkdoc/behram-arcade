@@ -31,6 +31,9 @@ CONG-XXXX-XXXX, 32-symbol alphabet (no 0/1/I/O). 40 bits = 20-bit masked payload
 + 20-bit truncated HMAC-SHA256. Valid while 0 <= today - issue <= 41 (America/New_York dates); expires on issue+42.
 **Security caveat (honest):** the HMAC key is in client JS (lightly obfuscated) and the PIN hash is of a 4-digit PIN (10,000
 possibilities, trivially brute-forced offline). Anyone with dev tools can bypass the gate or mint codes. Classroom honor lock only.
+**Rotation 2026-10-30:** instructor PIN changed (new random PIN_SALT + PIN_HASH) and the HMAC key K rotated, because the old
+PIN was recoverable from git history and the old key was public in the shipped JS. The HMAC key is independent of the PIN, so
+rotating K is what invalidates every CONG code issued before this date (and saved instructor tokens); issue new codes.
 
 ## Content accuracy self-review (done 2026-10-28)
 Sources: ACOG PBs/COs, CDC STI Treatment Guidelines 2021, ASCCP 2019 risk-based, USPSTF (cervical, breast 2024, CRC 2021, lung 2021,
