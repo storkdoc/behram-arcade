@@ -239,6 +239,37 @@ function shape(E0, E1, z, pts, close = true, su = 1) {
   if (close) ctx.closePath();
 }
 
+/* ============================== haptics (day 3, 2026-10-30) ==============================
+   Rumble on gamepads (Gamepad API vibrationActuator 'dual-rumble', Chrome/Edge/Safari pads; Firefox hapticActuators) and
+   short buzzes on touch devices that support navigator.vibrate (Android; iOS Safari has no vibration API, so iPhones get
+   the audio + visual cues only). Driven by the same event names as Sound.play, so every big moment has a feel: death,
+   rim grab, Superzapper, warp, kills, bonus life, mine/spark blasts, wall bumps and the incoming-shot warning.
+   Only the device you are playing with buzzes (last input wins). H toggles haptics (stored); independent of mute. */
+const HAPTIC = {   // name: [ms, strong, weak]
+  die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
+  hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
+  mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5]
+};
+const Haptics = {
+  on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
+  fire(n) {
+    const h = HAPTIC[n]; if (!h || !this.on) return;
+    const now = performance.now(); if (now - (this.lastT[n] || -1e9) < (n === 'hit' || n === 'zkill' ? 60 : 30)) return; this.lastT[n] = now;
+    let dev = null;
+    try {
+      if (this.src === 'pad' && this.pad) {
+        const g = this.pad, va = g.vibrationActuator;
+        if (va && va.playEffect) { va.playEffect(va.type === 'vibration' ? 'vibration' : 'dual-rumble', { startDelay: 0, duration: h[0], strongMagnitude: h[1], weakMagnitude: h[2] }).catch(() => {}); dev = 'pad'; }
+        else if (g.hapticActuators && g.hapticActuators[0] && g.hapticActuators[0].pulse) { g.hapticActuators[0].pulse(Math.max(h[1], h[2]), h[0]); dev = 'pad'; }
+      } else if (this.src === 'touch' && navigator.vibrate) { navigator.vibrate(Math.min(h[0], 120) | 0); dev = 'touch'; }
+    } catch (e) {}
+    if (this.log.length > 200) this.log.shift(); this.log.push({ n, dev, ms: h[0] });
+  },
+  toggle() { this.on = !this.on; store.set('haptics', this.on); if (this.on) this.fire('pack'); return this.on; }
+};
+addEventListener('keydown', () => { Haptics.src = 'kbm'; }, true);
+addEventListener('pointerdown', e => { Haptics.src = e.pointerType === 'touch' ? 'touch' : 'kbm'; }, true);
+
 /* ============================== sound ============================== */
 const Sound = {
   ac: null, out: null, noiseBuf: null, humGain: null, muted: !!store.get('muted', false),
@@ -334,6 +365,7 @@ const Sound = {
     s.connect(f); f.connect(g); g.connect(this.out); s.start(t, Math.random() * 1.0); s.stop(t + dur + 0.05);
   },
   play(n) {
+    Haptics.fire(n);
     if (!this.ac || this.muted) return;
     switch (n) {
       case 'shoot': this.tone('square', 1500, 300, 0.075, 0.045); break;
@@ -356,6 +388,7 @@ const Sound = {
       case 'arm': this.tone('square', 1800, 1800, 0.05, 0.05); this.tone('square', 1800, 1800, 0.05, 0.05, 0.11); break;
       case 'fizz': this.noise(0.32, 0.12, 2500, 9000, 2, 'highpass'); break;
       case 'bump': this.tone('triangle', 140, 60, 0.09, 0.14); break;
+      case 'shotwarn': this.tone('square', 980, 620, 0.07, 0.06); this.tone('square', 980, 620, 0.07, 0.05, 0.085); break;   // incoming shot in your lane
       case 'mineboom': this.noise(0.6, 0.5, 2600, 90, 0.7); this.tone('sawtooth', 300, 40, 0.4, 0.12); break;
       case 'sparkspawn': this.noise(0.28, 0.08, 9000, 3000, 4); this.tone('sawtooth', 2200, 3300, 0.1, 0.02); break;
       case 'sparkwarn': this.tone('square', 1400, 2300, 0.1, 0.05); this.tone('square', 1400, 2300, 0.1, 0.05, 0.13); break;
@@ -539,6 +572,7 @@ function pollPad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : []; const g = gps && [...gps].find(x => x);
   if (!g) return;
   const b = i => g.buttons[i] && g.buttons[i].pressed;
+  if (g.buttons.some(x => x && x.pressed) || g.axes.some(a => Math.abs(a) > 0.3)) { Haptics.src = 'pad'; Haptics.pad = g; } else if (Haptics.src === 'pad') Haptics.pad = g;
   const ax = g.axes[0] || 0, steer = state === 'play' || state === 'zoom' || state === 'warp';
   // in game the left stick is analog (speed proportional to deflection, 0.2 dead zone); in menus it acts like the d-pad
   const dz = 0.2, m = Math.abs(ax) > dz ? sgn(ax) * Math.pow((Math.abs(ax) - dz) / (1 - dz), 1.5) : 0;
@@ -722,6 +756,7 @@ function qualifies(s) { return s > 0 && (hiscores.length < 10 || s > hiscores[hi
 const INITIAL_SET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ .-'.split('');
 function onPress(k) {
   if (k === 'KeyM') { Sound.toggle(); return; }
+  if (k === 'KeyH') { const on = Haptics.toggle(); if (inGame()) msg(on ? 'RUMBLE ON' : 'RUMBLE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
   if (k === 'KeyF' && inGame()) { autofire = !autofire; store.set('autofire2', autofire); msg(autofire ? 'AUTOFIRE ON' : 'AUTOFIRE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
   const confirm = k === 'Enter' || k === 'NumpadEnter';
   if (DEBUG && inGame()) {
@@ -1282,6 +1317,8 @@ function updShots(dt) {
   for (const s of eshots) {
     s.pz = s.z; s.z -= LP.eshotSpeed * dt; s.spin += dt * 9;
     if (s.z <= 0) { s.dead = true; if (state === 'play' && player.alive && s.lane === player.lane) killPlayer('shot'); }
+    // day 3: the red-rim warning also beeps and buzzes once per shot, so you can hear/feel it without looking at the rim
+    else if (!s.warned && state === 'play' && player.alive && s.lane === player.lane && s.z < SHOT_WARN_Z) { s.warned = true; shotWarnCues++; Sound.play('shotwarn'); }
   }
   eshots = eshots.filter(s => !s.dead);
 }
@@ -1503,7 +1540,7 @@ function drawWeb(color, laneColor, highlight = true) {
 // Day 2 eval: incoming-shot warning. An enemy shot in the last 35 % of the claw's own lane lights the lane's rim edge
 // and the near ends of its rails red, brighter as it closes. Purely a cue: it does not change the shot.
 const SHOT_WARN_Z = 0.35;
-let shotWarnFrames = 0;   // frames on which the warning was drawn (test hook)
+let shotWarnFrames = 0, shotWarnCues = 0;   // frames on which the warning was drawn (test hook)
 function shotWarnLevel() {
   if (state !== 'play' || !player.alive) return 0;
   let w = 0; for (const s of eshots) if (!s.dead && s.lane === player.lane && s.z < SHOT_WARN_Z) w = Math.max(w, 1 - s.z / SHOT_WARN_Z);
@@ -1921,7 +1958,7 @@ function drawAttract() {
   drawTitleLogo(H * 0.12, size);
   text('A VECTOR TUBE SHOOTER', W / 2, H * 0.12 + size * 1.25, U * 1.9, '#ffe81a', 'center');
   if (attract.mode === 0) {
-    const rows = touch.on ? [['RIM', 'DRAG ALONG THE TUBE RIM'], ['KNOB', 'DRAG OR CIRCLE TO SPIN'], ['FIRE', 'HOLD THE FIRE PAD'], ['AUTO', 'SMART AUTO-FIRE ' + (touch.auto ? '(ON)' : '(OFF)')], ['ZAP', 'SUPERZAPPER'], ['MODE', 'SPINNER OR ARROWS']] : [['MOUSE', 'POINT AT THE RIM, CLICK FIRE'], ['← →', 'MOVE CLAW  (HOLD = FASTER)'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER  (RIGHT CLICK)'], ['PAD', 'STICK = ANALOG SPIN, A FIRE'], ['F', 'SMART AUTOFIRE  ' + (autofire ? '(ON)' : '(OFF)')], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF']];
+    const rows = touch.on ? [['RIM', 'DRAG ALONG THE TUBE RIM'], ['KNOB', 'DRAG OR CIRCLE TO SPIN'], ['FIRE', 'HOLD THE FIRE PAD'], ['AUTO', 'SMART AUTO-FIRE ' + (touch.auto ? '(ON)' : '(OFF)')], ['ZAP', 'SUPERZAPPER'], ['MODE', 'SPINNER OR ARROWS']] : [['MOUSE', 'POINT AT THE RIM, CLICK FIRE'], ['← →', 'MOVE CLAW  (HOLD = FASTER)'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER  (RIGHT CLICK)'], ['PAD', 'STICK = ANALOG SPIN, A FIRE'], ['F', 'SMART AUTOFIRE  ' + (autofire ? '(ON)' : '(OFF)')], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF'], ['H', 'PAD RUMBLE  ' + (Haptics.on ? '(ON)' : '(OFF)')]];
     const top = H * 0.44, lh = U * 3.6, cs = U * 1.9;
     text('CONTROLS', W / 2, top - lh * 1.4, U * 2.4, '#36e6ff', 'center');
     rows.forEach(([k, d], i) => { text(k, W / 2 - U * 2, top + i * lh, cs, '#ffe81a', 'right'); text(d, W / 2 + U * 2, top + i * lh, cs, '#ffffff', 'left'); });
@@ -2431,6 +2468,9 @@ window.VORTEX = {
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
   deathKind: () => death ? death.kind : null,
   shotWarn: () => shotWarnLevel(),
+  shotWarnCues: () => shotWarnCues,
+  eshotList: () => eshots.map(s => ({ lane: s.lane, z: s.z, warned: !!s.warned })),
+  haptics: () => ({ on: Haptics.on, src: Haptics.src, log: Haptics.log.slice(), padHeld: Object.keys(pad.prev).filter(k => pad.prev[k]) }),
   shotWarnFrames: () => shotWarnFrames,
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),

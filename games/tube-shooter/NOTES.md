@@ -111,3 +111,15 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Test: `node games/tube-shooter/tests/vortex-tips.test.js http://localhost:PORT` (desktop + iPhone).
 - tests/vortex-touch.test.js: the "▶ tap = one sub-position" check retries when a warp/new web lands inside the tap
   window (it reset the lane 4:0 -> 1:0 on iPhone portrait: a test race, not a game bug).
+
+## Day 3 (2026-10-30): pad rumble + audible shot warning
+- Haptics (game.js, `HAPTIC` table + `Haptics`): every game sound with a haptic entry also rumbles the active gamepad
+  (`vibrationActuator.playEffect('dual-rumble')`, Firefox `hapticActuators`), or calls `navigator.vibrate` on touch
+  (Android; iOS Safari has no vibration API, so iPhone gets the audio cue only). Device = last input (keyboard/mouse,
+  pad, touch). Throttled; H toggles (saved as `haptics`), help row added.
+- Shot warning is now audible too: one `shotwarn` double-blip (+ a light rumble) the moment an enemy shot enters
+  SHOT_WARN_Z in the claw's lane (once per shot). Shots are still the #1 death cause, and the visual rim cue was easy
+  to miss while watching the far end of the web.
+- Hooks: VORTEX.shotWarnCues(), eshotList(), haptics() -> {on, src, log, padHeld}.
+- Test: `node games/tube-shooter/tests/vortex-haptics.test.js http://localhost:PORT` (fake gamepad + vibrate stub;
+  desktop pad + iPhone touch).
