@@ -63,3 +63,12 @@ click; that was the iPhone page-test timeout. Human-timed taps (300 ms after ren
 - [x] bank (26 topics), access + tests, core + tests, audio, art (building, hallway, room, patients)
 - [x] index.html / css / main.js UI; page tests pass desktop + iPhone; thumb.png; games.js entry
 - [ ] (ideas) more cases per topic; real-device iOS check by the user
+
+## Day 3 (2026-10-30): answer-length cue + Next above the fold
+- The correct option was the longest in 74% of questions (often 3-5x longer than any distractor), a test-wiseness
+  give-away. Rewrote distractors of the 47 worst questions to be plausible and similar in length, trimmed 37 wordy
+  correct options (doses kept where they matter, e.g. PID regimen). Now: correct longest in 71.6% (strictly 69.3%),
+  ratio > 1.3x in 101 questions (was 146), max ratio 2.5x (was 4.9x). More balancing is still worth doing.
+- tests/bank-cues.test.js lints this (no correct answer > 2.5x the longest distractor; longest-share < 75%).
+- iPhone: after answering, the Next/Finish button sat just below the panel's scroll edge (7 px visible on iPhone 14).
+  `.enc-actions` is now sticky at the bottom of `.enc-panel` with a fade, so it is always fully on screen.
