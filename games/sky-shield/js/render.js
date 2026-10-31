@@ -601,8 +601,12 @@ export class Renderer {
           if (e.kind === 'emp') { this.empFx(e.x, e.y); break; }
           this.fireball(e.id, e.x, e.y, e.kind);
           const big = e.kind === 'ground' ? 1.4 : e.kind === 'abm' ? 1 : 0.8;
-          this.ring(e.x, e.y, 0.2, e.r * 2.3 * big, 0.55, e.kind === 'abm' ? '#a8d0ff' : '#ffd0a0', 0.05, e.kind === 'abm' ? 0.45 : 0.6);
-          this.sparks(e.x, e.y, e.kind === 'abm' ? 14 : 20, 26 * big, e.kind === 'abm' ? '#9cd0ff' : '#ffb050');
+          const lite = this.phone || this.tier <= 1, nb = g ? g.blasts.length : 0, busy = nb > 14 ? 0.5 : 1; // keep busy chains cheap on phones
+          this.ring(e.x, e.y, 0.2, e.r * 2.6 * big, 0.6, e.kind === 'abm' ? '#a8d0ff' : '#ffd0a0', 0.05, e.kind === 'abm' ? 0.55 : 0.7);
+          if (!lite || nb < 10) this.ring(e.x, e.y, 0.1, e.r * 1.5 * big, 0.35, '#ffffff', 0.09, 0.8); // bright inner shock ring
+          this.sparks(e.x, e.y, Math.round((e.kind === 'abm' ? 22 : 26) * busy * (lite ? 0.6 : 1)), 30 * big, e.kind === 'abm' ? '#9cd0ff' : '#ffb050');
+          this.add.add({ x: e.x - OX, y: e.y, z: 1.2, life: 0.12, size: e.r * 0.8, size1: e.r * 1.6, r: 2.2, g: 2.1, b: 1.9, a: 1 }); // white-hot core flash
+          if (busy > 0.5) this.puffs(e.x, e.y, lite ? 2 : 4, e.r * 0.35, e.r * 0.6, 0.3, 2.2, 1.2); // lingering smoke
           this.light(e.x, e.y, e.kind === 'abm' ? '#a0c8ff' : '#ff9a40', 900 * big, 0.9);
           this.add.add({ x: e.x - OX, y: e.y, z: 1, life: 0.22, size: e.r * 2.2, size1: e.r * 4, r: 1.4, g: 1.2, b: 1.0, a: 0.9 });
           this.kick(e.kind === 'ground' ? 0.9 : e.kind === 'abm' ? 0.12 : 0.25);

@@ -49,6 +49,8 @@ function show(name) {
   relayout();
 }
 let toastT = 0, banT = 0;
+let chainT = 0;
+function chainPop(n, mult) { const c = $('chainpop'); c.innerHTML = `CHAIN ×${n}${mult > 1 ? `<small>${mult}× POINTS</small>` : ''}`; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); c.style.fontSize = Math.min(34, 18 + n * 1.5) + 'px'; clearTimeout(chainT); chainT = setTimeout(() => c.classList.remove('show'), 1100); }
 function toast(msg, secs = 2.6) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); toastT = secs; }
 function banner(html, secs = 2) { const b = $('banner'); b.innerHTML = html; b.classList.add('show'); banT = secs; }
 
@@ -94,6 +96,11 @@ function requestLock() { if (touchDev || app.aim !== 'ball' || locked || !canvas
 function releaseLock() { if (locked && document.exitPointerLock) try { document.exitPointerLock(); } catch (e) {} }
 document.addEventListener('pointerlockchange', () => { const was = locked; locked = document.pointerLockElement === canvas; if (was && !locked && app.screen === 'play') pauseGame(); });
 function playing() { return app.screen === 'play' && g && !app.paused; }
+/* launch mode: 'closest' (default) = Space / double-click / double-tap fire the closest silo that can fire;
+   'lcr' = the original controls (click / Space = best battery, A S D / L C R = that battery) */
+app.launch = LS.get('ss.launch', 'closest') === 'lcr' ? 'lcr' : 'closest';
+function mainFire() { fireBase(app.launch === 'closest' ? -2 : -1); }
+const DBL_MS = 350; let lastClick = -1e9;
 function fireBase(i) { if (!playing()) return; pendingFire.push(i); }
 function fireEmp() { if (!playing()) return; pendingEmp = true; }
 
@@ -106,7 +113,9 @@ canvas.addEventListener('mousedown', e => {
   if (app.screen !== 'play' || touchDev) return; e.preventDefault(); AU.unlock();
   if (app.aim === 'direct') { directTarget = R.unproject(e.clientX, e.clientY); cross.x = directTarget.x; cross.y = directTarget.y; }
   if (app.aim === 'ball' && !locked) requestLock();
-  fireBase(e.button === 2 ? 1 : -1);
+  if (app.launch === 'lcr') { fireBase(e.button === 2 ? 1 : -1); return; }
+  // CLOSEST SILO: a double-click launches from the silo nearest the crosshair
+  const t = performance.now(); if (t - lastClick < DBL_MS) { lastClick = -1e9; fireBase(-2); } else lastClick = t;
 });
 addEventListener('wheel', e => {
   if (app.screen !== 'play') return; e.preventDefault();
@@ -122,7 +131,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   if (app.screen === 'initials') return iniKey(e);
   if (app.screen === 'play') {
-    if (e.code === 'Space') fireBase(-1);
+    if (e.code === 'Space') mainFire();
     else if (e.code in KEYFIRE) fireBase(KEYFIRE[e.code]);
     else if (e.code === 'Enter' || e.code === 'NumpadEnter') fireEmp();
     else if (e.code === 'KeyP' || e.code === 'Escape') pauseGame();
@@ -144,7 +153,13 @@ tpad.addEventListener('pointerdown', e => {
   padPts.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() }); hand.touch.down = padPts.size; hand.touch.last = performance.now();
   tball.style.left = e.clientX + 'px'; tball.style.top = e.clientY + 'px'; tball.classList.add('on');
   if (app.aim === 'direct') { directTarget = R.unproject(e.clientX, e.clientY - 70); }
+  if (app.launch === 'closest') { // double-tap the sky = closest-silo launch
+    const t = performance.now(), L = lastTap;
+    if (t - L.t < DBL_MS && Math.hypot(e.clientX - L.x, e.clientY - L.y) < 48) { lastTap = { t: -1e9, x: 0, y: 0 }; if (app.aim === 'direct') { cross.x = directTarget.x; cross.y = directTarget.y; } fireBase(-2); }
+    else lastTap = { t, x: e.clientX, y: e.clientY };
+  }
 });
+let lastTap = { t: -1e9, x: 0, y: 0 };
 tpad.addEventListener('pointermove', e => {
   const p = padPts.get(e.pointerId); if (!p) return; e.preventDefault();
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
@@ -168,7 +183,7 @@ function pollPad(dt) {
   let x = gp.axes[0] || 0, y = gp.axes[1] || 0; const m = Math.hypot(x, y); if (m < 0.16) { x = 0; y = 0; } else { const k = (m - 0.16) / 0.84 / m; x *= k; y *= k; }
   if (b(14)) x = -1; if (b(15)) x = 1; if (b(12)) y = -1; if (b(13)) y = 1;
   if (app.screen === 'play') {
-    if (edge(2)) fireBase(0); if (edge(0)) fireBase(1); if (edge(1)) fireBase(2); if (edge(5) || edge(7)) fireBase(-1); if (edge(3) || edge(4)) fireEmp(); if (edge(9)) pauseGame();
+    if (edge(2)) fireBase(0); if (edge(0)) fireBase(1); if (edge(1)) fireBase(2); if (edge(5) || edge(7)) mainFire(); if (edge(3) || edge(4)) fireEmp(); if (edge(9)) pauseGame();
   } else if (app.screen === 'initials') {
     padNavT -= dt; if (padNavT <= 0 && (Math.abs(x) > 0.5 || Math.abs(y) > 0.5)) { padNavT = 0.18; if (Math.abs(y) > Math.abs(x)) iniSpin(y > 0 ? 1 : -1); else iniMove(x > 0 ? 1 : -1); }
     if (edge(0) || edge(9)) iniSave();
@@ -249,6 +264,7 @@ function cues(evs) {
       case 'out': AU.out(S.BASES[e.i].x); break;
       case 'dry': AU.dry(); break;
       case 'flyer': if (e.kind === 'bomber') AU.droneOn(); else AU.sat(e.dir > 0 ? 0 : 160); break;
+      case 'chainpop': AU.chainPop(e.n); chainPop(e.n, e.mult); break;
       case 'chain': AU.chain(e.n); if (app.mode === 'versus') toast(`CHAIN ×${e.n} — WARHEAD SENT TO YOUR BUDDY!`, 1.6); break;
       case 'emp': AU.emp(e.x); break;
       case 'tally': $('tally').classList.remove('hidden'); $('tw').textContent = g.tally.wave; $('tmult').textContent = e.mult; AU.stopLoops(); break;
@@ -407,6 +423,13 @@ function joinByCode() { const c = $('jcode').value.trim().toUpperCase(); if (c.l
 function setAim(a) { app.aim = a; LS.set('ss.aim', a); document.querySelectorAll('#aims .chip').forEach(c => c.classList.toggle('sel', c.dataset.aim === a)); $('paim').textContent = 'AIM: ' + (a === 'ball' ? 'TRACKBALL' : 'DIRECT POINTER');
   $('aimhint').textContent = a === 'ball' ? (touchDev ? 'Swipe the sky like a trackball — flick to send the crosshair flying, rest your finger to stop it.' : 'Mouse / trackpad spins a heavy trackball: flick to fly, keep rolling to cruise. Click the field to capture the pointer (Esc releases).')
     : (touchDev ? 'The crosshair sits just above your finger.' : 'The crosshair follows the mouse pointer exactly.'); }
+function setLaunch(m) { app.launch = m === 'lcr' ? 'lcr' : 'closest'; LS.set('ss.launch', app.launch); document.querySelectorAll('#launches .chip').forEach(c => c.classList.toggle('sel', c.dataset.launch === app.launch));
+  $('launchhint').textContent = app.launch === 'closest' ? (touchDev ? 'Double-tap the sky to launch from the closest silo that can fire. L / C / R still fire their own silo.' : 'Space or double-click launches from the closest silo that can fire (next closest if it is empty or destroyed). A S D still fire their own silo.')
+    : (touchDev ? 'Classic: tap L / C / R to fire that silo.' : 'Classic: click / Space fires the best battery, right-click the center, A S D pick left / center / right.');
+  setFoot(); }
+function setFoot() { $('tfoot').textContent = touchDev ? (app.launch === 'closest' ? 'Swipe the sky like a trackball · double-tap = closest silo · L / C / R fire · ⚡ = EMP' : 'Swipe the sky like a trackball · tap L / C / R to fire · ⚡ = EMP')
+  : (app.launch === 'closest' ? 'Mouse / trackpad = trackball · Space or double-click = closest silo · A S D fire left/center/right · Enter = EMP · gamepad OK' : 'Mouse / trackpad = trackball · Space fires · A S D fire left/center/right · Enter = EMP · gamepad OK'); }
+$('launches').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) { setLaunch(c.dataset.launch); AU.ui(); } });
 function setSound(m) { app.muted = m; AU.setMuted(m); LS.set('ss.mute', m); $('bsound').textContent = 'SOUND: ' + (m ? 'OFF' : 'ON'); $('psound').textContent = 'SOUND: ' + (m ? 'OFF' : 'ON'); }
 $('waves').innerHTML = [1, 3, 5, 7, 9, 11, 13, 15].map(n => `<button class="chip" data-w="${n}">WAVE ${n}<small>×${S.waveParams(n).mult} POINTS</small></button>`).join('');
 $('waves').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; app.startWave = +c.dataset.w; document.querySelectorAll('#waves .chip').forEach(x => x.classList.toggle('sel', x === c)); AU.ui(); });
@@ -474,8 +497,8 @@ function loopBody(now) {
 
 /* ---------------- boot ---------------- */
 setAim(app.aim); setSound(app.muted);
-$('tfoot').textContent = touchDev ? 'Swipe the sky like a trackball · tap L / C / R to fire · ⚡ = EMP' : 'Mouse / trackpad = trackball · Space fires · A S D fire left/center/right · Enter = EMP · gamepad OK';
+setLaunch(app.launch);
 $('lprog').style.width = '60%';
 startAttract(); relayout();
-window.SS = { booted: true, app, R, S, Net, cross, get g() { return g; }, get attract() { return attract; }, newGame, setAim, show, fireBase, fireEmp, feed, hiList, quitToTitle, onNet };
+window.SS = { booted: true, app, R, S, Net, cross, get g() { return g; }, get attract() { return attract; }, newGame, setAim, setLaunch, show, fireBase, fireEmp, feed, hiList, quitToTitle, onNet };
 requestAnimationFrame(t => { last = t; $('lprog').style.width = '100%'; setTimeout(() => show('title'), 250); requestAnimationFrame(loop); });

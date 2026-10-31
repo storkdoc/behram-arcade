@@ -62,6 +62,9 @@
     <div class="lbl">AIMING</div>
     <div class="chips" id="aims"><button class="chip" data-aim="ball">TRACKBALL</button><button class="chip" data-aim="direct">DIRECT POINTER</button></div>
     <div class="hint" id="aimhint"></div>
+    <div class="lbl">LAUNCH MODE</div>
+    <div class="chips" id="launches"><button class="chip" data-launch="closest">CLOSEST SILO</button><button class="chip" data-launch="lcr">PICK SILO L·C·R</button></div>
+    <div class="hint" id="launchhint"></div>
     <button class="btn big" data-act="start">START</button>
   </div>
 </div>
@@ -71,19 +74,20 @@
   <div class="panel wide">
     <div class="ph"><span>HOW TO PLAY</span><button class="btn x" data-act="back">✕</button></div>
     <div class="howtxt">
-      <p>Warheads rain down on your six cities. Put the crosshair <b>where they are going to be</b> and fire: your interceptor flies there and bursts into a fireball. Anything that touches the fireball explodes, and its explosion can catch others — <b>chain them</b>.</p>
+      <p>Warheads rain down on your six cities. Put the crosshair <b>where they are going to be</b> and fire: your interceptor flies there and bursts into a fireball. Anything that touches the fireball explodes, and its explosion can catch others — <b>chain them</b>. Every link shows CHAIN ×N and the points multiplier climbs (up to ×5).</p>
       <p><b>MIRVs</b> split into several warheads. <b>Bombers</b> and <b>satellites</b> drop bombs (100 pts). Diamond <b>smart bombs</b> dodge your blasts (125 pts) — box them in. The center battery's interceptors are twice as fast; the outer ones have the same 10 each.</p>
       <p>After each wave every unused interceptor and surviving city scores, times the wave multiplier. A bonus city every 10,000 points. Lose every city and it's THE END.</p>
       <p><b>EMP</b> (Enter / ⚡) wipes out everything in a huge radius. You start with 2 and earn one every third wave (max 3).</p>
       <table class="keys">
         <tr><td>Mouse / trackpad</td><td>spin the trackball (click the field to capture the pointer, Esc to release)</td></tr>
-        <tr><td>Click / Space</td><td>fire from the best battery</td></tr>
+        <tr><td>Space / double-click</td><td><b>Closest-silo mode</b> (default): launch from the silo closest to the crosshair; if it is empty or destroyed, the next closest</td></tr>
+        <tr><td>Click / Space</td><td><b>Pick-silo L·C·R mode</b> (Launch mode on the start screen): fire from the best battery, right-click = center</td></tr>
         <tr><td>A S D &nbsp;or&nbsp; Z X C</td><td>fire the left / center / right battery</td></tr>
         <tr><td>Arrows</td><td>move the crosshair</td></tr>
         <tr><td>Enter</td><td>EMP super weapon</td></tr>
         <tr><td>P / Esc</td><td>pause</td></tr>
-        <tr><td>Gamepad</td><td>stick aims · X / A / B fire left / center / right · RB fires best · Y EMP · Start pauses</td></tr>
-        <tr><td>Touch</td><td>swipe anywhere on the sky like a trackball, tap L / C / R to fire, ⚡ for EMP</td></tr>
+        <tr><td>Gamepad</td><td>stick aims · X / A / B fire left / center / right · RB fires closest (best in L·C·R mode) · Y EMP · Start pauses</td></tr>
+        <tr><td>Touch</td><td>swipe anywhere on the sky like a trackball, double-tap the sky to fire the closest silo, or tap L / C / R to fire that silo, ⚡ for EMP</td></tr>
       </table>
       <p><b>Online two-player:</b> both of you play the same waves on your own screens. Every two chain kills sends an extra warhead to your buddy. Last one with cities standing wins.</p>
     </div>
@@ -137,6 +141,7 @@
 <div id="tally" class="hidden"><div class="tt2">WAVE <span id="tw"></span> CLEARED</div><div class="trow"><span>INTERCEPTORS</span><span id="tammo"></span></div><div class="trow"><span>CITIES</span><span id="tcity"></span></div><div class="trow tot"><span>BONUS ×<span id="tmult"></span></span><span id="tpts"></span></div></div>
 <div id="theend" class="hidden"><div class="te">THE END</div></div>
 <div id="toast"></div>
+<div id="chainpop"></div>
 
 <!-- ============ TOUCH CONTROLS ============ -->
 <div id="touch" class="hidden">

@@ -23,8 +23,12 @@
   const ABM_SPD = [82, 135, 82];          // the center base is the fast one, like the original
   const PTS = { icbm: 25, mirv: 25, bomb: 25, buddy: 25, smart: 125, bomber: 100, sat: 100 };
   const BLAST = {  // rMax, grow, hold, shrink (s)
-    abm: [7.4, 0.5, 0.35, 0.6], foe: [4.6, 0.34, 0.16, 0.42], ground: [6.8, 0.35, 0.3, 0.7], emp: [42, 0.75, 0.15, 0.35], air: [5.2, 0.3, 0.2, 0.5],
+    abm: [9.0, 0.5, 0.35, 0.6], foe: [5.8, 0.34, 0.16, 0.42], ground: [8.0, 0.35, 0.3, 0.7], emp: [42, 0.75, 0.15, 0.35], air: [6.4, 0.3, 0.2, 0.5],
   };
+  // chain reactions: each generation of secondary blast is a little smaller; past CHAIN_GEN_MAX no new blasts spawn (no runaway loops)
+  const CHAIN_GEN_MAX = 12, CHAIN_SHRINK = 0.93, CHAIN_MIN = 0.65;
+  /** score multiplier for the n-th kill of one chain: x1, x1, x2, x2, x3 ... capped at x5 */
+  const chainMult = n => Math.min(5, 1 + Math.floor(Math.max(0, n - 1) / 2));
   const CROSS = { x0: 1.5, x1: W - 1.5, y0: 13, y1: H - 1 };
 
   function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -33,8 +37,8 @@
   function waveParams(n) {
     return {
       n, mult: Math.min(6, Math.ceil(n / 2)),
-      spd: Math.min(26, 7.2 + 1.2 * (n - 1)),
-      icbms: Math.min(34, 10 + 2 * (n - 1)),
+      spd: Math.min(27.5, (7.2 + 1.2 * (n - 1)) * 1.06),
+      icbms: Math.min(36, 11 + 2 * (n - 1)),
       salvo: Math.min(6, 2 + Math.floor(n / 3)),
       gap: Math.max(1.5, 4.3 - 0.26 * (n - 1)),
       mirvP: n >= 2 ? Math.min(0.42, 0.12 + 0.03 * n) : 0,
@@ -121,7 +125,8 @@
 
   function addBlast(g, x, y, kind, chain, extra) {
     const B = BLAST[kind];
-    const b = Object.assign({ id: g.id++, x, y, kind, r: 0, rMax: B[0], tg: B[1], th: B[2], ts: B[3], t: 0, chain }, extra || {});
+    const b = Object.assign({ id: g.id++, x, y, kind, r: 0, rMax: B[0], tg: B[1], th: B[2], ts: B[3], t: 0, chain, gen: 0 }, extra || {});
+    if (b.gen > 0) b.rMax = B[0] * Math.max(CHAIN_MIN, Math.pow(CHAIN_SHRINK, b.gen - 1));
     g.blasts.push(b); ev(g, { e: 'blast', id: b.id, kind, x, y, r: b.rMax });
     return b;
   }
@@ -137,10 +142,17 @@
     }
     return best;
   }
+  /** closest-silo launch: available bases (alive, with ammo) ordered by straight-line distance to the target */
+  function closestOrder(g, tx, ty) {
+    return g.bases.filter(b => b.alive && b.ammo > 0)
+      .map(b => ({ i: b.i, d: Math.hypot(tx - b.x, ty - b.y) })).sort((a, b) => a.d - b.d || a.i - b.i).map(o => o.i);
+  }
+  function closestBase(g, tx, ty) { const o = closestOrder(g, tx, ty); return o.length ? o[0] : -1; }
+  /** which: 0/1/2 = that base, -1 (or null) = best base, -2 = closest available base (CLOSEST SILO launch mode) */
   function fire(g, which) {
     if (g.phase !== 'play') return false;
     const tx = g.cx, ty = Math.max(g.cy, CROSS.y0);
-    const i = which == null || which < 0 ? bestBase(g, tx, ty) : which;
+    const i = which === -2 ? closestBase(g, tx, ty) : which == null || which < 0 ? bestBase(g, tx, ty) : which;
     const b = g.bases[i];
     if (!b || !b.alive) { ev(g, { e: 'dry', i }); return false; }
     if (b.ammo <= 0) { ev(g, { e: 'dry', i }); return false; }
@@ -169,11 +181,15 @@
     f.dead = true; g.stats.kills++;
     const ch = blast && g.chains[blast.chain];
     let pts = 0;
-    if (ch) { pts = (PTS[f.kind] || 25) * g.P.mult; addScore(g, pts); ch.n++;
+    let mult = 1;
+    if (ch) { ch.n++; mult = chainMult(ch.n); pts = (PTS[f.kind] || 25) * g.P.mult * mult; addScore(g, pts);
+      if (ch.n >= 2) ev(g, { e: 'chainpop', n: ch.n, mult, x: f.x, y: f.y });
       if (ch.n > g.stats.bestChain) g.stats.bestChain = ch.n;
       if (!ch.noAtk && ch.n >= 2 && ch.n % 2 === 0) { g.outAtk++; ch.sent++; ev(g, { e: 'chain', n: ch.n, x: f.x, y: f.y }); } }
-    ev(g, { e: 'kill', id: f.id, kind: f.kind, x: f.x, y: f.y, pts });
-    addBlast(g, f.x, f.y, f.kind === 'bomber' || f.kind === 'sat' ? 'air' : 'foe', blast ? blast.chain : 0);
+    ev(g, { e: 'kill', id: f.id, kind: f.kind, x: f.x, y: f.y, pts, mult });
+    // the destroyed enemy detonates in a (slightly smaller) secondary blast that can catch others
+    const gen = (blast && blast.gen || 0) + 1;
+    if (gen <= CHAIN_GEN_MAX) addBlast(g, f.x, f.y, f.kind === 'bomber' || f.kind === 'sat' ? 'air' : 'foe', blast ? blast.chain : 0, { gen });
   }
   function impact(g, f) {
     f.dead = true;
@@ -295,6 +311,6 @@
   /** for the opponent strip / tests */
   function status(g) { return { c: aliveCities(g), r: g.reserve, s: g.score, w: g.wave, e: g.emp, a: !g.ended }; }
 
-  const SSSim = { DT, W, H, BASES, CITY_X, CITY_Y, AMMO, ABM_SPD, PTS, BLAST, CROSS, BONUS_EVERY, rng, waveParams, buildSchedule, createGame, step, fire, emp, addAttack, bestBase, aliveCities, status, addScore };
+  const SSSim = { DT, W, H, BASES, CITY_X, CITY_Y, AMMO, ABM_SPD, PTS, BLAST, CROSS, BONUS_EVERY, rng, waveParams, buildSchedule, createGame, step, fire, emp, addAttack, chainMult, CHAIN_GEN_MAX, bestBase, closestBase, closestOrder, aliveCities, status, addScore };
   if (typeof module !== 'undefined' && module.exports) module.exports = SSSim; else root.SSSim = SSSim;
 })(typeof window !== 'undefined' ? window : globalThis);

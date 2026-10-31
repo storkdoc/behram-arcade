@@ -97,3 +97,7 @@ body.port #tbtns { left: calc(10px + var(--sl)); right: calc(10px + var(--sr)); 
 body.port #hud { gap: 10px; padding-left: calc(8px + var(--sl)); padding-right: calc(50px + var(--sr)); justify-content: space-around; }
 body.port #link { top: calc(46px + var(--st)); right: calc(10px + var(--sr)); }
 @media (max-height: 460px) { .tt { font-size: 44px; } .tblock { margin-top: 0; } .menu { gap: 6px; } .btn { padding: 9px 12px; font-size: 13px; } .btn.big { padding: 11px; font-size: 15px; } .ttag { display: none; } }
+
+#chainpop { position: fixed; left: 50%; top: calc(122px + var(--st)); transform: translateX(-50%) scale(.6); z-index: 24; color: #ffe070; font-weight: 800; letter-spacing: .12em; text-shadow: 0 0 10px #ff60e0, 0 0 22px #ff9030; opacity: 0; pointer-events: none; white-space: nowrap; text-align: center; transition: opacity .35s, transform .2s; }
+#chainpop small { display: block; font-size: 11px; color: #ffd0f0; letter-spacing: .2em; }
+#chainpop.show { opacity: 1; transform: translateX(-50%) scale(1); }

@@ -16,3 +16,9 @@
 - Real-device perf only estimated (headless uses SwiftShader); adaptive tiering handles slow GPUs.
 - Versus targets can differ slightly between screens (warheads aim at whatever is still standing).
 - tools/rtest.html is a render-only dev harness (?w= wave).
+
+## 2026-10-31: closest-silo launch, bigger blasts, chains
+- Launch mode (start screen, localStorage ss.launch): CLOSEST SILO (default) = Space / double-click / double-tap fire the nearest silo with ammo (sim fire(g,-2)); PICK SILO L·C·R = original controls. A S D / L C R / gamepad X A B work in both.
+- Bigger blasts (abm 9, foe 5.8), secondary blast gen shrink 0.93 capped at 12 gens, chain multiplier x1..x5 + 'chainpop' popup; waves ~6% faster, +1 warhead.
+- Audio: limiter after compressor, layered boom/crackle, richer launch, rumble, bonus, wave-clear.
+- Tests: node tests/launch.test.js; tests/modes.test.mjs (browser, both modes + touch).
