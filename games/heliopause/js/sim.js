@@ -251,7 +251,7 @@ P.hit = function (a, amt, cls, pierce, src) {
   var res = (ad.res && ad.res[cls] !== undefined) ? ad.res[cls] : 1;
   if (res < 1 && this.has('B2')) res = 1 - (1 - res) * 0.5;
   if (pierce && res < 1) res = 1;
-  if (ad.mono && !a.open) res *= ad.elder ? 0.25 : 0.12;
+  if (ad.mono && !a.open) res *= ad.elder ? 0.32 : 0.12;
   if (a.sh > 0) {
     var sm = { kin: 0.5, las: 1.5, exp: 0.8, emp: 4, sol: 1.5, grav: 1 }[cls] || 1;
     var abs = Math.min(a.sh, amt * sm); a.sh -= abs; amt -= abs / sm;

@@ -158,7 +158,7 @@ var ALIENS = {
     res: { las: 0.6, exp: 0.8 }, spawn: 'cruiser', spawnT: 6.5, info: 'A moon-sized ark. Births cruisers as it comes.' },
   monolith: { name: 'THE SENTINEL', hp: 9500, spd: 4.8, dmg: 60, cost: 160, r: 12, bounty: 450, sci: 45, col: '#e8e8ff', boss: 1, mono: 1,
     info: 'A black slab of perfect proportion. It only opens for a moment — strike then. Its pulse silences towers.' },
-  elder: { name: 'THE FIRST CHOIR', hp: 8000, spd: 3.6, dmg: 999, cost: 300, r: 18, bounty: 1000, sci: 100, col: '#ffffff', boss: 1, mono: 1, elder: 1,
+  elder: { name: 'THE FIRST CHOIR', hp: 6400, spd: 3.6, dmg: 999, cost: 300, r: 18, bounty: 1000, sci: 100, col: '#ffffff', boss: 1, mono: 1, elder: 1,
     spawn: 'phantom', spawnT: 5, info: 'The intelligence behind the invasion. If it reaches Earth, everything ends.' }
 };
 
