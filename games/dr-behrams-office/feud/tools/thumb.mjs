@@ -5,7 +5,7 @@ const require = createRequire('/workspace/tools/'); const pw = require('playwrig
 const here = path.dirname(fileURLToPath(import.meta.url)), port = process.argv[2] || '8098';
 const b = await pw.chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const p = await b.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
-await p.goto(`http://localhost:${port}/games/feud-and-delivery/`); await p.waitForFunction(() => window.FEUD && FEUD.booted);
+await p.goto(`http://localhost:${port}/games/dr-behrams-office/feud/`); await p.waitForFunction(() => window.FEUD && FEUD.booted);
 await p.evaluate(() => COBAccess.makeCode(COBAccess.nyDay()).then(c => localStorage.setItem('cob.access', JSON.stringify({ code: c.code }))));
 await p.reload(); await p.waitForFunction(() => window.FEUD && FEUD.booted); await p.waitForTimeout(1500);
 await p.addStyleTag({ content: '#toasts,.mood-sticker,[class*=mood]{display:none!important}' });

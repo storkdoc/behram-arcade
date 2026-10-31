@@ -488,7 +488,7 @@
   // Default corner: bottom-left on desktop. On touch screens the bottom corners hold joysticks / fire
   // buttons in most games, so the sticker sits top-left just under the "← ARCADE" link instead
   // (except pages with no on-screen controls). Players can drag it to any corner; it is remembered.
-  var TOUCH_BOTTOM_OK = { 'arcade-home': 1, 'congressional-obgyn': 1, 'living-chess': 1 };
+  var TOUCH_BOTTOM_OK = { 'arcade-home': 1, 'congressional-obgyn': 1, 'dr-behrams-office': 1, 'living-chess': 1 };
   var defaultCorner = function () {
     var coarse = false; try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* ignore */ }
     return coarse && !TOUCH_BOTTOM_OK[gameName] ? 'tl' : 'bl';

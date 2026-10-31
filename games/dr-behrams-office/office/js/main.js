@@ -624,6 +624,7 @@
   /* ---------- boot ---------- */
   function boot() {
     resize(); syncSoundButtons(); requestAnimationFrame(pollPad);
+    try { window.MoodSticker && window.MoodSticker.game('congressional-obgyn'); } catch (e) {}
     var img = new Image(); img.src = BUST; var img2 = new Image(); img2.src = FACE;
     building();
     checkAccess().then(function (r) {

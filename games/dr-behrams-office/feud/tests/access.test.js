@@ -1,15 +1,15 @@
-// node games/feud-and-delivery/tests/access.test.js
-// Feud & Delivery shares the Congressional OB GYN lock: it loads ../congressional-obgyn/js/access.js and the same
+// node games/dr-behrams-office/feud/tests/access.test.js
+// Feud & Delivery shares the Congressional OB GYN lock: it loads ../office/js/access.js and the same
 // localStorage key, so the same PIN and the same CONG codes work in both. The real PIN is never written here:
 // set COB_PIN to test it, otherwise a throwaway test PIN is swapped into an in-memory copy (see the office game's tests/testpin.js).
 const fs = require('fs'), path = require('path');
-const T = require('../../congressional-obgyn/tests/testpin.js');
+const T = require('../../office/tests/testpin.js');
 const A = T.loadAccess();
 const DIR = path.join(__dirname, '..');
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
 (async () => {
   const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8'), main = fs.readFileSync(path.join(DIR, 'js/main.js'), 'utf8');
-  ok(/<script src="\.\.\/congressional-obgyn\/js\/access\.js"><\/script>/.test(html), 'loads the office game\'s access module (one lock for both games)');
+  ok(/<script src="\.\.\/office\/js\/access\.js"><\/script>/.test(html), 'loads the office game\'s access module (one lock for both games)');
   ok(/'cob\.access'/.test(main), 'stores unlocks under the shared cob.access key');
   ok(!/PIN_HASH|PIN_SALT/.test(main + html), 'no PIN hash copied into this game');
   const today = A.nyDay();
@@ -22,7 +22,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   ok(!(await A.checkCode('CONG-2345-6789', today)).ok, 'made-up code rejected');
   // plain-text PIN scan of this game's folder (only meaningful with the real PIN in COB_PIN)
   const hits = T.real ? T.scanFor(T.PIN, DIR) : [];
-  if (T.real) ok(hits.length === 0, 'real PIN not written anywhere in games/feud-and-delivery ' + JSON.stringify(hits));
+  if (T.real) ok(hits.length === 0, 'real PIN not written anywhere in games/dr-behrams-office/feud ' + JSON.stringify(hits));
   else ok(true, 'PIN scan skipped (set COB_PIN to scan for the real PIN)');
   console.log(fail ? fail + ' FAILED' : 'ALL ACCESS TESTS PASSED'); process.exit(fail ? 1 : 0);
 })();

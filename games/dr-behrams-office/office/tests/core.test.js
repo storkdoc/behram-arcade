@@ -1,4 +1,4 @@
-// node games/congressional-obgyn/tests/core.test.js
+// node games/dr-behrams-office/office/tests/core.test.js
 global.window = undefined; const C = require('../js/core.js');
 global.window = global; require('../js/bank.js'); const BANK = global.COB_BANK;
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };

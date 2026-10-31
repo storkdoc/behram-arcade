@@ -1,4 +1,4 @@
-// node games/feud-and-delivery/tests/engine.test.js
+// node games/dr-behrams-office/feud/tests/engine.test.js
 'use strict';
 const assert = require('assert');
 const E = require('../js/engine.js');

@@ -1,4 +1,4 @@
-// Bank lint: the right answer must not be given away by length. node games/congressional-obgyn/tests/bank-cues.test.js
+// Bank lint: the right answer must not be given away by length. node games/dr-behrams-office/office/tests/bank-cues.test.js
 const fs = require('fs'), path = require('path');
 global.window = global; global.COB_BANK = []; require(path.join(__dirname, '..', 'js', 'bank.js'));
 let n = 0, longest = 0, fail = 0; const bad = [];

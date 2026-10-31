@@ -1,9 +1,9 @@
-// Browser test: NODE_PATH=/workspace/tools/node_modules node games/feud-and-delivery/tests/page.test.js [baseURL] [shotDir]
+// Browser test: NODE_PATH=/workspace/tools/node_modules node games/dr-behrams-office/feud/tests/page.test.js [baseURL] [shotDir]
 // Serve the repo root first (python3 -m http.server 8090). Uses the office game's test-PIN helper: the real PIN is never in the repo.
 const { chromium } = require('playwright-core');
-const TP = require('../../congressional-obgyn/tests/testpin.js');
+const TP = require('../../office/tests/testpin.js');
 const ROOT = process.argv[2] || 'http://localhost:8090';
-const BASE = ROOT + '/games/feud-and-delivery/', OFFICE = ROOT + '/games/congressional-obgyn/';
+const BASE = ROOT + '/games/dr-behrams-office/feud/', OFFICE = ROOT + '/games/dr-behrams-office/office/';
 const SHOTS = process.argv[3] || '/tmp/feud-shots';
 require('fs').mkdirSync(SHOTS, { recursive: true });
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
@@ -15,7 +15,7 @@ const IPAD = { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, has
 const shot = (pg, n) => pg.screenshot({ path: SHOTS + '/' + n + '.png' });
 async function ctxOf(b, opts) {
   const ctx = await b.newContext(opts);
-  if (!TP.real) await ctx.route('**/congressional-obgyn/js/access.js*', r => r.fulfill({ contentType: 'text/javascript', body: TP.patchedAccessSource() }));
+  if (!TP.real) await ctx.route('**/office/js/access.js*', r => r.fulfill({ contentType: 'text/javascript', body: TP.patchedAccessSource() }));
   return ctx;
 }
 function watch(pg) { pg.errs = []; pg.on('pageerror', e => pg.errs.push('pageerror ' + e.message)); pg.on('console', m => { if (m.type() === 'error') pg.errs.push(m.text()); }); return pg; }

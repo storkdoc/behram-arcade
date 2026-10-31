@@ -1,4 +1,4 @@
-// node games/congressional-obgyn/tests/access.test.js
+// node games/dr-behrams-office/office/tests/access.test.js
 // The real instructor PIN is never written in this repo. Set COB_PIN to test it; otherwise the PIN check runs against
 // a throwaway test PIN whose salted hash is swapped into an in-memory copy of access.js (see tests/testpin.js).
 const T = require('./testpin.js');

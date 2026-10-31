@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#8fa3c4">
+<title>DR. BEHRAM'S OFFICE — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="hub/hub.css">
+<script>
+(function () {
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  var lastTouch = 0; document.addEventListener('touchend', function (e) { var t = Date.now(); if (t - lastTouch < 320 && e.target && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) e.preventDefault(); lastTouch = t; }, { passive: false });
+  addEventListener('error', function (e) { if (window.HUB && HUB.booted) return; var d = document.getElementById('fatal'); if (d) { d.textContent = "Dr. Behram's Office hit a problem: " + (e.message || 'script error') + '. Reload to try again.'; d.hidden = false; } }, true);
+})();
+</script>
+<script src="../../games.js"></script>
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<canvas id="hall" aria-hidden="true"></canvas>
+<div id="walk" aria-hidden="true"></div>
+<header id="top">
+  <a id="home" href="../../">←<span> ARCADE</span></a>
+  <div id="logo">Dr. Behram’s <b>Office</b><small>Congressional OB GYN · Fallsgrove Plaza · Rockville</small></div>
+  <button id="snd" class="icon" aria-label="Sound" title="Sound (M)">🔊</button>
+</header>
+
+<main id="ui">
+  <section id="gate" class="card glass hidden" aria-label="Unlock">
+    <img class="face" src="office/assets/behram-face.jpg" alt="">
+    <div class="pre">CHECK IN AT THE FRONT DESK</div>
+    <h1>Welcome to <b>Dr. Behram’s Office</b></h1>
+    <p id="gate-msg">Enter the access code Dr. Behram gave you. One code (<b>CONG-XXXX-XXXX</b>) opens all three games for six weeks.</p>
+    <input id="codein" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CONG-XXXX-XXXX" aria-label="Access code" data-nav>
+    <div class="err" id="code-err" role="alert"></div>
+    <button class="btn gold wide" id="code-go" data-nav>Check in <span class="k">ENTER</span></button>
+    <button class="btn ghost small" id="instr-gate" data-nav>Instructor</button>
+    <p class="fine" id="crypto-warn" hidden>This browser blocks secure crypto here. Open the game over https (the arcade link).</p>
+  </section>
+
+  <section id="menu" class="hidden" aria-label="Choose a room">
+    <div id="greet" class="glass">
+      <img src="office/assets/behram.webp" alt="Dr. Steven Behram" class="bust">
+      <div class="bubble" id="bubble">Welcome in! Pick a room.</div>
+    </div>
+    <div id="cards" role="list">
+      <button class="room" data-g="office" data-nav role="listitem">
+        <span class="num">1</span><span class="ico">🩺</span>
+        <span class="rt">EXAM ROOMS</span><b>Clinic Day</b><em>See a full day of OB/GYN patients, board-style.</em>
+      </button>
+      <button class="room" data-g="feud" data-nav role="listitem">
+        <span class="num">2</span><span class="ico">🎤</span>
+        <span class="rt">CONFERENCE ROOM</span><b>Feud &amp; Delivery</b><em>Survey says… name the differential. Solo or head-to-head.</em>
+      </button>
+      <button class="room new" data-g="surgery" data-nav role="listitem">
+        <span class="num">3</span><span class="ico">🔪</span><span class="newtag">NEW</span>
+        <span class="rt">OPERATING ROOM</span><b>Suture Self!</b><em>Scrub in with Dr. Behram: C-sections, laparoscopy, hysterectomy.</em>
+      </button>
+    </div>
+    <div id="foot">
+      <span id="access-line"></span>
+      <button class="btn ghost small" id="instr" data-nav>Instructor · issue codes <span class="k">ENTER</span></button>
+    </div>
+  </section>
+</main>
+
+<div id="modal" class="hidden" role="dialog" aria-modal="true"></div>
+<div id="toast" class="hidden"></div>
+<div id="fatal" hidden></div>
+
+<script src="office/js/access.js"></script>
+<script src="hub/hall.js"></script>
+<script src="hub/hub.js"></script>
+</body>
+</html>

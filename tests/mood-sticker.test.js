@@ -108,7 +108,7 @@ const ids = [];
     await settle(V); await V.context().close();
 
     // ---------- Congressional OB GYN: note-only send + reactions + gamepad ----------
-    const C = await open(opts, 'games/congressional-obgyn/');
+    const C = await open(opts, 'games/dr-behrams-office/office/');
     check(await C.evaluate(() => !!document.querySelector('mood-sticker')), 'cob: sticker present');
     await C.evaluate(() => MoodSticker.event('win')); await C.waitForTimeout(100);
     check(await C.evaluate(() => MoodSticker.mood()) === 'party', 'cob: event(win) -> celebrates');
