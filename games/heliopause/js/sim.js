@@ -155,7 +155,7 @@ P.energy = function () {
     if (st.type === 'aegis' && Math.hypot(p.x - e.x, p.y - e.y) < 46) sh += s.sh;
   }
   this.ecap = Math.round(cap * 10) / 10; this.euse = use; this.eshMax = sh; if (this.esh > sh) this.esh = sh;
-  this.pf = use > cap ? Math.pow(cap / use, 1.5) : 1;
+  this.pf = use > cap ? Math.pow(cap / use, 1.25) : 1;
 };
 P.income = function () {
   var m = 2.2, s = 0.25 * (this.has('E5') ? 1.5 : 1);
