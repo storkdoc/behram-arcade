@@ -123,3 +123,19 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Hooks: VORTEX.shotWarnCues(), eshotList(), haptics() -> {on, src, log, padHeld}.
 - Test: `node games/tube-shooter/tests/vortex-haptics.test.js http://localhost:PORT` (fake gamepad + vibrate stub;
   desktop pad + iPhone touch).
+
+## Day 4 (2026-10-31): Tempest 2000-style POWER-UPS
+- From level 2 a shot kill (not a zap) drops a green spinning crystal (first after 7-9 kills, then every 16-21; one on
+  the web at a time). It drifts up its lane, waits ~2.6 s on the rim (beacon ring, blinks before it fizzles); the claw
+  catches it by being in / moving into its lane. Warp auto-collects any crystal still on the web.
+- Order: 1 PARTICLE LASER (shots 1.45x faster, pierce one enemy, burn through enemy shots, Warden shields -2, 0.7x
+  barrel heat, cyan streak + 'lshoot' sound; kept until you lose a life), 2 AI DROID (orange diamond riding just inside
+  the rim; flies 9 lanes/s to the enemy closest to the rim, fires every 0.45 s, droid shots don't count toward the
+  8-shot cap; 12 s, at most to the end of the level, then DROID OFFLINE), 3+ BONUS 2500. Losing a life: POWER-UPS LOST.
+- Feedback: 'pupdrop'/'pup' sounds, green flash, shards, MoodSticker, HAPTIC.pup on pads/phones; first-catch tips.
+  No new inputs: works with keyboard, mouse, touch (iPhone/iPad), gamepad because catching is just steering.
+- Hooks: VORTEX.pups(), dropPup(lane, z), power() -> {laser, droid, n, kills, next, stats}, shotList().
+  window.__noPups = true disables drops (older tests that count kills/shots are unaffected).
+- Test: tests/vortex-powerups.test.js (12 checks x desktop + iPhone 14). v4/waves/tips/haptics/rim/touch still pass.
+- Bot (eval, 4 games each, pup-seeking): death level sharp 13/11/13/5 (baseline no-pups 10/10/10/6), average 7/12/12/8
+  (baseline 7/7/4/10). A first try (every 8-11 kills, droid all level) gave sharp 10-18, too generous; tuned down.
