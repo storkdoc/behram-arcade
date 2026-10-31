@@ -39,7 +39,7 @@ body.in-hud #home { display: none; }
 .mural .mu-hit { cursor: pointer; }
 .ledglow { animation: pulse 1.6s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .05; } }
 .door-urgent .ledglow { animation-duration: .7s; }
-.exit-text { filter: drop-shadow(0 0 6px #3dff7a); }
+.exit-text { filter: drop-shadow(0 0 6px #ff3b3b); }
 .pt .eye { animation: blink 5s infinite; transform-box: fill-box; transform-origin: center; } @keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
 .fetus { animation: fet 2.2s ease-in-out infinite; } @keyframes fet { 50% { transform: translate(2px, -2px); } }
 

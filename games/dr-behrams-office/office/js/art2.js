@@ -1,5 +1,9 @@
 /* CONGRESSIONAL OB GYN — art part 2: the clinic hallway hub with exam-room doors and the clinic's
- * real hallway circus mural (photo reproduction, used with Dr. Behram's permission). */
+ * real hallway circus mural (photo reproduction, used with Dr. Behram's permission).
+ * Styled after the real Fallsgrove hallway: slate-periwinkle walls (#8FA3C4..#9AAECF), white doors in white trim,
+ * light grey-brown planks, drop ceiling with fluorescent panels, niches with white shelves holding pink orchids and
+ * yellow calla lilies, a red EXIT sign, silver-grey textured wallpaper on the facing walls of the exit corridor and a
+ * curved white reception desk in front of a geometric white 3D tile wall. */
 (function () {
   'use strict';
   var A = window.COBArt;
@@ -99,10 +103,10 @@
     var chart = r.patient ? (r.patient.cat === 'OB' ? '#f28cb1' : '#45c4b0') : null;
     var s = '<g class="door door-' + st + '" data-room="' + r.num + '" tabindex="-1">';
     s += '<rect class="door-hit" x="' + (x + 6) + '" y="120" width="' + (SEG_DOOR - 12) + '" height="370" fill="transparent"/>';
-    s += '<rect x="' + (dx - 12) + '" y="' + (top - 12) + '" width="144" height="' + (470 - top + 12) + '" fill="#f7f8fa"/><rect x="' + (dx - 12) + '" y="' + (top - 12) + '" width="144" height="4" fill="#fff"/>';
+    s += '<rect x="' + (dx - 12) + '" y="' + (top - 12) + '" width="144" height="' + (470 - top + 12) + '" fill="#fdfdfe" stroke="#dfe3e8"/><rect x="' + (dx - 12) + '" y="' + (top - 12) + '" width="144" height="4" fill="#fff"/>';
     s += '<g class="door-leaf"><rect x="' + dx + '" y="' + top + '" width="120" height="' + (470 - top) + '" fill="url(#h_wood)"/>' +
-      '<rect x="' + dx + '" y="' + top + '" width="120" height="' + (470 - top) + '" fill="url(#h_grain)" opacity=".5"/>' +
-      '<rect x="' + (dx + 100) + '" y="318" width="6" height="22" rx="2" fill="#c9ced4"/><rect x="' + (dx + 84) + '" y="324" width="22" height="6" rx="3" fill="#e8ebee"/>';
+      '<rect x="' + (dx + 14) + '" y="' + (top + 18) + '" width="92" height="120" rx="2" fill="none" stroke="#d5dae1" stroke-width="2"/><rect x="' + (dx + 14) + '" y="' + (top + 156) + '" width="92" height="120" rx="2" fill="none" stroke="#d5dae1" stroke-width="2"/><rect x="' + dx + '" y="' + top + '" width="4" height="' + (470 - top) + '" fill="#cfd5dc"/>' +
+      '<rect x="' + (dx + 100) + '" y="318" width="6" height="22" rx="2" fill="#9aa3ad"/><rect x="' + (dx + 84) + '" y="324" width="22" height="6" rx="3" fill="#b9c0c8"/>';
     if (chart) s += '<rect x="' + (dx + 22) + '" y="240" width="46" height="58" rx="3" fill="#dfe9f2" opacity=".55" stroke="#fff"/><rect class="chart" x="' + (dx + 27) + '" y="232" width="36" height="60" rx="2" fill="' + chart + '"/><rect x="' + (dx + 27) + '" y="232" width="36" height="8" fill="#fff" opacity=".6"/>';
     s += '</g><rect class="door-glow" x="' + dx + '" y="' + top + '" width="120" height="' + (470 - top) + '" fill="#fff" opacity="0"/>';
     // status light
@@ -117,19 +121,48 @@
     return s + '</g>';
   }
 
+  /* recessed wall niche with white shelves: pink orchids and yellow calla lilies in glass vases */
+  var NICHE_W = 170;
+  function orchidSvg(cx, base) {
+    var s = '<rect x="' + (cx - 10) + '" y="' + (base - 22) + '" width="20" height="22" rx="3" fill="#e9f3f7" opacity=".85" stroke="#fff"/><ellipse cx="' + (cx - 7) + '" cy="' + (base - 26) + '" rx="10" ry="4" fill="#5f8f4e"/><ellipse cx="' + (cx + 7) + '" cy="' + (base - 25) + '" rx="10" ry="4" fill="#6f9e58"/>';
+    s += '<path d="M' + cx + ' ' + (base - 24) + ' C' + (cx - 2) + ' ' + (base - 60) + ' ' + (cx + 8) + ' ' + (base - 84) + ' ' + (cx + 22) + ' ' + (base - 90) + '" stroke="#4e7a3c" stroke-width="1.6" fill="none"/>';
+    [[2, -62], [7, -74], [14, -84], [22, -90]].forEach(function (p, k) { var fx = cx + p[0], fy = base + p[1], r = 6 - k * .6;
+      s += '<g transform="translate(' + fx + ',' + fy + ')"><ellipse rx="' + r + '" ry="' + (r * .7) + '" fill="#f6a5c8"/><ellipse cx="' + (-r * .7) + '" cy="' + (r * .4) + '" rx="' + (r * .65) + '" ry="' + (r * .5) + '" fill="#f48fb8"/><ellipse cx="' + (r * .7) + '" cy="' + (r * .4) + '" rx="' + (r * .65) + '" ry="' + (r * .5) + '" fill="#f48fb8"/><circle r="' + (r * .32) + '" fill="#c2185b"/></g>'; });
+    return s;
+  }
+  function callaSvg(cx, base) {
+    var s = '<rect x="' + (cx - 9) + '" y="' + (base - 34) + '" width="18" height="34" rx="2" fill="#e9f3f7" opacity=".8" stroke="#fff"/><rect x="' + (cx - 8) + '" y="' + (base - 10) + '" width="16" height="9" fill="#cfc6b8"/>';
+    [[-8, -70], [0, -82], [8, -66]].forEach(function (p) { var tx = cx + p[0], ty = base + p[1];
+      s += '<path d="M' + cx + ' ' + (base - 30) + ' L' + tx + ' ' + (ty + 10) + '" stroke="#5d9450" stroke-width="2"/><path d="M' + (tx - 5) + ' ' + (ty + 12) + ' Q' + (tx - 7) + ' ' + ty + ' ' + (tx + 4) + ' ' + (ty - 6) + ' Q' + (tx + 6) + ' ' + (ty + 4) + ' ' + (tx + 5) + ' ' + (ty + 12) + 'Z" fill="#ffd23f"/><path d="M' + tx + ' ' + (ty + 11) + ' l1 -9" stroke="#f0a500" stroke-width="2"/>'; });
+    return s;
+  }
+  function niche(x, k) {
+    var nx = x + 30, nw = NICHE_W - 60, top = 150, bot = 400, s = '<g class="niche">';
+    s += '<rect x="' + (nx - 6) + '" y="' + (top - 6) + '" width="' + (nw + 12) + '" height="' + (bot - top + 12) + '" rx="3" fill="#fdfdfe"/>';
+    s += '<rect x="' + nx + '" y="' + top + '" width="' + nw + '" height="' + (bot - top) + '" fill="#7f93b4"/><rect x="' + nx + '" y="' + top + '" width="' + nw + '" height="14" fill="#000" opacity=".12"/><rect x="' + nx + '" y="' + top + '" width="8" height="' + (bot - top) + '" fill="#000" opacity=".08"/>';
+    s += '<ellipse cx="' + (nx + nw / 2) + '" cy="' + (top + 4) + '" rx="' + (nw / 2) + '" ry="40" fill="url(#h_light)"/>';
+    [235, 320, 396].forEach(function (y, j) { s += '<rect x="' + nx + '" y="' + y + '" width="' + nw + '" height="6" fill="#fff"/><rect x="' + nx + '" y="' + (y + 6) + '" width="' + nw + '" height="3" fill="#000" opacity=".12"/>';
+      if (j < 2) s += ((j + k) % 2 ? callaSvg(nx + nw / 2, y) : orchidSvg(nx + nw / 2 - 10, y)); });
+    s += '<rect x="' + (nx + 14) + '" y="372" width="' + (nw - 28) + '" height="24" rx="3" fill="#f1ece4"/><rect x="' + (nx + 20) + '" y="378" width="' + (nw - 40) + '" height="3" fill="#c9bfae"/>';
+    return s + '</g>';
+  }
+
   /* rooms: [{num, state, patient:{cat}}]; returns {svg, width, doors:[{num,x}]} */
   A.hallway = function (rooms) {
-    var W = 300 + rooms.length * SEG_DOOR + 460 + 230, s = '', doors = [];
+    var order = [];
+    for (var i = 0; i < rooms.length; i++) { order.push(['door', rooms[i]]); if (i === 1) order.push(['mural']); if (i === 3) order.push(['exit']); if (i === 0 || i === 2 || i === 4) order.push(['niche', i]); }
+    var W = 300 + rooms.length * SEG_DOOR + 460 + 230 + order.filter(function (o) { return o[0] === 'niche'; }).length * NICHE_W, s = '', doors = [];
     s += '<svg class="hall-svg" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">';
-    s += '<defs><linearGradient id="h_wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9c8d6"/><stop offset=".5" stop-color="#cbd7e2"/><stop offset="1" stop-color="#bccad7"/></linearGradient>' +
-      '<linearGradient id="h_floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8f7a64"/><stop offset="1" stop-color="#b19a80"/></linearGradient>' +
-      '<linearGradient id="h_wood" x1="0" x2="1"><stop offset="0" stop-color="#c79a68"/><stop offset=".5" stop-color="#ddb27f"/><stop offset="1" stop-color="#b98957"/></linearGradient>' +
+    s += '<defs><linearGradient id="h_wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9AAECF"/><stop offset=".55" stop-color="#94a8c9"/><stop offset="1" stop-color="#8FA3C4"/></linearGradient>' +
+      '<linearGradient id="h_floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a89d90"/><stop offset="1" stop-color="#c6bcb0"/></linearGradient>' +
+      '<linearGradient id="h_wood" x1="0" x2="1"><stop offset="0" stop-color="#eef0f3"/><stop offset=".5" stop-color="#fbfcfd"/><stop offset="1" stop-color="#e4e8ec"/></linearGradient>' +
       '<pattern id="h_grain" width="120" height="40" patternUnits="userSpaceOnUse"><path d="M0 10 q30 -6 60 0 t60 0 M0 26 q40 6 70 -2 t50 2" stroke="#9a6a3c" stroke-width="1" fill="none" opacity=".5"/></pattern>' +
       '<linearGradient id="h_gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9b25a"/><stop offset=".5" stop-color="#8a6420"/><stop offset="1" stop-color="#c9a04a"/></linearGradient>' +
       '<linearGradient id="h_varnish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient>' +
       '<radialGradient id="h_light" cx=".5" cy="0" r=".9"><stop offset="0" stop-color="#fffbe8" stop-opacity=".55"/><stop offset="1" stop-color="#fffbe8" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="h_exitglow"><stop offset="0" stop-color="#3dff7a" stop-opacity=".55"/><stop offset="1" stop-color="#3dff7a" stop-opacity="0"/></radialGradient>' +
-      '<linearGradient id="h_refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>' + A.muralDefs() + '</defs>';
+      '<radialGradient id="h_exitglow"><stop offset="0" stop-color="#ff3b3b" stop-opacity=".5"/><stop offset="1" stop-color="#ff3b3b" stop-opacity="0"/></radialGradient>' +
+      '<linearGradient id="h_refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>' + '<pattern id="h_wp" width="14" height="60" patternUnits="userSpaceOnUse"><rect width="14" height="60" fill="#c3c7cc"/><rect x="2" width="1.4" height="60" fill="#d9dce0"/><rect x="7" width="2" height="60" fill="#b2b7bd" opacity=".7"/><rect x="11" y="10" width="1" height="36" fill="#e4e6e9"/></pattern>' +
+      '<pattern id="h_tile" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#f3f4f5"/><path d="M0 0 L20 20 L0 40Z" fill="#ffffff"/><path d="M40 0 L20 20 L40 40Z" fill="#e3e6e9"/><path d="M0 0 L20 20 L40 0Z" fill="#fbfbfc"/><path d="M0 40 L20 20 L40 40Z" fill="#d9dde1"/></pattern>' + A.muralDefs() + '</defs>';
     s += '<rect width="' + W + '" height="' + H + '" fill="url(#h_wall)"/>';
     // ceiling with tiles and lights
     s += '<rect width="' + W + '" height="62" fill="#eef0f1"/>';
@@ -140,29 +173,32 @@
     s += '<rect y="484" width="' + W + '" height="' + (H - 484) + '" fill="url(#h_floor)"/>';
     var fr = A.rng(99);
     for (var py = 484, row = 0; py < H; py += 16, row++) {
-      s += '<rect y="' + py + '" width="' + W + '" height="1" fill="#6f5c49" opacity=".55"/>';
-      for (var px = (row % 3) * 70; px < W; px += 180 + fr() * 90) s += '<rect x="' + px.toFixed(0) + '" y="' + py + '" width="1.2" height="16" fill="#6f5c49" opacity=".5"/><rect x="' + (px + 4).toFixed(0) + '" y="' + (py + 2) + '" width="' + (60 + fr() * 80).toFixed(0) + '" height="12" fill="' + (fr() > .5 ? '#fff' : '#000') + '" opacity=".035"/>';
+      s += '<rect y="' + py + '" width="' + W + '" height="1" fill="#8a7f72" opacity=".55"/>';
+      for (var px = (row % 3) * 70; px < W; px += 180 + fr() * 90) s += '<rect x="' + px.toFixed(0) + '" y="' + py + '" width="1.2" height="16" fill="#8a7f72" opacity=".5"/><rect x="' + (px + 4).toFixed(0) + '" y="' + (py + 2) + '" width="' + (60 + fr() * 80).toFixed(0) + '" height="12" fill="' + (fr() > .5 ? '#fff' : '#000') + '" opacity=".035"/>';
     }
     s += '<rect y="484" width="' + W + '" height="' + (H - 484) + '" fill="url(#h_refl)"/>';
     s += '<rect y="470" width="' + W + '" height="15" fill="#f6f7f8"/><rect y="470" width="' + W + '" height="2" fill="#fff"/><rect y="484" width="' + W + '" height="2" fill="#000" opacity=".15"/>';
-    // nurse station
-    s += '<g class="nurse"><rect x="30" y="330" width="240" height="140" fill="#f4f1ec"/><rect x="22" y="320" width="256" height="14" rx="3" fill="#b88a5c"/><rect x="30" y="360" width="240" height="4" fill="#d8d2c8"/>' +
-      '<rect x="70" y="272" width="64" height="44" rx="3" fill="#1f2a36"/><rect x="74" y="276" width="56" height="36" fill="#3b6ea5"/><rect x="78" y="282" width="34" height="4" fill="#cfe6ff"/><rect x="78" y="290" width="44" height="3" fill="#9cc6ef"/><rect x="78" y="296" width="28" height="3" fill="#9cc6ef"/><rect x="98" y="316" width="8" height="6" fill="#1f2a36"/>' +
-      '<path d="M200 318 q-6 -30 6 -40 q10 12 4 40Z" fill="#7cae6a"/><path d="M196 318 q-20 -24 -10 -44 q14 14 14 44Z" fill="#5d9450"/><circle cx="206" cy="276" r="7" fill="#f27a9b"/><circle cx="190" cy="272" r="6" fill="#ffd166"/><rect x="190" y="306" width="22" height="14" rx="3" fill="#2c4a66"/>' +
-      '<rect x="60" y="160" width="180" height="34" rx="5" fill="#2c4a66"/><text x="150" y="182" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#fff" letter-spacing="2">NURSES\' STATION</text>' +
-      '<g transform="translate(150,104)"><circle r="26" fill="#fff" stroke="#3b4a58" stroke-width="3"/><g id="hall-clock-h"><path d="M0 0 V-13" stroke="#1b2733" stroke-width="3" stroke-linecap="round"/></g><g id="hall-clock-m"><path d="M0 0 V-20" stroke="#1b2733" stroke-width="2" stroke-linecap="round"/></g><circle r="2.5" fill="#d33"/></g></g>';
-    var x = 300, order = [];
-    for (var i = 0; i < rooms.length; i++) { order.push(['door', rooms[i]]); if (i === 1) order.push(['mural']); if (i === 3) order.push(['exit']); }
+    // reception: geometric white 3D tile wall behind a curved white desk (clock above, monitor + flowers on the counter)
+    s += '<g class="nurse"><rect x="14" y="64" width="272" height="406" fill="url(#h_tile)"/><rect x="14" y="64" width="272" height="406" fill="none" stroke="#fff" stroke-width="3"/><rect x="286" y="64" width="6" height="406" fill="#000" opacity=".08"/>' +
+      '<path d="M18 352 Q150 312 282 352 L282 470 L18 470Z" fill="#fbfcfd"/><path d="M18 352 Q150 312 282 352" fill="none" stroke="#e2e6ea" stroke-width="10"/><path d="M18 352 Q150 312 282 352" fill="none" stroke="#fff" stroke-width="4"/>' +
+      '<path d="M24 392 Q150 360 276 392" fill="none" stroke="#e7eaee" stroke-width="2"/><path d="M28 466 Q150 450 272 466" fill="none" stroke="#d6dadf" stroke-width="3"/>' +
+      '<rect x="70" y="266" width="64" height="44" rx="3" fill="#1f2a36"/><rect x="74" y="270" width="56" height="36" fill="#3b6ea5"/><rect x="78" y="276" width="34" height="4" fill="#cfe6ff"/><rect x="78" y="284" width="44" height="3" fill="#9cc6ef"/><rect x="78" y="290" width="28" height="3" fill="#9cc6ef"/><rect x="98" y="310" width="8" height="10" fill="#1f2a36"/>' +
+      '<path d="M206 314 v-46" stroke="#5d9450" stroke-width="2"/><path d="M206 284 q14 -6 18 -20" stroke="#5d9450" stroke-width="2" fill="none"/><ellipse cx="200" cy="284" rx="7" ry="-6" fill="#6f9e58"/>' +
+      '<g fill="#f48fb8"><circle cx="208" cy="268" r="6"/><circle cx="220" cy="266" r="5.5"/><circle cx="224" cy="276" r="5"/></g><g fill="#c2185b"><circle cx="208" cy="268" r="1.8"/><circle cx="220" cy="266" r="1.6"/><circle cx="224" cy="276" r="1.5"/></g><rect x="198" y="302" width="18" height="16" rx="3" fill="#dfeef5" opacity=".8" stroke="#fff"/>' +
+      '<rect x="60" y="168" width="180" height="34" rx="5" fill="#2c4a66"/><text x="150" y="190" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#fff" letter-spacing="2">CHECK-IN</text>' +
+      '<g transform="translate(150,112)"><circle r="26" fill="#fff" stroke="#3b4a58" stroke-width="3"/><g id="hall-clock-h"><path d="M0 0 V-13" stroke="#1b2733" stroke-width="3" stroke-linecap="round"/></g><g id="hall-clock-m"><path d="M0 0 V-20" stroke="#1b2733" stroke-width="2" stroke-linecap="round"/></g><circle r="2.5" fill="#d33"/></g></g>';
+    var x = 300;
     order.forEach(function (o) {
       if (o[0] === 'door') { doors.push({ num: o[1].num, x: x + SEG_DOOR / 2 }); s += door(x, o[1]); x += SEG_DOOR; }
+      else if (o[0] === 'niche') { s += niche(x, o[1]); x += NICHE_W; }
       else if (o[0] === 'mural') { s += A.mural(x + 230, 100, 330); x += 460; }
       else {
         s += '<polygon points="' + (x + 30) + ',62 ' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 70) + ',150" fill="#e6eaee"/><rect x="' + (x + 30) + '" y="62" width="170" height="408" fill="none"/>' +
-          '<polygon points="' + (x + 30) + ',62 ' + (x + 70) + ',150 ' + (x + 70) + ',380 ' + (x + 30) + ',484" fill="#c2cfdb"/><polygon points="' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="#b3c2d0"/>' +
-          '<polygon points="' + (x + 30) + ',484 ' + (x + 70) + ',380 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="#9c8670"/><rect x="' + (x + 70) + '" y="150" width="90" height="230" fill="#dfe8f0"/>' +
-          '<rect x="' + (x + 88) + '" y="190" width="54" height="120" fill="#9fd0f5"/><rect x="' + (x + 88) + '" y="190" width="54" height="120" fill="url(#h_refl)"/><path d="M' + (x + 115) + ' 190 v120 M' + (x + 88) + ' 250 h54" stroke="#fff" stroke-width="3"/>' +
+          '<polygon points="' + (x + 30) + ',62 ' + (x + 70) + ',150 ' + (x + 70) + ',380 ' + (x + 30) + ',484" fill="url(#h_wp)"/><polygon points="' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="url(#h_wp)"/><polygon points="' + (x + 200) + ',62 ' + (x + 160) + ',150 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="#000" opacity=".12"/>' +
+          '<polygon points="' + (x + 30) + ',484 ' + (x + 70) + ',380 ' + (x + 160) + ',380 ' + (x + 200) + ',484" fill="#b2a798"/><rect x="' + (x + 70) + '" y="150" width="90" height="230" fill="#9AAECF"/>' +
+          '<rect x="' + (x + 84) + '" y="186" width="62" height="194" fill="#fbfcfd"/><rect x="' + (x + 88) + '" y="190" width="54" height="120" fill="#9fd0f5"/><rect x="' + (x + 88) + '" y="190" width="54" height="120" fill="url(#h_refl)"/><path d="M' + (x + 115) + ' 190 v120 M' + (x + 88) + ' 250 h54" stroke="#fff" stroke-width="3"/>' +
           '<ellipse cx="' + (x + 115) + '" cy="96" rx="80" ry="40" fill="url(#h_exitglow)"/><rect x="' + (x + 112) + '" y="62" width="6" height="16" fill="#9aa3ab"/><rect x="' + (x + 76) + '" y="78" width="78" height="32" rx="3" fill="#20262c"/>' +
-          '<text x="' + (x + 113) + '" y="102" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="#4dff88" class="exit-text">EXIT</text>';
+          '<text x="' + (x + 113) + '" y="102" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="#ff4040" class="exit-text">EXIT</text>';
         x += 230;
       }
     });

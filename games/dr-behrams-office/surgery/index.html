@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b2231">
+<title>SUTURE SELF! · Dr. Behram's Office</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="../../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<canvas id="cv" aria-label="Operating field"></canvas>
+
+<header id="top">
+  <a id="home" href="../" title="Back to Dr. Behram's Office">←<span> OFFICE</span></a>
+  <div id="hud" class="hidden">
+    <div id="h-case"></div>
+    <div id="h-step"></div>
+    <div id="h-dots"></div>
+  </div>
+  <div id="clock" class="hidden"><span id="c-main">0:00</span><span id="c-stat"></span></div>
+  <div id="radio" class="hidden" title="OR radio (R)"><button id="r-prev" aria-label="Previous station">◀</button><div id="r-name"><b>📻</b> <span>Off</span></div><button id="r-next" aria-label="Next station">▶</button></div>
+  <button id="b-voice" class="icon" title="Voices (V)">🗣</button>
+  <button id="b-mute" class="icon" title="Sound (M)">🔊</button>
+  <button id="b-pause" class="icon hidden" title="Pause (Esc)">⏸</button>
+</header>
+
+<canvas id="mon" class="hidden" width="300" height="200" aria-label="Vitals monitor"></canvas>
+
+<div id="team" class="hidden"></div>
+<div id="say" class="hidden"><img id="say-pic" alt=""><div><b id="say-who"></b><span id="say-txt"></span></div></div>
+
+<div id="prompt" class="hidden"><div id="p-txt"></div><div id="meter" class="hidden"><i id="m-band"></i><i id="m-fill"></i><i id="m-mark"></i></div><div id="p-sub"></div></div>
+<div id="banner" class="hidden"></div>
+
+<div id="pads" class="hidden">
+  <button id="bB" class="pad b"><b>SPECIAL</b><small>Enter</small></button>
+  <button id="bA" class="pad a"><b>ACTION</b><small>Space</small></button>
+</div>
+
+<!-- overlays -->
+<section id="title" class="screen">
+  <div class="tcard">
+    <div class="tpre">DR. BEHRAM'S OFFICE PRESENTS</div>
+    <h1 class="logo">SUTURE<br><span>SELF!</span></h1>
+    <div class="tsub">An operating-room teaching sim starring <b>Dr. Steven Behram</b></div>
+    <div class="tstar"><canvas id="t-pic" width="220" height="220"></canvas>
+      <div class="tquote" id="t-quote">“Scalpel. Kidding, time-out first. Always time-out first.”</div></div>
+    <div class="tbtns">
+      <button class="btn gold big" id="t-go" data-nav>Scrub in <span class="k">SPACE</span></button>
+      <button class="btn ghost" id="t-how" data-nav>How to play <span class="k">ENTER</span></button>
+    </div>
+    <div class="fine">Every step is based on standard op-note templates. Stylized, no gore. Humor is in the dialogue only.</div>
+  </div>
+</section>
+
+<section id="select" class="screen hidden">
+  <div class="sel-head"><h2>Today's OR schedule</h2><div id="sel-sub" class="fine"></div>
+    <button class="btn ghost small" id="hist-btn" data-nav>📋 Op-note history</button>
+    <label class="att" id="att-wrap"><input type="checkbox" id="att"> <b>Attending mode</b> <span id="att-note"></span></label></div>
+  <div id="chapters"></div>
+</section>
+
+<section id="preop" class="screen hidden">
+  <div class="pcard">
+    <div class="ptop"><div><div class="tpre" id="po-ch"></div><h2 id="po-title"></h2><div id="po-proc" class="fine"></div></div><div id="po-badge"></div></div>
+    <div class="pgrid">
+      <div><h4>H&amp;P</h4><p id="po-hp"></p></div>
+      <div><h4>Indication</h4><p id="po-ind"></p><h4>Consent</h4><p id="po-consent"></p><h4>Anesthesia</h4><p id="po-anes"></p></div>
+    </div>
+    <div id="po-team"></div>
+    <label class="sname">Assistant (student) name for the op note: <input id="po-name" maxlength="40" placeholder="Student"></label>
+    <div class="pbtns"><button class="btn ghost" id="po-back" data-nav>← Schedule</button><button class="btn gold big" id="po-go" data-nav>To the OR <span class="k">SPACE</span></button></div>
+  </div>
+</section>
+
+<section id="note" class="screen hidden">
+  <div class="ncard">
+    <div class="ngrade"><div id="n-grade">A</div><div id="n-stars"></div><div id="n-score" class="fine"></div><div id="n-unlock"></div></div>
+    <div class="npaper" id="n-paper"></div>
+    <div class="nbtns"><button class="btn ghost" id="n-sched" data-nav>Schedule</button><button class="btn ghost" id="n-print" data-nav>🖨 Print / Save PDF</button><button class="btn gold" id="n-again" data-nav>Replay this case <span class="k">SPACE</span></button></div>
+  </div>
+</section>
+
+<div id="quiz" class="hidden"><div class="qcard"><div class="qhead"><img id="q-pic" alt=""><div><div id="q-tag"></div><div id="q-q"></div></div><div id="q-timer"></div></div><div id="q-opts"></div><div id="q-why" class="hidden"></div><button class="btn gold hidden" id="q-ok" data-nav>Continue <span class="k">SPACE</span></button></div></div>
+<div id="tray" class="hidden"><div class="trcard"><div class="trhead"><img id="tr-pic" alt=""><div><div class="tpre">MAYO STAND</div><div id="tr-q"></div></div></div><div id="tr-items"></div><div id="tr-msg" class="fine"></div></div></div>
+<div id="howto" class="hidden"><div class="hcard">
+  <h2>How to operate</h2>
+  <ul>
+    <li><b>Space / tap ACTION / gamepad A</b>: main action (cut, clamp, stitch, cauterize, place)</li>
+    <li><b>Enter / tap SPECIAL / gamepad X</b>: special action (suction, aspirate, defog the scope, flag at time-out)</li>
+    <li><b>Mouse, finger or stick</b>: move the instrument. Arrow keys work too.</li>
+    <li><b>1–4</b> answer prompts. <b>R</b> radio, <b>M</b> sound, <b>V</b> voices, <b>Esc</b> pause.</li>
+    <li>Laparoscopy has the <b>fulcrum effect</b>: move your hand left and the instrument tip goes right.</li>
+  </ul>
+  <p>Each case: pre-op, time-out, every step in order (as minigames and “What’s next?” calls), surprises that change each replay, then your op note and grade. Score 2★ on a case to unlock <b>Attending mode</b> for it.</p>
+  <button class="btn gold" id="h-ok" data-nav>Got it <span class="k">SPACE</span></button>
+</div></div>
+<div id="pause" class="hidden"><div class="hcard"><h2>Paused</h2><p class="fine">The patient is under anesthesia. Dr. Stasia is doing a crossword.</p><div class="pbtns"><button class="btn ghost" id="pa-quit" data-nav>Abandon case</button><button class="btn gold" id="pa-go" data-nav>Resume <span class="k">ESC</span></button></div></div></div>
+<div id="baby" class="hidden"><div class="bcard"><div class="bwrap"><canvas id="b-cv" width="260" height="200"></canvas></div><h2 id="b-title">It's a girl!</h2><div id="b-sub" class="fine"></div></div></div>
+<div id="hist" class="hidden"><div class="hcard wide"><div class="hh"><h2>Op-note history</h2><button class="btn ghost small" id="hist-x" data-nav>Close <span class="k">ESC</span></button></div><div id="hist-list"></div><div class="fine">Saved on this device only (up to 30 notes).</div></div></div>
+<div id="lock" class="hidden"><div class="hcard"><h2>🔒 Scrub access required</h2><p>Check in at <b>Dr. Behram's Office</b> with your student code first.</p><a class="btn gold" href="../#surgery">Go to the front desk</a></div></div>
+<div id="fatal" class="hidden"></div>
+
+<script src="../office/js/access.js"></script>
+<script src="js/cases.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/tex.js"></script>
+<script src="js/render.js"></script>
+<script src="js/mini.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Player feedback — the MoodSticker
 
-Every page of the arcade (home page + all 22 games) loads one shared script,
+Every page of the arcade (home page + all 21 games) loads one shared script,
 [`assets/js/mood-sticker.js`](assets/js/mood-sticker.js). It draws a small animated smiley
 sticker in a corner of the screen. The sticker reacts to play:
 
@@ -35,8 +35,9 @@ D-pad/A/B all work.
   sits bottom-left on desktop. On phones it sits top-left, under the "← ARCADE" link, so it stays
   clear of joysticks and fire buttons.
 
-**Explicit hooks are wired in:** VORTEX (warp / death / game over / play), Congressional OB GYN
-(screens, correct/incorrect answers, encounter results, day summary), APEX GP, Astro Shatter,
+**Explicit hooks are wired in:** VORTEX (warp / death / game over / play), Dr. Behram's Office
+(Clinic Day: screens, correct/incorrect answers, encounter results, day summary; SUTURE SELF!: screens, deliveries,
+complications, grades, with pause bound to the OR pause menu), APEX GP, Astro Shatter,
 Planet Guardian, Sporewood, Star Invaders (screens + end of game), Vector Armor and MELTDOWN
 (screens), CHALICE (screens, gates / slain dragons, bat thefts, being eaten, the win), and AGE OF EMBERS
 (screens, age-ups, buildings lost / razed, the Wonder, victory and defeat, with pause bound to the menu), and HELIOPAUSE (screens, wave launches,

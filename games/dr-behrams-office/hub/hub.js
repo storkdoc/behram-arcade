@@ -12,7 +12,7 @@
   var PATH = { office: 'office/', feud: 'feud/', surgery: 'surgery/' };
   var LINES = {
     office: ['Exam 1 is ready. Charts are on the door.', 'Six patients, four rooms, one of me. Let’s go!', 'Wash your hands, read the chart, then knock.'],
-    feud: ['Survey says… you’d better know your differential.', 'We asked 100 OB/GYNs. Top answers are on the board!', 'Bring a friend: head-to-head on one screen.'],
+    feud: ['You’d better know your differential.', 'Top answers are on the board. Can you clear it?', 'Bring a friend: head-to-head on one screen.'],
     surgery: ['Scrub in! The OR is waiting and so is the baby.', 'Gowned, gloved, and slightly over-caffeinated. Let’s operate.', 'Suture Self! Steady hands, know your steps, count your sponges.']
   };
   var NAMES = { office: 'Clinic Day', feud: 'Feud & Delivery', surgery: 'Suture Self!' };

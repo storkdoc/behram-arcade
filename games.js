@@ -18,6 +18,19 @@ window.ARCADE_GAMES = [
     accent: '#ffd27a'
   },
   {
+    slug: 'dr-behrams-office',
+    title: "DR. BEHRAM'S OFFICE",
+    tagline: 'One student code, three games: Clinic Day in the exam rooms, the FEUD & DELIVERY diagnosis game show, and SUTURE SELF! in the OR with Dr. Behram.',
+    description: "A teaching cabinet for medical, PA and other clinical students, set in Dr. Steven Behram's practice, Congressional OB GYN at Fallsgrove Plaza in Rockville, Maryland. Check in once at the front desk with your six-week student code (or the instructor PIN) and walk the clinic hallway, with its periwinkle walls, orchids and calla lilies and the circus mural, to pick a game. CLINIC DAY: pick an exam room, read the chart and work each patient up through 257 board-style questions on 26 OB and GYN topics, with Dr. Behram explaining every answer. FEUD & DELIVERY: a game show where the top answers are differential diagnoses. Buzz in, name the most likely causes, survive three strikes, steal the board and play Fast Money across 47 rounds. SUTURE SELF!: scrub in as Dr. Behram's assistant for seven cases (breech, stat Category III and abruption cesareans, a laparoscopic dermoid cystectomy, a laparoscopic salpingo-oophorectomy for a postmenopausal mass, an abdominal myomectomy and a fibroid hysterectomy). Do the pre-op H&P, consent and time-out, then perform each step in order through first-person minigames: incisions, suturing, delivering the baby, suctioning and cauterizing bleeders, laparoscopy with inverted instruments, fog and smoke, and the final count. Random complications strike, the monitor alarms, the stat clock ticks and the OR radio ducks in a crisis. The anesthesiologist, scrub tech and circulator all have something to say. Every case ends with a teaching operative note that marks each step correct, suboptimal or wrong with the reason, adds pearls and an A+ to F grade, and can be printed or saved as a PDF. Attending mode removes the hints. All patients are fictional.",
+    thumb: 'games/dr-behrams-office/thumb.png',
+    added: '2026-10-31',
+    genre: 'MEDICAL SIM',
+    year: 'OB/GYN CLERKSHIP',
+    controls: 'mouse: click a door or menu card · arrows/WASD move the highlight · SPACE is the main action (continue, cut, suture, cauterize) · ENTER the special action (ask Dr. Behram, suction, X-ray, defog) · 1-4 pick answers · ESC back/pause · M sound · gamepad: stick/d-pad move, A main, X/Y special, B back, Start pause',
+    touch: 'tap a door or a card, tap answers · in the OR drag on the field and hold the ACTION / SPECIAL pads · works on iPhone and iPad in portrait and landscape',
+    accent: '#8fa3c4'
+  },
+  {
     slug: 'age-of-embers',
     title: 'AGE OF EMBERS',
     tagline: 'Gather, build, advance four ages and conquer. A beautiful isometric real-time strategy homage to Age of Empires.',
@@ -43,19 +56,7 @@ window.ARCADE_GAMES = [
     touch: 'drag anywhere in the stick zone to walk (floating joystick), tap DROP and FLARE, MAP and pause buttons · works on iPhone and iPad in portrait and landscape',
     accent: '#e8b84a'
   },
-  {
-    slug: 'feud-and-delivery',
-    title: 'FEUD & DELIVERY',
-    tagline: 'Dr. Behram hosts the game show where the top answers are differential diagnoses. Buzz in, name the most likely causes and steal the board.',
-    description: "A game-show teaching game for medical, PA and other clinical students, hosted by a cartoon Dr. Steven Behram of Congressional OB GYN. Each round names an OB or GYN presentation, such as postpartum fever, third-trimester bleeding or a pelvic mass, and hides its 4 to 6 most likely diagnoses on a lit-up board, with points that show their approximate relative likelihood. Two players or teams buzz in for the face-off. The winner chooses to play or pass, the controlling side names diagnoses until the board is cleared or they take three strikes, and the other side then gets one chance to steal the bank. Rounds 3 and 4 pay double and triple. Type answers freely: autocomplete, abbreviations, synonyms and typo-tolerant matching accept 'BV', 'endometrioma' or 'pre-eclampsia' just as well as the full name. Playing solo, you face the Night Float team, a simulated rival who buzzes, answers and tries to steal. The winner plays Fast Money: two players, five presentations, a ticking clock and 200 points to win. After each round, Reveal All shows every answer with a teaching pearl, its basis (ACOG, CDC, ASRM and standard texts) and any ties. A host panel lets an instructor accept an answer, add a strike, reveal tiles or end a round. 47 rounds in all. Expect banter, sad trombones, a confused (fictional) patient cameo, a slow-motion third strike and the odd clearly labelled bonus joke tile, while joke answers always score zero. Points are for teaching and are not survey data. Students play with the same six-week access code as Congressional OB GYN. All sound is synthesized.",
-    thumb: 'games/feud-and-delivery/thumb.png',
-    added: '2026-10-29',
-    genre: 'GAME SHOW',
-    year: 'OB/GYN CLERKSHIP',
-    controls: 'A / L buzz for the left / right player (SPACE buzzes in 1-player) · type a diagnosis, ↑/↓ pick a suggestion, ENTER says it · SPACE is the main button (continue, play), ENTER the special (pass, skip) · TAB passes in Fast Money · H host panel · I instructor · gamepad: pad 1 buzzes for the left side and pad 2 for the right (one pad: LB / RB), A continues, B special, Start host panel · mouse: click the BUZZ buttons and on-screen buttons',
-    touch: 'tap BUZZ on your podium, type answers with the on-screen keyboard and tap a suggestion or SAY IT · works on iPhone and iPad in portrait and landscape',
-    accent: '#ffc83d'
-  },
+
   {
     slug: 'reactor',
     title: 'MELTDOWN',
@@ -69,19 +70,7 @@ window.ARCADE_GAMES = [
     touch: 'hold RODS OUT/IN and LOAD −/+ in the bottom bar, hold SCRAM to trip, use the CORE / COOLANT / STEAM / SAFETY tabs for the console · works on iPhone and iPad in portrait and landscape',
     accent: '#4fb4ff'
   },
-  {
-    slug: 'congressional-obgyn',
-    title: 'CONGRESSIONAL OB GYN',
-    tagline: 'Clinic day at Fallsgrove Plaza with Dr. Behram. Pick an exam room, read the chart and work each patient up through board-style questions.',
-    description: "A teaching game for medical, PA and other clinical students, set in Dr. Steven Behram's practice, Congressional OB GYN at Fallsgrove Plaza in Rockville, Maryland. You arrive at the building, walk the hallway past the nurses' station and a circus mural, and patients check in to the waiting room before they are roomed into Exam 1 to 4. Each door shows a fictional patient's name, age and chief complaint, a pink OB or teal GYN chart in the rack, and a status light that turns amber, then red, the longer she waits. Choose a room and the door swings open on a fully drawn exam room with a table and stirrups, a fetal doppler (you hear the heartbeat in pregnant patients), an ultrasound cart and the patient herself, whose mood follows your care. Each encounter is a clinical vignette followed by 4 to 6 board-style questions covering history, workup, diagnosis and management, with Dr. Behram explaining every answer. There are 26 topics, from new OB intake, gestational diabetes, preeclampsia and preterm labor to abnormal Pap, STIs, PCOS, infertility, menopause, postmenopausal bleeding and breast lumps: 54 cases and 257 questions in all. Scoring includes points, a speed bonus, streak multipliers up to x3, stars, patient hearts and an A to F grade for the day. You are promoted from Student to Intern, Resident, Chief and Attending, which unlocks harder topics. Topic mastery uses spaced repetition, and there is a daily challenge, badges, a personal best and a local leaderboard. Students play with a six-week access code from Dr. Behram, and the Instructor button issues new codes.",
-    thumb: 'games/congressional-obgyn/thumb.png',
-    added: '2026-10-28',
-    genre: 'MEDICAL SIM',
-    year: 'OB/GYN CLERKSHIP',
-    controls: 'mouse: click a door or patient card to enter a room, click an answer · keys 1-4 pick an exam room, 1-5 answer, SPACE continues, ENTER asks Dr. Behram (removes wrong options for half points), arrows move the highlight, ESC goes back, M sound, N music, I instructor · gamepad: d-pad/stick moves, A continues, X or Y asks Dr. Behram, B goes back',
-    touch: "tap a patient in Today's Rooms or a door, tap answers, then tap Next · works on iPhone and iPad in portrait and landscape",
-    accent: '#f2708f'
-  },
+
   {
     slug: 'meta-arena',
     title: 'GENESIS',
