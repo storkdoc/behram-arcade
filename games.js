@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'heliopause',
+    title: 'HELIOPAUSE',
+    tagline: 'A solar defense odyssey. Something has crossed the edge of the Sun\'s domain. Fortify the Moon, the planets and their moons, and hold the line for Earth.',
+    description: "A theatrical tower defense across a living, orbiting solar system. Invaders arrive from deep space along shifting vectors while planets, moons and outposts turn on their orbits. Balance three resources: energy from solar arrays (weaker the farther you are from the Sun), metals from mines and science from labs. There are 12 structures, including railguns, missile batteries, laser arrays, gravity wells, EMP arrays, solar lances, Aegis shields, interceptor carriers and deep-space radar, and each upgrades through levels into two branches. A 31-node research tree covers weapons, power, engineering, sensors, defense, xenobiology and the Beyond. There are fourteen kinds of alien. They include swarmers, raiders that hunt your outposts, shielded wardens, cloaked phantoms, splitting hydras, healing menders, hive carriers, the Leviathan world-ship, a silent black monolith called the Sentinel and, at the end, the First Choir. Every wave is previewed with an advisor. The campaign has 12 chapters with title cards, followed by an Endless mode. There are three difficulties, 1-3 stars per chapter, and perks bought with stars. Play at 1x, 2x or 3x speed or pause, and unleash a super-weapon. It has bloom-lit planets, rings, lens flares and a monolith motif, plus an original synthesized score: a sunrise fanfare, a stately space waltz while you build, and Ligeti-like choral clusters in battle. Progress autosaves.",
+    thumb: 'games/heliopause/thumb.png',
+    added: '2026-10-31',
+    genre: 'TOWER DEFENSE',
+    year: '1968 ODYSSEY',
+    controls: 'click a site to build / upgrade · drag pan, wheel zoom · SPACE launches the next wave / confirms (main action) · ENTER fires the super-weapon (special) · arrows / Tab move between sites · 1-9 build options · U upgrade · A/B branch · X sell · R research · F speed · Esc pause · gamepad: d-pad sites, A confirm, B back, X launch, Y super, Start pause, Select research',
+    touch: 'tap sites to build and upgrade · drag to pan, pinch to zoom · on-screen LAUNCH, SPEED, RESEARCH and SUPER buttons · plays in landscape on iPhone and iPad',
+    accent: '#ffd27a'
+  },
+  {
     slug: 'age-of-embers',
     title: 'AGE OF EMBERS',
     tagline: 'Gather, build, advance four ages and conquer. A beautiful isometric real-time strategy homage to Age of Empires.',

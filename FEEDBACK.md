@@ -1,6 +1,6 @@
 # Player feedback — the MoodSticker
 
-Every page of the arcade (home page + all 21 games) loads one shared script,
+Every page of the arcade (home page + all 22 games) loads one shared script,
 [`assets/js/mood-sticker.js`](assets/js/mood-sticker.js). It draws a small animated smiley
 sticker in a corner of the screen. The sticker reacts to play:
 
@@ -39,7 +39,8 @@ D-pad/A/B all work.
 (screens, correct/incorrect answers, encounter results, day summary), APEX GP, Astro Shatter,
 Planet Guardian, Sporewood, Star Invaders (screens + end of game), Vector Armor and MELTDOWN
 (screens), CHALICE (screens, gates / slain dragons, bat thefts, being eaten, the win), and AGE OF EMBERS
-(screens, age-ups, buildings lost / razed, the Wonder, victory and defeat, with pause bound to the menu). All other games rely on the generic signals.
+(screens, age-ups, buildings lost / razed, the Wonder, victory and defeat, with pause bound to the menu), and HELIOPAUSE (screens, wave launches,
+boss arrivals, Earth hits, chapter victory and defeat, with pause bound to its pause screen). All other games rely on the generic signals.
 
 ## What gets recorded
 
