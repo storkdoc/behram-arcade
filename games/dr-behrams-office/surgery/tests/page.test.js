@@ -24,7 +24,7 @@ async function playCase(pg, id, touch, shotPrefix) {
   await pg.waitForSelector('#select:not(.hidden)'); await pg.click(`.case[data-id="${id}"]`); await pg.waitForSelector('#preop:not(.hidden)');
   if (touch) await pg.tap('#po-go'); else await pg.click('#po-go');
   const t0 = Date.now(); let shots = 0, seen = new Set();
-  while (Date.now() - t0 < (+process.env.CASE_MS || 240000)) {
+  while (Date.now() - t0 < (+process.env.CASE_MS || 420000)) {
     if (await vis(pg, '#note')) break;
     if (process.env.VERBOSE) { const st = await pg.evaluate(() => (SG.si + ':' + (SG.cur && SG.cur.step ? SG.cur.step.k : '-') + ' scr=' + SG.screen + ' modal=' + !!SG.modal + ' mini=' + !!SG.miniTick + ' p=' + document.querySelector('#p-txt').textContent.slice(0, 50))); if (st !== pg._last) { console.log('  ' + ((Date.now() - t0) / 1000).toFixed(0) + 's ' + st); pg._last = st; } }
     if (shotPrefix && shots < 4) { const k = await pg.evaluate(() => SG.cur && SG.cur.step ? SG.cur.step.k : ''); if (k && !seen.has(k) && ['trace', 'bleed', 'lapfind', 'suture', 'clamp', 'veress', 'ports'].includes(k) && !(await vis(pg, '#quiz')) && !(await vis(pg, '#tray'))) { seen.add(k); await pg.waitForTimeout(600); await pg.screenshot({ path: `${shotPrefix}-${k}.png` }); shots++; } }

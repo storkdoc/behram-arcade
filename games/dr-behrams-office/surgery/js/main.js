@@ -393,7 +393,7 @@
     var name = (SAVE.name || '').trim() || 'Student (you)';
     var surpF = G.surp.map(function (s) { return s.finding + (s.ok ? '' : ' (response delayed: ' + s.right.toLowerCase() + ')'); });
     var compl = G.surp.filter(function (s) { return /extension|atony|Bleed|spill|abruptDIC|cardioTrend|vasopressin|cavity|gaSat|spinalHypo|co2/.test(s.id); }).map(function (s) { return s.title.replace(/[!:].*$/, '') + ': ' + s.finding; });
-    G.log.forEach(function (L) { L.notes.forEach(function (n) { if (/ureter clamped|injury|tear/i.test(n.t)) compl.push(n.t); }); });
+    G.log.forEach(function (L) { L.notes.forEach(function (n) { var head = n.t.split('Should have')[0]; if (!/^Not completed|^Out of order|^Instrument/.test(head) && /ureter clamped|injur/i.test(head)) compl.push(head.replace(/[.\s]+$/, '')); }); });
     var ebl = Math.round(V.ebl / 25) * 25, fluids = Math.round((1000 + V.ebl * 1.3) / 100) * 100, prbc = V.ebl > 1800 ? Math.round((V.ebl - 1000) / 500) : 0;
     var babyLine = c.ch === 0 ? ' Infant to ' + (/Apgars [0-5]/.test(c.post) || c.id === 'abruption' ? 'the NICU team' : 'the newborn nursery with mother') + '.' : '';
     var dispo = (V.ebl > 2500 ? 'To the ICU, intubated? No: extubated and stable, to L&D ICU for monitoring.' : 'To the PACU in stable condition.') + babyLine;

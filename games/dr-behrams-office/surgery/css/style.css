@@ -66,9 +66,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #081822; col
 .fine { font-size: 12px; opacity: .78; }
 .tpre { font-size: 11px; letter-spacing: .24em; font-weight: 800; opacity: .7; }
 .tcard { max-width: 640px; margin: 0 auto; text-align: center; }
-.logo { font: 900 clamp(54px, 13vw, 104px)/.86 "Arial Black", Impact, system-ui, sans-serif; margin: 10px 0 8px; letter-spacing: -.02em; color: #e8fbff; text-shadow: 0 4px 0 #0e5d73, 0 10px 30px rgba(0,0,0,.6); transform: rotate(-3deg); }
+.logo { font: 900 clamp(54px, 13vw, 104px)/.86 "Arial Black", Impact, system-ui, sans-serif; margin: 10px 0 26px; letter-spacing: -.02em; color: #e8fbff; text-shadow: 0 4px 0 #0e5d73, 0 10px 30px rgba(0,0,0,.6); transform: rotate(-3deg); }
 .logo span { color: #4fe3cf; text-shadow: 0 4px 0 #0b6b60, 0 10px 30px rgba(0,0,0,.6); position: relative; }
-.logo span::after { content: ""; position: absolute; left: 4%; right: 4%; bottom: -10px; height: 8px; background: repeating-linear-gradient(90deg, #7b4fd0 0 10px, transparent 10px 18px); border-radius: 4px; }
+.logo span::after { content: ""; position: absolute; left: 4%; right: 4%; bottom: -14px; height: 7px; background: repeating-linear-gradient(90deg, #7b4fd0 0 10px, transparent 10px 18px); border-radius: 4px; }
 .tsub { font-size: 16px; margin: 18px 0 10px; }
 .tstar { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 8px 0 14px; }
 #t-pic { width: 150px; height: 150px; }
