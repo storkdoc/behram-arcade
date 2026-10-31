@@ -419,11 +419,11 @@ const coast = (p, ms) => p.evaluate(ms => new Promise(r => setTimeout(() => r(+T
   await M.screenshot({ path: '/tmp/tbf/t-landscape.png' });
 
   say('== OTHER GAMES + LANDING PAGE');
-  for (const [path, test] of [['', () => document.querySelectorAll('a[href*="games/"]').length], ['games/tube-shooter/', () => !!document.querySelector('canvas')], ['games/atari-football/', () => !!document.querySelector('canvas')]]) {
+  for (const [path, test] of [['', () => document.querySelectorAll('a[href*="games/"]').length], ['games/tube-shooter/', () => !!document.querySelector('canvas')]]) {
     const p = await (await b.newContext({ viewport: { width: 1200, height: 800 } })).newPage(); const e = []; p.on('pageerror', x => e.push(x.message)); p.on('console', m => { if (m.type() === 'error') e.push(m.text()); });
     const r = await p.goto(BASE + path); await p.waitForTimeout(1200); const v = await p.evaluate(test);
     check(r.status() === 200 && v && e.length === 0, `${path || 'landing page'} loads (${JSON.stringify(v)}) with no errors ${e.slice(0, 2).join(' ')}`);
-    if (!path) { const t = await p.evaluate(() => [...document.querySelectorAll('a[href*="games/"]')].map(a => a.getAttribute('href'))); say('  landing links', t.join(' ')); check(t.some(h => h.includes('trackball-football')) && t.some(h => h.includes('tube-shooter')) && t.some(h => h.includes('atari-football')), 'landing page lists all three games'); }
+    if (!path) { const t = await p.evaluate(() => [...document.querySelectorAll('a[href*="games/"]')].map(a => a.getAttribute('href'))); say('  landing links', t.join(' ')); check(t.some(h => h.includes('trackball-football')) && t.some(h => h.includes('tube-shooter')) && !t.some(h => h.includes('atari-football')), 'landing page lists both games (and not the removed Atari Football)'); }
   }
   const errs = pages.flatMap(p => p.errs.map(e => p.name + ': ' + e)); check(errs.length === 0, 'no console errors in the game ' + JSON.stringify(errs.slice(0, 5)));
   say(fails ? 'FAILURES: ' + fails : 'ALL PASS');

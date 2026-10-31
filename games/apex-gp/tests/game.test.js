@@ -176,7 +176,7 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; say(ok ? ' 
   check(F.errs.length === 0, 'fallback: no console errors', F.errs.slice(0, 3)); await F.context().close();
 
   say('== Arcade regression');
-  const games = ['', 'games/apex-gp/', 'games/astro-shatter/', 'games/vector-armor/', 'games/sporewood/', 'games/planet-guardian/', 'games/star-invaders/', 'games/trackball-football/', 'games/atari-football/', 'games/tube-shooter/'];
+  const games = ['', 'games/apex-gp/', 'games/astro-shatter/', 'games/vector-armor/', 'games/sporewood/', 'games/planet-guardian/', 'games/star-invaders/', 'games/trackball-football/', 'games/tube-shooter/'];
   for (const g of games) {
     const p = await open({ viewport: { width: 1280, height: 800 } }, BASE + g); await p.waitForTimeout(600);
     const st = await p.evaluate(() => document.title);

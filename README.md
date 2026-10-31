@@ -9,9 +9,6 @@ arcade/
 ├── assets/arcade.css     landing page styles (neon / CRT)
 ├── assets/arcade.js      renders cards from games.js, keyboard navigation
 ├── games/
-│   ├── atari-football/   ATARI FOOTBALL (game #2) – see games/atari-football/README.md
-│   │   ├── index.html, js/*.js, peerjs.min.js (vendored)
-│   │   └── thumb.png
 │   └── tube-shooter/     VORTEX (game #1)
 │       ├── index.html
 │       ├── game.js
@@ -99,34 +96,3 @@ Touch controls appear automatically on phones and tablets (first touch on any de
 
 Multi-touch: fire and spin at the same time. Sound unlocks on the first tap (on iPhone the ring/silent switch also mutes Web Audio). iPhone Safari has no fullscreen API, so use Share → Add to Home Screen for a full-screen app-style launch (icons + manifest included). On phones / tablets rendering is capped at ~5 MP to hold 60 fps.
 Test: `tests/vortex-touch.test.js` (Playwright mobile emulation, touch input only).
-
-## ATARI FOOTBALL
-
-Game #2 is a top-down, 7-on-7 football game in the style of the Atari 800 XL. Both sides secretly pick a play from a playbook with diagrams, then the play runs in real time with you steering one highlighted player. It has:
-
-* 12 offensive and 6 defensive plays
-* throws, catches, jukes and dive tackles
-* punts, field goals with a kick meter, kickoffs and returns
-* 4 downs to make 10 yards, quarters and a clock
-* chiptune music and sound effects
-
-**Modes:**
-
-* **Play vs Computer.** The CPU's play call stays hidden until the snap.
-* **Two-Player Game (Online).** Player 1 starts it and is told to call their buddy and have them bike over, with the Atari cassette-loading homage screen. Player 2, on their own device anywhere, taps **Join Two-Player Game in Progress** and it finds the waiting game without a code (a backup 5-letter room code is shown too).
-
-Each screen only ever shows its own playbook. The other side shows only "OPPONENT IS CHOOSING… / LOCKED IN", and both calls are revealed at the snap. Matchmaking uses 20 well-known PeerJS ids ("slots") on the free PeerJS cloud server, so there's no server of our own, and play is peer-to-peer over WebRTC with Google STUN. The host runs the game and streams about 60 state updates a second over an unordered channel. The guest predicts its own player so it responds instantly, and a `LINK xxMS` readout shows the round trip. Hot-seat is hidden behind `?local=1`.
-
-**Controls:**
-
-| Input | Move | Action | Cycle | Pause |
-| --- | --- | --- | --- | --- |
-| Keyboard | Arrows / WASD | Space | Shift | Esc / P |
-| Gamepad | D-pad / left stick | A | B | |
-| Touch | Floating joystick | **A** button | **B** button | **II** button |
-
-* **Action:** pass, pitch, juke, catch, tackle or kick, depending on the moment.
-* **Cycle:** pass target, switch defender or kneel.
-* **Touch:** tap menus and plays, landscape with a rotate hint, and online play works from phones.
-
-The full guide (controls, two-player matchmaking and secrecy, the playbook and hosting) is in [`games/atari-football/README.md`](games/atari-football/README.md).

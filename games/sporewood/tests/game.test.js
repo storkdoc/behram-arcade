@@ -270,13 +270,13 @@ const PREP = `window.__prep = (w, seed) => { CEN.start(w || 1, seed || 7); CEN.f
   await AQ.context().close();
 
   say('== ARCADE REGRESSION');
-  const paths = ['', 'games/sporewood/', 'games/star-invaders/', 'games/tube-shooter/', 'games/atari-football/', 'games/trackball-football/'];
+  const paths = ['', 'games/sporewood/', 'games/star-invaders/', 'games/tube-shooter/', 'games/trackball-football/'];
   const lp = await open({ viewport: { width: 1280, height: 800 } }, BASE);
   const cards = await lp.evaluate(() => (window.ARCADE_GAMES || []).map(g => g.slug)); await lp.context().close();
   for (const s of cards) if (!paths.includes('games/' + s + '/')) paths.push('games/' + s + '/');
   for (const path of paths) {
     const p = await open({ viewport: { width: 1280, height: 800 } }, BASE + path); const t = await p.title();
-    if (!path) check(cards[0] === 'sporewood' && ['star-invaders', 'tube-shooter', 'atari-football', 'trackball-football'].every(s => cards.includes(s)), 'landing page lists Sporewood first plus all earlier games', cards.join(','));
+    if (!path) check(cards[0] === 'sporewood' && ['star-invaders', 'tube-shooter', 'trackball-football'].every(s => cards.includes(s)), 'landing page lists Sporewood first plus all earlier games', cards.join(','));
     check(p.errs.length === 0, 'loads without console errors: /' + path + ' (' + t + ')', p.errs);
     await p.context().close();
   }

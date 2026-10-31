@@ -265,19 +265,6 @@ window.ARCADE_GAMES = [
     accent: '#ff5a3c'
   },
   {
-    slug: 'atari-football',
-    title: 'ATARI FOOTBALL',
-    tagline: '7-on-7 pixel gridiron',
-    description: 'Call hidden plays from a 12-play offense and 6-play defense, then take control of one highlighted player as the play runs live. Throws, catches, jukes, dive tackles, punts, field goals and kickoffs. Play the CPU, or go head to head online: one player starts a Two-Player Game, the buddy taps Join Two-Player Game in Progress on their own device - no code needed. Each screen only ever shows its own playbook.',
-    thumb: 'games/atari-football/thumb.png',
-    added: '2026-10-24',
-    genre: 'SPORTS',
-    year: '1982 STYLE',
-    controls: 'arrows/WASD move · SPACE action (pass/tackle/kick) · SHIFT cycle player/target · ESC pause',
-    touch: 'joystick (left) · A action · B cycle · tap plays to call them · tap to host or join online',
-    accent: '#ffd23c'
-  },
-  {
     slug: 'tube-shooter',            // folder name under games/
     title: 'VORTEX',
     tagline: 'Vector tube shooter',

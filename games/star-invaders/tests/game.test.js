@@ -178,10 +178,10 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; say(ok ? ' 
   check(NF.errs.length === 0, 'fallback: no console errors', NF.errs);
 
   say('== ARCADE REGRESSION');
-  for (const path of ['', 'games/tube-shooter/', 'games/atari-football/', 'games/trackball-football/', 'games/star-invaders/']) {
+  for (const path of ['', 'games/tube-shooter/', 'games/trackball-football/', 'games/star-invaders/']) {
     const p = await open({ viewport: { width: 1280, height: 800 } }, BASE + path); const t = await p.title();
     let extra = '';
-    if (!path) { const cards = await p.evaluate(() => (window.ARCADE_GAMES || []).map(g => g.slug)); extra = cards.join(','); check(cards[0] === 'star-invaders' && ['tube-shooter', 'atari-football', 'trackball-football'].every(s => cards.includes(s)), 'landing page lists Star Invaders first plus all earlier games', extra); }
+    if (!path) { const cards = await p.evaluate(() => (window.ARCADE_GAMES || []).map(g => g.slug)); extra = cards.join(','); check(cards[0] === 'star-invaders' && ['tube-shooter', 'trackball-football'].every(s => cards.includes(s)), 'landing page lists Star Invaders first plus all earlier games', extra); }
     check(p.errs.length === 0, 'loads without console errors: /' + path + ' (' + t + ')', p.errs);
     await p.context().close();
   }

@@ -49,7 +49,7 @@ let fails = 0; const check = (ok, msg) => { if (!ok) fails++; say(ok ? '  PASS' 
   const j1 = await st(J1); say('J1 joined slot', j1.slot, 'room', j1.code, 'in', Date.now() - tj, 'ms');
   check(j1.slot === 1 && j1.code === s1.code, 'joiner found the waiting host by slot scan (no code typed)');
   await H1.waitForFunction(() => TBF.App.mode === 'host' && TBF.App.screen === 'game', null, { timeout: 8000 });
-  check([...broker.ids.keys()].every(k => !k.startsWith('behram-afb')), 'uses its own PeerJS namespace (behram-tbf-v1-*), never Atari Football\u2019s');
+  check([...broker.ids.keys()].every(k => !k.startsWith('behram-afb')), 'uses its own PeerJS namespace (behram-tbf-v1-*), never the retired behram-afb one');
   const J2 = await mk('J2'); await tapL(J2, 'JOIN TWO-PLAYER GAME IN PROGRESS');
   await J2.waitForFunction(() => TBF.App.mode === 'guest' && TBF.App.snap, null, { timeout: 20000 });
   check((await st(J2)).code === s2.code, 'second joiner matched host 2 (host 1 is busy)');
