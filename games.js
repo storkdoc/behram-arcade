@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'age-of-embers',
+    title: 'AGE OF EMBERS',
+    tagline: 'Gather, build, advance four ages and conquer. A beautiful isometric real-time strategy homage to Age of Empires.',
+    description: "Lead a tribe from the Hearth Age to the Imperial Age. Villagers chop wood, hunt deer, farm, and mine gold and stone. Build houses, mills, barracks, archery ranges, stables, a blacksmith, a market, towers, walls, siege works, an academy, and finally a Wonder. Spearmen beat cavalry, cavalry beat archers, archers beat infantry, and infantry beat spearmen, while rams and catapults break cities. Formations, attack-move, control groups and rally points help you run 200+ units. A 6-mission campaign teaches the game, then skirmish on five random maps against 1-3 CPU rivals (Easy, Normal, Hard, or the unlockable Legendary), free-for-all or 2v2. Win by conquest or by holding a Wonder. Includes fog of war, day-lit procedural art, spatial sound, music that grows with each age, autosave and resume, a stats screen with graphs, XP ranks, 18 achievements and unlocks.",
+    thumb: 'games/age-of-embers/thumb.png',
+    added: '2026-10-30',
+    genre: 'STRATEGY',
+    year: '1997 HOMAGE',
+    controls: 'left-click / drag select · right-click smart command (Mac: ctrl-click) · wheel or pinch zoom · edge/arrows pan · SPACE next idle villager (main action) · ENTER select army / attack-move (special) · QWERT/ASDFG/ZXCVB command card · Ctrl/⌘+1-9 groups · Esc menu · gamepad: stick cursor, A select, X command, Y idle villager, LT army, Start menu',
+    touch: 'tap to select and command · one-finger drag box-selects · two-finger pan, pinch zoom · double-tap selects all of a type · side buttons for army, idle villager, attack-move · plays in landscape on iPhone and iPad',
+    accent: '#ff9a3c'
+  },
+  {
     slug: 'chalice',
     title: 'CHALICE',
     tagline: 'Three castles, three dragons, one thieving bat. Find the enchanted Chalice and carry it home to the Gold Castle. A painterly homage to the 1979 console adventure.',

@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Embers sprite sheet</title><link rel="icon" href="data:,">
+<style>body{margin:0;background:#6b8f4a}canvas{display:block}</style></head><body><canvas id="c" width="1400" height="1000"></canvas>
+<script src="../js/util.js"></script><script src="../js/data.js"></script><script src="../js/sprites.js"></script>
+<script>
+const S=EMB.Sprites, x=document.getElementById('c').getContext('2d');
+const draw=(sp,X,Y,sc)=>{sc=sc||1; x.drawImage(sp.c,X-sp.ox*sc,Y-sp.oy*sc,sp.w*sc,sp.h*sc);};
+const types=[['villager',0],['infantry',0],['infantry',1],['infantry',2],['infantry',3],['spear',0],['spear',2],['archer',0],['archer',2],['scout',0],['knight',0],['knight',1],['ram',0],['catapult',0],['fishboat',0],['galley',0],['deer',0]];
+types.forEach(([t,tier],i)=>{ for(let d=0;d<8;d++) draw(S.unit(t,i%3,tier,Math.min(3,tier+1),d,d<4?'walk':'work',d*2%8,i,'chop','w'),40+d*44,40+i*36,1.2); });
+const bl=['towncenter','house','barracks','archery','stable','blacksmith','market','tower','lumbercamp','miningcamp','mill','dock','siegeworks','academy','farm','wall','palisade'];
+let X=420,Y=160;
+for(let age=0;age<4;age++){ bl.forEach((b,i)=>{ const sp=S.building(b,age,age,4); draw(sp,X+i*58,Y+age*120,0.55*2/ (EMB.D.BUILD[b].size)); }); }
+draw(S.building('wonder',0,3,4),1250,900,0.8);
+for(let st=0;st<5;st++) draw(S.building('barracks',1,2,st),450+st*110,700,0.7);
+for(let v=0;v<12;v++) draw(S.tree(v),450+v*40,830,1);
+for(let v=0;v<5;v++){ draw(S.mine('gold',v,1),450+v*60,930,1); draw(S.mine('stone',v,0.5),760+v*60,930,1); draw(S.berry(v,1),1080+v*35,930,1);}
+</script></body></html>

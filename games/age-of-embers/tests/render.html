@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="icon" href="data:,"><style>html,body{margin:0;background:#000;overflow:hidden}</style></head><body><canvas id="c"></canvas>
+<script src="../js/util.js"></script><script src="../js/data.js"></script><script src="../js/map.js"></script><script src="../js/path.js"></script><script src="../js/sim.js"></script><script src="../js/ai.js"></script><script src="../js/sprites.js"></script><script src="../js/render.js"></script>
+<script>
+const E = window.EMB, q = new URLSearchParams(location.search);
+const G = new E.Game({ seed: +(q.get('seed') || 7), mapType: q.get('map') || 'heartland', size: 96, reveal: q.get('reveal') || undefined, players: [{ name: 'You', ai: 1 }, { name: 'B', ai: 1 }] });
+E.colorOf = o => G.players[o].color;
+G.ais.push(new E.AI(G, 0, 1), new E.AI(G, 1, 1));
+G.run(+(q.get('t') || 300));
+const cv = document.getElementById('c'); const R = new E.Render(cv, G, 0);
+R.resize(innerWidth, innerHeight, devicePixelRatio || 1);
+const p = G.players[0]; R.centerOn(p.startX + (+q.get('dx') || 0), p.startY + (+q.get('dy') || 0)); R.cam.z = +(q.get('z') || 1);
+R.updateFog();
+let last = performance.now();
+function loop(now) { const dt = Math.min(0.1, (now - last) / 1000); last = now; G.step(); R.onEvents(G.events.splice(0)); R.frame(1, dt); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+window.__ok = true;
+</script></body></html>

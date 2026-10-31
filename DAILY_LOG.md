@@ -320,3 +320,29 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
   procedural music for each area with a danger layer, and stereo sound effects. Keyboard (SPACE drops, ENTER fires a flare), mouse, touch (floating stick plus buttons) and gamepad all work.
 - Tests: `tests/sim.test.js` checks the rules, and the bot wins 8/8 seeds on every level with both switch settings.
   `tests/game.test.js` drives 1280x800 keyboard/mouse/gamepad play and iPhone portrait/landscape touch with no console errors. The root landing test passes.
+
+### New game (2026-10-30): AGE OF EMBERS (games/age-of-embers)
+- A single-player isometric RTS homage to Age of Empires.
+  - Four resources (food, wood, gold, stone) and 18 building types.
+  - Four ages: Hearth, Bronze, Iron and Imperial.
+  - Tech tree with unit tiers.
+  - Counters: spear > cavalry > archer > infantry > spear, plus rams and catapults.
+  - Formations, attack-move, control groups, fog of war, and 200+ units.
+  - Victory by conquest or by holding a Wonder.
+- Progression:
+  - A 6-mission campaign that doubles as the tutorial.
+  - Skirmish on 5 random maps against 1–3 CPUs (Easy, Normal, Hard, Legendary), FFA or 2v2.
+  - Autosave and resume.
+  - End-of-game stats with graphs, XP ranks, 18 achievements, and unlocks (maps, Legendary, banners, map size).
+- Graphics and sound are fully procedural:
+  - Canvas sprites with lighting, shadows and particles.
+  - WebAudio spatial sound effects and voice acknowledgements.
+  - Music that changes with each age.
+- Controls:
+  - Mouse, keyboard (SPACE = idle villager, ENTER = army / attack-move), touch, and gamepad.
+  - Mac trackpad and Safari gestures are handled.
+- Tests:
+  - `tests/campaign-test.js`: a bot clears all 6 missions, and a passive player loses mission 4.
+  - `tests/botmatch.js` / `batch.js`: Hard beats Easy 3/3 by conquest (24–37 min).
+  - `tests/counters.js`: 5/5 pass.
+  - Playwright mouse 15/15 and touch 14/14 pass, with no console errors at 1280x800, iPad landscape and iPhone landscape.
