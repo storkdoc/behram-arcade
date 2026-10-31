@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>HELIOPAUSE — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Visible error banner instead of a blank screen (real iPhones give no console). */
+(function () {
+  var shown = false;
+  window.HPFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'HELIOPAUSE hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  var booted = function () { return window.HP && window.HP.booted; };
+  addEventListener('error', function (e) { if (!(e instanceof ErrorEvent)) return; if (!booted()) HPFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); }, true);
+  setTimeout(function () { if (!booted()) HPFatal('The game did not start (scripts failed to load). Check your connection and reload.'); }, 20000);
+})();
+</script>
+<script>window.MOOD_STICKER_CONFIG = { corner: 'tl' };</script>
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<a id="home" href="../../">← ARCADE</a>
+
+<!-- ============ BEGIN (audio unlock) ============ -->
+<div id="begin" class="screen show">
+  <div class="bmono"></div>
+  <div class="btitle">HELIOPAUSE</div>
+  <div class="bsub">A SOLAR DEFENSE ODYSSEY</div>
+  <button id="beginBtn" class="ghost big">BEGIN</button>
+  <div class="bhint">Sound on, if you can. Headphones are better.</div>
+</div>
+
+<!-- ============ TITLE TEXT (over the dawn scene) ============ -->
+<div id="titleText" class="screen"><div class="tt">H E L I O P A U S E</div><div class="ts">A SOLAR DEFENSE ODYSSEY</div><div class="tskip" id="tskip">press any key</div></div>
+
+<!-- ============ MAIN MENU ============ -->
+<div id="menu" class="screen">
+  <div class="mtitle">H E L I O P A U S E</div>
+  <div class="msub">A SOLAR DEFENSE ODYSSEY</div>
+  <div class="mlist" id="mlist"></div>
+  <div class="mfoot" id="mfoot"></div>
+</div>
+
+<!-- ============ CHAPTER SELECT ============ -->
+<div id="chapters" class="screen">
+  <div class="shead">THE CAMPAIGN</div>
+  <div class="diffs" id="diffs"></div>
+  <div class="chgrid" id="chgrid"></div>
+  <div class="chinfo" id="chinfo"></div>
+  <div class="srow"><button class="ghost" data-back>BACK</button><button class="ghost primary" id="chGo">COMMENCE ▸</button></div>
+</div>
+
+<!-- ============ LEGACY (meta perks) ============ -->
+<div id="legacy" class="screen">
+  <div class="shead">LEGACY</div>
+  <div class="ssub" id="legStars"></div>
+  <div class="leglist" id="leglist"></div>
+  <div class="srow"><button class="ghost" data-back>BACK</button></div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settings" class="screen">
+  <div class="shead">SETTINGS</div>
+  <div class="setlist">
+    <label>MASTER <input type="range" min="0" max="100" id="vMaster"></label>
+    <label>MUSIC <input type="range" min="0" max="100" id="vMusic"></label>
+    <label>EFFECTS <input type="range" min="0" max="100" id="vSfx"></label>
+    <label>VISUAL QUALITY <select id="sQual"><option value="high">HIGH</option><option value="low">LOW (battery)</option></select></label>
+    <label>APPROACH PATHS <select id="sPaths"><option value="1">SHOWN</option><option value="0">HIDDEN</option></select></label>
+    <label>PLANET NAMES <select id="sLabels"><option value="1">SHOWN</option><option value="0">HIDDEN</option></select></label>
+  </div>
+  <div class="srow"><button class="ghost" id="resetSave">ERASE ALL PROGRESS</button><button class="ghost" data-back>BACK</button></div>
+</div>
+
+<!-- ============ HOW TO PLAY ============ -->
+<div id="howto" class="screen">
+  <div class="shead">HOW TO DEFEND THE EARTH</div>
+  <div class="howtxt" id="howtxt"></div>
+  <div class="srow"><button class="ghost" data-back>BACK</button></div>
+</div>
+
+<!-- ============ GAME HUD ============ -->
+<div id="hud" class="hide">
+  <div class="hl">
+    <div class="earth"><span class="lab">EARTH</span><div class="ebar"><i id="eFill"></i><b id="sFill"></b></div><span id="eNum">100</span></div>
+  </div>
+  <div class="hc"><div id="hChap">CHAPTER I</div><div id="hWave">WAVE 1 / 6</div></div>
+  <div class="hr">
+    <div class="res" title="Metals"><span class="ic m">◆</span><span id="rM">0</span><small id="rMr"></small></div>
+    <div class="res" title="Energy grid (use / capacity)"><span class="ic e">⚡︎</span><span id="rE">0/0</span></div>
+    <div class="res" title="Science"><span class="ic s">✦</span><span id="rS">0</span></div>
+  </div>
+</div>
+<div id="tools" class="hide">
+  <button id="bMenu" title="Pause / menu (Esc)">❙❙</button>
+  <button id="bSpeed" title="Speed (F)">1×</button>
+  <button id="bRes" title="Research (R)">RESEARCH</button>
+  <button id="bSuper" title="Super-weapon (Enter)"><span id="supName">BARRAGE</span><i id="supFill"></i></button>
+  <button id="bCam" title="Recentre (H)">◎</button>
+</div>
+<div id="panel" class="hide"><button id="pToggle">▸</button><div id="pBody"></div></div>
+<button id="launch" class="hide">LAUNCH WAVE <small>SPACE</small></button>
+<div id="toasts"></div>
+<div id="card" class="hide"><div class="c1" id="c1"></div><div class="c2" id="c2"></div><div class="c3" id="c3"></div></div>
+
+<!-- ============ RESEARCH ============ -->
+<div id="research" class="screen">
+  <div class="shead">RESEARCH <span id="rsSci"></span></div>
+  <div class="rgrid" id="rgrid"></div>
+  <div class="rinfo" id="rinfo"></div>
+  <div class="srow"><button class="ghost" id="rsClose">CLOSE <small>R</small></button></div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pause" class="screen">
+  <div class="shead">PAUSED</div>
+  <div class="mlist" id="plist"></div>
+</div>
+
+<!-- ============ END ============ -->
+<div id="end" class="screen">
+  <div class="etitle" id="eTitle"></div>
+  <div class="esub" id="eSub"></div>
+  <div class="estars" id="eStars"></div>
+  <div class="estats" id="eStats"></div>
+  <div class="mlist" id="elist"></div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/bot.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

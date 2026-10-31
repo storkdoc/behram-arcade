@@ -432,7 +432,7 @@ R.post = function (dt) {
   if (this.tint > 0) { this.tint = Math.max(0, this.tint - dt * 0.5); x.fillStyle = 'rgba(60,40,120,' + Math.min(0.35, this.tint * 0.3) + ')'; x.fillRect(0, 0, W, H); }
   if (this.flash > 0.01) { x.fillStyle = 'rgba(' + this.flashCol + ',' + Math.min(0.8, this.flash) + ')'; x.fillRect(0, 0, W, H); this.flash *= Math.pow(0.04, dt); }
   x.drawImage(this.vign, 0, 0);
-  if (this.letterbox > 0.01) { x.fillStyle = '#000'; var lb = H * 0.11 * this.letterbox; x.fillRect(0, 0, W, lb); x.fillRect(0, H - lb, W, lb); }
+  if (this.letterbox > 0.01) { x.fillStyle = '#000'; var lb = H * 0.085 * this.letterbox; x.fillRect(0, 0, W, lb); x.fillRect(0, H - lb, W, lb); }
 };
 
 /* ---------- title scene: dawn over the limb of the Earth, the Moon aligned, the Sentinel in silhouette ---------- */
@@ -443,14 +443,15 @@ R.title = function (dt, k) {
   x.globalAlpha = Math.min(1, k.stars); x.drawImage(this.bg, 0, 0); x.globalAlpha = 1;
   x.setTransform(dpr, 0, 0, dpr, 0, 0);
   var R0 = Math.max(W, H) * 1.25, cx = W / 2, cy = H + R0 * 0.82, rise = k.rise; // 0..1 sun rising
-  // the sun cresting the limb
-  var sy = cy - R0 - 8 + (1 - rise) * 60, sx = cx;
+  var limbY = cy - R0, mh = H * 0.27, mw = mh * 4 / 9;
+  // the sun crests the limb and climbs until it crowns the slab
+  var sy = limbY + 26 - rise * (mh * 0.98 + 26), sx = cx;
   x.globalCompositeOperation = 'lighter';
-  this.glowAt(sx, sy, 520 * rise + 40, '#ff9a50', 0.55 * rise, 1); this.glowAt(sx, sy, 180 * rise + 10, '#fff0c0', 0.9 * rise, 1);
+  this.glowAt(sx, sy, 520 * rise + 40, '#ff9a50', 0.55 * rise, 1); this.glowAt(sx, sy, 180 * rise + 10, '#fff0c0', 0.9 * rise, 1); this.glowAt(sx, sy, 34 * rise + 4, '#ffffff', rise, 1);
   x.globalAlpha = 0.5 * rise; x.strokeStyle = 'rgba(255,230,180,0.6)'; x.lineWidth = 1;
-  x.beginPath(); x.moveTo(sx - W * 0.6 * rise, sy); x.lineTo(sx + W * 0.6 * rise, sy); x.stroke(); x.globalAlpha = 1;
+  x.beginPath(); x.moveTo(sx - W * 0.6 * rise, sy); x.lineTo(sx + W * 0.6 * rise, sy); x.stroke(); x.beginPath(); x.moveTo(sx, sy - H * 0.07 * rise); x.lineTo(sx, sy + H * 0.07 * rise); x.stroke(); x.globalAlpha = 1;
   // the moon above, aligned
-  var my = H * 0.2 - k.moon * 10, mr = Math.min(W, H) * 0.045;
+  var my = H * 0.11 - k.moon * 6, mr = Math.min(W, H) * 0.04;
   x.globalCompositeOperation = 'source-over';
   var gm = x.createRadialGradient(cx, my + mr * 0.6, mr * 0.2, cx, my, mr); gm.addColorStop(0, 'rgba(230,230,235,' + k.moon + ')'); gm.addColorStop(0.7, 'rgba(120,120,130,' + k.moon * 0.6 + ')'); gm.addColorStop(1, 'rgba(10,10,14,' + k.moon + ')');
   x.fillStyle = gm; x.beginPath(); x.arc(cx, my, mr, 0, TAU); x.fill();
@@ -463,7 +464,7 @@ R.title = function (dt, k) {
   x.globalAlpha = 1;
   // monolith silhouette in front
   if (k.mono > 0) {
-    var mh = H * 0.36, mw = mh * 4 / 9, mx = cx - mw / 2, mY = H * 0.62 - mh / 2 + (1 - k.mono) * 30;
+    var mx = cx - mw / 2, mY = limbY - mh * 0.86 + (1 - k.mono) * 30;
     x.globalCompositeOperation = 'source-over'; x.globalAlpha = k.mono; x.fillStyle = '#000'; x.fillRect(mx, mY, mw, mh);
     x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(255,220,170,' + 0.5 * rise + ')'; x.lineWidth = 1; x.beginPath(); x.moveTo(mx, mY + mh); x.lineTo(mx, mY); x.lineTo(mx + mw, mY); x.stroke();
     x.globalAlpha = 1;
