@@ -309,3 +309,14 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
   play-counter / SELL OUT, scouting lines, banners and juke are kept. The AI is unchanged: a seeded CPU-vs-CPU fingerprint is identical before and after.
 - Removed games/mushroom-cloud and games/by-dawns-early-light with their games.js cabinets and FEEDBACK.md hook list mention. 19 games remain.
 - Tests: trackball run-defense, play-counter, game and mp all pass, and so does the root landing test. Only the mood-sticker test's external textdb CORS checks fail.
+
+### New game (2026-10-30): CHALICE (games/chalice)
+- A painterly 2.5D homage to the 1979 console adventure. Three castles with keys and portcullis gates, the blue labyrinth,
+  catacombs where you see only what your light reaches, the river and Bridge, the Magnet, and the Chalice to bring home to the Gold Castle.
+  Three dragons each hunt in their own way (Yorgrim, Grumbald, Rhindra), a bat steals what you carry, and a grey dot opens the secret Makers' Room.
+- Levels: I The Gold Road, II The Three Castles, III The Shifting Kingdom (items placed at random), and a bonus IV The Jade Kingdom (three key pedestals, faster dragons).
+  A/B difficulty switches, a tutorial, a timer with best times in localStorage, and a map plus minimap.
+- Graphics and sound: torchlight and a light map, soft shadows, particles, a day/night cycle, sliding room transitions,
+  procedural music for each area with a danger layer, and stereo sound effects. Keyboard (SPACE drops, ENTER fires a flare), mouse, touch (floating stick plus buttons) and gamepad all work.
+- Tests: `tests/sim.test.js` checks the rules, and the bot wins 8/8 seeds on every level with both switch settings.
+  `tests/game.test.js` drives 1280x800 keyboard/mouse/gamepad play and iPhone portrait/landscape touch with no console errors. The root landing test passes.
