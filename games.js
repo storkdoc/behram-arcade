@@ -83,19 +83,6 @@ window.ARCADE_GAMES = [
     accent: '#5ac8ff'
   },
   {
-    slug: 'by-dawns-early-light',
-    title: "BY DAWN'S EARLY LIGHT",
-    tagline: 'A rogue launch. A missing head of state. One aircraft, one night, and a hotline. Bring the bombers home before dawn.',
-    description: "A cinematic command-crisis strategy game inspired by the premise of the 1990 TV film, with an original story, blocs and characters. A renegade brigade has fired, the answer has gone out, and the head of state is missing. You are the senior official aboard LANTERN, an airborne command post, and from 01:00 to dawn (about half an hour of play, with 2x and 4x speed) you have to stop the war. Work three stations: the COMMAND POST, where you authenticate orders against your code card, fend off a rival claimant to command, call tankers before the fuel runs out, descend to reach the submarines and counter-jam the radio; the HOTLINE to an original rival Premier, where trust, bluffs, verification and timed answers decide whether her hawks win; and a photoreal night-Earth STRATEGIC MAP with a moving dawn terminator, where wings cross their fail-safe lines unless you recall, hold or divert them. Sometimes you fly a bomber's last minutes yourself: low through dark valleys, flares against fighters, a climb to catch the relay and the crew's choice whether to trust the recall. False radar, forged orders, jamming, fighter attacks and a spreading escalation ladder push back. It ends in a ceasefire at dawn, a partial exchange, catastrophe or being relieved of command, followed by an after-action report with a grade. Letterboxed in-engine cinematics (cold open, chapter intros, the hotline, the bomber crew, an ending for each outcome) and somber, realistic nuclear detonations seen from aircraft windows and from orbit. Easy, Normal and Hard, five chapters to replay, and a two-player online mode where each of you commands one bloc and talks over the hotline. All sound is synthesized.",
-    thumb: 'games/by-dawns-early-light/thumb.png',
-    added: '2026-10-26',
-    genre: 'STRATEGY',
-    year: '1990 FILM-INSPIRED',
-    controls: 'mouse on every button · SPACE confirms the focused or first pending choice (and skips cinematics) · ENTER transmits RECALL to the selected wing, or to every wing beyond the line · 1 / 2 / 3 switch Command Post, Hotline, Strategic Map · arrows or TAB move between buttons · Q / E cycle wings · F changes speed · drag and wheel turn and zoom the globe, click a wing to select it · P or ESC pauses · cockpit: arrows or WASD fly, SPACE fires flares · gamepad: d-pad/stick move, A confirms, X transmits recall, LB/RB switch stations, right stick turns the globe, START pauses; left stick flies in the cockpit',
-    touch: 'tap every button; the station panel becomes a bottom sheet in portrait · drag to turn the globe, pinch to zoom, tap a wing to select it · tap anywhere to skip a cinematic · cockpit: on-screen stick plus a FLARE button · works on iPhone and iPad in portrait and landscape',
-    accent: '#ffb35a'
-  },
-  {
     slug: 'sky-shield',
     title: 'SKY SHIELD',
     tagline: 'Six cities, three batteries, thirty interceptors. Hold the line, alone or against a buddy online.',
@@ -120,19 +107,6 @@ window.ARCADE_GAMES = [
     controls: 'arrows or WASD drive and turn · SPACE fires · ENTER fires the special (nitro, mine, mega shell) · P or ESC pauses, M toggles sound · mouse or arrows in menus; R and L change round type and CPU level on the select screen · gamepad: left stick or d-pad drives, A/RB/RT fire, B/X/LB/LT special, START pauses',
     touch: 'drag anywhere in the left zone to steer with the floating stick (the tank drives where you point) · FIRE and SPECIAL buttons on the right · tap through the menus · works on iPhone and iPad in portrait and landscape',
     accent: '#ffb347'
-  },
-  {
-    slug: 'mushroom-cloud',
-    title: 'MUSHROOM CLOUD',
-    tagline: 'A real-time strategy game of nuclear brinkmanship. Nobody wins. Somebody scores.',
-    description: 'A somber Cold War grand-strategy game played on a photoreal, sunlit Earth with city lights, drifting clouds and a living terminator. Lead one of six fictional blocs through DEFCON 5 to 1: deploy ICBM silos, radar, air defense, airbases, missile submarines and carrier groups in secret, scout with fighters and spy satellites, and use the hotline for alliances, ceasefires, shows of force and bluffs. Silos must choose between defending (intercepting incoming warheads) and launching. Warheads arc across the globe in real time, bombers can be recalled, launch-on-warning can be armed, and every launch reveals you to the world. CPU rivals have personalities (hawkish, cautious, opportunistic) and three difficulty levels. Scenarios: Brinkmanship (one rival), Pacific Standoff (three powers), Six Blocs (up to five CPUs) and Second Strike (you are already under attack). Score is kills minus losses, unless no warhead is ever fired: then deterrence holds. Two players can play online on separate devices. All sounds are synthesized.',
-    thumb: 'games/mushroom-cloud/thumb.png',
-    added: '2026-10-25',
-    genre: 'STRATEGY',
-    year: 'COLD WAR',
-    controls: 'drag to rotate the globe, scroll or pinch to zoom · 1–6 pick a unit type (place it during DEFCON 5–4, cycle units later) · click to place, select, set a course or choose a target · SPACE fires the selected launcher (SHIFT+SPACE fires all) · ENTER opens the strike package · M silo mode, F fighter, B bomber, R recall, T satellite, D hotline, L launch on warning, V war room · [ ] or the speed buttons change time, P pauses · ESC cancels · gamepad: left stick cursor, right stick rotate, triggers zoom, A select, X fire, Y strike package',
-    touch: 'drag to rotate, pinch to zoom, tap to place, select or target · on-screen buttons for every command: FIRE, STRIKE PACKAGE, silo mode, fighter/bomber sorties, satellite, hotline, war room and speed · works on iPhone and iPad in portrait and landscape',
-    accent: '#ff7a3a'
   },
   {
     slug: 'neuro-arena',

@@ -37,8 +37,8 @@ D-pad/A/B all work.
 
 **Explicit hooks are wired in:** VORTEX (warp / death / game over / play), Congressional OB GYN
 (screens, correct/incorrect answers, encounter results, day summary), APEX GP, Astro Shatter,
-Planet Guardian, Sporewood, Star Invaders (screens + end of game), Vector Armor, By Dawn's Early
-Light, Mushroom Cloud and MELTDOWN (screens). All other games rely on the generic signals.
+Planet Guardian, Sporewood, Star Invaders (screens + end of game), Vector Armor and MELTDOWN
+(screens). All other games rely on the generic signals.
 
 ## What gets recorded
 
