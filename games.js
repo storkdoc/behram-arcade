@@ -5,6 +5,19 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'chalice',
+    title: 'CHALICE',
+    tagline: 'Three castles, three dragons, one thieving bat. Find the enchanted Chalice and carry it home to the Gold Castle. A painterly homage to the 1979 console adventure.',
+    description: "The first action-adventure, reimagined in painterly 2.5D. Explore a kingdom of castles with portcullis gates and keys, a blue crystal labyrinth, catacombs where you see only what your light reaches, a river you cross with the Bridge, and haunted woods. Carry one thing at a time: the Sword slays dragons, the Magnet pulls treasures through walls, and the Bridge spans water. Yorgrim, Grumbald and Rhindra each hunt in their own way, and the Bat swoops in to steal whatever you hold. Torchlight, soft shadows, particles, a day/night cycle, sliding room transitions, a parchment map and a minimap, plus a theme for each area and stereo sound effects. Level I is a gentle start, Level II is the full kingdom, Level III hides everything somewhere new each game, and the bonus Level IV adds a Jade Castle. A/B difficulty switches, a tutorial, and best times saved for every level. Rumour has it a grey dot hides deep in the Black Castle...",
+    thumb: 'games/chalice/thumb.png',
+    added: '2026-10-30',
+    genre: 'ADVENTURE',
+    year: '1979 REMIX',
+    controls: 'arrows / WASD walk · hold the mouse to walk toward the pointer · SPACE drops or swaps the item you carry (main action) · ENTER fires a dazzling flare (special) · M / Tab map · P / Esc pause · gamepad: stick, A drop, B flare, Y map, Start pause',
+    touch: 'drag anywhere in the stick zone to walk (floating joystick), tap DROP and FLARE, MAP and pause buttons · works on iPhone and iPad in portrait and landscape',
+    accent: '#e8b84a'
+  },
+  {
     slug: 'feud-and-delivery',
     title: 'FEUD & DELIVERY',
     tagline: 'Dr. Behram hosts the game show where the top answers are differential diagnoses. Buzz in, name the most likely causes and steal the board.',
