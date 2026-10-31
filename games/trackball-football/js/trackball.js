@@ -116,8 +116,6 @@ const Track = (() => {
       if (A && !st.padA) press(); if (B && !st.padB) pressAlt(); if (S && !st.padStart) st.typed.push({ code: 'KeyP', key: 'p' });
       const SH = !!((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[5] && gp.buttons[5].pressed)); // LB / RB: FLIP the play
       if (SH && !st.padSh) st.typed.push({ code: 'KeyF', key: 'f', pad: true }); st.padSh = SH;
-      const Y = !!(gp.buttons[3] && gp.buttons[3].pressed); // Y / Triangle: HELMET CAM on / off
-      if (Y && !st.padY) st.typed.push({ code: 'KeyV', key: 'v', pad: true }); st.padY = Y;
       const ux = gp.axes[0] || 0, uy = gp.axes[1] || 0; // menu nav from the stick / d-pad
       st.padNav = [ux, uy, gp.buttons[12] && gp.buttons[12].pressed, gp.buttons[13] && gp.buttons[13].pressed, gp.buttons[14] && gp.buttons[14].pressed, gp.buttons[15] && gp.buttons[15].pressed];
       st.padA = A; st.padB = B; st.padStart = S;

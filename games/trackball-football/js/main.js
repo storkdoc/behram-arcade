@@ -146,31 +146,10 @@ function resize() {
   } else {
     L.tb = { cx: Math.round(safe.l + 64), cy: Math.round(H - safe.b - 64), R: 36 };
   }
-  L.field0 = L.field;
   App.L = L;
-  helmLayout();
+  Render.layout(W, H, DPR, L.field, touch);
   document.documentElement.classList.toggle('touch', touch);
 }
-/** HELMET CAM layout. Wide screens: side by side (broadcast left, helmet right). Portrait / narrow: stacked (helmet on top).
-    Helmet.st.k (0..1) slides it in and out, so the broadcast camera re-frames smoothly. */
-function helmLayout() {
-  const L = App.L; if (!L) return;
-  const k = Helmet.st.k, e = k * k * (3 - 2 * k), F = L.field0, W = L.W, H = L.H;
-  const mode = L.portrait ? 'stack' : W / H >= 1.2 ? 'split' : 'stack';
-  let field = F, helm = null, opt;
-  if (mode === 'split') {
-    const hw = Math.round(W * (App.touch ? 0.45 : 0.42) * e);
-    field = { x: F.x, y: F.y, w: F.w - hw, h: F.h }; helm = { x: W - hw, y: 0, w: hw, h: H };
-    if (hw > 0) opt = { split: true, kDiv: App.touch ? 30 : 34 };
-  } else {
-    const hh = Math.round(F.h * (L.portrait ? 0.46 : 0.45) * e);
-    field = { x: F.x, y: F.y + hh, w: F.w, h: F.h - hh }; helm = { x: F.x, y: F.y, w: F.w, h: hh };
-    if (hh > 0) opt = { split: true, kDiv: L.portrait ? 25 : undefined };
-  }
-  L.helmMode = mode; L.field = field; L.helm = e > 0.01 && helm.w > 40 && helm.h > 40 ? helm : null;
-  Render.layout(W, H, DPR, field, App.touch, opt);
-}
-Render.under = (c, S, me) => Helmet.drawCone(c, S, me);
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
@@ -255,28 +234,9 @@ function iconButtons(c) { // sound toggle (and pause in game), top right
   const L = App.L, s = L.small ? 34 : 38, inPanel = L.panel && App.screen === 'game', x = L.W - L.safe.r - s - 8, y = inPanel ? L.panel.y + 6 : L.safe.t + 8;
   UI.button(c, Sound.on ? '\u266A' : '\u00D7\u266A', x, y, s, s, () => { Sound.unlock(); Sound.toggle(); }, { focusable: false, size: 18 });
   if (App.screen === 'game' && !(App.snap && App.snap.over)) UI.button(c, 'II', x - s - 8, y, s, s, () => { App.paused = !App.paused; }, { focusable: false, size: 15 });
-  if (App.screen === 'game' && App.me != null) helmButton(c, L, s, inPanel ? x - 2 * (s + 8) : null, y);
-}
-/** the HELMET CAM toggle: in the control panel on portrait phones, top left everywhere else */
-function helmButton(c, L, s, right, y) {
-  const S = App.snap; if (!S || S.over || (App.touch && !L.panel && S.ph === 'select')) return;
-  const on = Helmet.st.on, w = L.small ? 104 : 124, h = s, x = right != null ? right - w : L.safe.l + 8;
-  UI.liveHits.push({ x, y, w, h, label: 'HELMET CAM', fn: () => { Sound.unlock(); Helmet.toggle(); }, focusable: false });
-  const g = c.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, on ? '#ffd955' : 'rgba(40,48,78,0.92)'); g.addColorStop(1, on ? '#d8940f' : 'rgba(18,22,40,0.92)');
-  c.fillStyle = g; UI.rr(c, x, y, w, h, Math.min(12, h / 3)); c.fill();
-  c.lineWidth = 1.5; c.strokeStyle = on ? '#fff3c4' : 'rgba(150,170,255,0.35)'; c.stroke();
-  const ink = on ? '#1b1000' : '#f2f4ff';
-  Helmet.glyph(c, x + h * 0.4, y + h * 0.5, h * 0.42, ink);
-  const fs = L.small ? 10.5 : 12, tx = x + h * 0.72 + (w - h * 0.72 - 4) / 2;
-  UI.text(c, 'HELMET CAM', tx, y + h * 0.36, UI.f(900, fs, DFONT), ink);
-  UI.text(c, (on ? 'ON' : 'OFF') + (App.touch ? '' : '  \u00B7  V'), tx, y + h * 0.72, UI.f(800, fs - 2, DFONT), on ? 'rgba(27,16,0,0.75)' : 'rgba(200,210,255,0.6)');
 }
 function menuColumn(c, items, top) {
-  const L = App.L, w = Math.min(L.W - 40, L.small ? 340 : 420), x = L.W / 2 - w / 2;
-  let h = L.small ? 40 : 50, gap = L.small ? 8 : 12;
-  const room = L.H - L.safe.b - 34 - top, need = items.length * (h + gap); // short screens (phone landscape): squeeze the column to fit
-  if (need > room) { const k = Math.max(0.72, room / need); h = Math.round(h * k); gap = Math.round(gap * k); }
+  const L = App.L, w = Math.min(L.W - 40, L.small ? 340 : 420), h = L.small ? 40 : 50, gap = L.small ? 8 : 12, x = L.W / 2 - w / 2;
   items.forEach((it, i) => UI.button(c, it[0], x, top + i * (h + gap), w, h, it[1], { lr: it[2], size: L.small ? 15 : 19, fam: DFONT }));
   return top + items.length * (h + gap);
 }
@@ -316,7 +276,6 @@ const Options = {
       ['SOUND:  ' + (Sound.on ? 'ON' : 'OFF'), () => { Sound.unlock(); Sound.toggle(); }],
       ['MUSIC:  ' + (Sound.musicOn ? 'ON' : 'OFF'), () => Sound.toggleMusic()],
       ['TRACKPAD SCROLL:  ' + (Track.st.invertWheel ? 'INVERTED' : 'NATURAL'), () => Track.setInvertWheel(!Track.st.invertWheel)],
-      [Helmet.optionLabel(), () => { Sound.unlock(); Helmet.cycleOption(); }],
       ['BACK', () => App.go('title')],
     ], L.safe.t + (L.small ? 62 : 120));
     UI.text(c, 'ONLINE GAMES USE THE HOST\u2019S HALF LENGTH.', L.W / 2, L.H - L.safe.b - 18, UI.f(700, 12, DFONT), '#8f98c2');
@@ -329,7 +288,6 @@ const HOWTO = [
   ['DEFENSE', 'You control the defender with the yellow ring. ACTION (Space / click / red button) jumps you to the defender closest to the ball: the runner, or where a pass is coming down. Near the runner, ACTION is a DIVING TACKLE. NEXT (Shift) cycles defenders. Before the snap ACTION picks your man.\nWhen you grab the runner, spin the trackball hard to drive him down. Hit him at full speed for a BIG HIT and maybe a fumble.'],
   ['MIX UP YOUR PLAYS', 'The defense learns. It remembers what you called and spots it when you keep running the same play (or just swap between two). Once it is sure, it can SELL OUT: it calls the counter built for that play (an edge blitz for the sweep, a run blitz for the dive, defenders jumping the slants, a bracket on the post or the bomb, a screen sniffer) and the play usually dies for a loss, a sack or a pick. It never sees your call, only your habits.\nThe tell: before the snap you may hear the crowd stir and see DEFENSE READS IT! It is usually real, sometimes a bluff. Change it up: a defense that sold out the wrong way leaves big holes. Your play-call screen warns you when your habit is showing.\nOn defense you can do it too: the scouting report under your calls shows the offense\u2019s habit, and SELL OUT bets on it (a wrong bet gets burned). All-Pro defenses learn fastest; Rookie ones are slower and leakier.'],
   ['INTERCEPTIONS', 'Pass in the air? Press ACTION once to take the defender closest to where it is coming down, steer him under it, then press ACTION again right as the ball arrives to lunge for it.\nPERFECT timing (within about a tenth of a second) and within a yard or two of the catch gives a real shot at a pick. EARLY or LATE, or too far away, usually only breaks it up. Guessing early makes you stumble, so mashing does not work.\nGot it? You steer the return. Take it to the house!'],
-  ['HELMET CAM', 'Want to see what your player sees? Turn on the HELMET CAM: a second view from inside your man’s helmet (the runner on offense, your defender on defense) next to the main view, which still plays exactly the same.\n\nTURN IT ON / OFF: press V, tap or click the HELMET CAM button (top left; in the control panel on a phone held upright), or press Y / Triangle on a gamepad. It remembers your choice. Options also has it, and can turn off the tackle shake.\nWHAT YOU SEE: what each player is really about to do. Red and orange lines show where tacklers are taking their angle; CONTAIN EDGE, DEEP SAFETY, BLITZ and SPY tags show their jobs; a flashing red ! means that man is in diving range, so juke now. Green lines are your blockers and who they are taking; cyan lines are your receivers\u2019 routes. A red arrow at the edge means someone is closing from your blind side. The yellow cone on the main view shows where you are looking.'],
   ['TWO-PLAYER ONLINE', 'Each player uses their own device, anywhere.\n1. You pick TWO-PLAYER GAME (ONLINE).\n2. Your buddy opens the Behram Arcade, picks Trackball Football and taps JOIN TWO-PLAYER GAME IN PROGRESS. No code needed; the game finds you. A backup room code is on your screen just in case.\nYou are XPRESS (red), your buddy is OUTLAWS (blue). Play calls stay secret until the snap.'],
 ];
 const Howto = {
@@ -473,7 +431,6 @@ const GameScreen = {
     if ((mode === 'host' || mode === 'guest') && Net.st.status === 'error') { const m = Net.st.error; Net.leave(); A.startAttract(); A.go('error', { msg: m, role: mode }); return; }
     if (typed.some(e => e.code === 'KeyP' || (e.code === 'Escape' && !Track.st.locked && performance.now() - (A.unlockAt || 0) > 400))) { if (!(A.snap && A.snap.over)) { A.paused = !A.paused; Sound.play(A.paused ? 'back' : 'select'); } }
     if (typed.some(e => e.code === 'KeyM')) Sound.toggle();
-    if (typed.some(e => e.code === 'KeyV')) Helmet.toggle();
     const S0 = A.snap;
     const picking = S0 && S0.ph === 'select', menuUp = A.paused || (S0 && S0.over);
     if (menuUp) UI.handleKeys(typed);
@@ -530,9 +487,6 @@ const GameScreen = {
     else if (S.ph === 'select' && !A.Sel.locked && A.Sel.offense !== (S.off === A.me)) this.resetSelect(S); // possession changed under the panel: rebuild the cards
     const snapCam = A.prevPh == null || (A.prevPh !== S.ph && S.ph === 'select' && Math.abs(Render.cam.tx - S.los) > 40);
     A.prevPh = S.ph;
-    // HELMET CAM: slide the second view in for the snap and the play, out for play calling
-    { const want = Helmet.st.on && A.me != null && !S.over && (S.ph === 'presnap' || S.ph === 'live' || S.ph === 'result');
-      const k0 = Helmet.st.k; Helmet.st.k = clamp(k0 + (want ? dt : -dt) / 0.35, 0, 1); if (Helmet.st.k !== k0) helmLayout(); }
     Render.follow(S, dt, snapCam, A.me);
     // events -> sound + effects
     for (const e of S.ev) if (e.s > A.lastEv) { A.lastEv = e.s; this.onEvent(e, S); }
@@ -541,7 +495,6 @@ const GameScreen = {
   },
   onEvent(e, S) {
     const n = e.n, R = Render, shake = v => { R.cam.shake = Math.max(R.cam.shake, v); };
-    Helmet.onEvent(e, S, App.me);
     switch (n) {
       case 'pad': case 'shed': case 'grunt': Sound.play('pad'); break;
       case 'hit': case 'deflect': Sound.play('hit'); if (e.x != null) R.spawn('turf', e.x, e.y); shake(0.12); break;
@@ -616,11 +569,9 @@ const GameScreen = {
     const A = App, S = A.snap, L = A.L;
     if (!S) { c.setTransform(DPR, 0, 0, DPR, 0, 0); c.fillStyle = '#05060c'; c.fillRect(0, 0, L.W, L.H); UI.text(c, 'WAITING FOR THE HOST\u2026', L.W / 2, L.H / 2, UI.f(800, 18, DFONT), '#fff'); return; }
     Render.draw(c, S, dt, A.me);
-    if (L.helm) Helmet.draw(c, S, A.me, dt, L.helm, { top: (L.hudBottom || L.safe.t + 40) + (L.small ? 32 : 36), clear: L.helmMode === 'stack' ? (L.hudBottom || 0) : 0 });
     c.setTransform(DPR, 0, 0, DPR, 0, 0);
     if (L.panel) this.drawPanel(c, L);
     UI.hud(c, S, L, A.me);
-    Helmet.drawToast(c, L);
     UI.callsDraw(c, S, L);
     UI.wrapMeter(c, S, A.me);
     this.drawFlash(c, S);
@@ -635,7 +586,7 @@ const GameScreen = {
       const off = S.off === A.me, blink = Math.sin(performance.now() / 160) > -0.2;
       const s = off ? (A.touch ? 'TAP HIKE TO SNAP THE BALL' : 'CLICK OR PRESS SPACE TO HIKE') : 'GET SET\u2026 ' + (A.touch ? 'NEXT MAN' : 'SPACE') + ' PICKS YOUR DEFENDER';
       if (A.Sel.flip && A.Sel.locked) UI.text(c, 'YOUR CALL IS FLIPPED', L.W / 2, Math.round(L.field.y + L.field.h * 0.86 + (L.small ? 20 : 28)), UI.f(800, L.small ? 11 : 13, DFONT), '#c9d0ee');
-      if (blink || !off) UI.text(c, s, L.field.x + L.field.w / 2, L.field.y + L.field.h * 0.86, UI.f('italic 900', L.small ? 15 : 22, DFONT), off ? '#ffe27a' : '#9fd0ff');
+      if (blink || !off) UI.text(c, s, L.W / 2, L.field.y + L.field.h * 0.86, UI.f('italic 900', L.small ? 15 : 22, DFONT), off ? '#ffe27a' : '#9fd0ff');
     }
     // controls
     const lab = this.actionLabels(S), show = !S.over && !A.paused && S.ph !== 'half';
@@ -707,15 +658,14 @@ const GameScreen = {
   },
   drawPause(c, L) {
     const A = App; c.fillStyle = 'rgba(0,0,10,0.55)'; c.fillRect(0, 0, L.W, L.H);
-    const w = Math.min(L.W - 24, 420), h = 310, x = L.W / 2 - w / 2, y = Math.max(L.safe.t + 10, L.H / 2 - h / 2);
+    const w = Math.min(L.W - 24, 420), h = 300, x = L.W / 2 - w / 2, y = Math.max(L.safe.t + 10, L.H / 2 - h / 2);
     panel(c, x, y, w, h);
     UI.text(c, 'TIMEOUT', L.W / 2, y + 36, UI.f('italic 900', 30, DFONT), '#ffd23c');
     if (A.mode !== 'cpu') UI.text(c, 'ONLINE: THE CLOCK KEEPS RUNNING', L.W / 2, y + 64, UI.f(700, 12, DFONT), '#c9d0ee');
     const bw = w - 40, bh = 44;
     UI.button(c, A.touch ? 'RESUME' : 'RESUME (CLICK TO GRAB THE BALL)', x + 20, y + 84, bw, bh, () => { A.paused = false; if (!A.touch) Track.requestLock(); });
     UI.button(c, 'SOUND: ' + (Sound.on ? 'ON' : 'OFF'), x + 20, y + 84 + (bh + 10), bw, bh, () => Sound.toggle());
-    UI.button(c, Helmet.optionLabel(), x + 20, y + 84 + 2 * (bh + 10), bw, bh, () => Helmet.cycleOption());
-    UI.button(c, 'QUIT TO MENU', x + 20, y + 84 + 3 * (bh + 10), bw, bh, () => A.quit());
+    UI.button(c, 'QUIT TO MENU', x + 20, y + 84 + 2 * (bh + 10), bw, bh, () => A.quit());
   },
 };
 
@@ -729,7 +679,6 @@ function frame(ts) {
   const typed = Track.takeTyped();
   if (typed.length) Sound.unlock();
   if (App.screen !== 'game') { Track.st.action = 0; Track.st.alt = 0; const nv = Track.takeNav(0.22); if (nv.dy) UI.handleKeys([{ code: nv.dy > 0 ? 'ArrowDown' : 'ArrowUp' }]); }
-  if (App.screen !== 'game' && Helmet.st.k > 0) { Helmet.st.k = 0; helmLayout(); }
   try {
     SCREENS[App.screen].update(dt, typed);
     UI.beginFrame();
@@ -752,4 +701,4 @@ requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => { if (document.hidden && App.screen === 'game' && App.mode === 'cpu' && App.snap && !App.snap.over) App.paused = true; });
 
 /* test hook (used by the Playwright tests; harmless in normal play) */
-window.TBF = { App, Sim, Net, UI, Track, Render, Sound, GameScreen, Helmet, get DPR() { return DPR; } };
+window.TBF = { App, Sim, Net, UI, Track, Render, Sound, GameScreen, get DPR() { return DPR; } };

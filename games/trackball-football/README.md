@@ -14,8 +14,7 @@ until friction stops it.
 - **F** (or Shift / right-click while calling, or the FLIP pill): **flip** the play you're calling, mirrored left-right.
 - **Defense, Space / click**: jump to the defender closest to the ball (the runner, or where a pass is coming down);
   near the runner it's a diving tackle. With a pass in the air, **press again right as it arrives** to lunge for a pick.
-- Arrows / WASD roll the ball too. A gamepad works (A = action, B = next, LB/RB = flip, Y = helmet cam). **P** pauses, **M** mutes,
-  **V** turns the **HELMET CAM** on or off.
+- Arrows / WASD roll the ball too. A gamepad works (A = action, B = next, LB/RB = flip). **P** pauses, **M** mutes.
 
 **iPhone / iPad (portrait or landscape)**
 - Swipe or flick the trackball drawn on screen. A faster flick spins it harder, it coasts after your finger
@@ -23,35 +22,6 @@ until friction stops it.
 - Red button: lock in / hike / throw / juke / dive; on defense it takes the man closest to the ball, and a second
   tap as a pass arrives lunges for the pick. Blue button: next receiver / next defender.
 - Tap a play card to pick it and tap it again (or LOCK IN) to call it. Tap **FLIP** (or the blue button) to mirror it.
-
-## Helmet Cam (optional second view)
-See the play through your own man's facemask while the main broadcast view keeps working exactly as before.
-It follows the ball carrier on offense and your selected defender on defense. It slides in at the snap and
-gets out of the way while you call plays.
-- **Toggle**: **V**, the **HELMET CAM** button (top left; in the control panel on a phone held upright), gamepad
-  **Y**, the pause menu or Options. It's off by default and remembered on that device (`tbf.helmet`). Options
-  also has *ON · NO SHAKE*, which turns off the tackle camera shake. Shake is off by default if the system asks
-  for reduced motion.
-- **Layout**: on wide screens, Mac and phone landscape, the broadcast view is on the left and the helmet view on
-  the right. On a phone held upright the helmet view sits on top and the field below. A yellow cone on the
-  broadcast view shows where you're looking.
-- **The view**: a field-level stadium with stands, light towers, yard lines, hashes, numbers, the LOS and
-  first-down lines, and goal posts. Players are lit and depth-sorted in team colours and numbers. The camera
-  bobs with your stride, drops when you dive or go down, and shakes on hits. A man right in your face goes
-  see-through.
-- **Intent cues**: each cue comes from the AI's own decision on that frame (`S.it`, recorded in `sim.js`
-  without changing the AI), and only for men inside your field of view.
-  - Tacklers' pursuit angles are red and orange lines to where they mean to meet you. Their jobs are tagged:
-    CONTAIN EDGE, DEEP SAFETY, BLITZ / RUSH, SPY, FILLING, MAN #, ZONE.
-  - A flashing red **!** means a tackler is in his real dive window, so juke now.
-  - Your blockers show green lines to the man they're taking.
-  - Receivers' routes are cyan. You see the full route for your own receivers and only the next cut for theirs.
-  - The ball's landing spot is marked.
-  - A red edge arrow, *BLIND SIDE / BEHIND YOU · #nn N YD*, warns of a pursuer you can't see, with a soft
-    whoosh.
-  - The defense's tendency read appears as "D IS KEYING ON …".
-- **Online 2P**: each player gets their own helmet cam on their own device; the guest gets the cues in the
-  host's snapshots.
 
 ## Flip and interceptions
 - **Flip** mirrors the whole call: formation, routes, run direction, man assignments and zones. The play cards redraw
@@ -103,7 +73,7 @@ asks for it. The guest never receives the host's call (or whether it is flipped)
 
 ## Files
 `js/plays.js` playbook · `js/sim.js` rules, AI, physics · `js/trackball.js` trackball model ·
-`js/render.js` stadium and players · `js/helmet.js` the helmet cam · `js/ui.js` HUD and menus · `js/audio.js` synthesized sound ·
+`js/render.js` stadium and players · `js/ui.js` HUD and menus · `js/audio.js` synthesized sound ·
 `js/net.js` matchmaking · `js/main.js` screens and input.
 
 ## Tests
@@ -113,5 +83,4 @@ node games/trackball-football/tests/game.test.js   # feel, CPU rules checker, fl
 node games/trackball-football/tests/mp.test.js     # online flow + play-call and flip secrecy (fake PeerJS transport)
 node games/trackball-football/tests/run-defense.test.js # pure Node, no server: run-exploit bots must stay under TD-rate caps
 node games/trackball-football/tests/play-counter.test.js # pure Node: repeat/alternate/random/anti-adaptive bots vs the learning defense (GAMES=n)
-node games/trackball-football/tests/helmet-cam.test.js # cues == AI state, "!" == real dive window, balance; toggle/persist/render (NOBROWSER=1: Node part only)
 ```

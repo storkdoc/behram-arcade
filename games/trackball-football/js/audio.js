@@ -94,10 +94,6 @@ const Sound = (() => {
       case 'move': osc('triangle', 520, t, 0.04, 0.07); break;
       case 'lock': osc('square', 440, t, 0.07, 0.08, { lp: 2000 }); osc('square', 660, t + 0.07, 0.12, 0.08, { lp: 2000 }); break;
       case 'back': osc('triangle', 440, t, 0.08, 0.1, { to: 300 }); break;
-      // HELMET CAM: the visor clicks down (on) / up (off); a soft whoosh when someone closes from your blind side
-      case 'helmOn': noise(t, 0.07, 0.16, 1800, 'bandpass', 1.4, { to: 5200 }); osc('triangle', 520, t + 0.02, 0.05, 0.07, { to: 780 }); osc('square', 1560, t + 0.07, 0.025, 0.03, { lp: 3000 }); osc('sine', 140, t + 0.07, 0.06, 0.12, { to: 90 }); break;
-      case 'helmOff': noise(t, 0.07, 0.12, 4200, 'bandpass', 1.4, { to: 1500 }); osc('triangle', 700, t + 0.01, 0.05, 0.06, { to: 470 }); osc('sine', 120, t + 0.05, 0.05, 0.08, { to: 80 }); break;
-      case 'glance': noise(t, 0.18, 0.07, 700, 'bandpass', 1.2, { to: 1900, a: 0.04 }); break;
     }
   }
   function cheer(level, dur) {
