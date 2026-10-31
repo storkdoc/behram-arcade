@@ -1,5 +1,6 @@
 # CONGRESSIONAL OB GYN — Clinic Day — worker notes
-(If resumed: read this file and `git log -- games/congressional-obgyn` first.)
+(If resumed: read this file, ../NOTES.md and `git log -- games/dr-behrams-office games/congressional-obgyn` first.)
+**Moved 2026-10-31:** now `games/dr-behrams-office/office/` inside the Dr. Behram's Office cabinet; `games/congressional-obgyn/` is a redirect stub. Paths below that say `games/congressional-obgyn` now mean this folder.
 
 ## Brief
 Teaching game for Dr. Steven Behram's medical students, set in Congressional OB GYN (Fallsgrove Plaza 14995, Shady Grove Rd, Rockville MD).
@@ -9,7 +10,7 @@ mastery (spaced repetition), daily challenge, badges, local leaderboard. Instruc
 ## Workflow (IMPORTANT — shared checkout)
 - Develop in the clean worktree **/workspace/cob-wt** (branch cob-dev, created from origin/main). NOT in /workspace/arcade
   (other agents have uncommitted work there; an untracked copy of this folder there would break their `git pull`).
-- Commit: `git add games/congressional-obgyn [games.js]` only; then `git pull --rebase origin main && git push origin HEAD:main`.
+- Commit: `git add games/dr-behrams-office [games.js]` only; then `git pull --rebase origin main && git push origin HEAD:main`.
 - Raw photos are NOT committed (students' photo never used anywhere). Only processed headshot: assets/behram.webp (cutout), assets/behram-face.jpg.
 - Tooling: NODE_PATH=/workspace/tools/node_modules (playwright-core), chrome /usr/bin/google-chrome.
 

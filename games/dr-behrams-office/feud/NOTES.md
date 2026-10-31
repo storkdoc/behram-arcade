@@ -2,10 +2,10 @@
 
 A game-show teaching game. Each round's "top answers" are the differential diagnoses for an OB/GYN presentation.
 Dr. Behram hosts as a caricature. The game is an original design and uses no Family Feud name, logo or assets.
-Live at `/games/feud-and-delivery/`.
+Live at `/games/dr-behrams-office/feud/` (moved 2026-10-31; `/games/feud-and-delivery/` redirects to the cabinet hub `#feud`).
 
 ## Access lock (shared with Congressional OB GYN)
-- **Shared script:** the gate loads the office game's own lock script, `../congressional-obgyn/js/access.js` (`COBAccess`).
+- **Shared script:** the gate loads the office game's own lock script, `../office/js/access.js` (`COBAccess`).
   - Nothing is copied. There is no PIN hash in this folder, and `tests/access.test.js` checks this.
 - **Shared storage:** both games use the same localStorage key, `cob.access`.
   - A student code unlocks both games on that device.
@@ -15,7 +15,7 @@ Live at `/games/feud-and-delivery/`.
   - This issues a new code that works in both games.
   - The **H** host panel is not PIN-gated. It is meant for whoever is running the game at the front of the room.
 - **No PIN in plain text anywhere:** not in code, tests, notes or commits.
-  - Tests use `games/congressional-obgyn/tests/testpin.js`. It uses the `COB_PIN` env var if set. Otherwise it swaps in a throwaway test PIN by patching the access script inside the test browser only.
+  - Tests use `games/dr-behrams-office/office/tests/testpin.js`. It uses the `COB_PIN` env var if set. Otherwise it swaps in a throwaway test PIN by patching the access script inside the test browser only.
 
 ## Files
 - **`js/rounds.js`:** 47 rounds (21 OB, 26 GYN); Fast Money draws its 5 presentations from the same bank.
@@ -49,9 +49,9 @@ Live at `/games/feud-and-delivery/`.
 ## Tests
 Serve the repo root (for example, `python3 -m http.server 8098`), then run:
 ```
-node games/feud-and-delivery/tests/engine.test.js        # 14 engine tests
-node games/feud-and-delivery/tests/access.test.js        # shared lock, code expiry, no PIN material here
-NODE_PATH=/workspace/tools/node_modules node games/feud-and-delivery/tests/page.test.js http://localhost:8098 /tmp/shots
+node games/dr-behrams-office/feud/tests/engine.test.js        # 14 engine tests
+node games/dr-behrams-office/feud/tests/access.test.js        # shared lock, code expiry, no PIN material here
+NODE_PATH=/workspace/tools/node_modules node games/dr-behrams-office/feud/tests/page.test.js http://localhost:8098 /tmp/shots
 ```
 The page test (Playwright and Chrome) covers:
 - Desktop 1440x900: the gate, invalid and expired codes, the instructor flow, an office code unlocking this game, a full 2P round with dupe, gag, slow-mo third strike and steal, rounds 2–4, a match win, Fast Money and results.
