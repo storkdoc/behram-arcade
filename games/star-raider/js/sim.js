@@ -32,8 +32,8 @@
   const RANK_CAP = [6, 8, 10, 11];
   // per difficulty
   const DCFG = [
-    { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0 },
-    { fleets: [3, 4, 1], bases: 4, move: 1.25, need: 3, siege: 75, plasmaV: 82, aimErr: 0.1, fireMul: 1.25, home: 0.1, drift: 0.12, hitE: 120, bareE: 900, bareSys: 3, bareKill: 0.15, hunters: 1 },
+    { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0, rescue: 2 },
+    { fleets: [3, 4, 1], bases: 4, move: 1.4, need: 3, siege: 85, plasmaV: 82, aimErr: 0.13, fireMul: 1.4, home: 0.1, drift: 0.12, hitE: 100, bareE: 900, bareSys: 3, bareKill: 0.15, leakE: 600, leakSys: 1, hunters: 1, rescue: 1 },
     { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.35, hunters: 2 },
     { fleets: [3, 4, 3], bases: 3, move: 0.85, need: 3, siege: 62, plasmaV: 104, aimErr: 0.045, fireMul: 0.9, home: 0.38, drift: 0.38, hitE: 180, bareE: 1500, bareSys: 3, bareKill: 0.5, leakE: 1000, leakSys: 1, sysHit: 0.08, hunters: 3 },
   ];
@@ -325,6 +325,17 @@
   }
   function kill(G, p, why) {
     if (!p.alive) return;
+    // Day 4 (2026-10-31): Novice (2) / Pilot (1) EMERGENCY RESERVE. A solo pilot who would die to energy exhaustion or a
+    // shields-down hit is pulled back once: 2500 energy, shields patched to "damaged", -50 rating each. Casual players
+    // get a second chance to learn docking; the rank still shows it. Warrior / Commander / WAR / co-op unchanged.
+    if (!G.war && (G.C.rescue || 0) > (G.stats.rescues || 0) && G.players.filter(Boolean).length <= 1 && (why === 'ENERGY EXHAUSTED' || why === 'HIT WITH SHIELDS DOWN')) {
+      G.stats.rescues = (G.stats.rescues || 0) + 1;
+      p.energy = Math.max(p.energy, 2500); if (p.dmg.S >= 2) p.dmg.S = 1; p.shields = true; p.hitT = 1.5;
+      const left = G.C.rescue - G.stats.rescues;
+      msg(G, 'EMERGENCY RESERVE ENGAGED · ' + (left ? left + ' MORE LEFT' : 'LAST ONE') + ' · DOCK AT A STARBASE', 'alert', p.idx);
+      ev(G, { e: 'rescue', p: p.idx, why, left });
+      return;
+    }
     p.alive = false; p.warp = null; p.dock = null; p.lock = false; p.inTransit = false; G.stats.deaths++;
     ev(G, { e: 'pdead', p: p.idx, pos: p.pos, sk: key(p.sx, p.sy), why }); G.lastDeath = why;
     if (G.war) { warDeath(G, p); return; }
@@ -636,7 +647,7 @@
     const S = G.stats, minutes = G.t / 60;
     const alive = G.bases.filter(b => b.alive).length;
     // efficiency counts: starbases saved, fast sector clears, few warps, little energy, little time
-    let R = S.killPts + (win ? 200 : 0) + alive * 25 + (S.saves || 0) * 25 + (S.fast || 0) * 10 - S.basesLost * 40 - S.energyUsed / 200 - S.warps * 4 - minutes * 2 - S.deaths * 60;
+    let R = S.killPts + (win ? 200 : 0) + alive * 25 + (S.saves || 0) * 25 + (S.fast || 0) * 10 - S.basesLost * 40 - S.energyUsed / 200 - S.warps * 4 - minutes * 2 - S.deaths * 60 - (S.rescues || 0) * 50;
     if (G.mission === 'laststand') R = S.killPts * 1.2 + (G.wave - 1) * 40 - S.deaths * 60;
     R *= [0.8, 1.3, 1.7, 2.1][G.diff];
     R = Math.max(0, R);
@@ -670,7 +681,7 @@
   const SQN = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   function newWar(o) {
     const seed = (o.seed >>> 0) || 1, R = rng(seed), layout = LAYOUTS[o.layout] ? o.layout : 'classic', L = LAYOUTS[layout];
-    const C = Object.assign({}, DCFG[1], { bareKill: 0.3 });
+    const C = Object.assign({}, DCFG[1], { bareKill: 0.3, move: 1.25, siege: 75, aimErr: 0.1, fireMul: 1.25, hitE: 120, leakE: undefined, leakSys: undefined, rescue: 0 })   /* WAR keeps the pre-2026-10-31 Pilot combat values */;
     const len = WAR.lengths[o.length] || WAR.lengths.short;
     const G = { diff: 1, seed, mission: 'war', C, R, t: 0, W, H, nextId: 1, bases: [], fleets: [], players: [], ships: [], shots: [], ev: [], msgs: [], over: null,
       wave: 0, waveT: 0, stats: { killPts: 0, kills: { darter: 0, lancer: 0, hive: 0 }, basesLost: 0, energyUsed: 0, deaths: 0, warps: 0, docks: 0 }, galSeq: 0 };

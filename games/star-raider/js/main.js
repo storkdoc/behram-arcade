@@ -294,6 +294,7 @@ function onEvents(list, p) {
         if (mine(e)) { fxl.push(e); AU.death(); say('Ship destroyed', { urgent: true, gap: 2 }); }
         else if (e.sk === sk) { R.explode(e.pos, 3, [0, 0, 0], [1, 0.6, 0.2]); AU.boom(V.dist(e.pos, p.pos), 3, loc(e.pos, p)); if (sess.war) { hud.pop(e.pos, 'FLAGSHIP KILL!', '#7dff9a'); say('Enemy flagship destroyed', { urgent: true, gap: 3 }); } }
         break;
+      case 'rescue': if (mine(e)) { hud.alertT = 2.4; AU.klaxon(); say('Emergency reserve engaged. Dock at a starbase now', { urgent: true, gap: 2 }); } break;
       case 'redalert': if (mine(e)) { hud.alertT = 2.4; AU.klaxon(); say('Red alert', { key: 'red', gap: 6, urgent: true }); } break;
       case 'lock': if (mine(e)) AU.lock(); break;
       case 'trackflip': if (mine(e)) AU.trackflip(); break;

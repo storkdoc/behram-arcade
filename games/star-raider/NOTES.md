@@ -98,8 +98,19 @@
 - Link: 9 s heartbeat (20 s until 40 messages arrive, so a slow first shader compile is not a disconnect). A drop gives the
   other player a forfeit win in WAR; in co-op the host keeps flying solo.
 
+## 2026-10-31: gentler Pilot step + emergency reserve
+- Pilot was a cliff after Novice (sloppy bot, skill 0.35: Novice 92% -> Pilot 4-33% depending on seeds). DCFG[1] now
+  move 1.4 (was 1.25), siege 85 (75), aimErr 0.13 (0.1), fireMul 1.4 (1.25), hitE 100 (120), new leakE 600 / leakSys 1
+  (hull hits through raised shields cost less), rescue 1. Novice gets rescue 2.
+- EMERGENCY RESERVE (solo, non-WAR, Novice/Pilot only): the first time(s) you would die of ENERGY EXHAUSTED or
+  HIT WITH SHIELDS DOWN, the ship is pulled back to 2500 energy with patched shields, a klaxon and the voice
+  "Emergency reserve engaged. Dock at a starbase now". Each rescue costs 50 rating points. Warrior/Commander: none.
+- WAR mode pins the OLD Pilot combat values (it used to inherit DCFG[1]), so the head-to-head balance is unchanged.
+- Measured (sim.test N=12, seeds as in the test): sloppy Pilot 33% -> 50%, sharp Pilot 100%, Warrior 58%, Commander 17%.
+  srtune N=30 other seeds: sloppy 4% -> 40%, skill 0.6 71% -> 87%, sharp 96% -> 97%.
+
 ## Test results (latest)
-- sim.test.js: Novice 100% win for a sloppy bot; sharp bot Pilot 100%, Warrior ~33%, Commander 0%. PASS.
+- sim.test.js: Novice 100% win for a sloppy bot; sloppy Pilot ~33-50%, sharp bot Pilot 100%, Warrior ~33-58%, Commander 0-17%; new asserts: sloppy Pilot >= 30%, Pilot rescue once then fatal, Warrior no rescue. PASS (2026-10-31).
 - war.test.js: better commander usually wins, equal bots split, fog privacy holds. PASS.
 - page.test.mjs chromium desktop 28/28 (HDR boot + self-check, full loop: combat, kill, chart, warp, dock, game over, rank).
 - page.test.mjs chromium touch devices (iphone, iphone-land, ipad) 69/69, webkit all devices 95/95.
