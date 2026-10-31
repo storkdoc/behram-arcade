@@ -301,3 +301,11 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
 - Bot sims, Pro: a repeated play or 2-play alternation averages 0.4 yd/play after play 5 (read by play ~4) and
   scores on 0% of drives. Random / anti-adaptive callers average 10-11 yd/play and score on ~60% of drives.
 - New `tests/play-counter.test.js`. play-counter, run-defense, game, mp and helmet-cam tests all pass.
+
+### Removals (2026-10-30): Atari Football, Helmet Cam, Mushroom Cloud, By Dawn's Early Light
+- Removed games/atari-football with its games.js cabinet, README sections, and the references in other games' tests. Trackball Football stays.
+- Trackball Football: removed the HELMET CAM entirely (helmet.js, V / gamepad Y / button / pause + Options toggle, pref,
+  How to Play page, FOV cone, split viewport, it/rt/ky sync fields, helmet-cam test, README section). The smart defense,
+  play-counter / SELL OUT, scouting lines, banners and juke are kept. The AI is unchanged: a seeded CPU-vs-CPU fingerprint is identical before and after.
+- Removed games/mushroom-cloud and games/by-dawns-early-light with their games.js cabinets and FEEDBACK.md hook list mention. 19 games remain.
+- Tests: trackball run-defense, play-counter, game and mp all pass, and so does the root landing test. Only the mood-sticker test's external textdb CORS checks fail.
