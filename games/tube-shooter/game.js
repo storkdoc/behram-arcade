@@ -248,7 +248,8 @@ function shape(E0, E1, z, pts, close = true, su = 1) {
 const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
-  mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8]
+  mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -405,6 +406,10 @@ const Sound = {
       case 'fuse': this.noise(0.25, 0.2, 7000, 2000, 2); break;
       case 'swarm': [196, 247, 294].forEach((f, i) => this.tone('sawtooth', f, f * 0.7, 0.09, 0.05, i * 0.055)); break;
       case 'pack': [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone('square', f, f, 0.07, 0.065, i * 0.045)); this.noise(0.3, 0.1, 8000, 2500, 3); break;
+      case 'jump': this.tone('sine', 180, 980, 0.22, 0.13); this.tone('triangle', 360, 1960, 0.18, 0.05, 0.02); this.noise(0.25, 0.06, 6000, 1200, 2); break;
+      case 'land': this.tone('sine', 420, 90, 0.12, 0.12); this.noise(0.08, 0.08, 1500, 200, 1); break;
+      case 'dodge': [1320, 1760, 2640].forEach((f, i) => this.tone('triangle', f, f * 1.01, 0.09, 0.06, i * 0.04)); break;
+      case 'nojump': this.tone('square', 160, 120, 0.06, 0.04); break;
       case 'pupdrop': [660, 880, 1320].forEach((f, i) => this.tone('sine', f, f * 1.02, 0.1, 0.06, i * 0.06)); break;
       case 'pup': [784, 1175, 1568, 2349, 3136].forEach((f, i) => this.tone('triangle', f, f, 0.12, 0.09, i * 0.05)); this.noise(0.4, 0.08, 9000, 3000, 3); this.tone('sine', 200, 900, 0.3, 0.1); break;
       case 'lshoot': this.tone('sawtooth', 2600, 700, 0.07, 0.05); this.tone('sine', 1500, 3200, 0.05, 0.03); break;
@@ -534,7 +539,7 @@ const Music = {
 const keys = {};
 const touch = { on: false, fire: false, fireBtn: false, fireZone: false, pend: 0, auto: store.get('touchAuto', true) };   // touch controls: FIRE held, smart auto-fire
 const mouse = { fire: false, used: false };
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace', 'KeyJ', 'ShiftLeft', 'ShiftRight']);
 addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code) || (state === 'initials' && /^Key[A-Z]$/.test(e.code))) e.preventDefault();
   Sound.init();
@@ -555,7 +560,7 @@ addEventListener('pointermove', e => {
 });
 addEventListener('pointerdown', e => {
   if (!isMouse(e) || e.target.closest && e.target.closest('a')) return;
-  if (inGame() && !paused) { if (e.button === 0) mouse.fire = true; else if (e.button === 2) onPress('Enter'); e.preventDefault(); }
+  if (inGame() && !paused) { if (e.button === 0) mouse.fire = true; else if (e.button === 2) onPress('Enter'); else if (e.button === 1) doJump(); e.preventDefault(); }
   else if (e.button === 0 && e.target === canvas) {
     Sound.unlock();
     if (state === 'attract' || state === 'gameover') onPress('Space');
@@ -581,7 +586,7 @@ function pollPad() {
   // in game the left stick is analog (speed proportional to deflection, 0.2 dead zone); in menus it acts like the d-pad
   const dz = 0.2, m = Math.abs(ax) > dz ? sgn(ax) * Math.pow((Math.abs(ax) - dz) / (1 - dz), 1.5) : 0;
   pad.ax = steer ? m : 0; if (m) pad.lastAx = m;
-  const map = { ArrowLeft: (!steer && ax < -0.5) || b(14), ArrowRight: (!steer && ax > 0.5) || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), Space: b(0) || b(7), Enter: b(1) || b(2) || b(6) || b(9), KeyP: b(8) };
+  const map = { ArrowLeft: (!steer && ax < -0.5) || b(14), ArrowRight: (!steer && ax > 0.5) || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), Space: b(0) || b(7), Enter: b(1) || b(2) || b(6) || b(9), KeyP: b(8), KeyJ: b(3) || b(4) || b(5) };
   for (const k in map) { const v = !!map[k]; if (v !== !!pad.prev[k]) { keys[k] = v; if (v) { Sound.init(); onPress(k); } } pad.prev[k] = v; }
 }
 
@@ -601,7 +606,37 @@ let shotsFired = 0;
    less barrel heat; kept until you lose a life), 2 AI DROID (a helper that rides the rim and shoots the enemy closest
    to the rim, for 12 s and at most until the end of the level), 3+ BONUS 2500. After the first crystal, one drops
    every 16-21 shot kills (about one per level), so the droid is a treat, not a permanent wingman. Losing a life loses them all. */
-let pups = [], power = { laser: false, droid: null, n: 0 }, pupKills = 0, pupNext = 8, pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 }, seenPup = new Set();
+let pups = [], power = { laser: false, droid: null, jump: false, n: 0 }, pupKills = 0, pupNext = 8, pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 }, seenPup = new Set();
+/* Day 5 (2026-11-01): JUMP, the Tempest 2000 power-up, is now the 2nd crystal (laser -> JUMP -> droid -> bonus).
+   Enemy shots were the #1 bot/player death on days 2-4, so JUMP gives a skilful answer: SHIFT or J, gamepad Y / LB / RB,
+   mouse middle button, or the JUMP touch button. The claw springs up off the rim for JUMP_P.dur s: enemy shots pass under it,
+   rim grabbers / pulsar zaps / fuseballs / sparks / mines in its lane miss, and it can hop over armed mine walls. It can
+   still steer and fire in the air. JUMP_P.cd s recharge after landing; kept until you lose a life. */
+const JUMP_P = { dur: 0.75, cd: 1.5, h: 0.55 };
+let jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 };
+const airborne = () => jump.t >= 0;
+const jumpH = () => airborne() ? Math.sin(Math.PI * Math.min(1, jump.t / JUMP_P.dur)) : 0;
+const JUMP_DODGE = new Set(['shot', 'capture', 'zap', 'fuse', 'spark', 'mine']);
+function doJump() {
+  if (state !== 'play' || paused || !player.alive) return;
+  if (!power.jump) { if (!seenPup.has('nojump')) { seenPup.add('nojump'); msg('NO JUMP YET: CATCH A 2ND GREEN CRYSTAL', 1.8, 0.68, '#3dff8a', 1.4); } return; }
+  if (airborne() || jump.cd > 0) { Sound.play('nojump'); return; }
+  jump.t = 0; jump.n++; Sound.play('jump');
+}
+function updJump(dt) {
+  if (jump.t >= 0) {
+    jump.t += dt;
+    if (jump.t >= JUMP_P.dur) {
+      jump.t = -1; jump.cd = JUMP_P.cd; Sound.play('land');
+      const cw = clawWorld(); shardBurst([cw[0], cw[1]], cw[2], [pal.claw, '#ffffff'], 6, 0.35);
+      player.aim = constrainMove(player.pos, player.aim, true);   // landing inside a mine wall is not allowed: slide to the rail
+    }
+  } else if (jump.cd > 0) jump.cd -= dt;
+}
+function jumpDodge(kind) {
+  jump.dodged++;
+  if (T - jump.lastDodge > 0.4) { jump.lastDodge = T; Sound.play('dodge'); addScore(50); msg(kind === 'shot' ? 'DODGED!' : 'JUMPED IT!', 0.9, 0.3, '#3dff8a', 2.6); }
+}
 const PUP = { rise: 0.34, rimWait: 2.6, laserSpeed: 1.45, laserHeat: 0.7, droidV: 9, droidCd: 0.45, droidLife: 12, every: [16, 21] };
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
 let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
@@ -694,7 +729,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 function startGame() {
   fireLock = true;
   deathTipCount = {};
-  pups = []; power = { laser: false, droid: null, n: 0 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
   Sound.play('start');
@@ -704,6 +739,7 @@ function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
   enemies = []; eshots = []; pshots = []; mines = []; shards = []; bolts = []; zfx = null; zapUses = 0; zap.active = false; rot = 0;
+  jump.t = -1; jump.cd = 0;
   placeClaw(web.start, 0); player.z = 0; player.alive = true; player.heat = 0; player.overheat = false;
   pups = []; if (power.droid && power.droid.until < L) power.droid = null; if (power.droid) power.droid.pos = player.pos + web.n / 2;
   Music.play(L);
@@ -727,9 +763,11 @@ function startWarp() {
 }
 function killPlayer(kind, captor) {
   if (invincible || !player.alive) return;
+  if (airborne() && JUMP_DODGE.has(kind)) { jumpDodge(kind); return; }
   player.alive = false; eshots = [];
-  if (power.laser || power.droid) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
-  power = { laser: false, droid: null, n: 0 }; pups = [];
+  jump.t = -1; jump.cd = 0;
+  if (power.laser || power.droid || power.jump) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
+  power = { laser: false, droid: null, jump: false, n: 0 }; pups = [];
   death = { kind, t: 0, captor, exploded: false, inWarp: state === 'warp' };
   state = 'dying'; window.MoodSticker && window.MoodSticker.event('hit');
   if (kind === 'capture') Sound.play('capture'); else explodePlayer();
@@ -797,6 +835,7 @@ function onPress(k) {
       if (k === 'KeyP' || k === 'Escape') { paused = !paused; return; }
       if (paused) { if (confirm || k === 'Space') paused = false; return; }
       if (confirm && state === 'play') superzap();
+      if (k === 'KeyJ' || k === 'ShiftLeft' || k === 'ShiftRight') doJump();
       break;
     case 'gameover':
       if (gameOverT > 1.2 && (confirm || k === 'Space')) endGameOver();
@@ -846,7 +885,7 @@ function mineAt(l) { for (const m of mines) if (m.armed && !m.dead && m.lane ===
 // move a -> b along the rim, stopping at the rail before a lane walled off by an armed rim mine
 function constrainMove(a, b, quiet) {
   if (!web.closed) b = clamp(b, MOVE.edge + 0.01, web.n - MOVE.edge - 0.01);
-  if (!mines.length) return b;
+  if (!mines.length || airborne()) return b;
   const dir = sgn(b - a); if (!dir) return b;
   let l = Math.floor(a);
   for (let k = 0; k < 64; k++) {
@@ -1382,6 +1421,7 @@ function collectPup() {
   power.n++; pupStats.caught++;
   let name, tip;
   if (!power.laser) { power.laser = true; name = 'PARTICLE LASER'; tip = 'SHOTS FLY FASTER, PIERCE AND BURN THROUGH ENEMY FIRE'; }
+  else if (!power.jump) { power.jump = true; name = 'JUMP'; tip = touch.on ? 'TAP JUMP TO HOP OVER SHOTS, GRABBERS AND MINE WALLS' : 'SHIFT / J (PAD Y) HOPS OVER SHOTS, GRABBERS AND MINE WALLS'; }
   else if (!power.droid) { power.droid = { pos: player.pos + web.n / 2, cd: 0.4, until: state === 'warp' ? level + 1 : level, lane: -1, life: PUP.droidLife }; name = 'AI DROID'; tip = 'IT GUARDS THE RIM FOR ' + PUP.droidLife + ' SECONDS'; }
   else { addScore(2500); name = 'BONUS 2500'; }
   msg(name, 2.2, 0.36, '#3dff8a', 4.2);
@@ -1516,7 +1556,7 @@ function update(dt) {
       if (zoom.t >= 1) { camZ = 0; state = 'play'; window.MoodSticker && window.MoodSticker.screen('play'); }
       break;
     case 'play':
-      handleMove(dt); handleFire(dt);
+      handleMove(dt); handleFire(dt); updJump(dt);
       updShots(dt); checkShotHits(); if (state !== 'play') break;
       updPups(dt); updDroid(dt); if (state !== 'play') break;
       updPulse(dt); if (state !== 'play') break;
@@ -1940,7 +1980,7 @@ function drawShots() {
   ctx.stroke();
   for (const s of pshots) { const m = laneMid(s.lane), p = proj(m[0], m[1], s.z * LL); if (p) ctx.fillRect(p[0] - 1.2 * DPR, p[1] - 1.2 * DPR, 2.4 * DPR, 2.4 * DPR); }
 }
-function clawPoints(f, zw, lean = 0) {
+function clawPoints(f, zw, lean = 0, lift = 0) {
   const E0 = railF(f), E1 = railF(f + 1), n = inwardF(f + 0.5 - 0.5);
   const len = Math.hypot(E1[0] - E0[0], E1[1] - E0[1]);
   const out = [];
@@ -1948,7 +1988,7 @@ function clawPoints(f, zw, lean = 0) {
     // lean: slide the claw's peak toward one rail and tilt it (taller on the leaning side)
     const u = clamp(u0 + lean * (0.04 + 0.19 * w0 / 0.44) * (1 - Math.abs(u0 - 0.5) * 0.9), 0, 1);
     const w = w0 * (1 + lean * (u0 - 0.5) * 0.5);
-    const x = E0[0] + (E1[0] - E0[0]) * u + n[0] * w * len, y = E0[1] + (E1[1] - E0[1]) * u + n[1] * w * len;
+    const x = E0[0] + (E1[0] - E0[0]) * u + n[0] * (w - lift) * len, y = E0[1] + (E1[1] - E0[1]) * u + n[1] * (w - lift) * len;
     const p = proj(x, y, zw + w * 0.22); if (!p) return null; out.push(p);
   }
   return out;
@@ -1983,8 +2023,17 @@ function drawDroid() {
   ctx.stroke();
 }
 function drawClaw() {
-  const pts = clawPoints(player.vis, player.z * LL, player.lean); if (!pts) return;
-  ctx.strokeStyle = pal.claw; ctx.lineWidth = LW(1.35);
+  const jh = state === 'play' ? jumpH() : 0;
+  if (jh > 0) {   // JUMP: a dim shadow stays on the rim, the claw springs up and out toward the viewer
+    const sh = clawPoints(player.vis, 0, player.lean);
+    if (sh) { ctx.globalAlpha = 0.28 * (1 - jh * 0.5); ctx.strokeStyle = pal.claw; ctx.lineWidth = LW(1); ctx.beginPath(); sh.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.stroke(); ctx.globalAlpha = 1; }
+  }
+  const pts = clawPoints(player.vis, player.z * LL - jh * JUMP_P.h * 0.12, player.lean, jh * JUMP_P.h * 0.22); if (!pts) return;
+  if (jh > 0) {   // thrust trail between rim and claw
+    const tip = pts[2], base = clawPoints(player.vis, 0, player.lean);
+    if (base) { const g = ctx.createLinearGradient(base[2][0], base[2][1], tip[0], tip[1]); g.addColorStop(0, 'rgba(61,255,138,0)'); g.addColorStop(1, 'rgba(61,255,138,0.7)'); ctx.strokeStyle = g; ctx.lineWidth = LW(2.2); ctx.beginPath(); ctx.moveTo(base[2][0], base[2][1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke(); }
+  }
+  ctx.strokeStyle = jh > 0 ? '#b6ffd2' : pal.claw; ctx.lineWidth = LW(1.35 + jh * 0.5);
   ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
   ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[7][0], pts[7][1]); ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[6][0], pts[6][1]);
   ctx.stroke();
@@ -2023,7 +2072,10 @@ function drawHUD() {
   ctx.globalAlpha = 1;
   if (Sound.muted && !touch.on) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
   if (invincible) text('INVINCIBLE', zx, ty + U * 6.2, U * 1.3, '#f0f', 'right');
-  if (inGame() && (power.laser || power.droid)) text([power.laser ? 'LASER' : '', power.droid ? 'DROID' : ''].filter(Boolean).join(' + '), zx, ty + U * 8.4, U * 1.4, '#3dff8a', 'right', 0.9);
+  if (inGame() && (power.laser || power.droid || power.jump)) text([power.laser ? 'LASER' : '', power.jump ? 'JUMP' : '', power.droid ? 'DROID' : ''].filter(Boolean).join(' + '), zx, ty + U * 8.4, U * 1.4, '#3dff8a', 'right', 0.9);
+  if (inGame() && power.jump) { const ready = !airborne() && jump.cd <= 0, k = ready ? 1 : airborne() ? 0 : 1 - jump.cd / JUMP_P.cd;
+    ctx.globalAlpha = 0.85; ctx.strokeStyle = '#3dff8a'; ctx.lineWidth = LW(1); ctx.strokeRect(zx - U * 9, ty + U * 10.4, U * 9, U * 0.6);
+    ctx.fillStyle = ready ? '#3dff8a' : 'rgba(61,255,138,0.45)'; ctx.fillRect(zx - U * 9, ty + U * 10.4, U * 9 * k, U * 0.6); ctx.globalAlpha = 1; }
 }
 function drawMsgs() {
   for (const m of msgs) {
@@ -2331,13 +2383,13 @@ function touchBuild() {
   E.mode = mk('div', 'tmode', 'tctl');
   E.rim = mk('div', 'trim'); E.fz = mk('div', 'tfz', null, '<span>FIRE ZONE</span>'); E.auto = mk('div', 'tauto', 'tctl tsq', 'AUTO');
   E.ring = mk('div', 'tring');
-  E.zap = mk('div', 'tzap', 'tctl', 'ZAP'); E.fire = mk('div', 'tfire', 'tctl', 'FIRE'); E.start = mk('div', 'tstart', 'tctl', 'START');
+  E.zap = mk('div', 'tzap', 'tctl', 'ZAP'); E.jump = mk('div', 'tjump', 'tctl', 'JUMP'); E.fire = mk('div', 'tfire', 'tctl', 'FIRE'); E.start = mk('div', 'tstart', 'tctl', 'START');
   E.pause = mk('div', 'tpause', 'tctl tsq', ICON.pause); E.mute = mk('div', 'tmute', 'tctl tsq', ICON.snd); E.fs = mk('div', 'tfs', 'tctl tsq', ICON.fs);
   E.keys = mk('div', 'tkeys');
   for (const c of [...INITIAL_SET, '↑', '↓', 'DEL', 'OK']) { const k = mk('div', null, 'tkey' + (c.length > 1 || c === '↑' || c === '↓' ? ' fn' : ''), c === ' ' ? 'SPC' : c); k.dataset.c = c; E.keys.appendChild(k); }
-  for (const k of ['rim', 'ring', 'fz', 'spin', 'knob', 'left', 'right', 'mode', 'zap', 'fire', 'start', 'auto', 'pause', 'mute', 'fs', 'keys']) root.appendChild(E[k]);
+  for (const k of ['rim', 'ring', 'fz', 'spin', 'knob', 'left', 'right', 'mode', 'zap', 'jump', 'fire', 'start', 'auto', 'pause', 'mute', 'fs', 'keys']) root.appendChild(E[k]);
   document.body.appendChild(root);
-  E.spin.setAttribute('aria-label', 'spinner'); E.fire.setAttribute('aria-label', 'fire'); E.zap.setAttribute('aria-label', 'superzapper');
+  E.spin.setAttribute('aria-label', 'spinner'); E.fire.setAttribute('aria-label', 'fire'); E.zap.setAttribute('aria-label', 'superzapper'); E.jump.setAttribute('aria-label', 'jump');
   if (fsSupported()) document.body.classList.add('fsok');
   // spinner zone
   E.spin.addEventListener('pointerdown', e => {
@@ -2376,6 +2428,7 @@ function touchBuild() {
   hold(E.mode, () => setMode(TC.mode === 'spin' ? 'arrows' : 'spin'));
   hold(E.fire, () => { touch.fireBtn = true; fireSync(); }, () => { touch.fireBtn = false; fireSync(); });
   hold(E.zap, () => onPress('Enter'));
+  hold(E.jump, () => doJump());
   hold(E.start, null, () => { if (state === 'select') onPress('Enter'); });
   hold(E.pause, () => onPress('KeyP'));
   hold(E.mute, () => { Sound.unlock(); onPress('KeyM'); });
@@ -2449,6 +2502,9 @@ function touchLayout() {
     const fx = iw - sa.r - 14 - fireD, fy = bot - 8 - fireD;
     place(E.fire, fx, fy, fireD, fireD); place(E.start, fx, fy, fireD, fireD);
     place(E.zap, Math.max(rx + 6, fx - zapD * 0.3), fy - zapD - 12, zapD, zapD);
+    // JUMP sits above ZAP, below the square button bar (bar top = sa.t + m * 0.09 in game)
+    const zTop = fy - zapD - 12, bBot = sa.t + m * 0.09 + sq + 6, jD = Math.round(clamp(Math.min(zapD * 0.82, zTop - 6 - bBot), 38, 80));
+    place(E.jump, Math.max(rx + 6, fx - zapD * 0.3) + (zapD - jD) / 2, Math.max(bBot, zTop - 6 - jD), jD, jD);
     barX = iw - sa.r - 10; barY = game ? sa.t + m * 0.09 : sa.t + 6;
     TC.box = [lx + side + 4, sa.t + ih * 0.115, rx - 4, ih - sa.b - ih * 0.035];
     TC.knobR = knobD / 2;
@@ -2468,6 +2524,10 @@ function touchLayout() {
     barX = iw - sa.r - 10; barY = game ? cy0 : sa.t + 4;
     // ZAP sits up-left of FIRE, below the button bar and clear of the knob
     place(E.zap, fx - zapD * 0.78, Math.max(fy - zapD * 0.55, cy0 + sq + 10), zapD, zapD);
+    // JUMP: left of FIRE, under ZAP, clear of the spinner knob
+    const kR = sa.l + Math.max(12, iw * 0.25 - knobD / 2) + knobD, zBot = Math.max(fy - zapD * 0.55, cy0 + sq + 10) + zapD;
+    const jD = Math.round(clamp(Math.min(fireD * 0.46, fx - 4 - (kR + 4), bot - 14 - (zBot + 6)), 36, 76));
+    place(E.jump, fx - 4 - jD, bot - 14 - jD, jD, jD);
     TC.box = [sa.l + iw * 0.035, sa.t + m * 0.14, iw - sa.r - iw * 0.035, cy0 - 12];
     TC.knobR = knobD / 2;
     place(E.rim, 0, sa.t + m * 0.1, iw, cy0 - 10 - sa.t - m * 0.1);
@@ -2492,6 +2552,9 @@ function touchSync() {
   if (!touch.on || !TC.built) return;
   const E = TC.E, S = TC.sync;
   if (player.overheat !== S.hot) { S.hot = player.overheat; E.fire.classList.toggle('hot', S.hot); }
+  const hj = !!power.jump && inGame(), jr = hj && !airborne() && jump.cd <= 0;
+  if (hj !== S.hj) { S.hj = hj; document.body.classList.toggle('hasjump', hj); }
+  if (jr !== S.jr) { S.jr = jr; E.jump.classList.toggle('used', !jr); }
   if (zapUses !== S.zap) { S.zap = zapUses; E.zap.classList.toggle('used', zapUses >= 2); }
   if (Sound.muted !== S.mute) { S.mute = Sound.muted; E.mute.innerHTML = S.mute ? ICON.mute : ICON.snd; E.mute.classList.toggle('off', S.mute); }
   if (paused !== S.pause) { S.pause = paused; E.pause.innerHTML = paused ? ICON.play : ICON.pause; }
@@ -2571,7 +2634,9 @@ window.VORTEX = {
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
-  power: () => ({ laser: power.laser, droid: power.droid ? { pos: power.droid.pos, lane: power.droid.lane, until: power.droid.until } : null, n: power.n, kills: pupKills, next: pupNext, stats: Object.assign({}, pupStats) }),
+  jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
+  doJump: () => doJump(),
+  power: () => ({ laser: power.laser, jump: power.jump, droid: power.droid ? { pos: power.droid.pos, lane: power.droid.lane, until: power.droid.until } : null, n: power.n, kills: pupKills, next: pupNext, stats: Object.assign({}, pupStats) }),
   shotList: () => pshots.map(s => ({ lane: s.lane, z: s.z, laser: !!s.laser, droid: !!s.droid, pierce: s.pierce || 0 })),
   setLane(l, sub) { placeClaw(wrapLane(l), sub || 0); },
   setAuto(v) { if (touch.on) { touch.auto = !!v; autoSync(); } else autofire = !!v; },

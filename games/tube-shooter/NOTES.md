@@ -139,3 +139,18 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Test: tests/vortex-powerups.test.js (12 checks x desktop + iPhone 14). v4/waves/tips/haptics/rim/touch still pass.
 - Bot (eval, 4 games each, pup-seeking): death level sharp 13/11/13/5 (baseline no-pups 10/10/10/6), average 7/12/12/8
   (baseline 7/7/4/10). A first try (every 8-11 kills, droid all level) gave sharp 10-18, too generous; tuned down.
+
+## Day 5 (2026-11-01): JUMP (Tempest 2000)
+- Why: enemy shots have been the #1 death cause in every eval (days 2-4). JUMP gives the claw a skill-based answer.
+- Crystal order is now 1 PARTICLE LASER, 2 JUMP, 3 AI DROID, 4+ BONUS 2500. JUMP lasts until you lose a life.
+- Input: SHIFT or J (keyboard), pad Y/LB/RB (buttons 3/4/5), mouse middle button, or the green JUMP touch button.
+  On portrait it sits left of FIRE under ZAP; on landscape it sits above ZAP. Both are clear of the knob and the top bar.
+- Feel: 0.75 s sine arc lifting the claw off the rim, with a shadow left on the rim, a green thrust trail, and land shards.
+  1.5 s recharge (HUD bar, button dims). Before you have it, pressing it shows "NO JUMP YET" once and plays a soft buzz.
+- While airborne, enemy shots, grabs (flipper capture), pulsar zaps, fuseball touches, spikes/mines and mine walls
+  can't hurt you; each dodge is +50 with a "DODGED!" pop (throttled). Landing next to a grabber still kills, so it's
+  a timing tool, not a shield.
+- Hooks: VORTEX.jump() -> {has, air, h, cd, n, dodged}, VORTEX.doJump(); power() includes jump.
+- Test: tests/vortex-jump.test.js (desktop, iPhone 14, iPhone 14 landscape: gating, launch by key/button/pad/mouse,
+  touch button visible and non-overlapping, recharge, shot dodge, airborne grab immunity then grab after landing,
+  mine-wall hop, death loses JUMP, no console errors). vortex-powerups updated for the new order.
