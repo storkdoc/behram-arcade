@@ -300,7 +300,7 @@
     $('#d-grade').textContent = R.grade; $('#d-stars').textContent = stars(R.stars); $('#d-score').textContent = R.total + ' / 100' + (rec.att ? ' · Attending mode' : '');
     $('#d-unlock').textContent = unlocked ? '🔓 Attending mode unlocked for this case!' : '';
     $('#d-verdict').textContent = fromHist ? 'From your case history.' : verdict(R.g);
-    var a = rec.tDec - 1200, strips = stripRows(S, a, rec.tDec + 30, { truth: allTruth(S, a, rec.tDec), flags: [], ucPeaks: S.ucs, decision: rec.tDec, until: rec.tDec });
+    var e = Math.ceil((rec.tDec + 1) / 60) * 60, a = e - 1200, strips = stripRows(S, a, e, { truth: allTruth(S, a, rec.tDec), flags: [], ucPeaks: S.ucs, decision: rec.tDec, until: rec.tDec });
     var sh = '';
     if (G.shift && !fromHist && G.shift.results.length === G.shift.order.length) { var avg = Math.round(G.shift.results.reduce(function (s, r) { return s + r.score; }, 0) / G.shift.results.length); sh = '<div class="shiftsum"><h3>Shift report</h3><p>Triage order: ' + G.shift.triage + ' · Average ' + avg + '/100</p><ul>' + G.shift.results.map(function (r) { return '<li>' + esc(r.title) + ': ' + r.grade + ' (' + esc(r.pick) + ')</li>'; }).join('') + '</ul></div>'; }
     $('#d-paper').innerHTML = sh + debriefHTML(rec, S).replace('<!--STRIPS-->', strips);

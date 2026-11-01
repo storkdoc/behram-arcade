@@ -14,7 +14,7 @@
     office: ['Exam 1 is ready. Charts are on the door.', 'Six patients, four rooms, one of me. Let’s go!', 'Wash your hands, read the chart, then knock.'],
     feud: ['You’d better know your differential.', 'Top answers are on the board. Can you clear it?', 'Bring a friend: head-to-head on one screen.'],
     surgery: ['Scrub in! The OR is waiting and so is the baby.', 'Gowned, gloved, and slightly over-caffeinated. Let’s operate.', 'Suture Self! Steady hands, know your steps, count your sponges.'],
-    triage: ['L&D is busy tonight. Grab a strip and tell me what you see.', 'Baseline, variability, accels, decels, contractions. Then category. Then act.', 'The monitor is beeping. It usually means something.']
+    triage: ['L&D is busy tonight. Grab a strip and tell me what you see.', 'Baseline, variability, accels, decels, contractions. Then category. Then make the call.', 'The monitor is beeping. It usually means something.']
   };
   var NAMES = { office: 'Clinic Day', feud: 'Feud & Delivery', surgery: 'Suture Self!', triage: 'OB Triage' };
   var state = { access: null, sel: 0, screen: 'boot', modal: false, walking: false };

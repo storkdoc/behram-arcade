@@ -9,7 +9,7 @@ One arcade cabinet, one lock, four games, set in Dr. Steven Behram's practice (C
 | `office/` | CLINIC DAY (was games/congressional-obgyn). Owns the shared lock `office/js/access.js` (`COBAccess`). |
 | `feud/` | FEUD & DELIVERY (was games/feud-and-delivery). |
 | `surgery/` | SUTURE SELF! |
-| `triage/` | OB TRIAGE (new): L&D fetal-strip reading + management. See `triage/NOTES.md`. Hub room 4, hallway door "L&D" (was EXAM 4). |
+| `triage/` | OB TRIAGE: strip on the top half, case + ONE management call per patient below, then an annotated debrief. Happens at Holy Cross Germantown (hub drive animation). See `triage/NOTES.md`. Hub room 4, hallway door "L&D" (was EXAM 4). |
 
 ## Lock
 - Same `office/js/access.js` and the same localStorage key `cob.access` as before, so old student codes and instructor tokens keep working.
