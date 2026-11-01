@@ -76,3 +76,17 @@ click; that was the iPhone page-test timeout. Human-timed taps (300 ms after ren
 - tests/bank-cues.test.js lints this (no correct answer > 2.5x the longest distractor; longest-share < 75%).
 - iPhone: after answering, the Next/Finish button sat just below the panel's scroll edge (7 px visible on iPhone 14).
   `.enc-actions` is now sticky at the bottom of `.enc-panel` with a fade, so it is always fully on screen.
+
+## Day 4 (2026-10-31): answer-length cue removed (Clinic Day + SUTURE SELF!)
+- Players reported the correct answer was over-explained and almost always the longest option. Baseline (words):
+  Clinic Day correct longest 56% (strictly 50%, chance 20%), shortest 6%, mean correct/distractor ratio 1.78, 97 of 257
+  correct options >30% longer than the longest distractor. SUTURE SELF! quizzes: longest 95%, ratio 2.17, 30 of 38 >30%.
+- Rewrote 184/257 clinic questions and all 38 surgery quizzes (incl. the 3 breech-extraction steps): short correct options,
+  explanation moved into the rationale (`why`), distractors of the same length and grammatical form, absolutes/"only"
+  removed from distractors and hedges from correct answers. Correct answer and teaching point unchanged.
+- After: clinic longest 11% (ties shared; strictly 2%), shortest 24%, ratio 1.00, none >30%; surgery longest 14%
+  (strictly 8%), shortest 25%, ratio 0.96, none >30%. Character-length longest share 16% / 20% (chance 20% / 25%).
+- Positions: clinic options are shuffled per encounter by core.js `buildQuestions` (seeded); surgery `G.quiz` shuffles.
+- Permanent lint: `node tests/answer-length.test.js` (stats in `tests/mcq.js`; `node tests/mcq.js` prints them).
+- Not covered: the SUTURE SELF! "What's next?" quiz uses step names as options (lengths uncontrolled, not a content cue).
+  Feud & Delivery has typed answers, no MCQs.

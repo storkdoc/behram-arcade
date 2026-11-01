@@ -32,6 +32,8 @@ One arcade cabinet, one lock, three games, set in Dr. Steven Behram's practice (
 - Test hook: `SG.limitScale` shrinks minigame time limits (tests only).
 - Tests: `node surgery/tests/cases.test.js` (content lint), `surgery/tests/page.test.js` (bot plays cases; ALL=1 for all 7, ~25 min),
   `tests/hub.test.js` (gate, codes, instructor, all 3 games on desktop/iPhone/iPad, redirects, games.js).
+- MCQ answer-length lint (Clinic Day + SUTURE SELF!): `node tests/answer-length.test.js` (correct option not a length tell;
+  see office/NOTES.md Day 4). Stats: `node tests/mcq.js`.
 - Mood sticker: slug is `dr-behrams-office` from the path; do NOT call MoodSticker.game() (it would change the corner/slug).
 
 ## Rules

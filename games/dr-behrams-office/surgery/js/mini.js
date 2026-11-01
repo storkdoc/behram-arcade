@@ -172,9 +172,9 @@
   /* ---------------- breech extraction ---------------- */
   SM.breech = function (st, cb) {
     var g = G(), steps = [
-      { q: 'The breech presents at the hysterotomy. First move?', a: 'Grasp the bony pelvis (thumbs on the sacrum) and deliver to the umbilicus', w: ['Pull on the fetal abdomen to speed things up', 'Deliver the head first', 'Rotate to sacrum posterior'] },
-      { q: 'The body is out to the umbilicus. Next?', a: 'Keep sacrum anterior; sweep the arms down across the chest (Løvset if needed)', w: ['Pull hard on the legs until the head comes', 'Hyperextend the neck to deliver the head', 'Clamp the cord now'] },
-      { q: 'Arms delivered. The aftercoming head?', a: 'Mauriceau–Smellie–Veit: flex the head (malar pressure) + suprapubic pressure', w: ['Pull on the shoulders with the neck extended', 'Fundal pressure and pull on the arms', 'Wait for the next contraction'] }
+      { q: 'The breech presents at the hysterotomy. First move?', a: 'Grasp the bony pelvis and deliver to the umbilicus', w: ['Pull on the fetal abdomen to speed the delivery along', 'Deliver the head first, then the body', 'Rotate the back down, to sacrum posterior'] },
+      { q: 'The body is out to the umbilicus. Next?', a: 'Keep sacrum anterior; sweep the arms down', w: ['Pull hard on the legs until the head comes', 'Hyperextend the neck to deliver the head', 'Clamp and cut the cord now'] },
+      { q: 'Arms delivered. The aftercoming head?', a: 'Mauriceau: flex the head, suprapubic pressure', w: ['Pull on the shoulders with the fetal neck extended', 'Fundal pressure and pull on the arms', 'Wait for the next contraction'] }
     ], k = 0, score = 100, issues = [];
     function next() {
       if (k >= steps.length) return flex();
