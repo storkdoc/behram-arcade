@@ -61,7 +61,7 @@ Net.onMessage = d => {
       const r = A.remote;
       if (d.n != null) { if (d.n <= (r.n || 0)) return; r.n = d.n; }
       r.x = clamp(+d.x || 0, -1.2, 1.2); r.y = clamp(+d.y || 0, -1.2, 1.2); r.m = clamp(+d.m || 0, 0, 1.2);
-      if (d.ac !== r.ac) { r.ac = d.ac; r.aP = true; r.tta = typeof d.tt === 'number' ? d.tt : null; } if (d.bc !== r.bc) { r.bc = d.bc; r.bP = true; }
+      if (d.ac !== r.ac) { r.ac = d.ac; r.aP = true; r.tta = typeof d.tt === 'number' ? d.tt : null; r.ti = Number.isInteger(d.ti) ? d.ti : null; } if (d.bc !== r.bc) { r.bc = d.bc; r.bP = true; }
     } else if (d.t === 'lock' && A.mode === 'host' && Sim.G && Sim.G.phase === 'select') Sim.lock(1);
     else if (d.t === 'pick' && A.mode === 'host' && Sim.G && Sim.G.phase === 'select' && Sim.G.pend[1] && Sim.G.picks[0] && typeof d.id === 'string') Sim.pick(1, d.id, d.f === 1);
     else if (d.t === 'rematch' && A.mode === 'host' && Sim.G && Sim.G.over) A.startGame('host');
@@ -159,6 +159,13 @@ const touches = new Map(); // pointerId -> { kind: 'ball' | 'act' | 'alt' | 'ui'
 const btnDown = { act: 0, alt: 0 };
 const inCircle = (c, x, y, k) => c && Math.hypot(x - c.cx, y - c.cy) <= c.R * (k || 1.35);
 const inRect = (r, x, y) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+/** touch passing: which of my eligible receivers (if any) is under the finger, while my QB still holds a pass */
+function tappedReceiver(x, y) {
+  const S = App.snap, me = App.me; if (!S || S.ph !== 'live' || S.kind !== 'pass' || S.thrown || !S.op || S.off !== me || S.b[4] !== S.ctl[me]) return null;
+  let best = null, bd = 1e9;
+  for (const [j] of S.op) { const p = S.pl[j], q = Render.proj(p[0], p[1], 1), d = Math.hypot(q[0] - x, q[1] - y), lim = Math.max(34, Render.pxAt(p[1]) * 2.2); if (d < lim && d < bd) { bd = d; best = j; } }
+  return best;
+}
 function gameControlsActive() { const S = App.snap; return App.screen === 'game' && !App.paused && S && !S.over; }
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault(); Sound.unlock();
@@ -168,6 +175,8 @@ canvas.addEventListener('pointerdown', e => {
     if (gameControlsActive()) {
       if (inCircle(L.act, x, y)) { touches.set(e.pointerId, { kind: 'act' }); Track.press(); btnDown.act = 1; return; }
       if (inCircle(L.alt, x, y, 1.25)) { touches.set(e.pointerId, { kind: 'alt' }); Track.pressAlt(); btnDown.alt = 1; return; }
+      const ti = tappedReceiver(x, y); // passing: tap a receiver on the field to throw to him
+      if (ti != null) { touches.set(e.pointerId, { kind: 'none' }); App.tapTi = ti; Track.press(); return; }
     }
     if (UI.tap(x, y)) { touches.set(e.pointerId, { kind: 'ui' }); return; }
     if (gameControlsActive() && (inRect(L.zone, x, y) || inCircle(L.tb, x, y, 1.4))) {
@@ -284,7 +293,7 @@ const Options = {
 const HOWTO = [
   ['THE TRACKBALL', 'Your player runs as fast as the ball spins. Stroke it hard and he sprints; stroke it gently and he jogs; let go and the ball coasts and slows on its own, just like the heavy cabinet ball. Stroke against the spin to brake.\n\nMAC: click the field to grab the trackball (the pointer disappears) and roll your mouse or trackpad. Or just two-finger swipe on the trackpad. Esc lets go.\nIPHONE / IPAD: swipe and flick anywhere in the trackball area (the big red ball). Keep your finger on it to stop.\nKEYS / GAMEPAD also work: arrows or WASD, Space = action, Shift = next, F = flip.'],
   ['CALLING PLAYS', 'Before every down both sides secretly call a play. You only ever see your own playbook, and your opponent only sees that you are choosing or locked in. Both calls are revealed at the snap.\n\nRoll the trackball or use the arrow keys to pick a card, then click / Space / tap again to lock it in. You have 14 seconds.\nFLIP mirrors your play left-right (formation, routes, run direction, coverage): press F or Shift (or right-click), tap FLIP or the blue button, or a gamepad shoulder button. The diagrams flip so you can see it. Your flip stays secret until the snap too.'],
-  ['OFFENSE', 'Press ACTION (click / Space / the red button) to hike. You control the quarterback: drop back, and the cyan ring shows your target receiver (NEXT or Shift cycles it). ACTION throws. Lead your receivers.\nOn runs the ball is handed off and you take over the runner. ACTION is a juke: time it when a tackler is 1-2 yards away to fake him out (with nobody near it just wastes your legs). With the ball you can’t outrun everyone: you tire on long runs and hard cuts cost speed unless you juke. The defense takes angles, keeps a man over the top and learns your habits, so mix in passes. Wrapped up? Spin the trackball and mash ACTION to break free.\nFourth down: PUNT or FIELD GOAL (when in range).'],
+  ['OFFENSE', 'Press ACTION (click / Space / the red button) to hike. You control the quarterback: drop back; the big pulsing ring is your target and starts on the most open man (green = open, yellow = tight, red = covered). NEXT or Shift picks another; on a phone you can just tap a receiver to throw to him. ACTION throws, leading him for you, and then he runs to the white X on his own. If the defense sold out on your call, though, throws get picked.\nOn runs the ball is handed off and you take over the runner. ACTION is a juke: time it when a tackler is 1-2 yards away to fake him out (with nobody near it just wastes your legs). With the ball you can’t outrun everyone: you tire on long runs and hard cuts cost speed unless you juke. The defense takes angles, keeps a man over the top and learns your habits, so mix in passes. Wrapped up? Spin the trackball and mash ACTION to break free.\nFourth down: PUNT or FIELD GOAL (when in range).'],
   ['DEFENSE', 'You control the defender with the yellow ring. ACTION (Space / click / red button) jumps you to the defender closest to the ball: the runner, or where a pass is coming down. Near the runner, ACTION is a DIVING TACKLE. NEXT (Shift) cycles defenders. Before the snap ACTION picks your man.\nWhen you grab the runner, spin the trackball hard to drive him down. Hit him at full speed for a BIG HIT and maybe a fumble.'],
   ['MIX UP YOUR PLAYS', 'The defense learns. It remembers what you called and spots it when you keep running the same play (or just swap between two). Once it is sure, it can SELL OUT: it calls the counter built for that play (an edge blitz for the sweep, a run blitz for the dive, defenders jumping the slants, a bracket on the post or the bomb, a screen sniffer) and the play usually dies for a loss, a sack or a pick. It never sees your call, only your habits.\nThe tell: before the snap you may hear the crowd stir and see DEFENSE READS IT! It is usually real, sometimes a bluff. Change it up: a defense that sold out the wrong way leaves big holes. Your play-call screen warns you when your habit is showing.\nOn defense you can do it too: the scouting report under your calls shows the offense\u2019s habit, and SELL OUT bets on it (a wrong bet gets burned). All-Pro defenses learn fastest; Rookie ones are slower and leakier.'],
   ['INTERCEPTIONS', 'Pass in the air? Press ACTION once to take the defender closest to where it is coming down, steer him under it, then press ACTION again right as the ball arrives to lunge for it.\nPERFECT timing (within about a tenth of a second) and within a yard or two of the catch gives a real shot at a pick. EARLY or LATE, or too far away, usually only breaks it up. Guessing early makes you stumble, so mashing does not work.\nGot it? You steer the return. Take it to the house!'],
@@ -439,14 +448,14 @@ const GameScreen = {
     let aP = Track.st.action > 0, bP = Track.st.alt > 0; Track.st.action = 0; Track.st.alt = 0;
     if (menuUp) { aP = bP = false; }
     if (picking && !A.paused && !(S0 && S0.over)) { this.selectInput(S0, typed, aP, bP); aP = bP = false; }
-    const inp = { x: cmd.x, y: cmd.y, m: cmd.m, aP, bP };
+    const inp = { x: cmd.x, y: cmd.y, m: cmd.m, aP, bP }; if (aP && A.tapTi != null) inp.ti = A.tapTi; A.tapTi = null;
     if (mode === 'guest') {
-      if (aP) { A.press.ac++; A.press.tta = S0 && S0.ba != null ? +S0.ba.toFixed(3) : null; } if (bP) A.press.bc++; // tta: when I pressed, how long until the ball arrives ON MY SCREEN
+      if (aP) { A.press.ac++; A.press.tta = S0 && S0.ba != null ? +S0.ba.toFixed(3) : null; A.press.ti = inp.ti != null ? inp.ti : null; } if (bP) A.press.bc++; // tta: when I pressed, how long until the ball arrives ON MY SCREEN
       A.inT -= dt;
       if (picking && !A.wasPicking) Net.send({ t: 'i', x: 0, y: 0, m: 0, ac: A.press.ac, bc: A.press.bc });
       A.wasPicking = !!picking;
       if (!picking) { // stick + press counters: immediately on change, keep-alive every 50 ms
-        const msg = { t: 'i', x: +cmd.x.toFixed(2), y: +cmd.y.toFixed(2), m: +cmd.m.toFixed(2), ac: A.press.ac, bc: A.press.bc }; if (A.press.tta != null) msg.tt = A.press.tta;
+        const msg = { t: 'i', x: +cmd.x.toFixed(2), y: +cmd.y.toFixed(2), m: +cmd.m.toFixed(2), ac: A.press.ac, bc: A.press.bc }; if (A.press.tta != null) msg.tt = A.press.tta; if (A.press.ti != null) msg.ti = A.press.ti;
         const key = JSON.stringify(msg);
         if (key !== A.lastIn || A.inT <= 0) { A.lastIn = key; A.inT = 0.05; msg.n = ++A.iseq; Net.sendFast(msg); }
       }
@@ -507,6 +516,7 @@ const GameScreen = {
       case 'lunge': if (e.t === App.me && !e.cpu) { App.flash = { s: e.g, i: e.i, t0: performance.now() }; Sound.play(e.g === 'PERFECT' ? 'perfect' : 'lunge'); } else Sound.play('dive'); break;
       case 'int': Sound.play('catch'); Sound.play('int'); if (e.x != null) R.spawn('ring', e.x, e.y); shake(0.25); break;
       case 'handoff': Sound.play('pad'); break;
+      case 'throw': Sound.play(n); if (S.off === App.me) Track.stop(); break; // the QB's dropback spin must not carry into the receiver
       case 'drop': Sound.play('aww'); break;
       case 'tell': Sound.play('tell'); break;
       case 'stuffed': Sound.play('stuffed'); if (e.x != null) R.spawn('ring', e.x, e.y); shake(0.3); break;

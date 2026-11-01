@@ -1232,6 +1232,8 @@ const Sim = (() => {
       b: [r2(b.x), r2(b.y), r2(b.z), b.st === 'held' ? 0 : b.st === 'air' ? 1 : b.st === 'dead' ? 3 : 2, b.holder, b.kind === 'pass' || b.kind === 'punt' || b.kind === 'fg' ? 1 : 0],
       bt: b.st === 'air' ? [r2(b.tx), r2(b.ty), b.tgt] : null, ba: b.st === 'air' && b.kind === 'pass' ? r2(b.T - b.t) : null,
       fl: revealed ? G.pflip.map(f => f ? 1 : 0) : null, // FLIP calls: like the calls themselves, only after the snap
+      // how open each eligible receiver is (yards to the nearest defender), while a QB still holds a pass
+      op: G.phase === 'live' && G.kind === 'pass' && !G.thrown && !G.crossed ? eligible(G.off).map(e => [e.i, r2(Math.min(9, openness(e, G.off)))]) : null,
       ctl: G.ctl.slice(), aim: G.aim.slice(), lk: G.pend.slice(), selT: Math.ceil(G.selT), hum: G.human.slice(),
       w: G.wrap ? [G.wrap.c, r2(G.wrap.m)] : null,
       bn: G.banner ? [G.banner.t, G.banner.sub, G.banner.c, G.banner.id] : null,

@@ -412,6 +412,25 @@ const coast = (p, ms) => p.evaluate(ms => new Promise(r => setTimeout(() => r(+T
   say('  HUD strings checked:', hudFit.n);
   check(hudFit.n > 3 && hudFit.bad.length === 0, 'portrait: all HUD / overlay text fits on screen ' + JSON.stringify(hudFit.bad.slice(0, 5)));
 
+  // passing on a phone: tap a receiver on the field and the QB throws to him; the dropback spin is cleared at the throw
+  {
+    const ok = await M.evaluate(async () => {
+      const A = TBF.App, G = () => TBF.Sim.G, wait = (f, ms) => new Promise(r => { const t0 = performance.now(), k = () => f() ? r(true) : performance.now() - t0 > ms ? r(false) : setTimeout(k, 30); k(); });
+      if (!(await wait(() => G().phase === 'select', 30000))) return 'no select';
+      G().off = 0; A.lockPick('slants');
+      if (!(await wait(() => G().phase === 'presnap', 8000))) return 'no presnap';
+      await new Promise(r => setTimeout(r, 700)); TBF.Track.press();
+      if (!(await wait(() => G().phase === 'live' && G().t > 1.0, 6000))) return 'no live';
+      return 'ok';
+    });
+    check(ok === 'ok', 'phone pass play reaches the dropback (' + ok + ')');
+    const tgt = await M.evaluate(() => { const S = TBF.App.snap, cur = S.aim[0], j = S.op.map(o => o[0]).find(j => j !== cur), p = S.pl[j], q = TBF.Render.proj(p[0], p[1], 1); return { j, cur, x: q[0], y: q[1], op: S.op }; });
+    await M.evaluate(() => { TBF.Track.w.x = 0.4; TBF.Track.w.y = 0.3; });
+    await tapAt(tgt.x, tgt.y); await M.waitForTimeout(150);
+    const res = await M.evaluate(() => { const G = TBF.Sim.G; return { thrown: G.thrown, tgt: G.ball.tgt, w: Math.hypot(TBF.Track.w.x, TBF.Track.w.y) }; });
+    check(res.thrown && res.tgt === tgt.j, `tapping a receiver throws to him (tapped #${tgt.j}, ring was on #${tgt.cur}, ball to #${res.tgt})`);
+    check(res.w < 0.2, `the QB's trackball spin is cleared at the throw (|w| ${res.w.toFixed(2)})`);
+  }
   say('== iPHONE landscape');
   await M.setViewportSize({ width: 844, height: 390 }); await M.waitForTimeout(500);
   const L2 = await M.evaluate(() => { const L = TBF.App.L; return { W: L.W, H: L.H, act: L.act, tb: L.tb, portrait: L.portrait }; });

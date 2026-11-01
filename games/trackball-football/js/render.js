@@ -498,8 +498,11 @@ const Render = (() => {
     ring(ctx, q[0], q[1], 0.85 + pulse * 0.08, `rgba(255,225,77,${0.75 + pulse * 0.25})`, 0.1);
     // target receiver for a passing QB
     if (S.ph === 'live' && S.aim && S.aim[me] >= 0 && S.b[4] === i && !S.thrown && S.kind === 'pass') {
-      const r = S.pl[S.aim[me]]; ring(ctx, r[0], r[1], 1.0, 'rgba(120,230,255,0.95)', 0.09, true);
-      const h = proj(r[0], r[1], 2.6); tri(ctx, h[0], h[1], pxAt(r[1]) * 0.35, 'rgba(120,230,255,0.95)');
+      // every eligible man gets a small openness ring (green open / yellow / red covered); the target gets the big one
+      if (S.op) for (const [j, o] of S.op) if (j !== S.aim[me]) { const e = S.pl[j]; ring(ctx, e[0], e[1], 0.7, openCol(o, 0.75), 0.07); }
+      const r = S.pl[S.aim[me]], o = S.op ? (S.op.find(x => x[0] === S.aim[me]) || [0, 3])[1] : 3, c = openCol(o, 0.95);
+      ring(ctx, r[0], r[1], 1.05 + pulse * 0.1, c, 0.13, true);
+      const h = proj(r[0], r[1], 2.6); tri(ctx, h[0], h[1], pxAt(r[1]) * 0.45, c);
     }
     const hd = proj(q[0], q[1], 2.35); tri(ctx, hd[0], hd[1], pxAt(q[1]) * 0.32, '#ffe14d');
   }
@@ -540,7 +543,15 @@ const Render = (() => {
     ctx.drawImage(vignette, 0, 0, W, H);
     drawFireworks(ctx, dt);
   }
-  function drawMarkersUnder(ctx, S, me) { }
+  function openCol(o, a) { return o >= 3 ? `rgba(90,240,120,${a})` : o >= 1.6 ? `rgba(255,220,70,${a})` : `rgba(255,90,80,${a})`; }
+  /** a pass in the air: an X where it comes down, so the receiver (you) can run under it */
+  function drawMarkersUnder(ctx, S, me) {
+    if (me == null || S.ph !== 'live' || !S.bt || S.ba == null || S.off !== me) return;
+    const [x, y] = S.bt, k = 0.5 + 0.5 * Math.sin(t * 10), a = proj(x - 0.6, y - 0.6), b2 = proj(x + 0.6, y + 0.6), c = proj(x - 0.6, y + 0.6), d = proj(x + 0.6, y - 0.6);
+    ring(ctx, x, y, 0.9 + 0.15 * k, 'rgba(255,255,255,0.85)', 0.08);
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1.2, pxAt(y) * 0.08);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b2[0], b2[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+  }
   /** Space on defense jumped you to a new man: a quick contracting highlight ring on him */
   let selF = null;
   function selFlash(i) { selF = { i, t0: t }; }

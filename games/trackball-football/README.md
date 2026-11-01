@@ -21,7 +21,21 @@ until friction stops it.
   lifts, and a resting finger brakes it.
 - Red button: lock in / hike / throw / juke / dive; on defense it takes the man closest to the ball, and a second
   tap as a pass arrives lunges for the pick. Blue button: next receiver / next defender.
+- Passing: **tap a receiver on the field** to throw straight to him (or use the red button for the ringed target).
 - Tap a play card to pick it and tap it again (or LOCK IN) to call it. Tap **FLIP** (or the blue button) to mirror it.
+
+## Passing
+- The big pulsing ring (and arrow) is your target. It starts on the **most open** eligible receiver and follows the
+  open man until you pick one yourself with NEXT (then it stays put). Small rings on the other receivers show how open
+  each one is: **green** open, **yellow** tight, **red** covered. The ring takes the target's color too.
+- Throwing leads the receiver automatically. Once the ball is in the air you control him, and he runs to the
+  landing spot (white X) on his own; your trackball only nudges him. Your dropback spin is cleared at the throw.
+- Human QBs get the forgiving numbers (per level, Rookie / Pro / All-Pro): catch radius 2.4 / 2.1 / 1.85 yd, a
+  faster ball, smaller throw error, fewer picks on open men and a couple of tenths more in the pocket.
+  The CPU QB keeps the old numbers. **But if the defense read your call and sold out on it (SELL OUT banner), the old,
+  tough numbers come back**: throwing into a predicted coverage still gets picked (about 20-40%).
+- `tests/passing.test.js` measures it: a modeled reasonable human completes about 80% / 70% / 60% on
+  Rookie / Pro / All-Pro with almost no picks on normal throws (it was about 30% with 10-29% picks before).
 
 ## Flip and interceptions
 - **Flip** mirrors the whole call: formation, routes, run direction, man assignments and zones. The play cards redraw
@@ -83,4 +97,5 @@ node games/trackball-football/tests/game.test.js   # feel, CPU rules checker, fl
 node games/trackball-football/tests/mp.test.js     # online flow + play-call and flip secrecy (fake PeerJS transport)
 node games/trackball-football/tests/run-defense.test.js # pure Node, no server: run-exploit bots must stay under TD-rate caps
 node games/trackball-football/tests/play-counter.test.js # pure Node: repeat/alternate/random/anti-adaptive bots vs the learning defense (GAMES=n)
+node games/trackball-football/tests/passing.test.js      # pure Node: completion % / picks per level for casual/reasonable/expert QB models (N=n)
 ```
