@@ -11,7 +11,7 @@ var DT = 1 / 30;
 /* ---------------- save ---------------- */
 var KEY = 'heliopause.v1';
 function defSave() { return { stars: {}, unlocked: 0, endlessBest: 0, perks: {}, diff: 'commander', run: null, seenIntro: false,
-  set: { master: 80, music: 70, sfx: 75, qual: 'high', paths: '1', labels: '1' } }; }
+  set: { master: 80, music: 70, sfx: 75, qual: 'high', paths: '1', labels: '1', mus: '1' } }; }
 var save = defSave();
 try { var raw = localStorage.getItem(KEY); if (raw) { var o = JSON.parse(raw); for (var k in o) save[k] = o[k]; save.set = Object.assign(defSave().set, o.set || {}); } } catch (e) { /* private mode */ }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
@@ -20,7 +20,8 @@ function totalStars() { var n = 0; for (var i = 0; i < D.SECTORS.length; i++) n 
 function spentStars() { var n = 0; D.PERKS.forEach(function (p) { for (var r = 0; r < (save.perks[p.id] || 0); r++) n += p.cost[r]; }); return n; }
 function endlessOpen() { return save.unlocked >= 3; }
 function applySettings() {
-  AU.setVol('master', save.set.master / 100); AU.setVol('music', save.set.music / 100); AU.setVol('sfx', save.set.sfx / 100);
+  AU.toggleMusic(save.set.mus !== '0'); AU.setVol('master', save.set.master / 100); AU.setVol('music', save.set.music / 100); AU.setVol('sfx', save.set.sfx / 100);
+  if ($('bMus')) $('bMus').classList.toggle('off', save.set.mus === '0');
   if (R.quality !== save.set.qual) { R.quality = save.set.qual; R.resize(); }
 }
 
@@ -29,7 +30,7 @@ var state = 'begin', prevState = null, sim = null, ui = { sel: null, hover: null
 var speed = 1, quick = false, acc = 0, titleT = 0, cardTimer = 0, camFocus = null, userCam = false, chapSel = 0, backTo = 'menu';
 var navIdx = 0;
 function screen(id) {
-  ['begin', 'titleText', 'menu', 'chapters', 'legacy', 'settings', 'howto', 'research', 'pause', 'end'].forEach(function (s) { $(s).classList.toggle('show', s === id); });
+  ['begin', 'titleText', 'menu', 'chapters', 'legacy', 'settings', 'howto', 'credits', 'research', 'pause', 'end'].forEach(function (s) { $(s).classList.toggle('show', s === id); });
   navIdx = 0; setTimeout(function () { focusNav(0); }, 0);
 }
 function setState(s) { prevState = state; state = s; var game = s === 'game' || s === 'research' || s === 'pause' || s === 'end';
@@ -38,7 +39,7 @@ function setState(s) { prevState = state; state = s; var game = s === 'game' || 
   $('launch').classList.toggle('hide', !(s === 'game' && sim && sim.mode === 'build'));
   if (s === 'menu') { screen('menu'); buildMenu(); }
   else if (s === 'game') screen(null);
-  else if (['chapters', 'legacy', 'settings', 'howto', 'research', 'pause', 'end'].indexOf(s) >= 0) screen(s);
+  else if (['chapters', 'legacy', 'settings', 'howto', 'credits', 'research', 'pause', 'end'].indexOf(s) >= 0) screen(s);
 }
 
 /* ---------------- toasts & cards ---------------- */
@@ -55,6 +56,7 @@ function buildMenu() {
   l.appendChild(mkBtn('LEGACY', (totalStars() - spentStars()) + ' ★ TO SPEND', function () { setState('legacy'); buildLegacy(); }));
   l.appendChild(mkBtn('HOW TO PLAY', '', function () { backTo = 'menu'; setState('howto'); buildHow(); }));
   l.appendChild(mkBtn('SETTINGS', '', function () { backTo = 'menu'; setState('settings'); buildSettings(); }));
+  l.appendChild(mkBtn('CREDITS', 'MUSIC', function () { backTo = 'menu'; setState('credits'); buildCredits(); }));
   $('mfoot').innerHTML = 'MOUSE · TOUCH · KEYBOARD · GAMEPAD &nbsp;&nbsp; SPACE launches the wave · ENTER fires the super-weapon';
   MS.screen('title');
 }
@@ -87,9 +89,17 @@ function buildLegacy() {
 }
 function buildSettings() {
   [['vMaster', 'master'], ['vMusic', 'music'], ['vSfx', 'sfx']].forEach(function (p) { var el = $(p[0]); el.value = save.set[p[1]]; el.setAttribute('data-nav', ''); el.oninput = function () { save.set[p[1]] = +el.value; applySettings(); persist(); }; el.onchange = function () { AU.sfxEvent({ k: 'ui' }); }; });
-  [['sQual', 'qual'], ['sPaths', 'paths'], ['sLabels', 'labels']].forEach(function (p) { var el = $(p[0]); el.value = save.set[p[1]]; el.setAttribute('data-nav', ''); el.onchange = function () { save.set[p[1]] = el.value; applySettings(); persist(); }; });
+  [['sQual', 'qual'], ['sPaths', 'paths'], ['sLabels', 'labels'], ['sMusic', 'mus']].forEach(function (p) { var el = $(p[0]); el.value = save.set[p[1]]; el.setAttribute('data-nav', ''); el.onchange = function () { save.set[p[1]] = el.value; applySettings(); persist(); }; });
   $('resetSave').onclick = function () { if (!confirm('Erase all chapters, stars and legacy?')) return; var st = save.set; save = defSave(); save.set = st; persist(); toast('PROGRESS ERASED'); };
 }
+function buildCredits() {
+  var T = window.HPAudio.TRACKS;
+  $('credtxt').innerHTML = '<b>MUSIC</b> — real performances, freely licensed. Thank you to the musicians.<br><br>' + Object.keys(T).map(function (k) { var t = T[k];
+    return '<b>' + t.t + '</b> · ' + t.c + '<br>Performed by ' + t.p + ' · <i>' + t.l + '</i>' + (t.l.indexOf('CC') === 0 ? ' (creativecommons.org/licenses/by/3.0) — via Wikimedia Commons, “Ride of the Valkyries.ogg”; recording trimmed and re-encoded' : ' — via Wikimedia Commons');
+  }).join('<br><br>') + '<br><br>Full sources in <i>music/CREDITS.md</i>. If the recordings cannot play, an original synthesized score takes over.<br><br><b>GAME</b> — design, code, art and sound effects made for the Behram Arcade. All sound effects are synthesized live.';
+}
+function musicToggle() { save.set.mus = save.set.mus === '0' ? '1' : '0'; persist(); applySettings(); toast(save.set.mus === '0' ? 'MUSIC MUTED · M' : 'MUSIC ON · M'); if ($('sMusic')) $('sMusic').value = save.set.mus; }
+AU.onTrack = function (t) { var el = $('nowPlaying'); el.innerHTML = '♪ <b>' + t.t + '</b> — ' + t.c + '<small>' + t.p + '</small>'; el.className = ''; void el.offsetWidth; el.className = 'on'; };
 function buildHow() {
   $('howtxt').innerHTML = [
     '<b>EARTH IS THE BASE.</b> Invaders cross the heliopause and spiral toward Earth along named approach vectors. Every ship that reaches Earth costs integrity. Lose it all and the odyssey ends.',
@@ -151,7 +161,7 @@ function openPause() { if (state !== 'game') return; setState('pause'); var l = 
 }
 function resume() { setState('game'); }
 function back() { AU.sfxEvent({ k: 'ui', m: 74 }); if (state === 'research') { setState('game'); return; }
-  if (state === 'howto' || state === 'settings') { if (backTo === 'pause') { setState('pause'); openPause(); } else setState('menu'); return; }
+  if (state === 'howto' || state === 'settings' || state === 'credits') { if (backTo === 'pause') { setState('pause'); openPause(); } else setState('menu'); return; }
   if (state === 'pause') { resume(); return; }
   if (state === 'chapters' || state === 'legacy') setState('menu'); }
 document.querySelectorAll('[data-back]').forEach(function (b) { b.setAttribute('data-nav', ''); b.onclick = back; });
@@ -346,6 +356,7 @@ $('launch').onclick = function () { launch(); this.blur(); };
 $('bMenu').onclick = function () { openPause(); this.blur(); };
 $('bSpeed').onclick = function () { cycleSpeed(); this.blur(); };
 $('bRes').onclick = function () { openResearch(); this.blur(); };
+$('bMus').onclick = function () { musicToggle(); this.blur(); };
 $('bSuper').onclick = function () { fireSuper(); this.blur(); };
 $('bCam').onclick = function () { R.home(); userCam = false; this.blur(); };
 
@@ -437,6 +448,7 @@ function adjustNav(d) { var a = document.activeElement; if (a && a.type === 'ran
 document.addEventListener('keydown', function (e) {
   var k = e.key, code = e.code;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if ((k === 'm' || k === 'M') && state !== 'begin') { musicToggle(); return; }
   if (state === 'begin') { e.preventDefault(); begin(); return; }
   if (state === 'title') { e.preventDefault(); skipTitle(); return; }
   if (state === 'game') {

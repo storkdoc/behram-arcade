@@ -1,5 +1,7 @@
-/* HELIOPAUSE — audio. Everything is synthesized with WebAudio: an original score (a dawn fanfare, an orbital waltz,
-   micropolyphonic choir clusters for battle) and soft, resonant sound effects. Master compressor + limiter. */
+/* HELIOPAUSE — audio. Music: real public-domain / CC-BY classical recordings streamed from music/ (credits in
+   music/CREDITS.md and the in-game CREDITS screen); if they cannot play, an original synthesized score (dawn fanfare,
+   orbital waltz, micropolyphonic choir clusters) takes over. Sound effects are synthesized: layered explosions with
+   sub-bass and reverb tails, weapons, boss arrivals. Master bus: compressor -> limiter -> soft clipper, so nothing clips. */
 (function (root) {
 'use strict';
 function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
@@ -12,7 +14,10 @@ P.init = function () {
   this.out = c.createGain(); this.out.gain.value = this.vol.master;
   var comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = 0.01; comp.release.value = 0.3;
   var lim = c.createDynamicsCompressor(); lim.threshold.value = -2.5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.12;
-  this.out.connect(comp); comp.connect(lim); lim.connect(c.destination);
+  // final safety: a soft clipper that is transparent below -3 dBFS and can never exceed 0.99
+  var clip = c.createWaveShaper(), N = 2048, cv = new Float32Array(N); for (var q = 0; q < N; q++) { var xx = q / (N - 1) * 2 - 1, ax = Math.abs(xx); cv[q] = Math.sign(xx) * (ax < 0.7 ? ax : 0.7 + 0.29 * Math.tanh((ax - 0.7) / 0.29)); } clip.curve = cv; clip.oversample = '2x';
+  this.meter = c.createAnalyser(); this.meter.fftSize = 2048; this.preMeter = c.createAnalyser(); this.preMeter.fftSize = 2048;
+  this.out.connect(comp); comp.connect(lim); lim.connect(clip); clip.connect(c.destination); clip.connect(this.meter); lim.connect(this.preMeter);
   this.music = c.createGain(); this.music.gain.value = this.vol.music * 0.8; this.music.connect(this.out);
   this.sfx = c.createGain(); this.sfx.gain.value = this.vol.sfx * 0.7; this.sfx.connect(this.out);
   // reverb (generated impulse)
@@ -28,13 +33,74 @@ P.init = function () {
   // continuous beam hums
   this.hum = this.drone([mtof(74), mtof(81)], 'sine', 0, this.sfx); this.lhum = this.drone([mtof(62), mtof(69), mtof(78)], 'triangle', 0, this.sfx);
   this.noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate); var nd = this.noiseBuf.getChannelData(0); for (i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  this.initMusic();
   var self = this; this.timer = setInterval(function () { self.tick(); }, 60);
   document.addEventListener('visibilitychange', function () { if (!self.ctx) return; if (document.hidden) self.ctx.suspend(); else self.ctx.resume(); });
 };
-P.setVol = function (k, v) { this.vol[k] = v; if (!this.ctx) return; var t = this.ctx.currentTime; if (k === 'master') this.out.gain.setTargetAtTime(v, t, 0.05); if (k === 'music') this.music.gain.setTargetAtTime(v * 0.8, t, 0.05); if (k === 'sfx') this.sfx.gain.setTargetAtTime(v * 0.7, t, 0.05); };
+P.setVol = function (k, v) { this.vol[k] = v; if (!this.ctx) return; var t = this.ctx.currentTime; if (k === 'master') this.out.gain.setTargetAtTime(v, t, 0.05); if (k === 'music') { this.music.gain.setTargetAtTime(this.musicMuted ? 0 : v * 0.8, t, 0.05); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.05); } if (k === 'sfx') this.sfx.gain.setTargetAtTime(v * 0.7, t, 0.05); };
 P.drone = function (freqs, type, vol, dest) { var c = this.ctx, g = c.createGain(); g.gain.value = vol; g.connect(dest); freqs.forEach(function (f) { var o = c.createOscillator(); o.type = type; o.frequency.value = f; var og = c.createGain(); og.gain.value = 1 / freqs.length; o.connect(og); og.connect(g); o.start(); }); return g; };
+/* peak output level since the last call (for tests): {post: after the soft clipper, pre: after the limiter} */
+P.peak = function () { if (!this.meter) return null; var b = new Float32Array(2048), r = {}; [['post', this.meter], ['pre', this.preMeter]].forEach(function (m) { m[1].getFloatTimeDomainData(b); var p = 0; for (var i = 0; i < b.length; i++) p = Math.max(p, Math.abs(b[i])); r[m[0]] = p; }); return r; };
 P.now = function () { return this.ctx ? this.ctx.currentTime : 0; };
 P.throttle = function (k, ms) { var t = performance.now(); if (this.last[k] && t - this.last[k] < ms) return false; this.last[k] = t; return true; };
+
+/* ---------- recorded classical music (public-domain / CC-BY recordings, see music/CREDITS.md) ----------
+   Two <audio> decks stream through WebAudio and crossfade. Each track remembers where it was, so returning to a
+   mode resumes the piece rather than restarting it. If the files cannot be played, the synthesized score takes over. */
+var TRACKS = {
+  danube: { f: 'danube.mp3', t: 'The Blue Danube, Op. 314', c: 'Johann Strauss II', p: 'United States Marine Band (wind ensemble arr.)', l: 'Public domain' },
+  clairdelune: { f: 'clairdelune.mp3', t: 'Clair de lune (Suite bergamasque)', c: 'Claude Debussy', p: 'Laurens Goedhart, piano', l: 'Public domain' },
+  gymnopedie: { f: 'gymnopedie.mp3', t: 'Gymnopédie No. 1', c: 'Erik Satie', p: 'Robin Alciatore (Musopen)', l: 'Public domain' },
+  mountainking: { f: 'mountainking.mp3', t: 'In the Hall of the Mountain King', c: 'Edvard Grieg', p: 'Musopen Symphony', l: 'Public domain' },
+  beethoven5: { f: 'beethoven5.mp3', t: 'Symphony No. 5 — I. Allegro con brio', c: 'Ludwig van Beethoven', p: 'Musopen', l: 'Public domain' },
+  valkyries: { f: 'valkyries.mp3', t: 'Ride of the Valkyries', c: 'Richard Wagner', p: 'conducted by Philip Milman (pmmusic.pro)', l: 'CC BY 3.0' },
+  pathetique: { f: 'pathetique.mp3', t: 'Symphony No. 6 “Pathétique” — IV. Adagio lamentoso', c: 'Pyotr Ilyich Tchaikovsky', p: 'Musopen Symphony', l: 'Public domain' }
+};
+var LISTS = { dawn: ['danube'], menu: ['danube', 'gymnopedie', 'clairdelune'], build: ['clairdelune', 'gymnopedie', 'danube'], wave: ['mountainking', 'beethoven5'], boss: ['valkyries', 'beethoven5'], victory: ['danube'], defeat: ['pathetique'] };
+var RESTART = { victory: 1, defeat: 1 };
+Audio.TRACKS = TRACKS;
+P.initMusic = function () {
+  var c = this.ctx, self = this; this.recOK = true; this.shown = {}; this.pos = {}; this.listIdx = {}; this.bad = {};
+  this.recBus = c.createGain(); this.recBus.gain.value = this.musicLevel(); this.duckG = c.createGain(); this.recBus.connect(this.duckG); this.duckG.connect(this.out);
+  this.decks = [0, 1].map(function (i) {
+    var el = document.createElement('audio'); el.preload = 'none'; el.setAttribute('playsinline', ''); el.crossOrigin = 'anonymous';
+    var d = { el: el, g: c.createGain(), id: null, i: i }; d.g.gain.value = 0;
+    try { c.createMediaElementSource(el).connect(d.g); d.g.connect(self.recBus); } catch (e) { self.recOK = false; }
+    el.addEventListener('ended', function () { if (self.cur === d) { self.pos[d.id] = 0; self.nextTrack(); } });
+    el.addEventListener('error', function () { if (d.id) { self.bad[d.id] = 1; if (self.cur === d) self.nextTrack(); } });
+    return d; });
+  this.cur = null;
+  // retry playback on the next gesture if the browser refused autoplay
+  var kick = function () { if (self.cur && self.cur.el.paused && self.cur.id && !document.hidden) self.cur.el.play().catch(function () {}); };
+  ['pointerdown', 'keydown', 'touchend'].forEach(function (ev) { document.addEventListener(ev, kick, true); });
+  document.addEventListener('visibilitychange', function () { if (!self.cur) return; if (document.hidden) self.cur.el.pause(); else kick(); });
+};
+P.musicLevel = function () { return this.musicMuted ? 0 : this.vol.music * 0.95; };
+P.useRec = function () { if (!this.recOK) return false; var l = LISTS[this.mode] || LISTS.menu; for (var i = 0; i < l.length; i++) if (!this.bad[l[i]]) return true; return false; };
+P.recMode = function (m) {
+  if (!this.decks) return; var list = LISTS[m]; if (!list) return;
+  if (this.cur && this.cur.id && list.indexOf(this.cur.id) >= 0 && !RESTART[m]) return; // the current piece suits this mode too
+  var idx = this.listIdx[m] || 0, id = null;
+  for (var k = 0; k < list.length; k++) { var cand = list[(idx + k) % list.length]; if (!this.bad[cand]) { id = cand; this.listIdx[m] = (idx + k + 1) % list.length; break; } }
+  if (!id) { this.recFallback(); return; }
+  this.playTrack(id, RESTART[m] ? 0 : this.pos[id] || 0);
+};
+P.nextTrack = function () { var m = this.mode === 'dawn' || this.mode === 'ambient' ? 'menu' : this.mode, d = this.cur; this.cur = null; if (d) { var ended = d.el.ended; this.fadeOut(d); if (ended) this.pos[d.id] = 0; } if (RESTART[m] || !LISTS[m]) return; this.recMode(m); };
+P.fadeOut = function (d) { var c = this.ctx, t = c.currentTime, self = this; if (d.id) this.pos[d.id] = d.el.currentTime || 0; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0, t + 2.5); var tok = d.tok = (d.tok || 0) + 1; setTimeout(function () { if (d.tok === tok && self.cur !== d) d.el.pause(); }, 2700); };
+P.playTrack = function (id, at) {
+  var c = this.ctx, self = this, old = this.cur, d = this.decks[old === this.decks[0] ? 1 : 0], tr = TRACKS[id];
+  if (old) this.fadeOut(old);
+  d.tok = (d.tok || 0) + 1; d.id = id; this.cur = d; this.nowPlaying = tr;
+  var src = 'music/' + tr.f; if (d.el.getAttribute('src') !== src) { d.el.src = src; d.el.preload = 'auto'; }
+  var seek = function () { try { if (at && Math.abs(d.el.currentTime - at) > 1) d.el.currentTime = at; } catch (e) { /* not seekable yet */ } };
+  if (d.el.readyState >= 1) seek(); else d.el.addEventListener('loadedmetadata', seek, { once: true });
+  var t = c.currentTime; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(1, t + (old ? 2.5 : 1.2));
+  var p = d.el.play(); if (p && p.catch) p.catch(function (e) { if (e && e.name === 'NotSupportedError') { self.bad[id] = 1; if (self.cur === d) self.nextTrack(); } });
+  var tok = d.tok; d.el.addEventListener('playing', function () { if (d.tok === tok && self.cur === d && self.onTrack && !self.shown[tok + d.id]) { self.shown[tok + d.id] = 1; self.onTrack(tr); } }, { once: true });
+};
+P.recFallback = function () { this.recOK = false; if (this.cur) this.fadeOut(this.cur); this.cur = null; var m = this.mode; this.mode = null; this.setMode(m); };
+P.duck = function (amt, rel) { if (!this.duckG) return; var t = this.ctx.currentTime, g = this.duckG.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(1 - amt, t + 0.04); g.setTargetAtTime(1, t + 0.25, rel || 0.6); };
+P.toggleMusic = function (on) { this.musicMuted = on === undefined ? !this.musicMuted : !on; if (!this.ctx) return; var t = this.ctx.currentTime; this.music.gain.setTargetAtTime(this.musicMuted ? 0 : this.vol.music * 0.8, t, 0.08); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.08); return !this.musicMuted; };
 
 /* ---------- instruments ---------- */
 P.env = function (g, t, a, peak, hold, rel) { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.exponentialRampToValueAtTime(0.0001, t + a + hold + rel); };
@@ -86,6 +152,7 @@ P.setMode = function (m, intensity) {
   if (intensity !== undefined) this.intensity = intensity;
   if (m === this.mode) return;
   this.mode = m; this.mt = this.ctx.currentTime + 0.2; this.bar = 0; this.nextVoice = this.mt; this.nextChord = this.mt; this.dawnT = null;
+  if (this.useRec()) { this.recMode(m); return; }
   if (m === 'dawn') this.dawn(this.mt);
   if (m === 'victory') this.victory(this.mt);
   if (m === 'defeat') this.defeat(this.mt);
@@ -110,6 +177,7 @@ P.tick = function () {
   this.hum.gain.setTargetAtTime(Math.min(0.05, this.beams * 0.014), now, 0.08);
   this.lhum.gain.setTargetAtTime(Math.min(0.05, this.lances * 0.02), now, 0.1);
   var m = this.mode;
+  if (this.cur && this.recOK) return; // recorded music is playing
   if (m === 'dawn' && now > this.dawnEnd) { this.mode = 'ambient'; this.nextChord = now; }
   if (m === 'ambient' || m === 'menu') {
     while (this.nextChord < ahead) { var ch = AMBIENT[this.bar++ % 4], t = this.nextChord; ch.forEach(function (mm, k) { if (k) this.voice(mm, t, 7.5, 0.035); }, this); this.organ([ch[0] - 12, ch[0]], t, 8, 0.1);
@@ -142,37 +210,75 @@ P.tick = function () {
 };
 
 /* ---------- sound effects ---------- */
+P.pan = function (dest, p) { if (!this.ctx.createStereoPanner) return dest; var s = this.ctx.createStereoPanner(); s.pan.value = Math.max(-1, Math.min(1, p)); s.connect(dest); return s; };
+P.send = function (amt) { var g = this.ctx.createGain(); g.gain.value = amt; g.connect(this.rev); return g; };
+/* a layered explosion: sub-bass drop, a lowpass-swept roar, crackle, and a long reverb tail. size ~0.3 (small) .. 2 (boss) */
+P.explode = function (t, size, pan) {
+  var c = this.ctx, now = c.currentTime; this.booms = (this.booms || []).filter(function (x) { return x > now; });
+  var crowd = 1 / Math.sqrt(1 + this.booms.length * 0.6); this.booms.push(t + 0.6 + size * 0.6);
+  var v = Math.min(1, 0.35 + size * 0.4) * crowd, dur = 0.5 + size * 1.1;
+  var bus = c.createGain(); bus.gain.value = 1; bus.connect(this.pan(this.sfx, pan || 0)); var tail = this.send(0.25 + size * 0.35); bus.connect(tail);
+  // sub-bass: a sine that falls from ~90 Hz to the floor
+  this.thump(t, 70 + 40 / (0.5 + size), 24, dur * 1.1, 0.32 * v + 0.08 * size, bus);
+  this.thump(t, 140, 50, 0.18, 0.12 * v, bus);
+  // roar: noise through a lowpass sweeping down
+  this.noise(t, dur, 2200 + 1500 * Math.min(1, size), 0.16 * v, bus, 'lowpass', 90);
+  // body: band-passed rumble that lingers
+  this.noise(t + 0.02, dur * 1.4, 220, 0.12 * v * Math.min(1.4, size + 0.3), bus, 'lowpass', 50);
+  // crackle: short bright fragments
+  var n = 3 + Math.round(size * 5); for (var i = 0; i < n; i++) this.noise(t + 0.03 + Math.random() * dur * 0.5, 0.03 + Math.random() * 0.05, 3000 + Math.random() * 3000, 0.035 * v, bus, 'bandpass');
+  if (size > 0.9) this.duck(Math.min(0.5, 0.2 + size * 0.15), 0.5 + size * 0.4);
+};
+/* a railgun crack: transient click, metallic zing, small thump */
+P.zing = function (t, heavy, pan) {
+  var c = this.ctx, bus = c.createGain(); bus.gain.value = heavy ? 1 : 0.6; bus.connect(this.pan(this.sfx, pan || 0)); bus.connect(this.send(0.15));
+  this.noise(t, 0.012, 6000, 0.12, bus, 'highpass');
+  var o = c.createOscillator(), g = c.createGain(), bp = c.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.setValueAtTime(heavy ? 1800 : 3200, t); o.frequency.exponentialRampToValueAtTime(heavy ? 300 : 900, t + (heavy ? 0.3 : 0.14));
+  bp.type = 'bandpass'; bp.Q.value = 6; bp.frequency.setValueAtTime(heavy ? 2400 : 4200, t); bp.frequency.exponentialRampToValueAtTime(900, t + 0.2); o.connect(bp); bp.connect(g); g.connect(bus); this.env(g, t, 0.002, heavy ? 0.05 : 0.025, 0, heavy ? 0.35 : 0.16); o.start(t); o.stop(t + 0.45);
+  this.thump(t, heavy ? 150 : 260, heavy ? 45 : 120, heavy ? 0.45 : 0.1, heavy ? 0.2 : 0.05, bus);
+};
+/* a rising sweep used before boss arrivals and super-weapons */
+P.riser = function (t, dur, vol) {
+  var c = this.ctx, bus = c.createGain(); bus.gain.value = 1; bus.connect(this.sfx); bus.connect(this.send(0.6));
+  var s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3; bp.frequency.setValueAtTime(180, t); bp.frequency.exponentialRampToValueAtTime(5200, t + dur);
+  var g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.95); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.08); s.connect(bp); bp.connect(g); g.connect(bus); s.start(t); s.stop(t + dur + 0.1);
+  [0, 7, 12].forEach(function (iv) { var o = c.createOscillator(), og = c.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(mtof(38 + iv), t); o.frequency.exponentialRampToValueAtTime(mtof(50 + iv), t + dur); var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(3000, t + dur);
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(vol * 0.35, t + dur * 0.95); og.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05); o.connect(lp); lp.connect(og); og.connect(bus); o.start(t); o.stop(t + dur + 0.1); });
+};
 var PENTA = [62, 64, 66, 69, 71];
 P.sfxEvent = function (e) {
   if (!this.ctx || this.ctx.state !== 'running') return;
-  var t = this.ctx.currentTime + 0.01, A = root.HPD.ALIENS;
+  var t = this.ctx.currentTime + 0.01, A = root.HPD.ALIENS, ex = e.x !== undefined ? e.x : e.x0, pan = ex !== undefined ? Math.max(-0.7, Math.min(0.7, ex / 520)) : (Math.random() - 0.5) * 0.4;
   switch (e.k) {
-    case 'rail': if (!this.throttle('rail', 70)) return; this.noise(t, 0.09, e.heavy ? 900 : 2400, e.heavy ? 0.18 : 0.06, this.sfx, 'bandpass'); this.thump(t, e.heavy ? 160 : 320, e.heavy ? 50 : 140, e.heavy ? 0.4 : 0.12, e.heavy ? 0.22 : 0.06); break;
-    case 'grid': if (!this.throttle('grid', 120)) return; this.thump(t, 520, 260, 0.08, 0.03); break;
-    case 'missile': if (!this.throttle('msl', 110)) return; this.noise(t, 0.45, 600, 0.05, this.sfx, 'bandpass', 2400); break;
-    case 'boom': if (!this.throttle('boom', 60)) return; this.thump(t, e.nova ? 110 : 140, 38, e.nova ? 1.2 : 0.55, e.nova ? 0.3 : 0.14); this.noise(t, e.nova ? 1.2 : 0.5, 500, e.nova ? 0.18 : 0.07, this.sfx, 'lowpass', 120); break;
-    case 'emp': if (!this.throttle('emp', 150)) return; this.thump(t, 900, 120, 0.7, 0.07); this.bell(93, t, 0.03); break;
+    case 'rail': if (!this.throttle('rail', 70)) return; this.zing(t, e.heavy, pan); break;
+    case 'grid': if (!this.throttle('grid', 120)) return; this.zing(t, false, 0); break;
+    case 'missile': if (!this.throttle('msl', 110)) return; this.noise(t, 0.5, 500, 0.05, this.pan(this.sfx, pan), 'bandpass', 2600); this.thump(t, 90, 60, 0.2, 0.05); break;
+    case 'boom': if (!this.throttle('boom', e.nova ? 60 : 90)) return; this.explode(t, e.nova ? 1.1 : 0.45, pan); break;
+    case 'emp': if (!this.throttle('emp', 150)) return; this.thump(t, 140, 1800, 0.16, 0.05); this.thump(t + 0.16, 1600, 90, 0.7, 0.07); this.noise(t, 0.8, 3000, 0.05, this.sfx, 'bandpass', 300); this.bell(93, t + 0.1, 0.025); break;
     case 'dshot': if (!this.throttle('dshot', 90)) return; this.thump(t, 1400, 900, 0.05, 0.02); break;
-    case 'kill': var a = A[e.type]; if (e.boss) { this.thump(t, 80, 25, 3.5, 0.5); this.noise(t, 3, 300, 0.3, this.sfx, 'lowpass', 60); [50, 57, 62, 69, 74].forEach(function (m, i) { this.voice(m, t + i * 0.1, 5, 0.06); }, this); this.bell(86, t + 0.5, 0.08, this.sfx, 5); return; }
+    case 'kill': var a = A[e.type]; if (!a) return;
+      if (e.boss) { this.explode(t, 2, 0); this.explode(t + 0.35, 1.3, -0.4); this.explode(t + 0.8, 1.1, 0.4); [50, 57, 62, 69, 74].forEach(function (m, i) { this.voice(m, t + 0.4 + i * 0.1, 5, 0.06); }, this); this.bell(86, t + 0.9, 0.08, this.sfx, 5); return; }
       if (!this.throttle('kill', 55)) return;
-      var oct = a.cost < 2 ? 24 : a.cost < 6 ? 12 : a.cost < 15 ? 0 : -12; this.bell(PENTA[(Math.random() * 5) | 0] + oct, t, a.cost < 2 ? 0.025 : 0.05, this.sfx, a.cost < 2 ? 1.2 : 2.6);
-      if (a.cost >= 6) this.thump(t, 120, 40, 0.6, 0.1 + Math.min(0.2, a.cost / 100)); break;
-    case 'impact': this.thump(t, 70, 28, 1.4, 0.4); this.noise(t, 1, 250, 0.2, this.sfx, 'lowpass', 60); this.voice(51, t, 2, 0.05, -60); break;
-    case 'shell': if (!this.throttle('shell', 300)) return; this.thump(t, 100, 40, 0.8, 0.14); break;
+      var oct = a.cost < 2 ? 24 : a.cost < 6 ? 12 : a.cost < 15 ? 0 : -12; this.bell(PENTA[(Math.random() * 5) | 0] + oct, t, a.cost < 2 ? 0.02 : 0.04, this.sfx, a.cost < 2 ? 1.2 : 2.6);
+      if (a.cost >= 2) this.explode(t, Math.min(1.2, 0.25 + a.cost / 14), pan); else this.noise(t, 0.12, 2400, 0.03, this.pan(this.sfx, pan), 'lowpass', 400);
+      break;
+    case 'impact': this.explode(t, 1.4, 0); this.voice(51, t, 2, 0.05, -60); break;
+    case 'shell': if (!this.throttle('shell', 300)) return; this.explode(t, 0.6, pan); break;
     case 'shieldHit': if (!this.throttle('shh', 120)) return; this.bell(98, t, 0.03, this.sfx, 1); this.noise(t, 0.3, 4000, 0.03, this.sfx, 'highpass'); break;
     case 'raid': this.bell(63, t, 0.06, this.sfx, 1.5); this.thump(t, 200, 60, 0.4, 0.1); break;
-    case 'destroyed': this.thump(t, 90, 30, 1.5, 0.3); this.voice(50, t, 2.5, 0.05, -100); break;
-    case 'build': this.bell(74, t, 0.06); this.bell(81, t + 0.09, 0.05); break;
+    case 'destroyed': this.explode(t, 1.0, pan); this.voice(50, t, 2.5, 0.05, -100); break;
+    case 'build': this.bell(74, t, 0.06); this.bell(81, t + 0.09, 0.05); this.thump(t, 220, 110, 0.12, 0.05); break;
     case 'upgrade': this.bell(74, t, 0.05); this.bell(78, t + 0.08, 0.05); this.bell(81, t + 0.16, 0.06); break;
     case 'sell': this.bell(81, t, 0.05); this.bell(74, t + 0.1, 0.04); break;
     case 'research': [62, 69, 74, 78].forEach(function (m, i) { this.voice(m, t, 3, 0.05); this.bell(m + 24, t + i * 0.12, 0.04); }, this); break;
-    case 'waveStart': this.bell(38, t, 0.18, this.sfx, 6); this.bell(50, t + 0.02, 0.1, this.sfx, 5); this.thump(t, 60, 40, 3, 0.18); break;
+    case 'waveStart': this.bell(38, t, 0.16, this.sfx, 6); this.bell(50, t + 0.02, 0.09, this.sfx, 5); this.thump(t, 55, 30, 3, 0.22, this.send(0.5)); this.thump(t, 55, 30, 3, 0.2); break;
     case 'waveEnd': this.bell(74, t, 0.08, this.sfx, 5); this.bell(69, t + 0.4, 0.06, this.sfx, 5); this.bell(78, t + 0.8, 0.06, this.sfx, 5); break;
-    case 'boss': this.brass(38, t, 4, 0.18); this.timp(26, t, 0.4); this.timp(26, t + 0.6, 0.3); this.timp(33, t + 1.2, 0.4); break;
-    case 'monoPulse': [55, 56, 58, 61, 62].forEach(function (m) { this.voice(m, t, 3, 0.04, (Math.random() - 0.5) * 200); }, this); this.thump(t, 50, 30, 2.5, 0.25); break;
+    case 'boss': this.riser(t, 2.4, 0.09); var tb = t + 2.4; this.thump(tb, 60, 22, 3.5, 0.4); this.thump(tb, 60, 22, 3.5, 0.3, this.send(0.7)); this.noise(tb, 2.5, 600, 0.12, this.sfx, 'lowpass', 60);
+      this.brass(38, tb, 4, 0.2); this.brass(45, tb + 0.05, 4, 0.12); this.timp(26, tb, 0.45, this.sfx); this.timp(26, tb + 0.6, 0.3, this.sfx); this.timp(33, tb + 1.2, 0.4, this.sfx); this.duck(0.5, 1.5); break;
+    case 'monoPulse': [55, 56, 58, 61, 62].forEach(function (m) { this.voice(m, t, 3, 0.04, (Math.random() - 0.5) * 200); }, this); this.thump(t, 50, 24, 2.5, 0.3); this.thump(t, 50, 24, 2.5, 0.2, this.send(0.6)); break;
     case 'monoOpen': this.bell(93, t, 0.04, this.sfx, 3); this.voice(74, t, 2.5, 0.04); break;
-    case 'super': this.thump(t, 60, 25, 3, 0.4); this.noise(t, 2.5, 800, 0.15, this.sfx, 'lowpass', 80); [50, 57, 62, 66, 69, 74].forEach(function (m) { this.voice(m, t, 4, 0.06); }, this); this.brass(50, t, 2, 0.15); break;
-    case 'phase': this.brass(39, t, 3, 0.18); this.voice(51, t, 4, 0.06, 80); break;
+    case 'super': this.riser(t, 0.9, 0.08); this.explode(t + 0.9, 1.8, 0); [50, 57, 62, 66, 69, 74].forEach(function (m) { this.voice(m, t + 0.9, 4, 0.06); }, this); this.brass(50, t + 0.9, 2, 0.15); this.duck(0.55, 1.6); break;
+    case 'phase': this.brass(39, t, 3, 0.18); this.voice(51, t, 4, 0.06, 80); this.thump(t, 50, 24, 2.5, 0.3); break;
     case 'launch': if (!this.throttle('launch', 400)) return; this.noise(t, 0.4, 300, 0.05, this.sfx, 'bandpass', 900); break;
     case 'ui': this.bell(e.m || 86, t, 0.025, this.sfx, 0.6); break;
     case 'deny': this.thump(t, 180, 120, 0.15, 0.06); break;

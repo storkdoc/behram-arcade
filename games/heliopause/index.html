@@ -77,6 +77,7 @@
   <div class="setlist">
     <label>MASTER <input type="range" min="0" max="100" id="vMaster"></label>
     <label>MUSIC <input type="range" min="0" max="100" id="vMusic"></label>
+    <label>MUSIC ON / OFF <small style="opacity:.5">M</small> <select id="sMusic"><option value="1">ON</option><option value="0">MUTED</option></select></label>
     <label>EFFECTS <input type="range" min="0" max="100" id="vSfx"></label>
     <label>VISUAL QUALITY <select id="sQual"><option value="high">HIGH</option><option value="low">LOW (battery)</option></select></label>
     <label>APPROACH PATHS <select id="sPaths"><option value="1">SHOWN</option><option value="0">HIDDEN</option></select></label>
@@ -89,6 +90,13 @@
 <div id="howto" class="screen">
   <div class="shead">HOW TO DEFEND THE EARTH</div>
   <div class="howtxt" id="howtxt"></div>
+  <div class="srow"><button class="ghost" data-back>BACK</button></div>
+</div>
+
+<!-- ============ CREDITS ============ -->
+<div id="credits" class="screen">
+  <div class="shead">CREDITS</div>
+  <div class="howtxt" id="credtxt"></div>
   <div class="srow"><button class="ghost" data-back>BACK</button></div>
 </div>
 
@@ -110,10 +118,12 @@
   <button id="bRes" title="Research (R)">RESEARCH</button>
   <button id="bSuper" title="Super-weapon (Enter)"><span id="supName">BARRAGE</span><i id="supFill"></i></button>
   <button id="bCam" title="Recentre (H)">◎</button>
+  <button id="bMus" title="Music on / off (M)" aria-label="Music on or off">♪</button>
 </div>
 <div id="panel" class="hide"><button id="pToggle">▸</button><div id="pBody"></div></div>
 <button id="launch" class="hide">LAUNCH WAVE <small>SPACE</small></button>
 <div id="toasts"></div>
+<div id="nowPlaying" aria-live="polite"></div>
 <div id="card" class="hide"><div class="c1" id="c1"></div><div class="c2" id="c2"></div><div class="c3" id="c3"></div></div>
 
 <!-- ============ RESEARCH ============ -->

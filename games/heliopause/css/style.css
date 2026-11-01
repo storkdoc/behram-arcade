@@ -246,3 +246,12 @@ button:focus:not(:focus-visible) { outline: none; }
   #research .rinfo { font-size: 10px; min-height: 40px; margin-top: 4px; line-height: 1.35; } .rinfo .kh { display: none; }
   #research .srow { margin-top: 4px; } #research .srow button { padding: 5px 10px; font-size: 10px; }
 }
+/* ---- music: now playing + mute ---- */
+#nowPlaying { position: fixed; z-index: 40; left: 50%; bottom: calc(64px + var(--sb)); transform: translateX(-50%); pointer-events: none; opacity: 0; font-size: 10.5px; letter-spacing: .12em; color: rgba(236,241,252,.9); background: rgba(3,5,16,.72); border: 1px solid rgba(200,215,245,.18); padding: 5px 14px 6px; border-radius: 14px; text-align: center; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+#nowPlaying b { font-weight: 400; color: #ffe2b0; } #nowPlaying small { display: block; font-size: 8.5px; color: rgba(210,220,245,.6); margin-top: 1px; }
+#nowPlaying.on { animation: npfade 6s ease forwards; }
+@keyframes npfade { 0% { opacity: 0; } 10% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+#bMus.off { opacity: .45; text-decoration: line-through; }
+#credits { background: rgba(0,0,6,.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#credtxt { font-size: 12px; }
+@media (max-height: 500px) { #nowPlaying { bottom: calc(52px + var(--sb)); font-size: 9px; } #credtxt { font-size: 10.5px; max-height: 62vh; } }
