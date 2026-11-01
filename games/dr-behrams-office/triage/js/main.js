@@ -11,7 +11,7 @@
   var save = function () { LS.set('obt.v1', SAVE); };
   var G = window.OBT = { screen: 'boot', phase: null, paused: false, instructor: false, booted: false, errors: [], att: false, speed: 10, view: null, paper: SAVE.set.paper || 3 };
   var SPEEDS = [1, 5, 10, 20, 40];
-  var QUOTES = ['“The strip is a screening test. The patient is the diagnosis.”', '“Describe it first. Name it second. Treat the cause third.”', '“Variability is the baby telling you its brain has oxygen.”', '“Nobody ever got in trouble for turning the Pitocin off.”', '“Early decels are the baby’s head saying hello. Lates are the placenta saying help.”', '“Look at the contractions. Then look again. Then count them.”'];
+  var QUOTES = ['“The strip is a screening test. The patient is the diagnosis.”', '“Describe it first. Name it second. Treat the cause third.”', '“Variability is the baby telling you its brain has oxygen.”', '“Nobody ever got in trouble for turning the oxytocin off.”', '“Early decels are the baby’s head saying hello. Lates are the placenta saying help.”', '“Look at the contractions. Then look again. Then count them.”'];
   var Q_GOOD = ['That’s the move.', 'Good. Babies like that.', 'Exactly what I’d do.', 'Nice. You’ve done this before.', 'Yes. Write that down for your boards.'];
   var Q_HARM = ['Let’s… not do that again.', 'The baby just filed a complaint.', 'Hmm. Walk me through your thinking. Slowly.', 'I’m going to pretend I didn’t see that.'];
   var Q_BAD = ['Why that, though?', 'Not indicated here. Think about the cause.', 'That doesn’t treat what’s going on.'];
@@ -37,7 +37,7 @@
     $('#pads').classList.toggle('hidden', !(G.touch && (id === 'desk')));
     G.screen = id; allPics();
     try { window.MoodSticker && MoodSticker.screen(id); } catch (e) {}
-    setTimeout(function () { var f = firstNav(); if (f && !G.touch) f.focus({ preventScroll: true }); }, 30);
+    setTimeout(function () { var f = firstNav(); if (f && !G.touch && $('#pause').classList.contains('hidden')) f.focus({ preventScroll: true }); }, 30);
     if (id === 'desk') resize();
   }
   function banner(html, cls, sec) { var b = $('#banner'); b.innerHTML = html; b.className = cls || ''; clearTimeout(banner.t); banner.t = setTimeout(function () { b.className = 'hidden'; }, (sec || 2.2) * 1000); }
@@ -367,9 +367,9 @@
       case 'kneechest': p.cord *= 0.8; if (p.prolapse > 0) S.ramp('relief', Math.max(p.relief, 0.35), 15); return [N, 'Knee-chest position… or as close as we can get with these lines.'];
       case 'stopPush': if (!(p.push > 0)) return [N, 'She isn’t pushing.']; S.ramp('push', 0.3, 30); p.cord *= 0.85; return [N, 'Okay mama, we’re going to push with every other contraction.'];
       case 'o2': return [N, 'Non-rebreather on at 10 L. Her sat was ' + c.pt.vitals.SpO2 + '% on room air.'];
-      case 'stopOxy': if (!(p.oxy > 0)) return [N, 'She’s not on oxytocin.']; p.oxy = 0; return [N, 'Pitocin is OFF.'];
-      case 'decOxy': if (!(p.oxy > 0)) return [N, 'She’s not on oxytocin.']; p.oxy = Math.round(p.oxy / 2 * 10) / 10; return [N, 'Pitocin down to ' + p.oxy + ' mU/min.'];
-      case 'incOxy': p.oxy = (p.oxy || 0) + 4; return [N, 'Pitocin up to ' + p.oxy + ' mU/min… you’re sure?'];
+      case 'stopOxy': if (!(p.oxy > 0)) return [N, 'She’s not on oxytocin.']; p.oxy = 0; return [N, 'Oxytocin is OFF.'];
+      case 'decOxy': if (!(p.oxy > 0)) return [N, 'She’s not on oxytocin.']; p.oxy = Math.round(p.oxy / 2 * 10) / 10; return [N, 'Oxytocin down to ' + p.oxy + ' mU/min.'];
+      case 'incOxy': p.oxy = (p.oxy || 0) + 4; return [N, 'Oxytocin up to ' + p.oxy + ' mU/min… you’re sure?'];
       case 'holdMiso': if (!(p.miso > 0)) return [N, 'She hasn’t had misoprostol.']; f.misoHeld = 1; return [N, 'Holding the next miso dose. Charted.'];
       case 'terb': if (f.terb) return [N, 'She already got terbutaline. Her heart rate is ' + S.maternal.hr + '.']; f.terb = 1; S.after(90, function (s) { s.p.terb = 1; s.ramp('tetanic', 0, 40); }); return [N, 'Terbutaline 0.25 mg subcutaneous, given. Should work in a couple of minutes. She’ll feel jittery.'];
       case 'pressor': if (p.hypo > 0.15) { S.after(40, function (s) { s.ramp('hypo', 0.04, 45); }); return ['gas', 'Phenylephrine 100 mcg IV pushed. Pressure should come right up.']; } return ['gas', 'Her pressure is ' + S.maternal.sbp + '/' + S.maternal.dbp + '. I’m not giving a pressor to a normotensive patient.'];
@@ -406,7 +406,7 @@
     if (id === 'observe') { G.speed = 40; buildSpeeds(); }
     var foc = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.a; panel(); if (foc && !G.touch) { var e = $('#panel .act[data-a="' + foc + '"]'); e && e.focus({ preventScroll: true }); }
   }
-  var SHORT = { lateral: 'Lateral', bolus: 'Bolus', kneechest: 'Knee-chest', stopPush: 'Space pushes', o2: 'O2', stopOxy: 'Pit OFF', decOxy: 'Pit ½', incOxy: 'Pit ↑', holdMiso: 'Hold miso', terb: 'Terb', pressor: 'Pressor', abx: 'Amp/gent', apap: 'Tylenol', stopMag: 'Mag OFF', sve: 'SVE', scalp: 'Scalp stim', fse: 'FSE', iupc: 'IUPC', amnio: 'Amnioinf.', elevate: 'Elevate', anesth: 'Anesthesia', nicu: 'NICU', labs: 'Labs', blood: 'Blood', observe: 'Observe' };
+  var SHORT = { lateral: 'Lateral', bolus: 'Bolus', kneechest: 'Knee-chest', stopPush: 'Space pushes', o2: 'O2', stopOxy: 'Pit OFF', decOxy: 'Pit ½', incOxy: 'Pit ↑', holdMiso: 'Hold miso', terb: 'Terb', pressor: 'Pressor', abx: 'Amp/gent', apap: 'APAP', stopMag: 'Mag OFF', sve: 'SVE', scalp: 'Scalp stim', fse: 'FSE', iupc: 'IUPC', amnio: 'Amnioinf.', elevate: 'Elevate', anesth: 'Anesthesia', nicu: 'NICU', labs: 'Labs', blood: 'Blood', observe: 'Observe' };
   function shortLbl(id) { return SHORT[id] || id; }
   function keysMissing() {
     var c = G.case, done = {}; G.log.forEach(function (l) { done[l.id] = 1; });
@@ -428,7 +428,7 @@
     if (G.pendingRecheck && S.t >= G.pendingRecheck) { G.pendingRecheck = 0; openRecheck(); }
   }
   var ASKS = {
-    restart: { title: 'Restart oxytocin?', q: 'The strip has been reassuring for a while and she’s contracting every 3–4 minutes. Paige asks: “Pitocin back on? At what rate?”', opts: ['Restart at a lower rate (about half the old rate) and re-titrate', 'Back to 14 mU/min, where we were', 'Never again: book the cesarean', 'Restart at 20 mU/min to catch up'], correct: 0, why: 'Once the tracing is reassuring and tachysystole has resolved, oxytocin may be restarted at a lower rate (protocols vary: often half the prior rate if off <20–30 min, or the starting dose if off longer) and titrated carefully.' }
+    restart: { title: 'Restart oxytocin?', q: 'The strip has been reassuring for a while and she’s contracting every 3–4 minutes. Paige asks: “Pit back on? At what rate?”', opts: ['Restart at a lower rate (about half the old rate) and re-titrate', 'Back to 14 mU/min, where we were', 'Never again: book the cesarean', 'Restart at 20 mU/min to catch up'], correct: 0, why: 'Once the tracing is reassuring and tachysystole has resolved, oxytocin may be restarted at a lower rate (protocols vary: often half the prior rate if off <20–30 min, or the starting dose if off longer) and titrated carefully.' }
   };
   function openAsk(k) { var Q = ASKS[k]; G.rq = { title: Q.title, q: Q.q, opts: Q.opts, correct: Q.correct, why: Q.why, kind: k, t: G.sim.t }; setPhase('recheck'); A.page(); }
   function openRecheck() {
@@ -438,9 +438,9 @@
   }
   function answerRecheck(i) {
     var Q = G.rq, ok = i === Q.correct; G.rechecks.push({ title: Q.title, q: Q.q, you: Q.opts[i], key: Q.opts[Q.correct], ok: ok, why: Q.why, t: Q.t - G.tAct });
-    if (Q.kind === 'restart' && i === 0) { G.sim.p.oxy = 6; G.sim.mark('Pit 6', 'act'); feed('nurse', 'Pitocin restarted at 6 mU/min.'); }
+    if (Q.kind === 'restart' && i === 0) { G.sim.p.oxy = 6; G.sim.mark('Pit 6', 'act'); feed('nurse', 'Oxytocin restarted at 6 mU/min.'); }
     if (Q.kind === 'restart' && i === 1) { G.sim.p.oxy = 14; G.sim.mark('Pit 14', 'bad'); feed('nurse', 'Back to 14 mU/min.'); }
-    if (Q.kind === 'restart' && i === 3) { G.sim.p.oxy = 20; G.sim.mark('Pit 20', 'bad'); feed('nurse', 'Pitocin at 20 mU/min…'); }
+    if (Q.kind === 'restart' && i === 3) { G.sim.p.oxy = 20; G.sim.mark('Pit 20', 'bad'); feed('nurse', 'oxytocin at 20 mU/min…'); }
     if (Q.kind === 'restart') G.log.push({ n: G.sim.n, t: G.sim.t - G.tAct, restart: i });
     setPhase('act'); (ok ? A.good : A.bad)();
     if (!G.att) say((ok ? '✔ ' : '✘ ') + esc(Q.why)); else say('Noted.');
@@ -621,7 +621,7 @@
   function visible(el) { if (!el || el.disabled) return false; var r = el.getBoundingClientRect(); if (!r.width || !r.height) return false; for (var x = el; x && x.nodeType === 1; x = x.parentElement) { var cs = getComputedStyle(x); if (cs.display === 'none' || cs.visibility === 'hidden') return false; } return true; }
   function scope() { var m = ['#lock', '#pause', '#howto', '#hist'].filter(function (s) { return !$(s).classList.contains('hidden'); })[0]; if (m) return $(m); if (G.screen === 'desk') return $('#desk'); return $('#' + G.screen); }
   function navs() { var sc = scope(); return sc ? Array.prototype.slice.call(sc.querySelectorAll('[data-nav]')).filter(visible) : []; }
-  function firstNav() { return navs()[0]; }
+  function firstNav() { var L = navs(); return L.filter(function (e) { return e.classList.contains("big"); })[0] || L[0]; }
   function move(dir) {
     var L = navs(); if (!L.length) return; var cur = document.activeElement; if (L.indexOf(cur) < 0) { L[0].focus(); return; }
     var r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, best = null, bs = 1e9;
@@ -784,7 +784,7 @@
     }).catch(function (e) { G.errors.push(String(e)); $('#lock').classList.remove('hidden'); G.booted = true; });
   }
   // test hooks (used by tests/page.test.js)
-  G.t = { key: function () { return G.key; }, answerAll: function () { var K = G.key; G.ans = { baseline: String(K.baseline), variability: K.variability, accels: K.accels, decel: K.decel, uc: K.uc, cat: K.cat }; panel(); }, act: doAction, cases: C, finish: function () { endWindow(); } };
+  G.t = { key: function () { return G.key; }, geo: function () { return geo; }, answerAll: function () { var K = G.key; G.ans = { baseline: String(K.baseline), variability: K.variability, accels: K.accels, decel: K.decel, uc: K.uc, cat: K.cat }; panel(); }, act: doAction, cases: C, finish: function () { endWindow(); } };
   window.addEventListener('error', function (e) { G.errors.push(String(e.message)); });
   boot();
 })();
