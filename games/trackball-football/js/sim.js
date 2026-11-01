@@ -51,6 +51,19 @@ const INT = {
   passive: 0.1,                              // human defender who never pressed but is closest to the catch
   cpu: [0.35, 0.45, 0.55], cpuSig: [0.24, 0.16, 0.1], // CPU defenders: base odds and timing error (s) by difficulty
 };
+/* PASSING for a human QB (rookie / pro / all-pro CPU defense; two humans play at pro). A CPU QB keeps the old numbers,
+   so the defense you play against the computer is unchanged. Throws should arrive and an open man should catch it:
+   catchR = how far (yd) the receiver can be from the ball and still catch it · beat = how much closer than the receiver
+   a defender must be to take the ball away · cpuInt = a CPU defender's pick odds on a contested ball (a defense that
+   SOLD OUT on the route keeps the old, much higher odds) · err = throw scatter (yd) · react = how close a defender must
+   be to break on a throw (slack, yd) · dropPen / tight = how much a stretch for the ball and a defender in his hip
+   pocket (within 1.45 yd) cost the catch, so open men catch it and covered men often don't · rushLate = extra time (s) the pass rush is slow off the ball · flight = ball
+   speed: T = a + d / (b + c d) seconds for a d-yard throw. */
+const PASS = {
+  catchR: [2.4, 2.1, 1.85], beat: [0.7, 0.45, 0.3], cpuInt: [0.15, 0.25, 0.35], err: [0.1, 0.18, 0.25],
+  react: [0.3, 0.7, 1.0], rushLate: [0.42, 0.5, 0.35], flight: [0.2, 19.5, 0.24], dropPen: [0.03, 0.05, 0.07], tight: [0.3, 0.42, 0.55],
+  old: { catchR: 1.75, beat: 0.25, err: 0.35, react: 1.2, flight: [0.25, 17, 0.22] },
+};
 function intTiming(e) { const a = Math.abs(e), edge = e < 0 ? INT.early : INT.late; if (a <= INT.perfect) return 1; if (a >= edge) return 0; return 1 - 0.8 * (a - INT.perfect) / (edge - INT.perfect); }
 function intDist(d) { return d <= INT.close ? 1 : d >= INT.reach ? 0 : 1 - (d - INT.close) / (INT.reach - INT.close); }
 function intOdds(e, d, base, recvCloser) { return base * intTiming(e) * intDist(d) * (recvCloser ? 0.7 : 1); }
@@ -283,7 +296,7 @@ const Sim = (() => {
     ev('hike', G.los, G.ballY);
     if (op.kind === 'punt' || op.kind === 'fg') { G.special = { k: op.kind, at: 0.85 }; }
     else G.special = null;
-    G.aim[off] = -1;
+    G.aim[off] = -1; G.aimT = [-1, -1]; G.aimR = [-9, -9];
   }
 
   /* ---------------- helpers ---------------- */
@@ -314,15 +327,17 @@ const Sim = (() => {
   function openness(r, team) {
     let m = 99; for (const q of teamPl(1 - team)) { if (q.st === 'down') continue; m = Math.min(m, hyp(q.x - r.x, q.y - r.y)); } return m;
   }
+  /** passing numbers for team t's QB: the forgiving set for a human, the old one for the CPU */
+  function passK(t) { const h = G.human[t] && !(G.ctr && G.ctr.hit && G.ctr.by !== t), k = h ? (G.human[1 - t] ? 1 : G.opts.diff) : -1; return { h, k }; }
   function leadPoint(qb, r) {
-    let tx = r.x, ty = r.y, T = 0.5;
-    for (let k = 0; k < 3; k++) { const dist = hyp(tx - qb.x, ty - qb.y); T = 0.25 + dist / (17 + dist * 0.22); tx = r.x + r.vx * T; ty = r.y + r.vy * T; }
+    let tx = r.x, ty = r.y, T = 0.5; const F = passK(qb.team).h ? PASS.flight : PASS.old.flight;
+    for (let k = 0; k < 3; k++) { const dist = hyp(tx - qb.x, ty - qb.y); T = F[0] + dist / (F[1] + dist * F[2]); tx = r.x + r.vx * T; ty = r.y + r.vy * T; }
     return { x: clamp(tx, 0.5, 119.5), y: clamp(ty, 0.6, FIELD_W - 0.6), T };
   }
   function throwTo(qb, r, err) {
     const L = leadPoint(qb, r), b = G.ball;
     const ex = err ? rand(-err, err) : 0, ey = err ? rand(-err, err) : 0;
-    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: L.T, sx: qb.x, sy: qb.y, sz: 2.0, tx: L.x + ex, ty: L.y + ey, tz: 1.25, tgt: r.i, from: qb.i, x: qb.x, y: qb.y, z: 2.0, hold: 0, lunge: null, arr: null });
+    Object.assign(b, { st: 'air', kind: 'pass', holder: -1, t: 0, T: L.T, sx: qb.x, sy: qb.y, sz: 2.0, tx: L.x + ex, ty: L.y + ey, tz: 1.25, tgt: r.i, from: qb.i, x: qb.x, y: qb.y, z: 2.0, hold: 0, lunge: null, arr: null, launch: G.t });
     G.thrown = true; G.ctl[qb.team] = r.i; qb.throwT = 0.35;
     ev('throw', qb.x, qb.y);
   }
@@ -438,7 +453,8 @@ const Sim = (() => {
     // ball in the air: break on it if I can get there
     if (b.st === 'air' && b.kind === 'pass') {
       const left = Math.max(0, b.T - b.t), dist = hyp(b.tx - p.x, b.ty - p.y);
-      if (dist < left * p.maxv * 1.05 + 1.2 && G.t - b.launch > s.react) return moveTo(p, b.tx, b.ty, p.maxv);
+      const pk = passK(off), slack = pk.h ? PASS.react[pk.k] : PASS.old.react;
+      if (dist < left * p.maxv * 1.05 + slack && G.t - b.launch > s.react) return moveTo(p, b.tx, b.ty, p.maxv);
       // can't get there in time: a cover man on the target trails to the landing spot (tracking the ball, not his back) to tackle at the catch
       const r = P(b.tgt); if (p.manT === b.tgt || hyp(r.x - p.x, r.y - p.y) < 6) return moveTo(p, b.tx, b.ty, p.maxv * 1.04);
       return pursue(p, r, p.maxv);
@@ -453,14 +469,14 @@ const Sim = (() => {
     const qb = P(off * 7 + 3);
     switch (p.as) {
       case 'rush': {
-        const tgt = c || qb;
+        const tgt = c || qb, pk = passK(off), late = pk.h && G.kind === 'pass' ? PASS.rushLate[pk.k] : 0; // a human QB gets a beat longer to set up
         if (p.role === 'S' && G.t < 0.75) return moveTo(p, p.x - d * 3, p.y, p.maxv * 0.35); // a safety blitz is delayed: he reads run/pass first, so a run still has someone over the top
-        if (p.role === 'DE' && G.t > 0.25 && (G.kind === 'pass' || K.out > 0.35)) { // ends rush with outside leverage (vs the pass, or once he keeps bouncing runs outside): no escaping around them
+        if (p.role === 'DE' && G.t > 0.25 + late && (G.kind === 'pass' || K.out > 0.35)) { // ends rush with outside leverage (vs the pass, or once he keeps bouncing runs outside): no escaping around them
           // (that leaves the inside softer: a defense keyed on the edge can be gashed up the middle)
           const side = Math.sign(p.y - G.ballY) || 1, w = 1.4 + 2.2 * K.out, dd = hyp(tgt.x - p.x, tgt.y - p.y);
           if (dd > 2.2) { const cx = tgt.x + tgt.vx * 0.3, cy = tgt.y + tgt.vy * 0.3 + side * Math.min(w, dd * 0.5); return moveTo(p, cx, cy, p.maxv); }
         }
-        return pursue(p, tgt, p.maxv * (G.t < 0.25 ? 0.6 : 1));
+        return pursue(p, tgt, p.maxv * (G.t < 0.25 + late ? 0.6 : 1));
       }
       case 'crash': { // counter: fire to the spot at the snap, then hunt the ball (a blitz if it turns out to be a pass)
         const tag = p.asArg[3], Z = p.zone;
@@ -624,13 +640,16 @@ const Sim = (() => {
       const c = carrier(), me = P(G.ctl[t]);
       if (inp.aP) {
         if (c && c.i === me.i) {
-          if (me.role === 'QB' && t === off && G.kind === 'pass' && !G.thrown && !G.crossed) { const r = P(G.aim[t] >= 0 ? G.aim[t] : bestAim(me)); throwTo(me, r, 0.35); }
+          if (me.role === 'QB' && t === off && G.kind === 'pass' && !G.thrown && !G.crossed) {
+            if (inp.ti != null && eligible(t).some(e => e.i === inp.ti)) G.aim[t] = inp.ti; // tapped a receiver (touch): throw to him
+            const r = P(G.aim[t] >= 0 ? G.aim[t] : bestAim(me)), pk = passK(t); throwTo(me, r, pk.h ? PASS.err[pk.k] : PASS.old.err);
+          }
           else if (G.wrap && G.wrap.c === me.i) { if (G.t - (me.mashT || -9) > 0.15) { me.mashT = G.t; G.wrap.m -= RUN.mash / Math.max(1, G.wrap.tk.length * 0.8); ev('grunt', me.x, me.y); } }
           else if (me.imm <= 0 && G.t - (me.jukeT || -9) > RUN.juke.cd) juke(me);
         } else if (t !== (c ? c.team : off)) defPress(t, me, inp);
       }
       if (inp.bP) {
-        if (c && c.i === me.i && me.role === 'QB' && !G.thrown && G.kind === 'pass') { cycleAim(t); }
+        if (c && c.i === me.i && me.role === 'QB' && !G.thrown && G.kind === 'pass') { cycleAim(t); G.aimT[t] = G.t; }
         else if (!(c && c.team === t)) switchTo(t);
       }
     }
@@ -659,7 +678,13 @@ const Sim = (() => {
       if (p.st === 'dive') { p.stT -= dt; if (p.stT <= 0) { p.st = 'down'; p.stT = 0.9; } wants.push({ x: p.vx, y: p.vy }); continue; }
       if (p.st === 'lunge') { p.stT -= dt; if (p.stT <= 0) { if (p.recov > 0) { p.st = 'stun'; p.stT = p.recov; p.recov = 0; } else p.st = 'ok'; } wants.push({ x: p.vx, y: p.vy }); continue; }
       const human = G.human[p.team] && G.ctl[p.team] === p.i && inputs[p.team];
-      if (human) {
+      if (human && G.thrown && b.st === 'air' && b.kind === 'pass' && b.tgt === p.i && p.team === off) {
+        // ball in the air to your man: he runs under it himself (the trackball only nudges him), so a throw to an open
+        // man isn't lost to the spin left over from the drop
+        const left = Math.max(0.05, b.T - b.t), dx = b.tx - p.x, dy = b.ty - p.y, dist = hyp(dx, dy), cm = inputs[p.team];
+        const sp = dist < 0.25 ? 0 : Math.min(p.maxv * 1.05, Math.max(dist / left, dist * 3.5));
+        w = { x: (dist ? dx / dist : 0) * sp + cm.x * 1.6, y: (dist ? dy / dist : 0) * sp + cm.y * 1.6 }; p.hm = cm.m || 0;
+      } else if (human) {
         const cm = inputs[p.team], role = p.role, f = (role === 'C' || role === 'LG' || role === 'RG' || role === 'DT') ? 0.86 : role === 'DE' ? 0.92 : 1;
         const top = BASE_V[role] * f * HUMAN_TOP;
         w = { x: cm.x * top, y: cm.y * top };
@@ -696,18 +721,25 @@ const Sim = (() => {
     checkDead();
     for (const p of G.pl) { if (p.tcd > 0) p.tcd -= dt; if (p.imm > 0) p.imm -= dt; if (p.noEng > 0) p.noEng -= dt; }
   }
-  function bestAim(qb) {
-    let best = null, bs = -1e9; const d = dirOf(qb.team);
-    for (const e of eligible(qb.team)) { if (e.st !== 'ok') continue; const L = leadPoint(qb, e); const s = Math.min(openness(L, qb.team), 6) + (L.x - G.los) * d * 0.05; if (s > bs) { bs = s; best = e; } }
+  /** how good a throw to e is right now: space at the catch point, plus a little for depth */
+  function aimScore(qb, e) { const d = dirOf(qb.team), L = leadPoint(qb, e); return Math.min(openness(L, qb.team), 6) + (L.x - G.los) * d * 0.05 + (G.op && G.op.screen && e.slot === 4 ? 1.5 : 0); }
+  function bestAim(qb, cur) {
+    let best = null, bs = -1e9;
+    for (const e of eligible(qb.team)) { if (e.st !== 'ok') continue; const s = aimScore(qb, e) + (e.i === cur ? 0.9 : 0); if (s > bs) { bs = s; best = e; } } // (sticky: no flicker between two men)
     return best ? best.i : qb.team * 7 + 5;
   }
+  /** the target ring: it rides the most open man until you pick one yourself (NEXT, a tap on him, or rolling the
+      ball toward him). Rolling the ball back to take the drop never moves it, and a NEXT pick sticks for a moment. */
   function updAim(t, qb) {
     const inp = inputs[t]; if (!inp) return;
     if (G.aim[t] < 0) G.aim[t] = bestAim(qb);
-    if (inp.m > 0.18 && !qb.aimLock) {
-      let best = -1, bs = 0.35;
+    if (G.aimT[t] < 0) G.aim[t] = bestAim(qb, G.aim[t]);
+    const d = dirOf(t);
+    if (inp.m > 0.35 && inp.x * d > -0.25 * inp.m && G.t - G.aimT[t] > 1.2) {
+      let best = -1, bs = 0.5;
       for (const e of eligible(t)) { const dx = e.x - qb.x, dy = e.y - qb.y, n = hyp(dx, dy) || 1; const cs = (dx * inp.x + dy * inp.y) / (n * inp.m); if (cs > bs) { bs = cs; best = e.i; } }
-      if (best >= 0) G.aim[t] = best;
+      if (best >= 0 && best !== G.aim[t] && G.t - (G.aimR[t] || -9) > 0.35) { G.aim[t] = best; G.aimR[t] = G.t; G.aimT[t] = Math.max(G.aimT[t], -0.5); }
+      else if (best >= 0 && best === G.aim[t] && G.aimT[t] < 0) G.aimT[t] = -0.5; // rolled toward the one it was already on: keep him
     }
   }
   function cycleAim(t) { const el = eligible(t).map(e => e.i); const k = el.indexOf(G.aim[t]); G.aim[t] = el[(k + 1) % el.length]; }
@@ -937,11 +969,11 @@ const Sim = (() => {
     if (b.kind === 'snap') { const qb = P(b.tgt); giveBall(qb); return; }
     if (b.kind === 'pitch') { const rb = P(b.tgt); if (hyp(rb.x - b.x, rb.y - b.y) < 3 && rb.st === 'ok') { giveBall(rb, 'catch'); return; } b.st = 'loose'; b.vx = (b.tx - b.sx) * 0.5; b.vy = (b.ty - b.sy) * 0.5; b.vz = 1; ev('fumble', b.x, b.y); return; }
     // forward pass: who is there when it arrives
-    const off = G.off, def = 1 - off; let r = null, rd = 1.75, dq = null, dd = 1.45;
+    const off = G.off, def = 1 - off, pk = passK(off); let r = null, rd = pk.h ? PASS.catchR[pk.k] : PASS.old.catchR, dq = null, dd = 1.45;
     for (const p of G.pl) {
       if (p.st === 'down' || p.eng >= 0) continue;
       const di = hyp(p.x - b.x, p.y - b.y);
-      if (p.team === off && (p.role === 'WR' || p.role === 'RB') && di < rd) { rd = di; r = p; }
+      if (p.team === off && (p.role === 'WR' || p.role === 'RB') && (di < rd || (r && r.i !== b.tgt && p.i === b.tgt && di < rd + 0.6))) { rd = di; r = p; } // (the intended man first)
       if (p.team !== off && di < dd) { dd = di; dq = p; }
     }
     b.arr = { r: r ? r.i : -1, rd, dq: dq ? dq.i : -1, dd, vz: vzEnd, d: G.pl.map(p => hyp(p.x - b.tx, p.y - b.ty)) };
@@ -958,7 +990,8 @@ const Sim = (() => {
   /** decide a forward pass: a timed lunge first, then the ordinary contest */
   function resolvePass(b) {
     const A = b.arr, off = G.off, def = 1 - off, vzEnd = A.vz; b.hold = 0;
-    const r = A.r >= 0 ? P(A.r) : null, rd = A.rd; let dq = A.dq >= 0 ? P(A.dq) : null, dd = A.dd;
+    const r = A.r >= 0 ? P(A.r) : null, rd = A.rd, pk = passK(off), beat = pk.h ? PASS.beat[pk.k] : PASS.old.beat, cR = pk.h ? PASS.catchR[pk.k] : PASS.old.catchR;
+    let dq = A.dq >= 0 ? P(A.dq) : null, dd = A.dd;
     const L = b.lunge && b.lunge[def];
     if (L) {
       const p = P(L.i), d = L.held ? Math.max(0, A.d[p.i] - INT.lateReach) : hyp(p.x - b.tx, p.y - b.ty);
@@ -972,24 +1005,25 @@ const Sim = (() => {
     }
     const s = sk(def);
     // a counter defender who sat on this route gets his hands on it even if the receiver is a step closer
-    if (G.ctr && !(dq && dd < rd - 0.25) && !G.human[def]) for (const q of teamPl(def)) {
+    if (G.ctr && !(dq && dd < rd - beat) && !G.human[def]) for (const q of teamPl(def)) {
       if ((q.as === 'jump' || q.as === 'bracket') && q.manT === b.tgt && q.st === 'ok' && A.d && A.d[q.i] != null && A.d[q.i] < 1.2 + 0.8 * G.ctr.sharp) { dq = q; dd = Math.min(A.d[q.i], (rd || 1) - 0.3); break; }
     }
-    if (dq && (!r || dd < rd - 0.25) && dq.st !== 'down') {
+    const sat = dq && G.ctr && (dq.as === 'jump' || dq.as === 'bracket') && dq.manT === b.tgt; // he sold out on this very route
+    if (dq && (!r || dd < rd - (sat ? 0.25 : beat)) && dq.st !== 'down') {
       const hd = G.human[dq.team] && G.ctl[dq.team] === dq.i;
       let pInt;
       if (hd) pInt = INT.passive * (dd < 0.8 ? 1.3 : 1);
       else { // CPU defender: a timing-based play on the ball, sharper on higher levels
         const e = gauss() * INT.cpuSig[G.human[off] ? G.opts.diff : 1];
-        pInt = intOdds(e, dd, INT.cpu[G.human[off] ? G.opts.diff : 1], false);
-        if (G.ctr && (dq.as === 'jump' || dq.as === 'bracket') && dq.manT === b.tgt) pInt = Math.min(0.5, pInt * (1.1 + 0.4 * G.ctr.sharp)); // he sat on that route
+        pInt = intOdds(e, dd, sat || !pk.h ? INT.cpu[G.human[off] ? G.opts.diff : 1] : PASS.cpuInt[pk.k], false);
+        if (sat) pInt = Math.min(0.5, pInt * (1.1 + 0.4 * G.ctr.sharp)); // he sat on that route
         dq.st = 'lunge'; dq.stT = 0.2; dq.recov = 0; dq.vx *= 0.5; dq.vy *= 0.5; ev('lunge', dq.x, dq.y, { t: dq.team, i: dq.i, g: intGrade(e), cpu: 1 });
       }
       if (Math.random() < pInt) return intercept(dq);
       ev('deflect', b.x, b.y); return fall(b, vzEnd, true);
     }
     if (r && r.st !== 'down') {
-      const pc = 0.94 - (dq ? (1.45 - dd) * 0.38 : 0) - (rd / 1.75) * 0.16;
+      const pc = pk.h ? 0.97 - (dq ? (1.45 - dd) * PASS.tight[pk.k] : 0) - (rd / cR) * PASS.dropPen[pk.k] : 0.94 - (dq ? (1.45 - dd) * 0.38 : 0) - (rd / 1.75) * 0.16;
       if (Math.random() < pc) { giveBall(r, 'catch'); G.run = true; G.runT = G.t; G.caught = true; if (Math.abs(r.x - G.los) > 15) G.excite = Math.min(1, G.excite + 0.4); return; }
       ev('drop', b.x, b.y);
     }

@@ -172,7 +172,8 @@ if (require.main === module) {
     check(altAvg <= lim + 0.5, `${DIFF[diff]}: alternating two plays gets read too (avg ${altAvg.toFixed(1)} yd/play after play 5, limit ${lim + 0.5})`);
     const rnd = r.random.all, ad = r.adapt.all;
     // (the scripted human is an expert: perfect drop, instant read, juke timing. Real players gain less; see README)
-    const band = [[5, 18], [4, 12], [3, 10]][diff];
+    // (rookie passing is deliberately forgiving since the passing tune-up, so its ceiling is higher)
+    const band = [[5, 22], [4, 12], [3, 10]][diff];
     check(rnd.g >= band[0] && rnd.g <= band[1], `${DIFF[diff]}: a random mix still moves the ball (${rnd.g.toFixed(1)} yd/play, target ${band[0]}-${band[1]})`);
     check(ad.g >= band[0] && ad.g <= band[1], `${DIFF[diff]}: an anti-adaptive caller moves the ball (${ad.g.toFixed(1)} yd/play, target ${band[0]}-${band[1]})`);
     const dv = r.drives, varied = (dv['random mix'] + dv['anti-adaptive']) / 2, same = (dv['same sweep'] + dv['same post'] + dv['alt sweep/dive']) / 3;
