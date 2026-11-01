@@ -1,6 +1,6 @@
 /* DR. BEHRAM'S OFFICE — cabinet hub: one check-in (shared cob.access lock), then choose a room.
- * The three games live in sub-folders: office/ (Clinic Day), feud/ (Feud & Delivery), surgery/ (Suture Self!).
- * They all read the same localStorage key 'cob.access', so unlocking here unlocks all three. */
+ * The four games live in sub-folders: office/ (Clinic Day), feud/ (Feud & Delivery), surgery/ (Suture Self!), triage/ (OB Triage).
+ * They all read the same localStorage key 'cob.access', so unlocking here unlocks all four. */
 (function () {
   'use strict';
   var X = window.COBAccess, AKEY = 'cob.access';
@@ -8,14 +8,15 @@
   var $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var LS = { get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-  var GAMES = ['office', 'feud', 'surgery'];
-  var PATH = { office: 'office/', feud: 'feud/', surgery: 'surgery/' };
+  var GAMES = ['office', 'feud', 'surgery', 'triage'];
+  var PATH = { office: 'office/', feud: 'feud/', surgery: 'surgery/', triage: 'triage/' };
   var LINES = {
     office: ['Exam 1 is ready. Charts are on the door.', 'Six patients, four rooms, one of me. Let’s go!', 'Wash your hands, read the chart, then knock.'],
     feud: ['You’d better know your differential.', 'Top answers are on the board. Can you clear it?', 'Bring a friend: head-to-head on one screen.'],
-    surgery: ['Scrub in! The OR is waiting and so is the baby.', 'Gowned, gloved, and slightly over-caffeinated. Let’s operate.', 'Suture Self! Steady hands, know your steps, count your sponges.']
+    surgery: ['Scrub in! The OR is waiting and so is the baby.', 'Gowned, gloved, and slightly over-caffeinated. Let’s operate.', 'Suture Self! Steady hands, know your steps, count your sponges.'],
+    triage: ['L&D is busy tonight. Grab a strip and tell me what you see.', 'Baseline, variability, accels, decels, contractions. Then category. Then act.', 'The monitor is beeping. It usually means something.']
   };
-  var NAMES = { office: 'Clinic Day', feud: 'Feud & Delivery', surgery: 'Suture Self!' };
+  var NAMES = { office: 'Clinic Day', feud: 'Feud & Delivery', surgery: 'Suture Self!', triage: 'OB Triage' };
   var state = { access: null, sel: 0, screen: 'boot', modal: false, walking: false };
 
   /* ---------- audio (tiny WebAudio synth) ---------- */
@@ -46,7 +47,7 @@
     tilt[0] += (ptr[0] - tilt[0]) * 0.05; tilt[1] += (ptr[1] - tilt[1]) * 0.05;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     var focus = state.screen === 'menu' ? GAMES[state.sel] : null;
-    hot = Hall.render(g, innerWidth, innerHeight, { t: t, focus: focus, px: -tilt[0], py: -tilt[1], flicker: true, focusColor: { office: '#34c6b4', feud: '#f5c04a', surgery: '#ff5d6c' }[focus] }) || {};
+    hot = Hall.render(g, innerWidth, innerHeight, { t: t, focus: focus, px: -tilt[0], py: -tilt[1], flicker: true, focusColor: { office: '#34c6b4', feud: '#f5c04a', surgery: '#ff5d6c', triage: '#9aa8ff' }[focus] }) || {};
     requestAnimationFrame(frame);
   }
   Hall.mural.addEventListener('load', function () {});
@@ -143,7 +144,7 @@
   }
   function say(t) { var b = $('#bubble'); b.textContent = t; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; }
   function select(i, quiet) {
-    state.sel = (i + 3) % 3; $$('.room').forEach(function (r, k) { r.classList.toggle('sel', k === state.sel); });
+    state.sel = (i + GAMES.length) % GAMES.length; $$('.room').forEach(function (r, k) { r.classList.toggle('sel', k === state.sel); });
     var gk = GAMES[state.sel], L = LINES[gk]; if (!quiet) sfx.tick(); say(L[Math.floor(Math.random() * L.length)]);
   }
   $$('.room').forEach(function (r, k) { r.addEventListener('click', function () { select(k, true); go(GAMES[k]); }); r.addEventListener('mouseenter', function () { if (state.sel !== k) select(k); }); });
@@ -178,7 +179,7 @@
     if (state.screen === 'menu') {
       if (k === 'ArrowRight' || k === 'ArrowDown') { select(state.sel + 1); return true; }
       if (k === 'ArrowLeft' || k === 'ArrowUp') { select(state.sel - 1); return true; }
-      if (/^[1-3]$/.test(k)) { select(+k - 1); go(GAMES[+k - 1]); return true; }
+      if (/^[1-4]$/.test(k)) { select(+k - 1); go(GAMES[+k - 1]); return true; }
       if (k === ' ') { go(GAMES[state.sel]); return true; }
       if (k === 'Enter') { instructor(); return true; }
       if (k === 'm' || k === 'M') { $('#snd').click(); return true; }

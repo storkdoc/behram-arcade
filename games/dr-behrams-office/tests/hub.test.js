@@ -1,4 +1,4 @@
-// Browser smoke test for the Dr. Behram's Office cabinet (hub + all 3 games + old-URL redirects) on desktop, iPhone and iPad.
+// Browser smoke test for the Dr. Behram's Office cabinet (hub + all 4 games + old-URL redirects) on desktop, iPhone and iPad.
 // NODE_PATH=/workspace/tools/node_modules node games/dr-behrams-office/tests/hub.test.js [baseURL]   (serve the repo root first)
 // The instructor PIN is never in the repo: COB_PIN from the environment, else a throwaway test PIN patched into access.js.
 // SHOTS=<dir> saves screenshots.
@@ -13,8 +13,8 @@ const DEV = {
   iPhone: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' },
   iPad: { viewport: { width: 1024, height: 1366 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' }
 };
-const BOOT = { office: 'window.COB && COB.booted', feud: 'window.FEUD && FEUD.booted', surgery: 'window.SG && SG.booted' };
-const UNLOCKED = { office: "!document.querySelector('#codein') || !document.querySelector('#codein').offsetParent", feud: "!document.querySelector('#gate') || getComputedStyle(document.querySelector('#gate')).display === 'none' || document.querySelector('#gate').classList.contains('hidden')", surgery: "getComputedStyle(document.querySelector('#lock')).display === 'none'" };
+const BOOT = { office: 'window.COB && COB.booted', feud: 'window.FEUD && FEUD.booted', surgery: 'window.SG && SG.booted', triage: 'window.OBT && OBT.booted' };
+const UNLOCKED = { office: "!document.querySelector('#codein') || !document.querySelector('#codein').offsetParent", feud: "!document.querySelector('#gate') || getComputedStyle(document.querySelector('#gate')).display === 'none' || document.querySelector('#gate').classList.contains('hidden')", surgery: "getComputedStyle(document.querySelector('#lock')).display === 'none'", triage: "getComputedStyle(document.querySelector('#lock')).display === 'none'" };
 async function ctxFor(b, dev) {
   const ctx = await b.newContext(DEV[dev]);
   if (!TP.real) await ctx.route('**/office/js/access.js*', r => r.fulfill({ contentType: 'text/javascript', body: TP.patchedAccessSource() }));
@@ -37,10 +37,10 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
     const code = await pg.evaluate(() => COBAccess.makeCode(COBAccess.nyDay()).then(c => c.code));
     await pg.fill('#codein', code); await pg.click('#code-go'); await pg.waitForTimeout(900);
     ok(await shown(pg, '#menu'), dev + ': a generated student code opens the hallway menu');
-    ok(await pg.$$eval('.room', a => a.length) === 3, dev + ': three rooms (Clinic Day, Feud & Delivery, Suture Self!)');
+    ok(await pg.$$eval('.room', a => a.length) === 4, dev + ': four rooms (Clinic Day, Feud & Delivery, Suture Self!, OB Triage)');
     if (SHOTS) await pg.screenshot({ path: `${SHOTS}/hub-${dev}-menu.png` });
-    // the same code opens all three games (shared cob.access)
-    for (const gk of ['office', 'feud', 'surgery']) {
+    // the same code opens all four games (shared cob.access)
+    for (const gk of ['office', 'feud', 'surgery', 'triage']) {
       const gp = watch(await ctx.newPage());
       await gp.goto(BASE + gk + '/'); await gp.waitForFunction(BOOT[gk], null, { timeout: 20000 }); await gp.waitForTimeout(1500);
       ok(await gp.evaluate(UNLOCKED[gk]), `${dev}: ${gk} is unlocked by the hub code`);
@@ -55,8 +55,13 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
       await pg.reload(); await pg.waitForFunction(() => window.HUB && HUB.booted);
       await pg.click('.room[data-g="feud"]'); await pg.waitForURL(/\/feud\/$/, { timeout: 8000 }); ok(true, 'desktop: clicking the conference room walks into Feud & Delivery');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
+      await pg.evaluate(() => { HUB.noNavigate = true; }); await pg.keyboard.press('4'); await pg.waitForTimeout(300);
+      ok(await pg.evaluate(() => HUB.went) === 'triage', 'desktop: key 4 picks L&D triage (OB Triage)');
+      await pg.reload(); await pg.waitForFunction(() => window.HUB && HUB.booted);
     } else {
       await pg.tap('.room[data-g="surgery"]'); await pg.waitForURL(/\/surgery\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the OR door walks into Suture Self!');
+      await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
+      await pg.tap('.room[data-g="triage"]'); await pg.waitForURL(/\/triage\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the L&D door walks into OB Triage');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
     }
     ok(!pg.errs.length, dev + ': hub has no console errors ' + pg.errs.slice(0, 3).join(' | '));
@@ -74,6 +79,8 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
     await pg.click('#done'); ok(await shown(pg, '#menu'), 'instructor lands in the menu');
     const sp = watch(await ctx.newPage()); await sp.goto(BASE + 'surgery/'); await sp.waitForFunction(BOOT.surgery);
     ok(await sp.evaluate(() => SG.instructor === true), 'instructor access carries into Suture Self! (Attending mode open)');
+    const tp = watch(await ctx.newPage()); await tp.goto(BASE + 'triage/'); await tp.waitForFunction(BOOT.triage);
+    ok(await tp.evaluate(() => OBT.instructor === true), 'instructor access carries into OB Triage (Attending mode open)');
     await ctx.close(); }
   // old URLs redirect into the cabinet
   for (const [old, hash] of [['congressional-obgyn', 'office'], ['feud-and-delivery', 'feud']]) {

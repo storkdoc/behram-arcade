@@ -190,7 +190,7 @@
     gr.addColorStop(0, 'rgba(255,60,60,.22)'); gr.addColorStop(1, 'rgba(255,60,60,0)'); g.fillStyle = gr; g.fillRect(a[0] - 200, a[1] - 100, b[0] - a[0] + 400, 300);
   }
 
-  /* opts: {t, focus:'office'|'feud'|'surgery'|null}. Returns hotspots {office, feud, surgery}. */
+  /* opts: {t, focus:'office'|'feud'|'surgery'|'triage'|null}. Returns hotspots {office, feud, surgery, triage}. */
   H.render = function (g, w, h, opts) {
     opts = opts || {}; var t = opts.t || 0;
     if (!tex.wp) { tex.wp = wallpaperTex(); tex.pl = plankTex(); tex.tile = tileTex(); tex.ceil = ceilTex(); }
@@ -233,11 +233,11 @@
     exitSign(g, ZE - 0.4, t);
     // right wall: exam rooms + niches (doors on the RIGHT); procedure room further down
     var hs = {};
-    var R = [[1.0, 1.9, 'niche', 0], [2.3, 3.2, 'door', 'EXAM 1'], [3.7, 4.4, 'niche', 1], [4.8, 5.7, 'door', 'EXAM 2'], [6.2, 6.8, 'niche', 2], [7.3, 8.2, 'door', 'EXAM 3'], [8.7, 9.2, 'niche', 3], [9.7, 10.6, 'door', 'PROC'], [11.2, 11.7, 'niche', 4], [12.2, 13.1, 'door', 'EXAM 4'], [13.6, 14.1, 'niche', 5], [14.6, 15.5, 'door', 'EXAM 5']];
+    var R = [[1.0, 1.9, 'niche', 0], [2.3, 3.2, 'door', 'EXAM 1'], [3.7, 4.4, 'niche', 1], [4.8, 5.7, 'door', 'EXAM 2'], [6.2, 6.8, 'niche', 2], [7.3, 8.2, 'door', 'EXAM 3'], [8.7, 9.2, 'niche', 3], [9.7, 10.6, 'door', 'PROC'], [11.2, 11.7, 'niche', 4], [12.2, 13.1, 'door', 'L&D'], [13.6, 14.1, 'niche', 5], [14.6, 15.5, 'door', 'EXAM 5']];
     for (var i = R.length - 1; i >= 0; i--) {
       var it = R[i];
       if (it[2] === 'niche') niche(g, it[0], it[1], it[3]);
-      else { var d = door(g, 1, it[0], it[1], { plaque: it[3] === 'PROC' ? 'OR' : it[3].replace('EXAM ', ''), plaqueColor: it[3] === 'PROC' ? '#7a1f2b' : '#2c4a66' }); if (it[3] === 'EXAM 1') hs.office = d; if (it[3] === 'PROC') hs.surgery = d; }
+      else { var d = door(g, 1, it[0], it[1], { plaque: it[3] === 'PROC' ? 'OR' : it[3].replace('EXAM ', ''), plaqueColor: it[3] === 'PROC' ? '#7a1f2b' : it[3] === 'L&D' ? '#5a5fb8' : '#2c4a66' }); if (it[3] === 'EXAM 1') hs.office = d; if (it[3] === 'PROC') hs.surgery = d; if (it[3] === 'L&D') hs.triage = d; }
     }
     // left wall: conference room (game-show set inside), office doors
     var L = [[4.0, 4.9, 'CONF'], [7.6, 8.5, 'MD'], [11.4, 12.3, 'LAB']];

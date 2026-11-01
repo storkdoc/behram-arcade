@@ -1,14 +1,15 @@
 # DR. BEHRAM'S OFFICE — cabinet notes
 (If resumed: read this file, office/NOTES.md, feud/NOTES.md and `git log -- games/dr-behrams-office`.)
 
-One arcade cabinet, one lock, three games, set in Dr. Steven Behram's practice (Congressional OB GYN, Fallsgrove Plaza, Rockville MD).
+One arcade cabinet, one lock, four games, set in Dr. Steven Behram's practice (Congressional OB GYN, Fallsgrove Plaza, Rockville MD).
 
 | folder | game |
 |---|---|
 | `index.html` + `hub/` | Front desk + clinic-hallway menu (canvas perspective hallway: periwinkle exam-room wall on the right, silver-grey wallpaper opposite, plank floor, drop ceiling, orchid/calla niches, red EXIT, curved white reception desk on a white 3D tile wall, the circus mural). Unlock + instructor panel. |
 | `office/` | CLINIC DAY (was games/congressional-obgyn). Owns the shared lock `office/js/access.js` (`COBAccess`). |
 | `feud/` | FEUD & DELIVERY (was games/feud-and-delivery). |
-| `surgery/` | SUTURE SELF! (new) |
+| `surgery/` | SUTURE SELF! |
+| `triage/` | OB TRIAGE (new): L&D fetal-strip reading + management. See `triage/NOTES.md`. Hub room 4, hallway door "L&D" (was EXAM 4). |
 
 ## Lock
 - Same `office/js/access.js` and the same localStorage key `cob.access` as before, so old student codes and instructor tokens keep working.

@@ -32,7 +32,7 @@
     <img class="face" src="office/assets/behram-face.jpg" alt="">
     <div class="pre">CHECK IN AT THE FRONT DESK</div>
     <h1>Welcome to <b>Dr. Behram’s Office</b></h1>
-    <p id="gate-msg">Enter the access code Dr. Behram gave you. One code (<b>CONG-XXXX-XXXX</b>) opens all three games for six weeks.</p>
+    <p id="gate-msg">Enter the access code Dr. Behram gave you. One code (<b>CONG-XXXX-XXXX</b>) opens all four games for six weeks.</p>
     <input id="codein" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CONG-XXXX-XXXX" aria-label="Access code" data-nav>
     <div class="err" id="code-err" role="alert"></div>
     <button class="btn gold wide" id="code-go" data-nav>Check in <span class="k">ENTER</span></button>
@@ -54,9 +54,13 @@
         <span class="num">2</span><span class="ico">🎤</span>
         <span class="rt">CONFERENCE ROOM</span><b>Feud &amp; Delivery</b><em>Name the top differentials. Solo or head-to-head.</em>
       </button>
-      <button class="room new" data-g="surgery" data-nav role="listitem">
-        <span class="num">3</span><span class="ico">🔪</span><span class="newtag">NEW</span>
+      <button class="room" data-g="surgery" data-nav role="listitem">
+        <span class="num">3</span><span class="ico">🔪</span>
         <span class="rt">OPERATING ROOM</span><b>Suture Self!</b><em>Scrub in with Dr. Behram: C-sections, laparoscopy, hysterectomy.</em>
+      </button>
+      <button class="room new" data-g="triage" data-nav role="listitem">
+        <span class="num">4</span><span class="ico">📈</span><span class="newtag">NEW</span>
+        <span class="rt">L&amp;D TRIAGE</span><b>OB Triage</b><em>Read the fetal heart tracing, then act before the strip does.</em>
       </button>
     </div>
     <div id="foot">
