@@ -433,14 +433,14 @@ function easeIO(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t)
 function titleK(t) { return { black: 1 - easeIO(t / 3), stars: easeIO((t - 0.5) / 6), rise: easeIO((t - 4) / 11), moon: easeIO((t - 5) / 7), mono: easeIO((t - 9) / 5) }; }
 
 /* ---------------- main loop ---------------- */
-var last = performance.now(), fpsAcc = 0;
+var last = performance.now(), fpsAcc = 0, menuK = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   var dt = Math.min(0.1, (now - last) / 1000); last = now;
   pollPad(dt);
   if (state === 'begin') { R.title(dt, { black: 1, stars: 0, rise: 0, moon: 0, mono: 0 }); return; }
   if (state === 'title' || (!sim && state !== 'game')) {
-    titleT += dt; R.title(dt, titleK(titleT));
+    titleT += dt; menuK = state === 'title' ? 0 : Math.min(1, menuK + dt * 1.5); var tk = titleK(titleT); tk.menu = menuK; R.title(dt, tk);
     if (state === 'title' && titleT > 14.5) $('titleText').classList.add('on');
     if (state === 'title' && titleT > 27) { $('titleText').classList.remove('on'); setState('menu'); }
     return;

@@ -184,3 +184,25 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 1px s
 button:focus:not(:focus-visible) { outline: none; }
 #research { padding-left: calc(64px + var(--sl)); }
 @media (max-height: 500px) { #card .c2 { font-size: 22px; margin: 8px 0; } #card .c3 { font-size: 11px; max-width: 440px; } }
+
+/* ---- menu legibility: dark glass behind lettering, shadows/outlines on every line of text ---- */
+#begin .bhint, #titleText .tskip { color: rgba(235,240,255,.6); }
+#home { text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+#menu .mtitle, #titleText .tt { white-space: nowrap; font-size: clamp(18px, 4.4vw, 54px); color: #fff;
+  text-shadow: 0 0 1px #000, 0 1px 3px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.85), 0 0 42px rgba(0,0,10,.7); }
+#menu .msub, #titleText .ts { color: rgba(240,244,255,.9); text-shadow: 0 1px 2px #000, 0 0 10px rgba(0,0,0,.95); }
+#menu .mhead { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 14px 30px 16px; border-radius: 6px; background: radial-gradient(ellipse at center, rgba(0,0,8,.55) 0%, rgba(0,0,8,.35) 55%, rgba(0,0,8,0) 78%); }
+#menu .mlist { background: rgba(3,5,16,.7); border: 1px solid rgba(200,215,245,.2); border-radius: 6px; padding: 14px 28px; backdrop-filter: blur(10px) saturate(.8); -webkit-backdrop-filter: blur(10px) saturate(.8); box-shadow: 0 12px 44px rgba(0,0,0,.65); }
+#menu .mlist button { color: rgba(236,241,252,.9); text-shadow: 0 1px 3px #000; }
+#menu .mlist button:hover, #menu .mlist button.focus { color: #fff; border-bottom-color: rgba(255,217,160,.8); }
+#menu .mlist button small { color: rgba(220,230,250,.65); }
+#menu .mlist button[disabled] { opacity: .45; }
+#menu .mfoot { color: rgba(235,240,255,.72); background: rgba(0,0,8,.6); padding: 4px 14px; border-radius: 4px; text-shadow: 0 1px 2px #000; }
+@media (max-height: 500px) {
+  #menu .mtitle { font-size: clamp(16px, 3.6vw, 30px); letter-spacing: .42em; text-indent: .42em; }
+  #menu .msub { margin-top: 6px; font-size: 9px; }
+  #menu .mhead { padding: 6px 20px 8px; }
+  #menu .mlist { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; padding: 8px 16px; margin-top: 3vh; }
+  #menu .mlist button { font-size: 11px; padding: 6px 4px; }
+  #menu .mfoot { font-size: 8.5px; letter-spacing: .18em; bottom: calc(6px + var(--sb)); }
+}

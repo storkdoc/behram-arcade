@@ -88,6 +88,7 @@ function Renderer(canvas) {
   this.belt = []; for (var i = 0; i < 520; i++) { var rr = 198 + Math.random() * 50 + (Math.random() - 0.5) * 8; this.belt.push({ r: rr, a: Math.random() * TAU, w: TAU / (500 + rr * 0.8), s: Math.random() < 0.15 ? 1.6 : 1, b: 0.25 + Math.random() * 0.5 }); }
   this.kuiper = []; for (i = 0; i < 380; i++) this.kuiper.push({ r: 470 + Math.random() * 60, a: Math.random() * TAU, b: 0.12 + Math.random() * 0.3 });
   this.lights = this.cityLights();
+  this.initSun();
   this.resize();
 }
 var R = Renderer.prototype;
@@ -176,18 +177,109 @@ R.event = function (e, sim) {
 R.ell = function (wx, wy, r) { var s = this.toScreen(wx, wy), x = this.x; x.beginPath(); x.ellipse(s.x, s.y, Math.max(0.1, r * this.cam.z), Math.max(0.1, r * this.cam.z * TILT), 0, 0, TAU); };
 R.glowAt = function (sx, sy, r, col, a, soft) { var x = this.x; x.globalAlpha = a; x.drawImage(glow(col, soft), sx - r, sy - r, r * 2, r * 2); x.globalAlpha = 1; };
 
-R.drawSun = function (t) {
-  var x = this.x, s = this.toScreen(0, 0), z = this.cam.z, r = 20 * z * 1.1;
+/* ---------- the Sun: granulated photosphere, glowing corona, prominence loops, flares and coronal mass ejections ---------- */
+function smooth(a, b, v) { v = Math.max(0, Math.min(1, (v - a) / (b - a))); return v * v * (3 - 2 * v); }
+R.initSun = function () {
+  // granulation: bright convection cells separated by dark lanes (a darkening overlay, drawn source-atop)
+  var S = 256, c = mk(S, S), x = c.getContext('2d'), img = x.createImageData(S, S), d = img.data;
+  for (var yy = 0; yy < S; yy++) for (var xx = 0; xx < S; xx++) {
+    var u = xx / S, v = yy / S, k = (yy * S + xx) * 4;
+    var cell = Math.abs(vnoise(u * 34, v * 34) - vnoise(u * 34 + 7.3, v * 34 + 3.1)), big = fbm(u * 6 + 4, v * 6 + 9, 4);
+    var lane = smooth(0.0, 0.32, cell), dark = (1 - lane) * 0.75 + Math.max(0, 0.48 - big) * 0.9;
+    d[k] = 120; d[k + 1] = 36; d[k + 2] = 0; d[k + 3] = Math.min(255, dark * 150);
+  }
+  x.putImageData(img, 0, 0); this.gran = c;
+  this.sunCan = mk(8, 8); this.sunCx = this.sunCan.getContext('2d');
+  this.loops = []; this.flares = []; this.cmes = []; this.sunParts = []; this.nextFlare = 2; this.nextCme = 6; this.sunT = 0;
+  for (var i = 0; i < 9; i++) this.loops.push(this.newLoop(Math.random()));
+};
+R.newLoop = function (age) {
+  var life = 7 + Math.random() * 9;
+  return { a: Math.random() * TAU, s: 0.05 + Math.random() * 0.13, h: 0.12 + Math.random() * 0.38, sk: (Math.random() - 0.5) * 0.8, life: life, t: (age || 0) * life, ph: Math.random() * 9, tw: (Math.random() - 0.5) * 0.5 };
+};
+R.sunPhotosphere = function (r, t) {
+  // re-render the disc into a small offscreen canvas (cheap: ~2r px square)
+  var S = Math.max(32, Math.min(this.quality === 'low' ? 128 : 320, Math.ceil(r * 2 * this.dpr))), c = this.sunCan, x = this.sunCx;
+  if (c.width !== S) { c.width = S; c.height = S; }
+  var h = S / 2; x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.clearRect(0, 0, S, S);
+  var g = x.createRadialGradient(h * 0.92, h * 0.9, 0, h, h, h);
+  g.addColorStop(0, '#fff6d8'); g.addColorStop(0.45, '#ffd97a'); g.addColorStop(0.78, '#ffaa40'); g.addColorStop(0.95, '#ea7422'); g.addColorStop(1, '#c84c10');
+  x.fillStyle = g; x.beginPath(); x.arc(h, h, h, 0, TAU); x.fill();
+  x.globalCompositeOperation = 'source-atop';
+  // two counter-rotating granulation layers whose weights breathe, so the surface seems to boil
+  var w1 = 0.5 + 0.5 * Math.sin(t * 0.7), sc = S / 256 * 1.5;
+  for (var L = 0; L < 2; L++) { x.save(); x.translate(h, h); x.rotate((L ? -1 : 1) * t * 0.035 + L * 1.3); x.scale(sc * (L ? 1.12 : 1), sc * (L ? 1.12 : 1)); x.globalAlpha = 0.35 + 0.4 * (L ? 1 - w1 : w1); x.drawImage(this.gran, -128, -128); x.restore(); }
+  // faculae and a couple of slowly drifting sunspots
+  x.globalAlpha = 1;
+  for (var i = 0; i < 3; i++) { var sa = t * 0.02 + i * 2.1, sr = h * (0.25 + 0.18 * i), sx = h + Math.cos(sa) * sr, sy = h + Math.sin(sa * 0.7 + i) * sr * 0.6;
+    x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(90,30,0,0.55)'; x.beginPath(); x.arc(sx, sy, h * 0.045, 0, TAU); x.fill();
+    x.fillStyle = 'rgba(140,60,10,0.25)'; x.beginPath(); x.arc(sx, sy, h * 0.09, 0, TAU); x.fill();
+    x.globalCompositeOperation = 'lighter'; x.globalAlpha = 0.25; x.drawImage(glow('#fff0b0', 1), sx - h * 0.25, sy - h * 0.25, h * 0.5, h * 0.5); x.globalAlpha = 1; }
+  // limb darkening
+  x.globalCompositeOperation = 'source-atop'; var lg = x.createRadialGradient(h, h, h * 0.55, h, h, h); lg.addColorStop(0, 'rgba(120,30,0,0)'); lg.addColorStop(0.8, 'rgba(150,40,0,0.18)'); lg.addColorStop(1, 'rgba(110,20,0,0.55)');
+  x.fillStyle = lg; x.fillRect(0, 0, S, S); x.globalCompositeOperation = 'source-over';
+  return c;
+};
+R.sunStep = function (dt) {
+  dt = Math.min(0.1, Math.max(0, dt)); this.sunT += dt; var i;
+  for (i = 0; i < this.loops.length; i++) { var L = this.loops[i]; L.t += dt; if (L.t > L.life) this.loops[i] = this.newLoop(0); }
+  this.nextFlare -= dt; if (this.nextFlare <= 0) { this.nextFlare = 1.5 + Math.random() * 4; this.flares.push({ a: Math.random() * TAU, d: 0.75 + Math.random() * 0.25, t: 0, life: 0.5 + Math.random() * 0.9, big: Math.random() < 0.25 }); }
+  this.nextCme -= dt; if (this.nextCme <= 0) { this.nextCme = 9 + Math.random() * 12; var a = Math.random() * TAU; this.cmes.push({ a: a, t: 0, life: 6 + Math.random() * 2, w: 0.5 + Math.random() * 0.5 }); this.flares.push({ a: a, d: 0.98, t: 0, life: 1.4, big: true });
+    for (i = 0; i < 26 && this.sunParts.length < 160; i++) { var aa = a + (Math.random() - 0.5) * 0.9, sp = 0.35 + Math.random() * 0.9; this.sunParts.push({ x: Math.cos(aa) * 1.02, y: Math.sin(aa) * 1.02, vx: Math.cos(aa) * sp, vy: Math.sin(aa) * sp, t: 0, life: 2 + Math.random() * 3 }); } }
+  for (i = this.flares.length - 1; i >= 0; i--) { this.flares[i].t += dt; if (this.flares[i].t > this.flares[i].life) this.flares.splice(i, 1); }
+  for (i = this.cmes.length - 1; i >= 0; i--) { this.cmes[i].t += dt; if (this.cmes[i].t > this.cmes[i].life) this.cmes.splice(i, 1); }
+  for (i = this.sunParts.length - 1; i >= 0; i--) { var p = this.sunParts[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.995; p.vy *= 0.995; if (p.t > p.life) { this.sunParts[i] = this.sunParts[this.sunParts.length - 1]; this.sunParts.pop(); } }
+};
+/* Draw the Sun centred at screen (sx, sy) with photosphere radius r (CSS px). k scales corona brightness. */
+R.sunAt = function (sx, sy, r, t, k) {
+  var x = this.x, i, j; k = k === undefined ? 1 : k;
   x.globalCompositeOperation = 'lighter';
-  this.glowAt(s.x, s.y, r * 14, '#ff9a40', 0.32, 1); this.glowAt(s.x, s.y, r * 6, '#ffc070', 0.6, 1);
-  // corona rays
-  x.save(); x.translate(s.x, s.y);
-  for (var i = 0; i < 14; i++) { var a = i / 14 * TAU + t * 0.03 * (i % 2 ? 1 : -1), L = r * (2.4 + 0.8 * Math.sin(t * 0.7 + i * 1.7)); var g = x.createLinearGradient(0, 0, Math.cos(a) * L, Math.sin(a) * L); g.addColorStop(0, 'rgba(255,220,150,0.35)'); g.addColorStop(1, 'rgba(255,160,60,0)'); x.strokeStyle = g; x.lineWidth = r * 0.25; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(a) * L, Math.sin(a) * L); x.stroke(); }
-  x.restore();
+  // corona: a soft halo plus a few slowly turning lobes so it is never a perfect disc
+  this.glowAt(sx, sy, r * 8.5, '#ff8a30', 0.2 * k, 1); this.glowAt(sx, sy, r * 3.6, '#ffc070', 0.42 * k, 1);
+  if (this.quality !== 'low') for (i = 0; i < 6; i++) { var ca = i * TAU / 6 + t * 0.012 * (i % 2 ? 1 : -1) + Math.sin(t * 0.13 + i) * 0.2, cd = r * (0.75 + 0.15 * Math.sin(t * 0.3 + i * 2)); this.glowAt(sx + Math.cos(ca) * cd, sy + Math.sin(ca) * cd, r * (2.1 + 0.4 * Math.sin(t * 0.21 + i)), '#ffb060', 0.14 * k, 1); }
+  // prominence loops: arcing plasma anchored in the limb (their feet are hidden behind the disc)
+  x.lineCap = 'round';
+  for (i = 0; i < this.loops.length; i++) {
+    var L = this.loops[i], f = L.t / L.life, env = Math.sin(Math.PI * Math.min(1, f)), hh = L.h * (0.6 + 0.4 * f) * (1 + 0.06 * Math.sin(t * 1.3 + L.ph));
+    if (env <= 0.01) continue;
+    var a = L.a + L.tw * f;
+    for (j = 0; j < 3; j++) {
+      var s = L.s * (1 + (j - 1) * 0.18), h2 = hh * (1 + (j - 1) * 0.12), fa = a - s, fb = a + s;
+      var x1 = sx + Math.cos(fa) * r * 0.96, y1 = sy + Math.sin(fa) * r * 0.96, x2 = sx + Math.cos(fb) * r * 0.96, y2 = sy + Math.sin(fb) * r * 0.96;
+      var c1a = a - s * (0.9 - L.sk), c2a = a + s * (0.9 + L.sk), hr = r * (1 + h2 * 1.45);
+      var c1x = sx + Math.cos(c1a) * hr, c1y = sy + Math.sin(c1a) * hr, c2x = sx + Math.cos(c2a) * hr * (1 + 0.15 * Math.sin(t * 0.9 + L.ph + j)), c2y = sy + Math.sin(c2a) * hr * (1 + 0.15 * Math.sin(t * 0.9 + L.ph + j));
+      x.beginPath(); x.moveTo(x1, y1); x.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2);
+      x.strokeStyle = 'rgba(255,' + (105 + j * 25) + ',35,' + (0.22 * env * k) + ')'; x.lineWidth = Math.max(1, r * (0.1 - j * 0.02)); x.stroke();
+      if (j === 1) { x.strokeStyle = 'rgba(255,190,140,' + (0.3 * env * k) + ')'; x.lineWidth = Math.max(0.5, r * 0.018); x.stroke(); }
+    }
+  }
+  // coronal mass ejections: a detaching plasma loop that balloons outward and fades
+  for (i = 0; i < this.cmes.length; i++) {
+    var C = this.cmes[i], p = C.t / C.life, e = Math.pow(1 - p, 1.4), dist = r * (1.05 + 4.2 * Math.pow(p, 0.8)), rr = r * (0.35 + 2.4 * p) * C.w;
+    var bx = sx + Math.cos(C.a) * dist, by = sy + Math.sin(C.a) * dist;
+    this.glowAt(bx, by, rr * 1.6, '#ff9a50', 0.22 * e * k, 1);
+    for (j = 0; j < 3; j++) { x.beginPath(); x.arc(bx - Math.cos(C.a) * rr * 0.3 * j, by - Math.sin(C.a) * rr * 0.3 * j, rr * (1 - j * 0.18), C.a - 1.35 + j * 0.15, C.a + 1.35 - j * 0.15);
+      x.strokeStyle = 'rgba(255,' + (150 + j * 30) + ',90,' + (0.5 * e * k / (1 + j)) + ')'; x.lineWidth = Math.max(0.8, r * 0.07 * (1 - p * 0.6)); x.stroke(); }
+    // the trailing legs still tied to the surface early on
+    if (p < 0.45) { var le = (1 - p / 0.45) * k; x.beginPath(); x.moveTo(sx + Math.cos(C.a - 0.25) * r, sy + Math.sin(C.a - 0.25) * r); x.quadraticCurveTo(bx, by, sx + Math.cos(C.a + 0.25) * r, sy + Math.sin(C.a + 0.25) * r); x.strokeStyle = 'rgba(255,200,140,' + 0.5 * le + ')'; x.lineWidth = Math.max(0.8, r * 0.05); x.stroke(); }
+  }
+  for (i = 0; i < this.sunParts.length; i++) { var sp = this.sunParts[i], pa = 1 - sp.t / sp.life; x.globalAlpha = 0.7 * pa * k; var ps = Math.max(1.5, r * 0.12); x.drawImage(glow('#ffb070'), sx + sp.x * r - ps, sy + sp.y * r - ps, ps * 2, ps * 2); }
+  x.globalAlpha = 1;
+  // the photosphere
   x.globalCompositeOperation = 'source-over';
-  var g2 = x.createRadialGradient(s.x - r * 0.2, s.y - r * 0.2, r * 0.1, s.x, s.y, r); g2.addColorStop(0, '#fffef0'); g2.addColorStop(0.6, '#ffe08a'); g2.addColorStop(1, '#ff9a3a');
-  x.fillStyle = g2; x.beginPath(); x.arc(s.x, s.y, r, 0, TAU); x.fill();
-  x.globalCompositeOperation = 'lighter'; this.glowAt(s.x, s.y, r * 2.2, '#fff4d0', 0.7, 1); x.globalCompositeOperation = 'source-over';
+  x.drawImage(this.sunPhotosphere(r, t), sx - r, sy - r, r * 2, r * 2);
+  // flares: brief white-hot brightenings near the limb
+  x.globalCompositeOperation = 'lighter';
+  for (i = 0; i < this.flares.length; i++) { var F = this.flares[i], q = F.t / F.life, fe = q < 0.15 ? q / 0.15 : Math.pow(1 - (q - 0.15) / 0.85, 2), fx = sx + Math.cos(F.a) * r * F.d, fy = sy + Math.sin(F.a) * r * F.d;
+    this.glowAt(fx, fy, r * (F.big ? 0.9 : 0.45), '#fff6d8', (F.big ? 0.95 : 0.6) * fe, 0); if (F.big) this.glowAt(fx, fy, r * 2.2, '#ffcf8a', 0.35 * fe * k, 1); }
+  this.glowAt(sx, sy, r * 1.5, '#fff1c8', 0.16 * k, 1);
+  x.globalCompositeOperation = 'source-over';
+};
+R.drawSun = function (t, dt) {
+  var s = this.toScreen(0, 0), r = 20 * this.cam.z * 1.1;
+  this.sunStep(dt);
+  if (s.x < -r * 9 || s.y < -r * 9 || s.x > this.W + r * 9 || s.y > this.H + r * 9) return;
+  this.sunAt(s.x, s.y, r, t, 1);
 };
 R.drawPlanet = function (b, p, t) {
   var x = this.x, s = this.toScreen(p.x, p.y), r = this.bodyR(b), gl = this.globes[b.id];
@@ -364,7 +456,7 @@ R.frame = function (sim, dt, ui) {
       x.fillStyle = 'rgba(255,160,200,0.8)'; x.font = '600 9px ' + FONT; x.textAlign = 'center'; x.fillText(gp[i].vec, q0.x, q0.y - 14); }
     x.setLineDash([]);
   }
-  this.drawSun(t);
+  this.drawSun(t, dt);
   // Lagrange & site markers below planets
   var bodies = D.BODIES.filter(function (b) { return b.id !== 'sun' && b.size > 0; }).sort(function (p1, p2) { return bp[p1.id].y - bp[p2.id].y; });
   for (i = 0; i < bodies.length; i++) {
@@ -446,10 +538,12 @@ R.title = function (dt, k) {
   var limbY = cy - R0, mh = H * 0.27, mw = mh * 4 / 9;
   // the sun crests the limb and climbs until it crowns the slab
   var sy = limbY + 26 - rise * (mh * 0.98 + 26), sx = cx;
+  // behind the menus the dawn is dimmed so that lettering stays legible
+  var md = 1 - 0.6 * (k.menu || 0);
   x.globalCompositeOperation = 'lighter';
-  this.glowAt(sx, sy, 520 * rise + 40, '#ff9a50', 0.55 * rise, 1); this.glowAt(sx, sy, 180 * rise + 10, '#fff0c0', 0.9 * rise, 1); this.glowAt(sx, sy, 34 * rise + 4, '#ffffff', rise, 1);
-  x.globalAlpha = 0.5 * rise; x.strokeStyle = 'rgba(255,230,180,0.6)'; x.lineWidth = 1;
-  x.beginPath(); x.moveTo(sx - W * 0.6 * rise, sy); x.lineTo(sx + W * 0.6 * rise, sy); x.stroke(); x.beginPath(); x.moveTo(sx, sy - H * 0.07 * rise); x.lineTo(sx, sy + H * 0.07 * rise); x.stroke(); x.globalAlpha = 1;
+  this.glowAt(sx, sy, 520 * rise + 40, '#ff9a50', 0.5 * rise * md, 1); this.glowAt(sx, sy, 170 * rise + 10, '#ffe2b0', 0.6 * rise * md, 1);
+  this.sunStep(dt);
+  if (rise > 0.01) this.sunAt(sx, sy, Math.max(3, Math.min(W, H) * 0.026) * (0.5 + 0.5 * rise), t, rise * md);
   // the moon above, aligned
   var my = H * 0.11 - k.moon * 6, mr = Math.min(W, H) * 0.04;
   x.globalCompositeOperation = 'source-over';
@@ -466,10 +560,11 @@ R.title = function (dt, k) {
   if (k.mono > 0) {
     var mx = cx - mw / 2, mY = limbY - mh * 0.86 + (1 - k.mono) * 30;
     x.globalCompositeOperation = 'source-over'; x.globalAlpha = k.mono; x.fillStyle = '#000'; x.fillRect(mx, mY, mw, mh);
-    x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(255,220,170,' + 0.5 * rise + ')'; x.lineWidth = 1; x.beginPath(); x.moveTo(mx, mY + mh); x.lineTo(mx, mY); x.lineTo(mx + mw, mY); x.stroke();
+    x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(255,220,170,' + 0.5 * rise * md + ')'; x.lineWidth = 1; x.beginPath(); x.moveTo(mx, mY + mh); x.lineTo(mx, mY); x.lineTo(mx + mw, mY); x.stroke();
     x.globalAlpha = 1;
   }
   x.globalCompositeOperation = 'source-over';
+  if (k.menu > 0) { var sg = x.createRadialGradient(cx, H * 0.45, 0, cx, H * 0.45, Math.max(W, H) * 0.6); sg.addColorStop(0, 'rgba(0,0,6,' + 0.45 * k.menu + ')'); sg.addColorStop(1, 'rgba(0,0,6,' + 0.2 * k.menu + ')'); x.fillStyle = sg; x.fillRect(0, 0, W, H); }
   this.parts.length = 0; this.cam.z = this.fitZ;
   this.post(dt);
   if (k.black > 0) { x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = 'rgba(0,0,0,' + k.black + ')'; x.fillRect(0, 0, this.c.width, this.c.height); }
