@@ -388,7 +388,7 @@
       tick: function (dt, c) {
         var i = I(); fieldCursor(cur, dt, 120); var on = dist(cur.x, cur.y, tgt.x, tgt.y) < 22;
         if (i.specP) { if (on) { asp = true; A.sfx.click(); g.say('scrub', 'No flash of blood. You’re not in a vessel.'); } else g.say('behram', 'Get into position first.'); }
-        if (using() && on) { if (!asp && !noAsp) { noAsp = true; g.vitalsHit({ hr: -28, sbp: 42 }); A.alarm(1); g.say('gas', 'Whoa, pressure just jumped and her heart rate dropped. Did that go intravascular?', true); } p += dt / 3; g.sc.blanch = clamp(p, 0, 1); }
+        if (using() && on) { if (!asp && !noAsp) { noAsp = true; g.vitalsHit({ hr: -30, sbp: 45, dbp: 28 }, { on: 7, hold: 40, off: 60 }); A.alarm(1); g.say('gas', 'Whoa, pressure just jumped and her heart rate dropped. Did that go intravascular?', true); } p += dt / 3; g.sc.blanch = clamp(p, 0, 1); }
         g.meter({ val: p });
         if (p >= 1) c.end(noAsp ? 45 : 100 - Math.max(0, c.t - 12), noAsp ? { issue: { bad: true, t: 'Injected without aspirating. Should have: aspirate before injecting; intravascular vasopressin causes severe hypertension, bradycardia, even arrest.' } } : null);
       },
@@ -520,7 +520,7 @@
         pr = clamp(pr, 0, 30); peak = Math.max(peak, pr); g.sc.insuf = pr; g.sc.flow = using() ? (high ? 35 : 1) : 0;
         document.getElementById('p-sub').innerHTML = 'CO₂ <b>' + pr.toFixed(1) + ' mmHg</b> · ' + vol.toFixed(1) + ' L · ' + (high ? 'HIGH' : 'low') + ' flow · hold SPACE, release at 14–16';
         g.meter({ val: pr / 25, lo: 14 / 25, hi: 16 / 25, danger: pr > 18 });
-        if (pr > 20 && !c.data.over) { c.data.over = true; g.vitalsHit({ sbp: -14, hr: 10, etco2: 6 }); g.say('gas', 'Pressure’s over 20! Her venous return is dropping. Back off.', true); }
+        if (pr > 20 && !c.data.over) { c.data.over = true; g.vitalsHit({ sbp: -12, hr: 8, etco2: 5 }, { on: 20, hold: 30, off: 40 }); g.say('gas', 'Pressure’s over 20! Her venous return is dropping. Back off.', true); }
         if (!using() && pr >= 14 && pr <= 16) { hold += dt; if (hold > 1.2) c.end(100 - (c.data.over ? 25 : 0) - (c.data.early ? 12 : 0) - Math.max(0, c.t - 15), c.data.over ? { issue: { bad: true, t: 'Over-insufflated past 20 mmHg. Should have: 15 mmHg working pressure; high pressure impairs venous return and ventilation.' } } : c.data.early ? { issue: { sub: true, t: 'Went to high flow before confirming placement. Start low flow; opening pressure should be < 10 mmHg.' } } : null); } else hold = 0;
       }
     }, cb);
@@ -562,7 +562,7 @@
         if (i.mainP || (i.ptr.pressed && i.mode === 'pointer')) {
           var s = cur.x < 800 ? -1 : 1, v = ex(cur.y, s), dv = Math.abs(cur.x - v);
           if (placed.some(function (p) { return (p.x < 800) === (cur.x < 800); })) { g.say('scrub', 'You already have a port on that side.'); return; }
-          if (dv < 22) { bad++; A.sfx.bad(); g.addEBL(150); g.say('behram', 'That’s the inferior epigastric! Tamponade it. Next time, go lateral.', true); g.vitalsHit({ hr: 12, sbp: -8 }); }
+          if (dv < 22) { bad++; A.sfx.bad(); g.addEBL(150); g.say('behram', 'That’s the inferior epigastric! Tamponade it. Next time, go lateral.', true); }
           else if (s * (cur.x - v) < 0) { med++; g.say('scrub', 'Medial to the epigastrics… brave.'); }
           A.sfx.click(); placed.push({ x: cur.x, y: cur.y });
           if (placed.length >= 2) { g.sc.poke = null; g.sc.lapScene = null; g.sc.lapPorts = [{ x: 500, y: 182, trocar: true }, { x: 390, y: 470, trocar: true }, { x: 610, y: 470, trocar: true }]; return c.end(100 - bad * 35 - med * 15, bad ? { issue: { bad: true, t: 'Injured the inferior epigastric vessels. Should have: transilluminate and look from inside; place ports lateral to the vessels (lateral to the lateral umbilical fold).' } } : med ? { issue: { sub: true, t: 'Port medial to the epigastric vessels. Lateral placement avoids them.' } } : null); }

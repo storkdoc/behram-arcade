@@ -139,26 +139,35 @@
   };
 
   /* ---------------- vitals + monitor ---------------- */
-  var V = G.vit = {}, OFF = { hr: 0, sbp: 0, spo2: 0, etco2: 0 }, mon = $('#mon'), mg = mon.getContext('2d');
-  var waves = { ecg: [], pl: [], co: [] }, beatPh = 0, alarmT = 0, warnT = 0, idleT = 12;
+  var V = G.vit = {}, M = null, mon = $('#mon'), mg = mon.getContext('2d');
+  var waves = { ecg: [], pl: [], co: [] }, beatPh = 0, alarmT = 0, warnT = 0, idleT = 12, treatT = 0;
+  /* Physiology lives in js/vitals.js (SVITALS): baselines per case, ATLS-style hemorrhage classes, spinal dip +
+     phenylephrine, smoothed noise, timed effects. It runs ×6 (TS) so trends play out within a short game step. */
+  function syncV() { var v = M.vals(); for (var k in v) V[k] = v[k]; V.base = M.base; V.repl = M.repl; V.M = M; }
   function resetVitals(c) {
-    var ab = c.abruption; V.base = { hr: ab ? 104 : c.ch === 0 ? 88 : 76, sbp: ab ? 150 : 118, dbp: ab ? 96 : 72, spo2: 99, etco2: c.anes && /General/.test(c.anes) ? 35 : 0 };
-    V.hr = V.base.hr; V.sbp = V.base.sbp; V.dbp = V.base.dbp; V.spo2 = 99; V.etco2 = V.base.etco2; V.ebl = 0; V.repl = 0; V.rr = 14; OFF = { hr: 0, sbp: 0, spo2: 0, etco2: 0 }; G.offHold = false; waves = { ecg: [], pl: [], co: [] };
+    var ga = !!(c.anes && /General/.test(c.anes)), spinal = !!(c.anes && /Spinal|Epidural|CSE/i.test(c.anes));
+    M = SVITALS.create({ preg: c.ch === 0, ga: ga, abruption: !!c.abruption });
+    if (spinal) { var hypo = !!(G.sched && G.sched.spinalHypo); M.startSpinal(hypo ? 0.2 : 0.15 + Math.random() * 0.07); if (hypo) M.autoPressor = false; }
+    V.rr = 14; waves = { ecg: [], pl: [], co: [] }; treatT = 0; syncV();
   }
-  G.vitalsHit = function (o) { for (var k in o) OFF[k] = (OFF[k] || 0) + o[k]; };
-  G.addEBL = function (ml) { V.ebl += ml; if (G.cur) G.cur.ebl = (G.cur.ebl || 0) + ml; };
-  G.replace = function (ml) { V.repl += ml; };
+  /* o: deltas {sbp, dbp, hr, spo2, etco2}; opt: {on, hold, off} in physiologic seconds (hold Infinity = until released). */
+  G.vitalsHit = function (o, opt) { opt = opt || {}; return M.effect(o, { on: opt.on || 15, hold: opt.hold == null ? 30 : opt.hold, off: opt.off || 60, name: opt.name }); };
+  G.addEBL = function (ml) { M.addEBL(ml); V.ebl = M.ebl; if (G.cur) G.cur.ebl = (G.cur.ebl || 0) + ml; };
+  G.replace = function (ml) { M.blood(ml); };
+  G.fill = function (t) { return String(t).replace(/\{bp\}/g, Math.round(V.sbp) + '/' + Math.round(V.dbp)).replace(/\{hr\}/g, Math.round(V.hr)).replace(/\{spo2\}/g, Math.round(V.spo2)).replace(/\{etco2\}/g, Math.round(V.etco2)).replace(/\{ebl\}/g, Math.round(V.ebl / 50) * 50); };
   function vitalsTick(dt) {
-    var def = Math.max(0, V.ebl - V.repl - 600);
-    var tHr = V.base.hr + def / 22 + OFF.hr, tS = V.base.sbp - Math.max(0, def - 400) / 18 + OFF.sbp, tSp = Math.min(100, 99 + OFF.spo2), tCo = V.base.etco2 ? V.base.etco2 + OFF.etco2 : 0;
-    var k = Math.min(1, dt * 0.5); V.hr += (tHr - V.hr) * k; V.sbp += (tS - V.sbp) * k; V.dbp = V.sbp * 0.6; V.spo2 += (tSp - V.spo2) * k; V.etco2 += (tCo - V.etco2) * k;
-    if (!G.offHold) { var d = Math.exp(-dt / 7); for (var o in OFF) OFF[o] *= d; }
-    if (V.repl < V.ebl - 1500 && G.mtp) V.repl += dt * 40; // blood products running
+    M.mtp = !!G.mtp; M.tick(dt); syncV();
     // alarms + anesthesia chatter
     var lvl = V.spo2 < 90 || V.sbp < 80 || V.hr > 135 ? 2 : V.spo2 < 94 || V.sbp < 92 || V.hr > 118 ? 1 : 0;
     alarmT -= dt; if (lvl && alarmT <= 0) { A.alarm(lvl); alarmT = lvl === 2 ? 2.2 : 4; }
-    warnT -= dt; if (lvl && warnT <= 0 && !G.modal) { G.say('gas', lvl === 2 ? (V.spo2 < 90 ? 'Sats ' + Math.round(V.spo2) + '. I need a minute up here.' : 'Pressure ' + Math.round(V.sbp) + ' over ' + Math.round(V.dbp) + '. I’m squeezing in fluids and phenylephrine.') : pick(S.QUIPS.gasWarn)); warnT = 14; }
-    idleT -= dt; if (idleT <= 0 && !lvl && !G.modal && !sayQ.length && sayT <= 0) { idleT = 22 + Math.random() * 16; var w = Math.random() < 0.6 ? 'gas' : 'circ'; G.say(w, pick(w === 'gas' ? S.QUIPS.gasIdle : S.QUIPS.circIdle)); }
+    warnT -= dt; if (lvl && warnT <= 0 && !G.modal) {
+      var low = V.sbp < (lvl === 2 ? 80 : 92), line;
+      if (V.spo2 < (lvl === 2 ? 90 : 94)) line = lvl === 2 ? 'Sats {spo2}. I need a minute up here.' : 'Sats {spo2}. Give me a second with the airway.';
+      else if (low) { line = lvl === 2 ? 'Pressure {bp}. I’m squeezing in fluids and phenylephrine.' : S.QUIPS.gasWarn[0]; M.pressor(); if (V.cls > 1 || lvl === 2) M.fluids(1000); }
+      else { line = V.cls > 1 && V.ebl > 700 ? S.QUIPS.gasWarn[3] : S.QUIPS.gasWarn[1]; if (V.cls > 1) M.fluids(1000); }
+      G.say('gas', G.fill(line)); warnT = 14;
+    }
+    idleT -= dt; if (idleT <= 0 && !lvl && V.hr < 105 && V.sbp > M.base.sbp * 0.88 && V.cls < 2 && !G.modal && !sayQ.length && sayT <= 0) { idleT = 22 + Math.random() * 16; var w = Math.random() < 0.6 ? 'gas' : 'circ'; G.say(w, G.fill(pick(w === 'gas' ? S.QUIPS.gasIdle : S.QUIPS.circIdle))); }
     // tension score: crisis, haemorrhage, stat clock
     var ten = (G.crisisOn ? 0.75 : 0) + clamp((V.ebl - 900) / 1800, 0, 0.5) + (lvl ? 0.25 : 0) + (G.statLeft != null && G.statLeft < 0.5 ? 0.35 : 0) + (G.cur && G.cur.hot ? 0.2 : 0);
     A.tension(clamp(ten, 0, 1));
@@ -186,7 +195,7 @@
     var flash = (now() * 2 | 0) % 2 === 0;
     num('HR', Math.round(V.hr), V.hr > 120 && flash ? '#ff5a5a' : '#36ff6a', rowH * 0.95);
     num('SpO\u2082', Math.round(V.spo2), V.spo2 < 92 && flash ? '#ff5a5a' : '#3fe8ff', rowH * 1.95, '%');
-    mg.fillStyle = V.sbp < 90 && flash ? '#ff5a5a' : '#f2f2f2'; mg.font = '700 ' + (fs - 3) + 'px system-ui'; mg.fillText('NIBP', x, rowH * 2.95 - big + 4); mg.font = '800 ' + Math.round(big * 0.72) + 'px ui-monospace, Menlo, monospace'; mg.fillText(Math.round(V.sbp) + '/' + Math.round(V.dbp), x, rowH * 2.95);
+    mg.fillStyle = V.sbp < 90 && flash ? '#ff5a5a' : '#f2f2f2'; mg.font = '700 ' + (fs - 3) + 'px system-ui'; mg.fillText('NIBP', x, rowH * 2.95 - big + 4); mg.font = '800 ' + Math.round(big * 0.72) + 'px ui-monospace, Menlo, monospace'; mg.fillText(Math.round(V.sbp) + '/' + Math.round(V.dbp) + (small ? '' : ' (' + Math.round(V.map) + ')'), x, rowH * 2.95);
     mg.font = '700 ' + (fs - 2) + 'px system-ui'; mg.fillStyle = '#ffe14a'; if (V.base.etco2) { mg.fillText('EtCO\u2082 ' + Math.round(V.etco2), 6, rowH * 3.35); }
     mg.fillStyle = V.ebl > 1000 ? '#ff6b6b' : '#ffb0b0'; mg.font = '800 ' + (fs + 1) + 'px system-ui'; mg.fillText('EBL ' + Math.round(V.ebl) + ' mL', small ? 6 : 6, rowH * 3.85);
     mg.fillStyle = 'rgba(255,255,255,.5)'; mg.font = '600 ' + (fs - 4) + 'px system-ui'; mg.textAlign = 'right'; mg.fillText(G.case ? (G.case.anes || '').split(' ')[0].toUpperCase() : '', w - 6, rowH * 3.85); mg.textAlign = 'left';
@@ -256,7 +265,7 @@
   var EXP_EBL = { breech: 800, cat3: 800, abruption: 1100, dermoid: 50, adnexal: 75, myomectomy: 500, tah: 400 };
   G.PRE = PRE;
   function startCase(c, att) {
-    G.case = c; G.att = !!att; G.view = 'open'; G.drawCustom = null; G.miniTick = null; G.quizTick = null; G.steps = c.steps(); G.si = 0; G.log = []; G.surp = []; G.mtp = false; G.t0 = now(); G.statLeft = null; G.tool = null; G.crisisOn = false; G.countOK = null; G.notes = [];
+    G.case = c; G.att = !!att; G.view = 'open'; G.drawCustom = null; G.miniTick = null; G.quizTick = null; G.steps = c.steps(); G.si = 0; G.log = []; G.surp = []; G.mtp = false; G.t0 = now(); G.statLeft = null; G.tool = null; G.crisisOn = false; G.countOK = null; G.notes = []; G.painDone = false; G.insufDone = false;
     var stepIds = {}; G.steps.forEach(function (s) { stepIds[s.id] = 1; stepIds[s.k] = 1; });
     var pool = shuffle(c.surprises.filter(function (id) { var x = S.SURPRISES[id]; return x && stepIds[x.at] && (!x.hard || att || Math.random() < 0.5); }));
     var n = att ? Math.min(pool.length, 3 + (Math.random() < 0.5 ? 1 : 0)) : Math.min(pool.length, 2 + (Math.random() < 0.35 ? 1 : 0));
@@ -289,6 +298,7 @@
     var cur = G.cur = { step: st, t0: now(), ebl: 0, issues: [], tool: null, next: null, score: null, revealed: !(st.next && G.si > 0), urgent: st.urgent };
     G.sc.k = ''; G.sc.prog = 0; G.sc.grow = null; G.sc.overlay = null; G.sc.lapTools = null; G.sc.roi = null; G.sc.path = null;
     hud(); G.prompt(null); G.meter(null); G.pads(null, null);
+    stepPhysio(st);
     var sp = null; for (var id in G.sched) { var x = G.sched[id]; if ((x.at === st.id || x.at === st.k) && !x.done) sp = x; }
     chain([
       !cur.revealed ? whatNext : null,
@@ -299,6 +309,16 @@
       function (nx) { mini(st, nx); },
       sp && !PRE[sp.id] ? function (nx) { surprise(sp, nx); } : null
     ], function () { completeStep(st); });
+  }
+  function stepPhysio(st) {
+    var c = G.case, ga = c.anes && /General/.test(c.anes);
+    // first incision under GA: sympathetic response (HR and BP up), settles as anesthesia deepens
+    if (ga && !G.painDone && st.k !== 'timeout') { G.painDone = true; G.vitalsHit({ hr: 8, sbp: 12, dbp: 8 }, { on: 30, hold: 90, off: 90, name: 'pain' }); }
+    // pneumoperitoneum + Trendelenburg: mild sustained rise in BP/HR and EtCO2; sometimes a vagal dip from peritoneal stretch
+    if (st.id === 'insufflate' && !G.insufDone) {
+      G.insufDone = true; G.vitalsHit({ sbp: 8, dbp: 6, hr: 4, etco2: 4 }, { on: 60, hold: Infinity, name: 'pneumo' });
+      if (Math.random() < 0.3 && !(G.sched && G.sched.co2)) { G.vitalsHit({ hr: -28, sbp: -8, dbp: -5 }, { on: 4, hold: 15, off: 25, name: 'vagal' }); setTimeout(function () { if (G.screen === 'or' && G.case === c) G.say('gas', G.fill('Heart rate {hr}: vagal, from the peritoneal stretch. Pause the gas a second… it’s coming back.')); }, 3000); }
+    }
   }
   function whatNext(nx) {
     var st = G.steps[G.si], names = {}; names[st.name] = 1;
@@ -314,20 +334,31 @@
   function surprise(x, nx) {
     x.done = true; var rec = { id: x.id, title: x.title, finding: x.finding, step: G.cur.step.name, ok: null }; G.surp.push(rec);
     A.sfx.whoosh(); G.banner('⚠ ' + esc(x.title), '', 2.2); try { window.MoodSticker && MoodSticker.event('hit'); } catch (e) {}
-    if (x.crisis || x.vitals || x.blood) { G.crisis(true); G.offHold = true; }
-    if (x.vitals) G.vitalsHit(x.vitals); if (x.blood) G.addEBL(x.blood * 0.5);
+    if (x.crisis || x.vitals || x.blood) G.crisis(true);
+    var fx = null, sp = x.id === 'spinalHypo';
+    if (sp) M.deepenSpinal(0.25); else if (x.vitals) fx = G.vitalsHit(x.vitals, { on: x.von || 15, hold: Infinity, off: x.voff || 60, name: x.id });
+    if (x.blood) G.addEBL(x.blood * 0.5);
     if (x.id === 'couvelaire') G.sc.couvelaire = true; if (x.id === 'endo') G.sc.endo = true; if (x.id === 'spill') { G.sc.spill = true; R.lap.smoke = 0.6; }
-    G.say(x.who, x.say, true); G.cur.hot = true;
-    setTimeout(function () {
-      G.quiz({ tag: '⚠ ' + x.title, who: x.who, q: x.quiz.q, opts: x.quiz.opts, why: x.quiz.why, time: x.crisis || x.vitals ? (G.att ? 12 : 22) : (G.att ? 15 : 0), crisis: !!(x.crisis || x.vitals) }, function (ok) {
+    G.cur.hot = true;
+    // let the event develop on the monitor (time runs ×4) before the team calls out numbers, so words match the screen
+    var t0 = now(), vit = sp || fx; if (vit) M.warp = 4; else G.say(x.who, G.fill(x.say), true);
+    (function wait() {
+      var dev = sp ? M.spinal.a : fx ? fx.a : 1, el = now() - t0;
+      if (vit && el < 8 && (dev < 0.9 || el < 1.3) && G.screen === 'or') return setTimeout(wait, 150);
+      if (vit) { M.warp = 1; G.say(x.who, G.fill(x.say), true); }
+      setTimeout(ask, vit ? 600 : 1300);
+    })();
+    function treat() { if (sp) M.pressor(); if (fx) M.release(fx, x.voff || 60); }
+    function ask() {
+      G.quiz({ tag: '⚠ ' + x.title, who: x.who, q: G.fill(x.quiz.q), opts: x.quiz.opts, why: x.quiz.why, time: x.crisis || x.vitals ? (G.att ? 12 : 22) : (G.att ? 15 : 0), crisis: !!(x.crisis || x.vitals) }, function (ok) {
         rec.ok = ok; rec.why = x.quiz.why; rec.right = x.quiz.opts[0];
-        if (ok) { G.say('behram', pick(S.QUIPS.behramGood)); G.offHold = false; if (/atony|abruptDIC|myoBleed|uterineBleed/.test(x.id)) { G.mtp = G.mtp || V.ebl > 1200 || x.id === 'abruptDIC'; G.replace(400); } }
-        else { G.addEBL((x.blood || 100) * 0.6); G.vitalsHit({ hr: 10, sbp: -10 }); G.say('behram', pick(S.QUIPS.behramMeh)); setTimeout(function () { G.offHold = false; }, 5000); if (x.id === 'abruptDIC' || x.id === 'atony') G.mtp = true; }
+        if (ok) { G.say('behram', pick(S.QUIPS.behramGood)); treat(); if (/atony|abruptDIC|myoBleed|uterineBleed/.test(x.id)) { G.mtp = G.mtp || V.ebl > 1200 || x.id === 'abruptDIC'; G.replace(400); M.fluids(1000); } }
+        else { G.addEBL((x.blood || 100) * 0.6); G.say('behram', pick(S.QUIPS.behramMeh)); setTimeout(treat, 5000); if (x.blood) M.fluids(1000); if (x.id === 'abruptDIC' || x.id === 'atony') G.mtp = true; }
         var after = function () { G.cur.hot = false; G.crisis(false); nx(); };
         if (x.bleed) { G.say('gas', 'Now control that bleeding, please.'); SM.bleed({ id: 'surp-' + x.id, k: 'bleed', name: 'Control: ' + x.title, n: x.bleed.n, secs: x.bleed.secs, ooze: x.bleed.ooze, lap: G.case.type === 'lap' }, function (sc2) { rec.bleed = sc2; after(); }); }
         else after();
       });
-    }, 1300);
+    }
   }
   function mini(st, nx) {
     if (st.k === 'quiz') { G.quiz({ tag: st.name, who: 'behram', q: st.quiz.q, opts: st.quiz.opts, why: st.quiz.why || st.pearl, time: G.att ? 20 : (st.id === 'crash' || st.id === 'mtp' ? 25 : 0), crisis: st.id === 'crash' }, function (ok) { G.cur.score = ok ? 100 : 25; if (!ok) G.cur.issues.push({ bad: true, t: 'Should have: ' + st.quiz.opts[0] + '. ' + (st.quiz.why || '') }); if (st.id === 'mtp' && ok) G.mtp = true; nx(); }); return; }

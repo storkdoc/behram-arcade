@@ -29,6 +29,14 @@ One arcade cabinet, one lock, three games, set in Dr. Steven Behram's practice (
 - Op note: header (pre/post-op dx, procedure, surgeon/assistant, anesthesia, findings incl. surprises, EBL, fluids/urine, specimens,
   complications, counts, disposition), annotated description (✔ ok / ▲ suboptimal / ✘ wrong + "Should have" + why), pearls, grade.
   Print/Save PDF = window.print with print CSS (paper only). History: localStorage `sts.v1`.hist (30 notes), from the case menu.
+- Vitals (2026-10-31): physiology in `surgery/js/vitals.js` (SVITALS, pure, node-testable), driven by main.js. Runs at TS=6
+  physiologic s per real s (frame dt ≤ 0.05 s). Baselines: term pregnant/spinal SBP 112–124, DBP 66–76, HR 84–96; GYN/GA
+  114–128/70–80, HR 68–82 (abruption 136/86, HR 102). Smoothed OU noise (SBP sd ~3, HR ~2.5). Hemorrhage = ATLS classes on
+  (EBL − blood − crystalloid/3) / EBV (100 mL/kg pregnant, 70 non-pregnant), lag ~50 s up / 90 s down; pregnant SBP holds
+  ~4% EBV longer. Spinal dips 15–22% over ~2–4 min, phenylephrine (auto, or after the spinalHypo answer) fixes it in ~1–2 min,
+  HR −5. Effects (`G.vitalsHit(delta, {on, hold, off})`): GA incision pain, insufflation/Trendelenburg (+ 30% vagal dip),
+  surprise events (held until answered). Vitals surprises warp time ×4 until the event shows, then dialogue/stems fill
+  {bp} {hr} {spo2} {etco2} {ebl} with the live numbers (`G.fill`). Monitor shows MAP. Test: `node surgery/tests/vitals.test.js`.
 - Test hook: `SG.limitScale` shrinks minigame time limits (tests only).
 - Tests: `node surgery/tests/cases.test.js` (content lint), `surgery/tests/page.test.js` (bot plays cases; ALL=1 for all 7, ~25 min),
   `tests/hub.test.js` (gate, codes, instructor, all 3 games on desktop/iPhone/iPad, redirects, games.js).
