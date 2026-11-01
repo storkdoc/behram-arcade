@@ -148,9 +148,36 @@
     var gk = GAMES[state.sel], L = LINES[gk]; if (!quiet) sfx.tick(); say(L[Math.floor(Math.random() * L.length)]);
   }
   $$('.room').forEach(function (r, k) { r.addEventListener('click', function () { select(k, true); go(GAMES[k]); }); r.addEventListener('mouseenter', function () { if (state.sel !== k) select(k); }); });
+  /* change of site of service: OB Triage and Suture Self! are at the hospital (Holy Cross Germantown), so Dr. Behram drives there.
+   * First trip of the session plays the full ~6 s cartoon, later trips a ~2.5 s express version; Space/Enter/click/tap skips. */
+  var HOSP = { triage: 1, surgery: 1 };
+  function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } }
+  function driveSound(name) {
+    if (muted) return;
+    if (name === 'parking') { tone(520, 0.18, 'sine', 0.07, 0.25); tone(780, 0.22, 'sine', 0.06, 0.38); } // door chime
+    else if (name === 'drive' || name === 'drive-back') { tone(180, 1.1, 'sawtooth', 0.025, 0, 420); tone(360, 1.1, 'sine', 0.03, 0, 840); } // electric whine
+    else if (name === 'arrive' || name === 'office-lot') { tone(659, 0.4, 'sine', 0.08, 1.0); tone(523, 0.5, 'sine', 0.07, 1.18); }
+    else if (name === 'stairs') sfx.step();
+  }
+  function driveTo(k) {
+    var n = +(ss('drbo.drives') || 0); ss('drbo.drives', String(n + 1));
+    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('#ui').style.transition = 'opacity .3s'; $('#ui').style.opacity = '0';
+    var leave = function () { ss('drbo.away', k); if (HUB.noNavigate) return; location.href = PATH[k]; };
+    if (!window.DriveFX) { setTimeout(leave, 300); return; }
+    DriveFX.play({ dir: 'to', dest: k, express: n > 0 || reduce, face: 'office/assets/behram-face.jpg', sound: driveSound }).then(leave);
+  }
+  function driveBack(k) {
+    ss('drbo.away', null);
+    if (!window.DriveFX) return;
+    $('#ui').style.opacity = '0'; $('#ui').style.transition = 'opacity .4s';
+    DriveFX.play({ dir: 'back', dest: k, face: 'office/assets/behram-face.jpg', sound: driveSound }).then(function () { $('#ui').style.opacity = ''; say('Back at the office. Who’s next?'); });
+  }
+  HUB.driveBack = driveBack;
   function go(k) {
     if (state.walking) return; state.walking = true; LS.set('drbo.last', GAMES.indexOf(k));
     try { window.MoodSticker && MoodSticker.event('start'); } catch (e) {}
+    if (HOSP[k]) { HUB.went = k; sfx.step(); driveTo(k); return; }
     sfx.step(); var r = hot[k];
     if (r) { var ox = (r.cx / innerWidth * 100).toFixed(1), oy = (r.cy / innerHeight * 100).toFixed(1); cv.style.transformOrigin = ox + '% ' + oy + '%'; }
     cv.classList.add('walking'); cv.style.transform = 'scale(' + (k === 'office' ? 2.6 : 4.5) + ')'; $('#walk').classList.add('on'); $('#ui').style.opacity = '0'; $('#ui').style.transition = 'opacity .3s';
@@ -158,7 +185,7 @@
     setTimeout(function () { if (HUB.noNavigate) return; location.href = PATH[k]; }, 1150);
   }
   HUB.go = go;
-  addEventListener('pageshow', function (e) { if (e.persisted) { state.walking = false; cv.classList.remove('walking'); cv.style.transform = ''; $('#walk').classList.remove('on'); $('#ui').style.opacity = ''; } });
+  addEventListener('pageshow', function (e) { if (e.persisted) { state.walking = false; cv.classList.remove('walking'); cv.style.transform = ''; $('#walk').classList.remove('on'); $('#ui').style.opacity = ''; var aw = ss('drbo.away'); if (aw && state.screen === 'menu') driveBack(aw); } });
 
   /* ---------- input: keyboard, gamepad ---------- */
   function focusFirst(sel) { var e = $(sel + ' [data-nav]'); if (e) e.focus(); }
@@ -217,7 +244,7 @@
   document.addEventListener('pointerdown', function () { ac(); }, { once: true });
   checkAccess().then(function (r) {
     HUB.booted = true;
-    if (r.ok) { state.access = r; showMenu(); } else showGate(r.reason, r);
+    if (r.ok) { state.access = r; showMenu(); var aw = ss('drbo.away'); if (HOSP[aw]) driveBack(aw); } else showGate(r.reason, r);
   }, function () { HUB.booted = true; showGate('none'); });
   HUB.state = state; HUB.select = select; HUB.instructor = instructor;
 })();

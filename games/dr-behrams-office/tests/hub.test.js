@@ -52,6 +52,13 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
     if (dev === 'desktop') {
       await pg.evaluate(() => { HUB.noNavigate = true; }); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press(' '); await pg.waitForTimeout(300);
       ok(await pg.evaluate(() => HUB.went) === 'surgery', 'desktop: arrows + SPACE pick the operating room');
+      ok(await pg.evaluate(() => DriveFX.active && DriveFX.scene === 'office'), 'desktop: the OR is at the hospital: the drive starts in Dr. Behram\'s office');
+      await pg.waitForFunction(() => DriveFX.log.indexOf('stairs') >= 0, null, { timeout: 4000 }); ok(true, 'desktop: drive goes down the stairs');
+      await pg.keyboard.press(' '); await pg.waitForTimeout(100);
+      ok(await pg.evaluate(() => !DriveFX.active && DriveFX.skipped && sessionStorage.getItem('drbo.away') === 'surgery'), 'desktop: SPACE skips the drive');
+      ok(await pg.evaluate(() => { var P = DriveFX.plan({ dir: 'to', dest: 'triage' }), E = DriveFX.plan({ dir: 'to', dest: 'triage', express: true }), B = DriveFX.plan({ dir: 'back' });
+        return P.map(s => s.name).join() === 'office,stairs,parking,drive,arrive' && P.total >= 4 && P.total <= 7 && E.total < 3 && B.total < P.total; }), 'desktop: full drive 4-7 s (office, stairs, parking, drive, arrival), express and return shorter');
+      ok(!/tesla|model x/i.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'hub', 'drive.js'), 'utf8')), 'drive.js names no car brand');
       await pg.reload(); await pg.waitForFunction(() => window.HUB && HUB.booted);
       await pg.click('.room[data-g="feud"]'); await pg.waitForURL(/\/feud\/$/, { timeout: 8000 }); ok(true, 'desktop: clicking the conference room walks into Feud & Delivery');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
@@ -59,10 +66,17 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
       ok(await pg.evaluate(() => HUB.went) === 'triage', 'desktop: key 4 picks L&D triage (OB Triage)');
       await pg.reload(); await pg.waitForFunction(() => window.HUB && HUB.booted);
     } else {
-      await pg.tap('.room[data-g="surgery"]'); await pg.waitForURL(/\/surgery\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the OR door walks into Suture Self!');
+      await pg.tap('.room[data-g="surgery"]'); await pg.waitForFunction(() => window.DriveFX && DriveFX.active); await pg.waitForTimeout(600);
+      if (SHOTS) await pg.screenshot({ path: `${SHOTS}/hub-${dev}-drive.png` });
+      await pg.tap('#drive'); await pg.waitForURL(/\/surgery\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the OR door drives to the hospital (tap skips) and opens Suture Self!');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
-      await pg.tap('.room[data-g="triage"]'); await pg.waitForURL(/\/triage\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the L&D door walks into OB Triage');
+      await pg.waitForFunction(() => window.DriveFX && DriveFX.active && DriveFX.log[0] === 'leave-hospital', null, { timeout: 4000 }); ok(true, dev + ': coming back plays the drive back to the office');
+      await pg.tap('#drive'); await pg.waitForFunction(() => !DriveFX.active);
+      await pg.tap('.room[data-g="triage"]'); await pg.waitForFunction(() => window.DriveFX && DriveFX.active);
+      ok(await pg.evaluate(() => DriveFX.total < 3), dev + ': second trip this session is the express drive');
+      await pg.waitForURL(/\/triage\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the L&D door drives to the hospital and opens OB Triage');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
+      await pg.waitForFunction(() => window.DriveFX && DriveFX.active, null, { timeout: 4000 }); await pg.tap('#drive'); await pg.waitForFunction(() => !DriveFX.active);
     }
     ok(!pg.errs.length, dev + ': hub has no console errors ' + pg.errs.slice(0, 3).join(' | '));
     await ctx.close();
