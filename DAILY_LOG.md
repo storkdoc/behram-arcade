@@ -346,3 +346,68 @@ entries from the Oct 29 test runs (ignored; archived to ~/behram-arcade-feedback
   - `tests/botmatch.js` / `batch.js`: Hard beats Easy 3/3 by conquest (24–37 min).
   - `tests/counters.js`: 5/5 pass.
   - Playwright mouse 15/15 and touch 14/14 pass, with no console errors at 1280x800, iPad landscape and iPhone landscape.
+
+## 2026-11-01 (day 5): gameplay evaluation + fixes
+
+The Oct 31 daily run failed, so there's no day-4 entry. Its VORTEX power-ups had already shipped and are written up in
+games/tube-shooter/NOTES.md. Today's work ran in a fresh worktree `/workspace/arcade-daily-2026-11-01` from `eb719e4`,
+using headless Chrome (SwiftShader) at desktop 1440×900 and iPhone 14. The box was heavily loaded (load average 17–28).
+
+### Player feedback (Oct 31)
+`node tools/read-feedback.mjs --date 2026-10-31 --no-sync`: 2 real submissions, no test records, both from one desktop/mouse
+session (about 7 min, Oct 31 4:01 PM EDT) in Clinic Day (`congressional-obgyn`, office/).
+- Ratings: Clinic Day had 1 FUN and 1 note-only. No other game was rated.
+- Suggestion cluster, answer cues (1): "correct answers are overexplained and almost invariably the longest choice".
+  That was already fixed upstream in `c6187c5` (Clinic Day bank and SUTURE SELF! quizzes; `tests/answer-length.test.js`
+  passes). Today the same check was extended to OB Triage (see below).
+
+### Findings
+- **Smoke test, all 21 games, desktop and iPhone**: every game loads with no console or page errors. The screenshot
+  timeouts (jax-adventures, planet-guardian) were CPU load.
+- **Dr. Behram's Office**: hub, office access and office page tests all pass, so the instructor PIN (salted hash only;
+  the tests use testpin.js) and the generated student codes with their 6-week expiry still work. Clinic core and
+  bank-cues pass, surgery cases and vitals pass, triage cases and CTG pass, feud engine passes, and the answer-length lint passes.
+  - The OB Triage page test passes on desktop (pit A+ 93, push A+ 95, prolapse B 80, random students F), iPhone
+    (abruption A 90) and iPad. One first run timed out under load and passed on the re-run.
+  - **Weakness**: OB Triage's one text MCQ (the oxytocin restart ask) had the longest correct answer (11 words vs 5–6)
+    and always showed it first. The answer-length lint didn't cover triage.
+- **VORTEX (Tempest)**: enemy shots are still the #1 death cause (days 2–4). Classic Tempest 2000 has a JUMP; we didn't.
+  All VORTEX tests pass: powerups, tips, haptics, waves, v4 (the warden flake didn't recur) and root rim/touch.
+
+### Changes
+1. `7c20f16` **VORTEX JUMP power-up** (games/tube-shooter). The 2nd green crystal is now JUMP. The order is LASER → JUMP → DROID → BONUS.
+   - Controls: SHIFT/J, pad Y/LB/RB, mouse middle button, or a green JUMP touch button.
+   - Portrait places the button left of FIRE under ZAP; landscape places it above ZAP. It overlaps nothing on iPhone 14/SE, iPad Mini or Pixel 7.
+   - A 0.75 s arc off the rim with a shadow claw and thrust trail, then a 1.5 s recharge bar.
+   - In the air you're safe from shots, grabs, zaps, fuseballs, spikes and mine walls (+50 "DODGED!").
+   - You lose JUMP when you lose a life, and landing next to a grabber still kills you.
+   - New `tests/vortex-jump.test.js` covers desktop, iPhone 14 and iPhone 14 landscape. `vortex-powerups` was updated for the new order.
+2. `23ea18f` **OB Triage answer cue** (games/dr-behrams-office).
+   - The restart options were rewritten to equal length (8–10 words; the correct one is now the shortest by words).
+   - Text asks show in a case-seeded shuffled order. Replays keep the same order and answer indexes are unchanged.
+   - Category re-checks stay in I/II/III order.
+   - `tests/mcq.js` and `answer-length.test.js` now load the triage ASKS and check that no correct option is the longest and that the order is shuffled.
+- Both changes were live-verified on GitHub Pages about 20 s after the push (Nov 1 7:38 AM EST).
+
+### Neuro Arena (seed 1101; 10 rounds × K=4, Lamarck, 30 s matches, size 2800, ABL=5; plateau rule on, 40 generations)
+| contest | chance | champ by round | full task | beyond reflex | plateau / reaped | notes |
+|---|---|---|---|---|---|---|
+| divisor | 8% | 22→41→55→61→63→63→64→68→81→84% | 59% | −0.07 | 0 / 1 | best yet (day 3: 80%, full 44%); still below the full reflex prior |
+| simon | 25% | 46→56→73→…→80% | 36% | +0.10 | 1 / 2 | real beyond-reflex gain, flat rounds 3–7 |
+| text | 8% | 36→44→…→56% | 19% | −0.06 | 0 / 0 | new words 27% vs familiar 40%: some generalisation, part memorisation |
+| add | 5% | 28 (×5)→33→72→89→100→56% | 7% | −0.03 | 3 / 1 | stuck 5 rounds, then broke out; reached level 1 (the drop to 56% is the harder level) |
+| sub | 10% | 67→83→92→60→…→73% | 15% | −0.04 | 0 / 1 | reached level 2, and the drops follow level-ups |
+| big | 50% | 60→76→…→90% | – | +0.12 | 1 / 1 | |
+| pattern | 13% | 65→90→95→100% | – | +0.50 | 2 / 2 | saturated by round 4 |
+| pong | – | 40% for all 10 rounds | – | +0.04 | 0 / 1 | **stagnant**: the champion never changed (hit 40%, duel 58%) |
+| echo, dots, rps, tug | 13/17/33/50% | 88→100, 100, 100, 100% | – | – | | saturated, uninformative |
+- Compared with day 3 (seed 12345): divisor, simon, text and big are all higher today, but this is a different seed and
+  one seed only, so it isn't evidence of improvement. Pong regressed from day 3's 40→48% to fully flat. Add, sub and
+  pattern behave the same as before. The "beyond reflex" scores are still ≤0 for the arithmetic contests: their gains
+  come from task inputs a reflex already reads, not new understanding.
+
+### For tomorrow
+- Pong in Neuro Arena: the champion is never displaced. Look at selection and the match length (30 s may be too noisy).
+- Run plateau on/off on 3+ seeds before claiming it helps. The iPhone landscape encounter layout is still not probed.
+- Bot playthroughs to measure how JUMP changes VORTEX death level. The DROID now arrives later.
+- The PIN is still in git history (unchanged; only a salted hash in the current tree).
