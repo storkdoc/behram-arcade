@@ -178,31 +178,101 @@ function why(sid, type) {
   else if (sim.metals < sim.buildCost(type)) toast('NOT ENOUGH METALS', 'bad');
 }
 
-/* ---------------- research overlay ---------------- */
-var resFocus = null;
-function openResearch(focus) { if (!sim || (state !== 'game')) return; resFocus = focus || null; setState('research'); buildResearch(); AU.sfxEvent({ k: 'ui', m: 81 }); }
-function buildResearch() {
-  $('rsSci').textContent = '✦ ' + Math.floor(sim.science);
-  var g = $('rgrid'); g.innerHTML = '';
-  Object.keys(D.CATS).forEach(function (c) {
-    var col = document.createElement('div'); col.className = 'rcol'; col.innerHTML = '<h4>' + D.CATS[c] + '</h4>';
-    D.RESEARCH.filter(function (r) { return r.cat === c; }).forEach(function (r) {
-      var st = sim.researchState(r.id), b = document.createElement('button'); b.className = 'rn ' + st; b.setAttribute('data-nav', ''); b.setAttribute('data-id', r.id);
-      b.innerHTML = r.name + '<span class="c">' + (st === 'done' ? 'COMPLETE' : st === 'locked' ? 'NOT YET KNOWN' : st === 'excluded' ? 'PATH NOT CHOSEN' : '✦ ' + r.cost) + '</span>';
-      b.onmouseenter = b.onfocus = function () { resInfo(r.id); };
-      b.onclick = function () { resInfo(r.id); if (sim.doResearch(r.id)) { panelDirty = true; saveRun(); toast('RESEARCH COMPLETE · ' + r.name.toUpperCase(), 'good'); var keep = r.id; buildResearch(); var el = g.querySelector('[data-id="' + keep + '"]'); if (el) focusEl(el); } else AU.sfxEvent({ k: 'deny' }); };
-      col.appendChild(b);
-    });
-    g.appendChild(col);
-  });
-  var f = resFocus && g.querySelector('[data-id="' + resFocus + '"]'); if (f) setTimeout(function () { focusEl(f); resInfo(resFocus); }, 0); else resInfo(null);
+/* ---------------- research: a visual technology tree ---------------- */
+var resFocus = null, TL = null, rScale = 0, rConfirm = null;
+var ST_TXT = { done: 'RESEARCHED', locked: 'NOT IN THIS CHAPTER', excluded: '✕ LOCKED OUT', prereq: '', specimen: '', ready: '', poor: '' };
+function openResearch(focus) { if (!sim || (state !== 'game')) return; resFocus = focus || null; rConfirm = null; setState('research'); buildResearch(true); AU.sfxEvent({ k: 'ui', m: 81 }); }
+function resStatus(r, st) {
+  if (st === 'ready') return '✦ ' + r.cost + ' · READY';
+  if (st === 'poor') return '✦ ' + r.cost + ' · NEED ' + Math.ceil(r.cost - sim.science) + ' MORE';
+  if (st === 'prereq') return '🔒 NEEDS ' + (r.req || []).filter(function (q) { return !sim.research[q]; }).map(function (q) { return D.RES[q].name.toUpperCase(); }).join(' + ');
+  if (st === 'specimen') return '◉ ' + Object.keys(r.spec).map(function (s) { return s === 'boss' ? 'DEFEAT A BOSS' : Math.min(sim.kills[s] || 0, r.spec[s]) + '/' + r.spec[s] + ' ' + A[s].name; }).join(', ');
+  return ST_TXT[st] || '';
+}
+function svgEl(tag, attrs) { var e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function buildResearch(first) {
+  if (!TL) TL = window.HPTree.layout();
+  var L = TL, plane = $('rplane'); $('rsSci').textContent = '✦ ' + Math.floor(sim.science) + ' SCIENCE';
+  plane.innerHTML = ''; plane.style.width = L.W + 'px'; plane.style.height = L.H + 'px';
+  L.lanes.forEach(function (ln) { var d = document.createElement('div'); d.className = 'rlane'; d.style.cssText = 'left:' + ln.x + 'px;top:' + ln.y + 'px;width:' + ln.w + 'px;height:' + ln.h + 'px';
+    d.innerHTML = '<span class="lt">' + ln.title + '</span>' + (ln.note ? '<span class="ln ' + (ln.cat === 'B' ? 'spec' : 'or') + '">' + (ln.cat === 'B' ? '◉ ' : '◆ ') + ln.note + '</span>' : ''); plane.appendChild(d); });
+  var svg = svgEl('svg', { class: 'redges', width: L.W, height: L.H, viewBox: '0 0 ' + L.W + ' ' + L.H }), defs = svgEl('defs', {});
+  [['done', '#9fffc8'], ['open', '#9cc8ff'], ['shut', 'rgba(200,210,235,.35)']].forEach(function (m) { var mk = svgEl('marker', { id: 'ar-' + m[0], viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }); mk.appendChild(svgEl('path', { d: 'M0,1 L10,5 L0,9 z', fill: m[1] })); defs.appendChild(mk); });
+  svg.appendChild(defs);
+  L.edges.forEach(function (e) { var a = L.nodes[e.from], b = L.nodes[e.to]; if (!a || !b) return;
+    var x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x - 2, y2 = b.y + b.h / 2, mx = (x1 + x2) / 2;
+    var cls = sim.research[e.to] ? 'done' : sim.research[e.from] ? 'open' : 'shut';
+    svg.appendChild(svgEl('path', { d: 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2, class: 'ed ' + cls + (e.cross ? ' cross' : ''), 'marker-end': 'url(#ar-' + cls + ')', 'data-from': e.from, 'data-to': e.to })); });
+  L.excl.forEach(function (e) { var a = L.nodes[e.a], b = L.nodes[e.b], y = a.y + a.h / 2, x1 = a.x + a.w + 4, x2 = b.x - 4, chosen = sim.research[e.a] ? e.a : sim.research[e.b] ? e.b : null;
+    svg.appendChild(svgEl('path', { d: 'M' + x1 + ',' + y + ' L' + x2 + ',' + y, class: 'ex' + (chosen ? ' chosen' : '') }));
+    var pill = document.createElement('div'); pill.className = 'ror' + (chosen ? ' chosen' : ''); pill.style.left = ((x1 + x2) / 2) + 'px'; pill.style.top = y + 'px';
+    pill.innerHTML = '<b>OR</b><small>' + (chosen ? D.RES[chosen].name.replace(/^Doctrine: /, '').toUpperCase() + ' CHOSEN' : 'ONLY ONE') + '</small>'; plane.appendChild(pill); });
+  plane.appendChild(svg);
+  D.RESEARCH.forEach(function (r) { var n = L.nodes[r.id]; if (!n) return;
+    var st = sim.researchState(r.id), b = document.createElement('button'); b.className = 'rn ' + st + (r.excl ? ' xor' : '') + (r.spec ? ' bio' : '');
+    b.style.cssText = 'left:' + n.x + 'px;top:' + n.y + 'px;width:' + n.w + 'px;height:' + n.h + 'px';
+    b.setAttribute('data-nav', ''); b.setAttribute('data-id', r.id);
+    b.innerHTML = '<span class="nm">' + r.name.replace(/^Doctrine: /, '') + '</span><span class="c">' + resStatus(r, st) + '</span>' + (st === 'done' ? '<i class="bd ok">✓</i>' : st === 'excluded' ? '<i class="bd no">✕</i>' : r.excl ? '<i class="bd or" title="Mutually exclusive">◆</i>' : '');
+    b.onmouseenter = b.onfocus = function () { resInfo(r.id); hiEdges(r.id); };
+    b.onclick = function () { tryResearch(r.id); };
+    plane.appendChild(b); });
+  legend();
+  if (first) { fitTree(true); var g = $('rtree'); g.scrollLeft = 0; g.scrollTop = 0; }
+  var f = resFocus && plane.querySelector('[data-id="' + resFocus + '"]');
+  if (f) setTimeout(function () { focusEl(f); }, 0); else if (first) resInfo(null);
+}
+function tryResearch(id) {
+  var r = D.RES[id], st = sim.researchState(id), riv = window.HPTree.rivals(id);
+  if (st === 'ready' && riv.length && rConfirm !== id) { rConfirm = id; resInfo(id); AU.sfxEvent({ k: 'ui', m: 79 }); return; }
+  rConfirm = null;
+  if (sim.doResearch(id)) { panelDirty = true; saveRun(); toast('RESEARCH COMPLETE · ' + r.name.toUpperCase(), 'good'); resFocus = id; buildResearch(false); resInfo(id); }
+  else { AU.sfxEvent({ k: 'deny' }); resInfo(id); }
+}
+function hiEdges(id) { document.querySelectorAll('#rplane .ed').forEach(function (p) { p.classList.toggle('hi', p.getAttribute('data-from') === id || p.getAttribute('data-to') === id); }); }
+function legend() {
+  $('rlegend').innerHTML = [['done', '✓ RESEARCHED'], ['ready', 'AVAILABLE'], ['poor', 'NEED SCIENCE'], ['prereq', '🔒 NEEDS PREREQUISITE'], ['specimen', '◉ NEEDS SPECIMENS'], ['xor', '◆ CHOOSE ONE OF TWO'], ['excluded', '✕ LOCKED OUT']]
+    .map(function (x) { return '<span class="lg ' + x[0] + '"><i></i>' + x[1] + '</span>'; }).join('');
 }
 function resInfo(id) {
-  if (!id) { $('rinfo').innerHTML = 'Research is permanent for this chapter. Choose a Doctrine and a Super-weapon — only one of each.'; return; }
-  var r = D.RES[id], st = sim.researchState(id), why = { done: 'Complete.', locked: 'Not available in this chapter.', excluded: 'Another path was chosen.', prereq: 'Requires ' + (r.req || []).map(function (q) { return D.RES[q].name; }).join(', ') + '.', poor: 'Needs ' + r.cost + ' science.', ready: 'Ready — click, Space or A to research.' }[st];
-  if (st === 'specimen') { why = 'Needs specimens: ' + Object.keys(r.spec).map(function (s) { return s === 'boss' ? 'defeat a boss' : (sim.kills[s] || 0) + ' / ' + r.spec[s] + ' ' + A[s].name; }).join(', ') + '.'; }
-  $('rinfo').innerHTML = '<b>' + r.name.toUpperCase() + '</b> — ' + r.txt + '<br>' + why;
+  if (!id) { $('rinfo').innerHTML = 'Arrows show what each project unlocks. Research is permanent for this chapter. <b class="orc">◆</b> Doctrine and Super-weapon are <b class="orc">either / or</b>: choosing one locks out its rival.<br><span class="kh">ARROWS / D-PAD move · SPACE / ENTER / A research · + / − / LT / RT zoom · drag or swipe to pan · R / ESC / B close</span>'; return; }
+  var r = D.RES[id], st = sim.researchState(id), T2 = window.HPTree, riv = T2.rivals(id), nx = T2.leadsTo(id);
+  var why = { done: 'Researched.', locked: 'Not available in this chapter.', excluded: 'Locked out: you chose <b class="orc">' + riv.filter(function (q) { return sim.research[q]; }).map(function (q) { return D.RES[q].name; }).join('') + '</b> instead.', prereq: 'Research its prerequisite first.', poor: 'Needs ' + r.cost + ' science (you have ' + Math.floor(sim.science) + ').', ready: 'Ready — click, tap, Space or A to research for ✦ ' + r.cost + '.' }[st];
+  if (st === 'specimen') why = 'Needs specimens: ' + Object.keys(r.spec).map(function (s) { return s === 'boss' ? 'defeat a boss' : (sim.kills[s] || 0) + ' / ' + r.spec[s] + ' ' + A[s].name + ' destroyed'; }).join(', ') + '.';
+  var h = '<b>' + r.name.toUpperCase() + '</b> — ' + r.txt + '<br>' + why;
+  if (r.req) h += ' <span class="dim">Requires ' + r.req.map(function (q) { return D.RES[q].name + (sim.research[q] ? ' ✓' : ''); }).join(', ') + '.</span>';
+  if (nx.length) h += ' <span class="dim">Leads to ' + nx.map(function (q) { return D.RES[q].name; }).join(', ') + '.</span>';
+  if (riv.length && st !== 'excluded' && st !== 'done') h += '<br><b class="orc">◆ EITHER / OR</b> — choosing this permanently locks out <b class="orc">' + riv.map(function (q) { return D.RES[q].name; }).join(', ') + '</b> for this chapter.' + (rConfirm === id ? ' <b class="cf">PRESS AGAIN TO CONFIRM</b>' : '');
+  if (riv.length && st === 'done') h += '<br><span class="dim">You chose this over ' + riv.map(function (q) { return D.RES[q].name; }).join(', ') + '.</span>';
+  $('rinfo').innerHTML = h;
 }
+function setTreeScale(s, ax, ay) {
+  var g = $('rtree'), L = TL; s = Math.max(0.35, Math.min(1.6, s)); if (ax === undefined) { ax = g.clientWidth / 2; ay = g.clientHeight / 2; }
+  var old = rScale || s, px = (g.scrollLeft + ax) / old, py = (g.scrollTop + ay) / old;
+  rScale = s; $('rplane').style.transform = 'scale(' + s + ')'; $('rsize').style.width = Math.ceil(L.W * s) + 'px'; $('rsize').style.height = Math.ceil(L.H * s) + 'px';
+  g.scrollLeft = px * s - ax; g.scrollTop = py * s - ay;
+}
+function fitTree(initial) {
+  var g = $('rtree'), L = TL, fw = g.clientWidth / L.W, fh = g.clientHeight / L.H;
+  // first open: fill the width (legible on phones; pan vertically). FIT button: show everything.
+  setTreeScale(initial ? Math.min(1.25, Math.max(0.62, fw)) : Math.min(fw, fh));
+}
+function treeMove(dx, dy) {
+  var a = document.activeElement, id = a && a.getAttribute && a.getAttribute('data-id');
+  if (!id) { focusNav(0); return; }
+  var to = window.HPTree.nav(TL, id, dx, dy), el = $('rplane').querySelector('[data-id="' + to + '"]'); if (el) { focusEl(el); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+(function () {
+  var g = $('rtree'), pin = null, drag = null;
+  g.addEventListener('touchstart', function (e) { if (e.touches.length === 2) { var a = e.touches[0], b = e.touches[1], r = g.getBoundingClientRect(); pin = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), s: rScale, x: (a.clientX + b.clientX) / 2 - r.left, y: (a.clientY + b.clientY) / 2 - r.top }; } }, { passive: true });
+  g.addEventListener('touchmove', function (e) { if (pin && e.touches.length === 2) { e.preventDefault(); var a = e.touches[0], b = e.touches[1]; setTreeScale(pin.s * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pin.d, pin.x, pin.y); } }, { passive: false });
+  g.addEventListener('touchend', function (e) { if (e.touches.length < 2) pin = null; });
+  g.addEventListener('wheel', function (e) { if (e.ctrlKey || e.metaKey) { e.preventDefault(); var r = g.getBoundingClientRect(); setTreeScale(rScale * Math.exp(-e.deltaY * 0.01), e.clientX - r.left, e.clientY - r.top); } }, { passive: false });
+  g.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('.rn')) return; drag = { x: e.clientX, y: e.clientY, sl: g.scrollLeft, st: g.scrollTop }; g.classList.add('grab'); });
+  window.addEventListener('pointermove', function (e) { if (!drag) return; g.scrollLeft = drag.sl - (e.clientX - drag.x); g.scrollTop = drag.st - (e.clientY - drag.y); });
+  window.addEventListener('pointerup', function () { drag = null; g.classList.remove('grab'); });
+  $('rzIn').onclick = function () { setTreeScale(rScale * 1.2); }; $('rzOut').onclick = function () { setTreeScale(rScale / 1.2); }; $('rzFit').onclick = function () { fitTree(false); };
+  window.addEventListener('resize', function () { if (state === 'research') fitTree(true); });
+})();
 
 /* ---------------- side panel ---------------- */
 var panelDirty = true, panelHtml = '', panelT = 0;
@@ -391,6 +461,11 @@ document.addEventListener('keydown', function (e) {
   // menus & overlays
   if (k === 'Escape' || k === 'Backspace') { e.preventDefault(); if (state === 'end') toMenu(); else back(); return; }
   if ((k === 'r' || k === 'R') && state === 'research') { e.preventDefault(); setState('game'); return; }
+  if (state === 'research') {
+    var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (dirs[k]) { e.preventDefault(); treeMove(dirs[k][0], dirs[k][1]); return; }
+    if (k === '+' || k === '=') { setTreeScale(rScale * 1.2); return; } if (k === '-' || k === '_') { setTreeScale(rScale / 1.2); return; } if (k === '0') { fitTree(false); return; }
+  }
   if ((k === 'p' || k === 'P') && state === 'pause') { resume(); return; }
   if (k === 'ArrowDown' || (k === 'Tab' && !e.shiftKey)) { e.preventDefault(); focusNav(1); return; }
   if (k === 'ArrowUp' || (k === 'Tab' && e.shiftKey)) { e.preventDefault(); focusNav(-1); return; }
@@ -419,7 +494,11 @@ function pollPad(dt) {
     if (hit(2)) { if (sim.mode === 'build') launch(); else { quick = !quick; } }
     if (hit(3)) fireSuper(); if (hit(9)) openPause(); if (hit(8)) openResearch();
   } else if (state !== 'begin' && state !== 'title') {
-    if (dirHit) { if (sx && adjustNav(Math.sign(sx))) { /* slider */ } else focusNav(sy ? Math.sign(sy) : Math.sign(sx)); }
+    if (state === 'research') {
+      if (dirHit) { if (Math.abs(sx) >= Math.abs(sy) && sx) treeMove(Math.sign(sx), 0); else treeMove(0, Math.sign(sy)); }
+      if (Math.abs(ax[2]) > 0.2 || Math.abs(ax[3]) > 0.2) { $('rtree').scrollLeft += ax[2] * 700 * dt; $('rtree').scrollTop += ax[3] * 700 * dt; }
+      if (b[7]) setTreeScale(rScale * (1 + dt * 1.2)); if (b[6]) setTreeScale(rScale * (1 - dt * 1.1));
+    } else if (dirHit) { if (sx && adjustNav(Math.sign(sx))) { /* slider */ } else focusNav(sy ? Math.sign(sy) : Math.sign(sx)); }
     if (hit(0)) activateNav(); if (hit(1)) { if (state === 'end') toMenu(); else back(); }
     if (hit(9) && state === 'pause') resume(); if (hit(8) && state === 'research') setState('game');
   }
