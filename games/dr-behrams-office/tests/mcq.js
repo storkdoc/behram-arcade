@@ -1,6 +1,6 @@
 // Shared loader: every multiple-choice question in the cabinet, as { game, id, stem, opts (correct FIRST), why }.
 // Clinic Day bank (office/js/bank.js), SUTURE SELF! cases + complications (surgery/js/cases.js) and the breech
-// mini-quiz (surgery/js/mini.js). Feud & Delivery has no multiple-choice prompts (answers are typed).
+// mini-quiz (surgery/js/mini.js), OB Triage text asks (triage/js/main.js ASKS). Feud & Delivery has no multiple-choice prompts (answers are typed).
 const fs = require('fs'), path = require('path');
 const D = path.join(__dirname, '..');
 function words(s) { return String(s).split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length; }
@@ -19,6 +19,10 @@ function load() {
   const mini = fs.readFileSync(path.join(D, 'surgery', 'js', 'mini.js'), 'utf8');
   const m = mini.match(/SM\.breech = function[\s\S]*?steps = (\[[\s\S]*?\n\s*\]),/);
   if (m) new Function('return ' + m[1])().forEach((s, i) => out.push({ game: 'surgery', id: 'mini/breech/' + i, stem: s.q, opts: [s.a].concat(s.w), why: null }));
+  // OB Triage text asks (triage/js/main.js ASKS; authored correct index -> moved first). Category re-checks are ordinal, not text.
+  const tri = fs.readFileSync(path.join(D, 'triage', 'js', 'main.js'), 'utf8'), ta = tri.match(/var ASKS = (\{[\s\S]*?\n  \});/);
+  if (ta) { const A = new Function('return ' + ta[1])(); for (const k of Object.keys(A)) { const q = A[k], o = q.opts.slice(); const c = o.splice(q.correct, 1)[0];
+    out.push({ game: 'triage', id: 'triage/' + k, stem: q.q, opts: [c].concat(o), why: q.why }); } }
   // dedupe identical surgery questions (shared step builders return fresh objects per case)
   const key = new Set();
   return out.filter(q => { const k = q.game + '|' + q.stem + '|' + q.opts.join('|'); if (key.has(k)) return false; key.add(k); return true; });
@@ -53,7 +57,7 @@ function stats(qs) {
 module.exports = { load, stats, words };
 if (require.main === module) {
   const all = load();
-  for (const g of ['clinic', 'surgery']) {
+  for (const g of ['clinic', 'surgery', 'triage']) {
     const s = stats(all.filter(q => q.game === g));
     const f = x => x.toFixed(1) + '%';
     console.log(g + ': n=' + s.n + ' (options ' + s.nOpts + ', chance ' + f(s.chancePct) + ') correct is longest ' + f(s.longestPct) + ' (strictly ' + f(s.strictLongestPct) +

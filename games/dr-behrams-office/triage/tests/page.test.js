@@ -77,7 +77,7 @@ async function playCase(pg, id, smart, shot) {
       const later = await pg.evaluate(() => { const c = OBT.case, d = [], f = OBT.flags || {}; for (const [k, v] of Object.entries(c.grades)) if (v.g === 'key' && v.after && (v.after === 'recheck' ? OBT.rechecks.length : f[v.after]) && !OBT.log.some(l => l.id === k)) d.push(k); return d; });
       if (smart) for (const a of later) { if (a === 'cs' || a === 'ovd') { dlv = true; } await press(pg, `#panel .act[data-a="${a}"]`).catch(() => {}); await pg.waitForTimeout(150); }
     }
-    if (s === 'desk/recheck') { const chips = await pg.$$('#panel .chip[data-rq]'); const i = smart ? await pg.evaluate(() => OBT.rq.correct) : Math.floor(Math.random() * chips.length); await (pg.touch ? chips[i].tap() : chips[i].click()).catch(() => {}); }
+    if (s === 'desk/recheck') { const chips = await pg.$$('#panel .chip[data-rq]'); const want = smart ? String(await pg.evaluate(() => OBT.rq.correct)) : null; let i = Math.floor(Math.random() * chips.length); if (want != null) for (let k = 0; k < chips.length; k++) if (await chips[k].getAttribute('data-rq') === want) i = k; await (pg.touch ? chips[i].tap() : chips[i].click()).catch(() => {}); }
     await pg.waitForTimeout(400);
   }
   const r = await pg.evaluate(() => ({ screen: OBT.screen, grade: document.querySelector('#d-grade').textContent, score: OBT.result && OBT.result.total, paper: document.querySelector('#d-paper').innerHTML, imgs: document.querySelectorAll('#d-paper img.row').length, errs: OBT.errors.slice(), hist: JSON.parse(localStorage.getItem('obt.v1')).hist.length, how: OBT.result && OBT.result.how }));

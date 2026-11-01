@@ -1,6 +1,6 @@
 // node games/dr-behrams-office/tests/answer-length.test.js
 // Guards against the "longest answer is right" cue in every multiple-choice question of the cabinet
-// (Clinic Day bank, SUTURE SELF! step/complication quizzes and the breech mini-quiz). Run `node tests/mcq.js -v`
+// (Clinic Day bank, SUTURE SELF! step/complication quizzes, the breech mini-quiz and OB Triage text asks). Run `node tests/mcq.js -v`
 // to see the current numbers and the questions where the correct option is the longest.
 // Ties for longest/shortest are shared fractionally, so "chance" is the mean of 1/(number of options).
 const fs = require('fs'), path = require('path');
@@ -29,6 +29,17 @@ for (const g of ['clinic', 'surgery']) {
   ok(s.absDistractorPct - s.absCorrectPct <= 5, g + ': absolute words (always/never/only/all/must...) not concentrated in distractors (' + pct(s.absCorrectPct) + ' vs ' + pct(s.absDistractorPct) + ')');
   ok(s.hedgeCorrectPct - s.hedgeDistractorPct <= 5, g + ': hedges (usually/may/likely...) not concentrated on correct answers (' + pct(s.hedgeCorrectPct) + ' vs ' + pct(s.hedgeDistractorPct) + ')');
 }
+// OB Triage text asks (few, so per-question rules instead of rates): the correct option is never the longest by words or
+// characters, and the options are shown in a shuffled (case-seeded) order, not authored order.
+const tri = all.filter(q => q.game === 'triage');
+ok(tri.length >= 1, 'loaded the OB Triage text asks (' + tri.length + ')');
+for (const q of tri) {
+  const W = q.opts.map(words), Ch = q.opts.map(o => o.length);
+  ok(W[0] < Math.max(...W.slice(1)) || (W[0] === Math.max(...W.slice(1)) && Ch[0] < Math.max(...Ch.slice(1))), q.id + ': correct is not the longest option (words ' + W.join(',') + '; chars ' + Ch.join(',') + ')');
+  ok(Ch[0] <= 1.1 * Math.max(...Ch.slice(1)), q.id + ': correct is within 110% of the longest distractor in characters');
+}
+const triMain = fs.readFileSync(path.join(__dirname, '..', 'triage', 'js', 'main.js'), 'utf8');
+ok(/order: askOrder\(Q\.opts\.length, G\.seed\)/.test(triMain) && /\(Q\.order \|\| /.test(triMain), 'OB Triage: text asks render in a shuffled order');
 // No over-explained correct answers: a hard cap on length.
 const longC = all.filter(q => words(q.opts[0]) > 14);
 ok(longC.length === 0, 'no correct answer over 14 words ' + JSON.stringify(longC.map(q => q.id)));

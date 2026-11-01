@@ -302,7 +302,7 @@
       });
       h += '</div>' + (G.att ? '' : '<button class="btn ghost wide" id="p-hint" data-nav>Ask Dr. B <span class="k">ENTER</span></button>');
     } else if (ph === 'recheck') {
-      var Q = G.rq; h = '<h3>' + esc(Q.title) + '</h3><p>' + esc(Q.q) + '</p><div class="chips col">' + Q.opts.map(function (o, i) { return '<button class="chip" data-rq="' + i + '" data-nav><small>' + (i + 1) + '</small>' + esc(o) + '</button>'; }).join('') + '</div>';
+      var Q = G.rq; h = '<h3>' + esc(Q.title) + '</h3><p>' + esc(Q.q) + '</p><div class="chips col">' + (Q.order || Q.opts.map(function (o, i) { return i; })).map(function (i, k) { return '<button class="chip" data-rq="' + i + '" data-nav><small>' + (k + 1) + '</small>' + esc(Q.opts[i]) + '</button>'; }).join('') + '</div>';
     } else if (ph === 'delivery') {
       h = '<h3>' + esc(G.dlv.title) + '</h3><p id="p-dlv">' + esc(G.dlv.txt) + '</p><div class="bar"><i id="p-bar"></i></div>';
     }
@@ -429,9 +429,12 @@
     if (G.pendingRecheck && S.t >= G.pendingRecheck) { G.pendingRecheck = 0; openRecheck(); }
   }
   var ASKS = {
-    restart: { title: 'Restart oxytocin?', q: 'The strip has been reassuring for a while and she’s contracting every 3–4 minutes. Paige asks: “Pit back on? At what rate?”', opts: ['Restart at a lower rate (about half the old rate) and re-titrate', 'Back to 14 mU/min, where we were', 'Never again: book the cesarean', 'Restart at 20 mU/min to catch up'], correct: 0, why: 'Once the tracing is reassuring and tachysystole has resolved, oxytocin may be restarted at a lower rate (protocols vary: often half the prior rate if off <20–30 min, or the starting dose if off longer) and titrated carefully.' }
+    restart: { title: 'Restart oxytocin?', q: 'The strip has been reassuring for a while and she’s contracting every 3–4 minutes. Paige asks: “Pit back on? At what rate?”', opts: ['Restart at half the prior rate and re-titrate', 'Resume 14 mU/min, the same rate she was on before', 'Keep it off for good and book a cesarean', 'Restart at 20 mU/min to make up lost time'], correct: 0, why: 'Once the tracing is reassuring and tachysystole has resolved, oxytocin may be restarted at a lower rate (protocols vary: often half the prior rate if off <20–30 min, or the starting dose if off longer) and titrated carefully.' }
   };
-  function openAsk(k) { var Q = ASKS[k]; G.rq = { title: Q.title, q: Q.q, opts: Q.opts, correct: Q.correct, why: Q.why, kind: k, t: G.sim.t }; setPhase('recheck'); A.page(); }
+  function openAsk(k) { var Q = ASKS[k]; G.rq = { title: Q.title, q: Q.q, opts: Q.opts, order: askOrder(Q.opts.length, G.seed), correct: Q.correct, why: Q.why, kind: k, t: G.sim.t }; setPhase('recheck'); A.page(); }
+  // (2026-11-01) text asks are shown in a shuffled order (seeded by the case, so a replay shows the same order); answer
+  // indexes stay the authored ones. Category re-checks keep the natural I / II / III order.
+  function askOrder(n, seed) { var o = [], r = (seed >>> 0) || 1, i, j, t; for (i = 0; i < n; i++) o.push(i); for (i = n - 1; i > 0; i--) { r = (Math.imul(r, 1103515245) + 12345) >>> 0; j = (r >>> 8) % (i + 1); t = o[i]; o[i] = o[j]; o[j] = t; } return o; }
   function openRecheck() {
     var T = G.sim.truth(G.sim.t, 600, 180), cat = T.category;
     G.rq = { title: 'Re-assess', q: 'Dr. Behram: “Things changed. Read the last few minutes again: what category is it now?”', opts: ['Category I', 'Category II', 'Category III'], correct: cat - 1, why: 'Now: ' + T.variability + ' variability' + (T.lateRecurrent ? ', recurrent lates' : T.late ? ', late decels' : '') + (T.varRecurrent ? ', recurrent variables' : T.variable ? ', variable decels' : '') + (T.prolonged ? ', a prolonged decel' : '') + ' = Category ' + ['', 'I', 'II', 'III'][cat] + '.', kind: 'cat', t: G.sim.t };
