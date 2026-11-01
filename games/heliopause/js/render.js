@@ -315,60 +315,108 @@ R.drawRings = function (s, r, sa, back) {
 };
 
 /* ---------- aliens ---------- */
+/* ---------- invaders: small, sleek silhouettes sized to their collision radius ---------- */
+function hullFill(x, r, col) { var g = x.createLinearGradient(0, -r, 0, r); g.addColorStop(0, '#1c1830'); g.addColorStop(0.5, '#07060f'); g.addColorStop(1, '#120c1c'); return g; }
+var SHAPES = {
+  drone: function (x, r) { // a slim dart with a notched tail
+    x.beginPath(); x.moveTo(r * 1.35, 0); x.quadraticCurveTo(-r * 0.1, r * 0.22, -r * 0.95, r * 0.62); x.lineTo(-r * 0.55, 0); x.lineTo(-r * 0.95, -r * 0.62); x.quadraticCurveTo(-r * 0.1, -r * 0.22, r * 1.35, 0); x.closePath(); },
+  raider: function (x, r) { // a needle with long swept blades
+    x.beginPath(); x.moveTo(r * 1.6, 0); x.lineTo(r * 0.1, r * 0.16); x.lineTo(-r * 0.9, r * 0.95); x.lineTo(-r * 0.55, r * 0.14); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 0.55, -r * 0.14); x.lineTo(-r * 0.9, -r * 0.95); x.lineTo(r * 0.1, -r * 0.16); x.closePath(); },
+  cruiser: function (x, r) { // a leaf-shaped hull with fins
+    x.beginPath(); x.moveTo(r * 1.4, 0); x.bezierCurveTo(r * 0.7, r * 0.6, -r * 0.5, r * 0.62, -r * 1.15, r * 0.3); x.lineTo(-r * 1.4, r * 0.62); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 1.4, -r * 0.62); x.lineTo(-r * 1.15, -r * 0.3); x.bezierCurveTo(-r * 0.5, -r * 0.62, r * 0.7, -r * 0.6, r * 1.4, 0); x.closePath(); },
+  aegis: function (x, r) { // an elongated hexagonal lozenge
+    x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(r * 0.5, r * 0.62); x.lineTo(-r * 0.7, r * 0.62); x.lineTo(-r * 1.15, 0); x.lineTo(-r * 0.7, -r * 0.62); x.lineTo(r * 0.5, -r * 0.62); x.closePath(); },
+  dread: function (x, r) { // a heavy layered chevron wedge
+    x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(-r * 0.35, r * 0.92); x.lineTo(-r * 1.1, r * 0.92); x.lineTo(-r * 0.75, r * 0.38); x.lineTo(-r * 1.2, 0); x.lineTo(-r * 0.75, -r * 0.38); x.lineTo(-r * 1.1, -r * 0.92); x.lineTo(-r * 0.35, -r * 0.92); x.closePath(); },
+  phantom: function (x, r) { // a manta crescent
+    x.beginPath(); x.moveTo(r * 1.1, 0); x.bezierCurveTo(r * 0.6, r * 0.5, -r * 0.2, r * 1.2, -r * 1.1, r * 1.0); x.quadraticCurveTo(-r * 0.4, r * 0.3, -r * 0.75, 0); x.quadraticCurveTo(-r * 0.4, -r * 0.3, -r * 1.1, -r * 1.0); x.bezierCurveTo(-r * 0.2, -r * 1.2, r * 0.6, -r * 0.5, r * 1.1, 0); x.closePath(); },
+  hydra: function (x, r) { // three curved blades around a hub
+    x.beginPath(); for (var i = 0; i < 3; i++) { var a = i * TAU / 3, c = Math.cos(a), s = Math.sin(a), c2 = Math.cos(a + 0.9), s2 = Math.sin(a + 0.9);
+      x.moveTo(c * r * 0.2, s * r * 0.2); x.quadraticCurveTo(c2 * r * 0.9, s2 * r * 0.9, c * r * 1.15, s * r * 1.15); x.quadraticCurveTo(c * r * 0.6 - s * r * 0.15, s * r * 0.6 + c * r * 0.15, c * r * 0.2, s * r * 0.2); }
+    x.moveTo(r * 0.32, 0); x.arc(0, 0, r * 0.32, 0, TAU); },
+  mender: function (x, r) { // a halo ring with four petals
+    x.beginPath(); for (var i = 0; i < 4; i++) { var a = i * TAU / 4 + TAU / 8; x.moveTo(0, 0); x.ellipse(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55, r * 0.5, r * 0.2, a, 0, TAU); } },
+  prism: function (x, r) { // a faceted diamond
+    x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(r * 0.15, r * 0.7); x.lineTo(-r * 1.0, r * 0.25); x.lineTo(-r * 1.0, -r * 0.25); x.lineTo(r * 0.15, -r * 0.7); x.closePath(); },
+  carrier: function (x, r) { // a long flat-decked hull
+    x.beginPath(); x.moveTo(r * 1.35, 0); x.lineTo(r * 1.05, r * 0.4); x.lineTo(-r * 1.0, r * 0.5); x.lineTo(-r * 1.3, r * 0.3); x.lineTo(-r * 1.3, -r * 0.3); x.lineTo(-r * 1.0, -r * 0.5); x.lineTo(r * 1.05, -r * 0.4); x.closePath(); },
+  siege: function (x, r) { // a long barrel on a finned body
+    x.beginPath(); x.moveTo(r * 1.7, -r * 0.08); x.lineTo(r * 1.7, r * 0.08); x.lineTo(r * 0.3, r * 0.14); x.lineTo(-r * 0.4, r * 0.62); x.lineTo(-r * 1.1, r * 0.75); x.lineTo(-r * 0.8, r * 0.2); x.lineTo(-r * 1.1, 0); x.lineTo(-r * 0.8, -r * 0.2); x.lineTo(-r * 1.1, -r * 0.75); x.lineTo(-r * 0.4, -r * 0.62); x.lineTo(r * 0.3, -r * 0.14); x.closePath(); },
+  leviathan: function (x, r, t) { // a ribbed organic ark
+    x.beginPath(); x.moveTo(r * 1.3, 0); x.bezierCurveTo(r * 1.0, r * 0.42, r * 0.2, r * 0.55, -r * 0.6, r * 0.5); x.bezierCurveTo(-r * 1.0, r * 0.46, -r * 1.2, r * 0.25, -r * 1.35, r * 0.32 + Math.sin(t * 2) * r * 0.05);
+    x.lineTo(-r * 1.2, 0); x.lineTo(-r * 1.35, -r * 0.32 - Math.sin(t * 2) * r * 0.05); x.bezierCurveTo(-r * 1.2, -r * 0.25, -r * 1.0, -r * 0.46, -r * 0.6, -r * 0.5); x.bezierCurveTo(r * 0.2, -r * 0.55, r * 1.0, -r * 0.42, r * 1.3, 0); x.closePath(); }
+};
 R.drawAlien = function (a, t) {
-  var ad = D.ALIENS[a.type], x = this.x, s = this.toScreen(a.x, a.y), z = this.cam.z, k = Math.max(0.9, z) * 1.25, r = ad.r * k;
-  if (s.x < -60 || s.y < -60 || s.x > this.W + 60 || s.y > this.H + 60) return;
-  var ang = Math.atan2(a.hy * TILT, a.hx), cloaked = ad.cloak && !a.rev;
-  var alpha = cloaked ? 0.18 + 0.1 * Math.sin(t * 6 + a.id) : 1;
-  x.globalCompositeOperation = 'lighter';
-  if (!cloaked) this.glowAt(s.x, s.y, r * (ad.boss ? 3.5 : 3), ad.col, ad.boss ? 0.5 : 0.35, 1);
-  // engine trail
-  if (!a.sieging && !ad.mono) { x.globalAlpha = 0.5 * alpha; var tl = r * 3.2; var g = x.createLinearGradient(s.x, s.y, s.x - Math.cos(ang) * tl, s.y - Math.sin(ang) * tl); g.addColorStop(0, ad.col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.strokeStyle = g; x.lineWidth = Math.max(1, r * 0.5); x.beginPath(); x.moveTo(s.x, s.y); x.lineTo(s.x - Math.cos(ang) * tl, s.y - Math.sin(ang) * tl); x.stroke(); x.globalAlpha = 1; }
-  x.globalCompositeOperation = 'source-over';
-  x.save(); x.translate(s.x, s.y); x.globalAlpha = alpha; x.fillStyle = '#0a0612'; x.strokeStyle = ad.col; x.lineWidth = Math.max(1, r * 0.16); x.lineJoin = 'round';
+  var ad = D.ALIENS[a.type], x = this.x, s = this.toScreen(a.x, a.y), z = this.cam.z;
+  // r is chosen so each hull's half-length is about the collision radius the simulation uses (ad.r world units)
+  var r = Math.max(ad.boss ? 6 : 2.4, ad.r * Math.max(0.9, z) * 0.8);
+  if (s.x < -80 || s.y < -80 || s.x > this.W + 80 || s.y > this.H + 80) return;
+  var ang = Math.atan2(a.hy * TILT, a.hx), cloaked = ad.cloak && !a.rev, i;
+  var alpha = cloaked ? 0.16 + 0.08 * Math.sin(t * 6 + a.id) : 1, col = ad.col, lw = Math.max(0.7, r * 0.1);
   var stun = a.stun > 0 || a.frozen > 0;
-  switch (a.type) {
-    case 'monolith': case 'elder':
-      var h = r * 2.2, w = h * (4 / 9), th = w * 0.25;
-      if (a.type === 'elder') { x.rotate(t * 0.15); for (var i = 0; i < 6; i++) { x.save(); x.rotate(i * TAU / 6 + t * 0.2); x.translate(0, -r * 1.6); x.fillStyle = '#000'; x.strokeStyle = 'rgba(230,230,255,0.7)'; x.lineWidth = 1; x.fillRect(-w * 0.18, -h * 0.25, w * 0.36, h * 0.5); x.strokeRect(-w * 0.18, -h * 0.25, w * 0.36, h * 0.5); x.restore(); } x.rotate(-t * 0.15); }
-      x.fillStyle = '#000'; x.fillRect(-w / 2, -h / 2, w, h);
-      x.strokeStyle = 'rgba(220,225,255,' + (a.open ? 0.95 : 0.45) + ')'; x.lineWidth = 1.2; x.strokeRect(-w / 2, -h / 2, w, h);
-      x.fillStyle = 'rgba(255,255,255,0.08)'; x.fillRect(-w / 2, -h / 2, th * 0.4, h);
-      if (a.open) { x.globalCompositeOperation = 'lighter'; var g2 = x.createLinearGradient(0, -h / 2, 0, h / 2); g2.addColorStop(0, 'rgba(160,140,255,0)'); g2.addColorStop(0.5, 'rgba(255,255,255,0.95)'); g2.addColorStop(1, 'rgba(160,140,255,0)'); x.fillStyle = g2; x.fillRect(-w * 0.08, -h / 2, w * 0.16, h); this.glowAt(0, 0, h * 1.2, '#c8c0ff', 0.6, 1); x.globalCompositeOperation = 'source-over'; }
-      break;
-    case 'leviathan':
-      x.rotate(ang); x.beginPath(); x.ellipse(0, 0, r * 1.5, r * 0.75, 0, 0, TAU); x.fill(); x.stroke();
-      for (var j = -3; j <= 3; j++) { x.beginPath(); x.ellipse(j * r * 0.35, 0, r * 0.12, r * 0.6 * Math.cos(j / 4), 0, 0, TAU); x.stroke(); }
-      x.globalCompositeOperation = 'lighter'; for (j = 0; j < 9; j++) { x.fillStyle = 'rgba(255,170,90,' + (0.4 + 0.4 * Math.sin(t * 3 + j)) + ')'; x.fillRect(-r + j * r * 0.25, -1, 1.6, 1.6); } x.globalCompositeOperation = 'source-over';
-      break;
-    case 'drone': x.rotate(ang); x.beginPath(); x.moveTo(r * 1.4, 0); x.lineTo(-r, r * 0.8); x.lineTo(-r * 0.4, 0); x.lineTo(-r, -r * 0.8); x.closePath(); x.fill(); x.stroke(); break;
-    case 'raider': x.rotate(ang); x.beginPath(); x.moveTo(r * 1.6, 0); x.lineTo(-r, r); x.lineTo(-r * 0.2, 0); x.lineTo(-r, -r); x.closePath(); x.fill(); x.stroke(); break;
-    case 'cruiser': x.rotate(ang); x.beginPath(); x.moveTo(r * 1.5, 0); x.lineTo(r * 0.3, r * 0.6); x.lineTo(-r * 1.2, r * 0.45); x.lineTo(-r * 1.2, -r * 0.45); x.lineTo(r * 0.3, -r * 0.6); x.closePath(); x.fill(); x.stroke(); x.beginPath(); x.moveTo(-r * 0.6, 0); x.lineTo(r * 0.8, 0); x.stroke(); break;
-    case 'aegis': x.rotate(ang); x.beginPath(); for (i = 0; i < 6; i++) { var aa = i / 6 * TAU; x.lineTo(Math.cos(aa) * r, Math.sin(aa) * r * 0.8); } x.closePath(); x.fill(); x.stroke();
-      if (a.sh > 0) { x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(111,182,255,' + (0.25 + 0.6 * a.sh / a.shMax) + ')'; x.lineWidth = 1.2; x.beginPath(); x.arc(0, 0, r * 1.7 + Math.sin(t * 5) * 0.5, 0, TAU); x.stroke(); x.globalCompositeOperation = 'source-over'; }
-      break;
-    case 'dread': x.rotate(ang); x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(r * 0.5, r * 0.9); x.lineTo(-r * 1.1, r * 0.9); x.lineTo(-r * 1.3, r * 0.4); x.lineTo(-r * 1.3, -r * 0.4); x.lineTo(-r * 1.1, -r * 0.9); x.lineTo(r * 0.5, -r * 0.9); x.closePath(); x.fill(); x.stroke();
-      x.lineWidth = 1; for (i = -1; i <= 1; i++) { x.beginPath(); x.moveTo(-r * 0.9, i * r * 0.45); x.lineTo(r * 0.5, i * r * 0.45); x.stroke(); } break;
-    case 'phantom': x.rotate(ang); x.beginPath(); x.moveTo(r * 1.4, 0); x.quadraticCurveTo(0, r * 1.2, -r * 1.2, r * 0.3); x.lineTo(-r * 0.7, 0); x.lineTo(-r * 1.2, -r * 0.3); x.quadraticCurveTo(0, -r * 1.2, r * 1.4, 0); x.fill(); x.stroke(); break;
-    case 'hydra': x.rotate(t * 0.8 + a.id); for (i = 0; i < 3; i++) { x.save(); x.rotate(i * TAU / 3); x.beginPath(); x.ellipse(r * 0.55, 0, r * 0.6, r * 0.38, 0, 0, TAU); x.fill(); x.stroke(); x.restore(); } break;
-    case 'mender': x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill(); x.stroke(); x.beginPath(); x.moveTo(-r * 0.5, 0); x.lineTo(r * 0.5, 0); x.moveTo(0, -r * 0.5); x.lineTo(0, r * 0.5); x.stroke();
-      x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(94,255,232,' + (0.35 * (1 - (t * 0.7 % 1))) + ')'; x.beginPath(); x.arc(0, 0, r + (t * 0.7 % 1) * 42 * z * 0.9, 0, TAU); x.stroke(); x.globalCompositeOperation = 'source-over'; break;
-    case 'prism': x.rotate(t * 1.5 + a.id); x.beginPath(); x.moveTo(0, -r * 1.3); x.lineTo(r * 0.8, 0); x.lineTo(0, r * 1.3); x.lineTo(-r * 0.8, 0); x.closePath(); x.fill(); x.stroke();
-      x.globalCompositeOperation = 'lighter'; ['#ff5a7a', '#5affb0', '#5a8aff'].forEach(function (c, ii) { x.strokeStyle = c; x.globalAlpha = 0.5; x.beginPath(); x.moveTo(0, -r * 1.3); x.lineTo(Math.cos(t * 2 + ii * 2) * r * 2.4, Math.sin(t * 2 + ii * 2) * r * 2.4); x.stroke(); }); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; break;
-    case 'carrier': x.rotate(ang); x.beginPath(); x.ellipse(0, 0, r * 1.4, r * 0.7, 0, 0, TAU); x.fill(); x.stroke(); x.beginPath(); x.ellipse(-r * 0.2, 0, r * 0.8, r * 0.32, 0, 0, TAU); x.stroke();
-      x.globalCompositeOperation = 'lighter'; for (i = 0; i < 5; i++) { x.fillStyle = 'rgba(255,90,150,' + (0.5 + 0.5 * Math.sin(t * 4 + i)) + ')'; x.fillRect(-r * 0.8 + i * r * 0.35, r * 0.4, 1.5, 1.5); } x.globalCompositeOperation = 'source-over'; break;
-    case 'siege': x.rotate(a.sieging ? Math.atan2((this.ey - a.y) * TILT, this.ex - a.x) : ang); x.beginPath(); x.moveTo(r * 1.8, -r * 0.2); x.lineTo(r * 1.8, r * 0.2); x.lineTo(-r, r * 0.7); x.lineTo(-r * 1.1, 0); x.lineTo(-r, -r * 0.7); x.closePath(); x.fill(); x.stroke();
-      if (a.sieging) { x.globalCompositeOperation = 'lighter'; this.glowAt(r * 1.8, 0, r * 1.2, '#ff5a3a', 0.6 + 0.4 * Math.sin(t * 6), 1); x.globalCompositeOperation = 'source-over'; } break;
+  x.globalCompositeOperation = 'lighter';
+  if (!cloaked) this.glowAt(s.x, s.y, r * (ad.boss ? 3.2 : 2.3), col, ad.boss ? 0.42 : 0.24, 1);
+  // engine trail: a thin tapered streak plus the hot nozzle
+  if (!a.sieging && !ad.mono && a.type !== 'hydra' && a.type !== 'mender') {
+    var tl = r * (ad.boss ? 3 : 4.2), bx = s.x - Math.cos(ang) * r, by = s.y - Math.sin(ang) * r;
+    x.globalAlpha = 0.45 * alpha; var g = x.createLinearGradient(bx, by, bx - Math.cos(ang) * tl, by - Math.sin(ang) * tl); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.strokeStyle = g; x.lineCap = 'round'; x.lineWidth = Math.max(0.8, r * (ad.boss ? 0.35 : 0.28)); x.beginPath(); x.moveTo(bx, by); x.lineTo(bx - Math.cos(ang) * tl, by - Math.sin(ang) * tl); x.stroke();
+    x.globalAlpha = alpha; this.glowAt(bx, by, Math.max(2, r * 0.7), '#ffffff', 0.5, 0); x.globalAlpha = 1;
   }
-  if (stun) { x.globalCompositeOperation = 'lighter'; x.strokeStyle = a.frozen > 0 ? 'rgba(185,156,255,0.8)' : 'rgba(127,255,224,0.7)'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r * 1.5, t * 8, t * 8 + 4); x.stroke(); x.globalCompositeOperation = 'source-over'; }
-  if (a.burn > 0) { x.globalCompositeOperation = 'lighter'; this.glowAt(0, 0, r * 2, '#ffa040', 0.5, 1); x.globalCompositeOperation = 'source-over'; }
+  x.globalCompositeOperation = 'source-over';
+  x.save(); x.translate(s.x, s.y); x.globalAlpha = alpha; x.lineJoin = 'round'; x.lineCap = 'round';
+  if (ad.mono) {
+    var h = r * 2.4, w = h * (4 / 9);
+    if (a.type === 'elder') { // the First Choir: a great slab ringed by six lesser ones and a slow ring of light
+      x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(200,195,255,0.35)'; x.lineWidth = 1; x.beginPath(); x.ellipse(0, 0, r * 1.7, r * 1.7 * TILT, 0, 0, TAU); x.stroke();
+      x.strokeStyle = 'rgba(200,195,255,0.15)'; x.beginPath(); x.ellipse(0, 0, r * 2.05, r * 2.05 * TILT, 0, t * 0.3, t * 0.3 + 2.5); x.stroke(); x.globalCompositeOperation = 'source-over';
+      for (i = 0; i < 6; i++) { var oa = i * TAU / 6 + t * 0.25, ox = Math.cos(oa) * r * 1.7, oy = Math.sin(oa) * r * 1.7 * TILT, sw = w * 0.22, sh = h * 0.3;
+        x.fillStyle = '#000'; x.fillRect(ox - sw / 2, oy - sh / 2, sw, sh); x.strokeStyle = 'rgba(225,228,255,0.6)'; x.lineWidth = 0.8; x.strokeRect(ox - sw / 2, oy - sh / 2, sw, sh); }
+    }
+    x.fillStyle = '#000'; x.fillRect(-w / 2, -h / 2, w, h);
+    var eg = x.createLinearGradient(-w / 2, 0, w / 2, 0); eg.addColorStop(0, 'rgba(255,255,255,0.14)'); eg.addColorStop(0.12, 'rgba(255,255,255,0.02)'); eg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = eg; x.fillRect(-w / 2, -h / 2, w, h);
+    x.strokeStyle = 'rgba(220,225,255,' + (a.open ? 0.95 : 0.5) + ')'; x.lineWidth = 1; x.strokeRect(-w / 2, -h / 2, w, h);
+    // a glint that slides down the edge
+    x.globalCompositeOperation = 'lighter'; var gy = -h / 2 + ((t * 0.25 + a.id * 0.13) % 1) * h; this.glowAt(-w / 2, gy, Math.max(3, w * 0.35), '#e8e4ff', 0.7, 0);
+    if (a.open) { var g2 = x.createLinearGradient(0, -h / 2, 0, h / 2); g2.addColorStop(0, 'rgba(160,140,255,0)'); g2.addColorStop(0.5, 'rgba(255,255,255,0.95)'); g2.addColorStop(1, 'rgba(160,140,255,0)'); x.fillStyle = g2; x.fillRect(-w * 0.06, -h / 2, w * 0.12, h); this.glowAt(0, 0, h * 1.1, '#c8c0ff', 0.55, 1); }
+    x.globalCompositeOperation = 'source-over';
+  } else {
+    var spin = a.type === 'hydra' ? t * 0.9 + a.id : a.type === 'mender' ? t * 0.4 : ang;
+    if (a.type === 'siege' && a.sieging) spin = Math.atan2((this.ey - a.y) * TILT, this.ex - a.x);
+    x.rotate(spin);
+    SHAPES[a.type](x, r, t);
+    x.fillStyle = hullFill(x, r, col); x.fill('evenodd');
+    x.strokeStyle = col; x.lineWidth = lw; x.globalAlpha = alpha * 0.9; x.stroke(); x.globalAlpha = alpha;
+    // luminous details
+    x.globalCompositeOperation = 'lighter'; x.lineWidth = Math.max(0.5, lw * 0.6);
+    switch (a.type) {
+      case 'drone': this.glowAt(r * 0.35, 0, Math.max(1.5, r * 0.4), col, 0.8, 0); break;
+      case 'raider': x.strokeStyle = 'rgba(255,255,255,0.5)'; x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(-r * 0.4, 0); x.stroke(); break;
+      case 'cruiser': x.strokeStyle = col; x.globalAlpha = 0.7; x.beginPath(); x.moveTo(r * 1.0, 0); x.lineTo(-r * 0.8, 0); x.stroke(); x.globalAlpha = 1; this.glowAt(r * 0.5, 0, r * 0.35, '#fff', 0.6, 0); break;
+      case 'aegis': if (a.sh > 0) { x.strokeStyle = 'rgba(111,182,255,' + (0.2 + 0.55 * a.sh / a.shMax) + ')'; x.lineWidth = Math.max(0.7, r * 0.08); x.beginPath(); x.arc(0, 0, r * 1.55 + Math.sin(t * 5) * 0.4, -1.2, 1.2); x.stroke(); x.globalAlpha = 0.4; x.beginPath(); x.arc(0, 0, r * 1.55, 1.9, 4.4); x.stroke(); x.globalAlpha = 1; } break;
+      case 'dread': x.strokeStyle = col; x.globalAlpha = 0.55; for (i = -1; i <= 1; i += 2) { x.beginPath(); x.moveTo(r * 0.9, i * r * 0.12); x.lineTo(-r * 0.2, i * r * 0.62); x.stroke(); } x.globalAlpha = 1; this.glowAt(r * 0.4, 0, r * 0.3, '#ffe0c0', 0.7, 0); break;
+      case 'phantom': x.strokeStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, r * 0.6, -r * 0.8, r * 0.75); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, -r * 0.6, -r * 0.8, -r * 0.75); x.stroke(); break;
+      case 'hydra': this.glowAt(0, 0, r * 0.5, col, 0.9, 0); break;
+      case 'mender': var mp = (t * 0.7 + a.id * 0.17) % 1; x.strokeStyle = 'rgba(94,255,232,' + (0.4 * (1 - mp)) + ')'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r + mp * 42 * z * 0.9, 0, TAU); x.stroke(); x.strokeStyle = col; x.globalAlpha = 0.8; x.beginPath(); x.arc(0, 0, r * 1.1, 0, TAU); x.stroke(); x.globalAlpha = 1; this.glowAt(0, 0, r * 0.4, '#fff', 0.7, 0); break;
+      case 'prism': var cols = ['#ff5a7a', '#5affb0', '#5a8aff']; for (i = 0; i < 3; i++) { var pa = t * 1.6 + i * 2.1 + a.id; this.glowAt(Math.cos(pa) * r * 0.5, Math.sin(pa) * r * 0.35, r * 0.35, cols[i], 0.7, 0); }
+        x.strokeStyle = 'rgba(255,255,255,0.4)'; x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(-r * 1.0, 0); x.moveTo(r * 0.15, r * 0.7); x.lineTo(r * 0.15, -r * 0.7); x.stroke(); break;
+      case 'carrier': for (i = 0; i < 5; i++) { x.fillStyle = 'rgba(255,90,150,' + (0.45 + 0.45 * Math.sin(t * 4 + i)) + ')'; x.fillRect(-r * 0.85 + i * r * 0.4, r * 0.28, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); x.fillRect(-r * 0.85 + i * r * 0.4, -r * 0.36, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); } break;
+      case 'siege': if (a.sieging) this.glowAt(r * 1.7, 0, r * 1.0, '#ff5a3a', 0.55 + 0.35 * Math.sin(t * 6), 1); else this.glowAt(r * 1.7, 0, r * 0.3, '#ff8a6a', 0.6, 0); break;
+      case 'leviathan': x.strokeStyle = col; for (i = -3; i <= 3; i++) { var lx = i * r * 0.3; x.globalAlpha = 0.35; x.beginPath(); x.moveTo(lx + r * 0.08, -r * 0.48 * Math.cos(i / 4.2)); x.quadraticCurveTo(lx - r * 0.06, 0, lx + r * 0.08, r * 0.48 * Math.cos(i / 4.2)); x.stroke(); }
+        x.globalAlpha = 1; for (i = 0; i < 7; i++) { x.fillStyle = 'rgba(255,170,90,' + (0.35 + 0.4 * Math.sin(t * 3 + i)) + ')'; x.beginPath(); x.arc(-r * 0.9 + i * r * 0.3, r * 0.05 * Math.sin(i), Math.max(0.7, r * 0.04), 0, TAU); x.fill(); }
+        this.glowAt(r * 0.95, 0, r * 0.25, '#fff2d0', 0.8, 0); for (i = -1; i <= 1; i += 2) this.glowAt(-r * 1.3, i * r * 0.22, r * 0.35, col, 0.8, 0); break;
+    }
+    x.globalCompositeOperation = 'source-over';
+  }
+  if (stun) { x.globalCompositeOperation = 'lighter'; x.strokeStyle = a.frozen > 0 ? 'rgba(185,156,255,0.8)' : 'rgba(127,255,224,0.7)'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r * 1.6, t * 8, t * 8 + 4); x.stroke(); x.globalCompositeOperation = 'source-over'; }
+  if (a.burn > 0) { x.globalCompositeOperation = 'lighter'; this.glowAt(0, 0, r * 1.8, '#ffa040', 0.45, 1); x.globalCompositeOperation = 'source-over'; }
   x.restore(); x.globalAlpha = 1;
   // health bar for damaged larger ships
   if (!cloaked && (a.hp < a.hpMax || a.sh < a.shMax) && ad.cost >= 3) {
-    var bw = Math.max(10, r * 2.4), by = s.y - r * (ad.boss ? 2.6 : 1.8) - 3;
-    x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(s.x - bw / 2, by, bw, 2);
-    x.fillStyle = ad.boss ? '#fff' : '#ff8fb0'; x.fillRect(s.x - bw / 2, by, bw * Math.max(0, a.hp / a.hpMax), 2);
-    if (a.shMax) { x.fillStyle = '#6fb6ff'; x.fillRect(s.x - bw / 2, by - 2.5, bw * Math.max(0, a.sh / a.shMax), 1.5); }
+    var bw = Math.max(10, r * 2.2), byy = s.y - r * (ad.mono ? 1.25 : ad.boss ? 1.1 : 1.3) - 5;
+    x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(s.x - bw / 2, byy, bw, 2);
+    x.fillStyle = ad.boss ? '#fff' : '#ff8fb0'; x.fillRect(s.x - bw / 2, byy, bw * Math.max(0, a.hp / a.hpMax), 2);
+    if (a.shMax) { x.fillStyle = '#6fb6ff'; x.fillRect(s.x - bw / 2, byy - 2.5, bw * Math.max(0, a.sh / a.shMax), 1.5); }
   }
 };
 
