@@ -209,12 +209,15 @@ const Sim = (() => {
   function cpuTick(live) {
     for (const c of G.cpu) {
       if (c.slow > 0) c.slow -= DT;
+      // a wrecked CPU car sits out its explosion, then rejoins (ghosted) in its lane at a standstill
+      if (c.crash > 0) { c.crash -= DT; c.v = 0; c.rpm = 1500; if (c.crash <= 0) { c.crash = 0; c.ghost = 1.6; c.d = LANES[c.lane != null ? c.lane : 1]; c.hold = 0; emit('respawn', { me: false }); } continue; }
+      if (c.ghost > 0) c.ghost -= DT;
       if (!live) { c.v = 0; continue; }
       if (c.hold > 0) { c.hold -= DT; } else { c.laneT -= DT; if (c.laneT <= 0) { c.laneT = 5 + rnd() * 9; c.lane = clamp(c.lane + (rnd() < 0.5 ? -1 : 1), 0, 2); } }
       const s = c.dist, k = kAt(T, s);
       let vt = Math.min(vrefAt(T, s + Math.max(10, c.v)), vrefAt(T, s + c.v * 0.4)) * c.skill; if (c.slow > 0) vt *= 0.55;
       // don't drive through the car ahead in the same lane: change lanes or follow
-      for (const o of G.cpu) { if (o === c) continue; const gap = o.dist - c.dist; if (gap > 0 && gap < 28 && Math.abs(o.d - c.d) < 2.4 && o.v < c.v + 1) { if (c.laneT > 1.2) { c.lane = clamp(c.lane + (c.lane === 1 ? (rnd() < 0.5 ? -1 : 1) : (c.lane === 0 ? 1 : -1)), 0, 2); c.laneT = 1.2; } vt = Math.min(vt, o.v); } }
+      for (const o of G.cpu) { if (o === c || o.crash > 0) continue; const gap = o.dist - c.dist; if (gap > 0 && gap < 28 && Math.abs(o.d - c.d) < 2.4 && o.v < c.v + 1) { if (c.laneT > 1.2) { c.lane = clamp(c.lane + (c.lane === 1 ? (rnd() < 0.5 ? -1 : 1) : (c.lane === 0 ? 1 : -1)), 0, 2); c.laneT = 1.2; } vt = Math.min(vt, o.v); } }
       const gear = c.v < 36 ? 0 : 1, acc = Math.max(0, engineAcc(c.v, gear, 1) - drag(c.v)) * 0.92;
       if (c.v < vt) c.v = Math.min(vt, c.v + acc * DT); else c.v = Math.max(vt, c.v - 15 * DT);
       const td = c.hold > 0 ? c.d : LANES[c.lane]; c.d += clamp(td - c.d, -2.4 * DT, 2.4 * DT);
@@ -223,10 +226,15 @@ const Sim = (() => {
   }
   function nearGap(a, b) { let g = b.dist - a.dist; const L = T.L; if (G.mode === 'qualify' || G.mode === 'demo') { g = ((g % L) + L) % L; if (g > L / 2) g -= L; } return g; }
   function collide(c, o, other) {
-    if (c.crash > 0 || c.ghost > 0 || (o.crash || 0) > 0) return;
+    if (c.crash > 0 || c.ghost > 0 || (o.crash || 0) > 0 || (o.ghost || 0) > 0) return;
     const g = nearGap(c, o); if (Math.abs(g) > 4.4 || Math.abs(c.d - o.d) > 1.9) return;
     const rv = c.v - o.v;
-    if ((g > 0 && rv > 7) || (g < 0 && rv < -7) || (Math.abs(g) < 2.5 && Math.abs(c.ld - (o.ld || 0)) > 5)) { crashCar(c, 'car'); if (!other) o.slow = 2; return; }
+    if ((g > 0 && rv > 7) || (g < 0 && rv < -7) || (Math.abs(g) < 2.5 && Math.abs(c.ld - (o.ld || 0)) > 5)) {
+      // a real hit: BOTH cars blow up. A CPU car is wrecked here; the online rival is told to wreck its own car.
+      crashCar(c, 'car');
+      if (other) emit('hitRival', {}); else { crashCar(o, 'car'); emit('hitCpu', { i: G.cpu.indexOf(o) }); }
+      return;
+    }
     // a nudge: trade a little speed and push apart sideways
     if (g > 0) c.v = Math.min(c.v, o.v - 1); else c.v = Math.max(c.v, o.v + 1);
     const push = c.d >= o.d ? 1 : -1; c.d += push * 0.25; c.ld = push * 2.5; emit('bump', {});
@@ -240,7 +248,7 @@ const Sim = (() => {
     const live = G.phase === 'run' || G.phase === 'finish';
     if (G.auto || inp.auto) {
       let dT = c.apD != null ? c.apD : 0;
-      for (const o of G.cpu) { const gap = nearGap(c, o); if (gap > 0 && gap < 40 && Math.abs(o.d - c.d) < 2.8 && o.v < c.v + 2) { dT = clamp(o.d > 0.5 ? o.d - 5 : o.d < -0.5 ? o.d + 5 : (c.d >= 0 ? 5 : -5), -5.5, 5.5); c.apT = 2; } }
+      for (const o of G.cpu) { if (o.crash > 0) continue; const gap = nearGap(c, o); if (gap > 0 && gap < 40 && Math.abs(o.d - c.d) < 2.8 && o.v < c.v + 2) { dT = clamp(o.d > 0.5 ? o.d - 5 : o.d < -0.5 ? o.d + 5 : (c.d >= 0 ? 5 : -5), -5.5, 5.5); c.apT = 2; } }
       if (c.apT > 0) c.apT -= DT; else dT = dT * 0.995; c.apD = dT;
       const ap = autopilot(c, dT, inp.skill || 0.97); if (!inp.manual) inp = ap;
     }

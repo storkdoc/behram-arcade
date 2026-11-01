@@ -151,6 +151,8 @@
     if (m.t === 'me' && v.role === 'host') { applyRival(m.c); return; }
     if (m.t === 'fin') { v.rivalFin = +m.tm || 0.001; if (App.screen === 'play' && !G.finished) banner('YOUR RIVAL HAS FINISHED!', 1.8, C.pink); hostResult(); return; }
     if (m.t === 'res' && v.role === 'guest') { v.res = { ord: Array.isArray(m.ord) ? m.ord.map(String) : [], tm: Array.isArray(m.tm) ? m.tm.map(Number) : [] }; return; }
+    if (m.t === 'boom') { if (G.car.crash <= 0 && G.phase !== 'done') { Sim._.crashCar(G.car, 'car'); handleEvents(); } return; }
+    if (m.t === 'cpuboom' && v.role === 'host') { const c = G.cpu[m.i | 0]; if (c && !(c.crash > 0)) { Sim._.crashCar(c, 'car'); handleEvents(); } return; }
     if (m.t === 'again') { v.theirAgain = true; maybeRematch(); return; }
   };
   function hostResult() { const v = App.vs; if (!v || v.role !== 'host' || !v.myFin || !v.rivalFin || v.res) return; const ord = v.myFin <= v.rivalFin ? ['host', 'guest'] : ['guest', 'host']; v.res = { ord, tm: [v.myFin, v.rivalFin] }; Net.send({ t: 'res', ord, tm: v.res.tm }); }
@@ -163,7 +165,7 @@
   }
   function applySnap(m) {
     const v = App.vs; v.hostPh = String(m.ph || ''); v.hostRt = +m.rt || 0;
-    if (Array.isArray(m.cpu)) m.cpu.forEach((a, i) => { const c = G.cpu[i]; if (c && Array.isArray(a)) c.net = { dist: +a[0] || 0, d: +a[1] || 0, v: +a[2] || 0, at: performance.now() }; });
+    if (Array.isArray(m.cpu)) m.cpu.forEach((a, i) => { const c = G.cpu[i]; if (c && Array.isArray(a)) { c.net = { dist: +a[0] || 0, d: +a[1] || 0, v: +a[2] || 0, at: performance.now() }; if (a[3] && !(c.crash > 0) && !(c.ghost > 0)) Sim._.crashCar(c, 'car'); } });
     applyRival(m.me);
     // the host owns the race clock: if the host is racing and we are still on the grid, go now
     if (v.hostPh === 'run' && (G.phase === 'count' || G.phase === 'intro')) { G.phase = 'run'; G.phaseT = 0; G.rt = Math.max(0, v.hostRt); handleGoEvent(); }
@@ -184,7 +186,7 @@
     const v = App.vs; if (!v || !G || G.mode !== 'versus' || Net.st.status !== 'connected') return;
     v.sentT -= Sim.DT; if (v.sentT > 0) return; v.sentT = 1 / 15;
     const send = Net.sendFast || Net.send;
-    if (v.role === 'host') send({ t: 'sn', ph: G.phase, rt: r2(G.rt), cpu: G.cpu.map(c => [r2(c.dist), r2(c.d), r2(c.v)]), me: carPack(G.car) });
+    if (v.role === 'host') send({ t: 'sn', ph: G.phase, rt: r2(G.rt), cpu: G.cpu.map(c => [r2(c.dist), r2(c.d), r2(c.v), c.crash > 0 ? 1 : 0]), me: carPack(G.car) });
     else send({ t: 'me', c: carPack(G.car) });
   }
 
@@ -202,7 +204,9 @@
         case 'lights': Sound.play('beep'); break;
         case 'go': handleGoEvent(); break;
         case 'gear': Sound.play('gear'); break;
-        case 'crash': Rn.event(e, G); if (e.me) { Sound.play('crash'); App.red = 1; if (navigator.vibrate) try { navigator.vibrate(120); } catch (x) { } } else Sound.play('bump'); break;
+        case 'crash': Rn.event(e, G); if (e.me) { Sound.play('crash'); App.red = 1; if (navigator.vibrate) try { navigator.vibrate(120); } catch (x) { } } else if (e.why === 'car') Sound.play('crash'); else Sound.play('bump'); break;
+        case 'hitRival': if (App.vs && Net.st.status === 'connected') Net.send({ t: 'boom' }); break;
+        case 'hitCpu': if (App.vs && App.vs.role === 'guest' && Net.st.status === 'connected') Net.send({ t: 'cpuboom', i: e.i }); break;
         case 'bump': Sound.play('bump'); break;
         case 'extend': Sound.play('extend'); banner('EXTENDED TIME', 2.0, C.yellow, '+' + Math.round(e.add) + ' SEC'); break;
         case 'lap': {

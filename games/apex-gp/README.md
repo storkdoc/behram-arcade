@@ -13,7 +13,7 @@ Play: https://storkdoc.github.io/behram-arcade/games/apex-gp/
 ## Features
 - **Gearbox:** LO and HI gears. LO pulls hard at low speed; HI is needed for top speed (~300 km/h).
 - **Handling:** tyre squeal and skids, plus kerb, grass and gravel run-off.
-- **Crashes:** billboards and rear-ending CPU cars cause explosions. The car then respawns, briefly ghosted.
+- **Crashes:** billboards cause explosions. A hard car-to-car hit blows up **both** cars: a CPU car explodes and rejoins in its lane a few seconds later, and in two-player the rival's car explodes on their screen too. Wrecked cars respawn briefly ghosted.
 - **Voice and banners:** "Prepare to qualify" / "Prepare to race" with banners, 5-light start gantry, "Extended time", "Final lap", "Qualified 3rd".
 - **Records:** lap records, best qualifying per circuit, and a top-10 high score table with initials, all saved in localStorage.
 - **Attract mode:** a demo lap plays behind the title, switching between chase and TV cameras.

@@ -74,6 +74,9 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; say(ok ? ' 
   check(cr.after === 0 && Math.abs(cr.d) <= 7.5 && cr.ghost > 0, 'the car respawns on the racing line (briefly ghosted)', cr);
   const cc = await D.evaluate(() => { const G = AGP.G, c = G.car, o = G.cpu[0]; c.ghost = 0; c.crash = 0; c.d = 0; c.v = 80; o.dist = c.dist + 3; o.d = 0; o.v = 30; o.ghost = 0; o.crash = 0; AGP.step(3); return { me: c.crash > 0, cpu: o.crash > 0 }; });
   check(cc.me, 'rear-ending a CPU car at speed explodes you', cc);
+  check(cc.me && cc.cpu, 'car-to-car collision blows up BOTH cars (you and the CPU car)', cc);
+  const cr2 = await D.evaluate(() => { const G = AGP.G, o = G.cpu[0], n = AGP.particles ? AGP.particles() : -1; AGP.step(80); const mid = { crash: o.crash > 0, v: o.v }; AGP.step(100); return { mid, back: o.crash <= 0, ghost: o.ghost > 0 || o.v > 0, onRoad: Math.abs(o.d) < 6 }; });
+  check(cr2.mid.crash && cr2.mid.v === 0 && cr2.back && cr2.onRoad, 'wrecked CPU car sits out its explosion, then rejoins the race on the road', cr2);
   await D.evaluate(() => AGP.step(200));
   await D.keyboard.press('KeyP'); check(await D.evaluate(() => AGP.app.paused), 'P pauses'); await D.keyboard.press('KeyP');
   check(!(await D.evaluate(() => AGP.app.paused)), 'P resumes');

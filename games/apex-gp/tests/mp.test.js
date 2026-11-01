@@ -77,6 +77,14 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; say(ok ? ' 
   // rival crash propagates as an explosion
   await H.evaluate(() => { const c = AGP.G.car; AGP.sim._.crashCar(c, 'sign'); });
   await G.waitForFunction(() => AGP.G.remote.crash > 0, null, { timeout: 3000 }).then(() => check(true, 'host crash shows as an exploding rival on the guest'), () => check(false, 'rival crash never shown'));
+  // head-to-head collision: the guest rams the host's car -> BOTH cars explode (each side wrecks its own car)
+  await H.waitForFunction(() => AGP.G.car.crash <= 0 && AGP.G.car.ghost <= 0, null, { timeout: 8000 }).catch(() => {});
+  await G.waitForFunction(() => !(AGP.G.remote.crash > 0), null, { timeout: 3000 }).catch(() => {});
+  const hit = await G.evaluate(() => { const G = AGP.G, c = G.car, r = G.remote; c.crash = 0; c.ghost = 0; c.d = r.d; c.dist = r.dist - 3; c.v = r.v + 30; r.ghost = 0; AGP.sim._.collide(c, r, true); return c.crash > 0; });
+  check(hit, 'guest car explodes when it rams the rival');
+  await H.waitForFunction(() => AGP.G.car.crash > 0, null, { timeout: 3000 }).then(() => check(true, 'the rammed host car explodes too (both cars blow up)'), () => check(false, 'host car did not explode on head-to-head hit'));
+  await G.waitForFunction(() => AGP.G.remote.crash > 0, null, { timeout: 3000 }).then(() => check(true, 'guest sees the rival car explode'), () => check(false, 'guest never saw the rival explode'));
+  await Promise.all([H, G].map(p => p.waitForFunction(() => AGP.G.car.crash <= 0, null, { timeout: 6000 })));
   // finish: guest first, then host
   await G.evaluate(() => { const G = AGP.G; G.car.dist = G.laps * AGP.sim.T.L - 3; G.car.lap = G.laps - 1; });
   await G.waitForFunction(() => AGP.G.finished, null, { timeout: 5000 });
