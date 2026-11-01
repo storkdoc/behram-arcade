@@ -255,3 +255,4 @@ button:focus:not(:focus-visible) { outline: none; }
 #credits { background: rgba(0,0,6,.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 #credtxt { font-size: 12px; }
 @media (max-height: 500px) { #nowPlaying { bottom: calc(52px + var(--sb)); font-size: 9px; } #credtxt { font-size: 10.5px; max-height: 62vh; } }
+body:not(.ingame) #nowPlaying { left: auto; right: 14px; bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); transform: none; text-align: right; }
