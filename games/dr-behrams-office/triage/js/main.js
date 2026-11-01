@@ -202,6 +202,7 @@
 
   /* ---------------- case start ---------------- */
   function startCase(c, seed, replayRec) {
+    if (G.pop) { $("#pop").classList.add("hidden"); G.pop = null; }
     G.case = c; G.seed = seed || (Math.floor(Math.random() * 1e9) + 1);
     G.sim = C.start(c, G.seed, CTG); G.sim.marks = []; G.marks = []; G.log = []; G.flags = {}; G.asked = []; G.hints = 0; G.rechecks = [];
     G.clock0 = (c.n * 97) % 600 + 60; // fictional night-shift clock
@@ -700,12 +701,12 @@
   function openPop(t, px, py) {
     if (G.phase !== 'analyze') return;
     var near = G.marks.filter(function (m) { return Math.abs(m.t - t) < 20 / ((geo && geo.pxs) || 1) * DPR + 6; })[0];
-    var P = $('#pop'); G.pop = { t: near ? near.t : t, m: near, at: performance.now() };
+    var P = $('#pop'); G.pop = { t: near ? near.t : t, m: near, at: px != null ? performance.now() : 0 };
     var types = ['accel', 'early', 'late', 'variable', 'prolonged'];
     P.innerHTML = '<div class="pt">' + (near ? 'Change mark' : 'Mark at ' + clockStr(t)) + '</div>' + types.map(function (ty, i) { return '<button data-ty="' + ty + '" class="pb ' + ty + '"><small>' + (i + 1) + '</small>' + TNAME[ty] + '</button>'; }).join('') + (near ? '<button data-ty="del" class="pb del"><small>6</small>Remove</button>' : '') + '<button data-ty="x" class="pb x">Cancel</button>';
     var r = cv.getBoundingClientRect(); if (px == null && geo) { px = geo.X(t) / DPR; py = r.height * 0.3; }
     P.style.left = clamp(px - 80, 4, r.width - 170) + 'px'; P.style.top = clamp(py - 20, 4, Math.max(4, r.height - 250)) + 'px'; P.classList.remove('hidden');
-    $$('#pop button').forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); if (G.pop && performance.now() - G.pop.at < 400) return; /* the tap that opened the menu also fires a click under the finger */ var ty = b.dataset.ty; if (ty === 'del') G.marks.splice(G.marks.indexOf(near), 1); else if (ty !== 'x') { var i = Math.round(G.pop.t * HZ), v = G.sim.fhr[i]; if (near) near.type = ty; else G.marks.push({ t: G.pop.t, v: v === v ? v : 140, type: ty }); A.tick(); } closePop(); panel(); }; });
+    $$('#pop button').forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); if (ev.detail > 0 && G.pop && performance.now() - G.pop.at < 400) return; /* the tap that opened the menu also fires a click under the finger */ var ty = b.dataset.ty; if (ty === 'del') G.marks.splice(G.marks.indexOf(near), 1); else if (ty !== 'x') { var i = Math.round(G.pop.t * HZ), v = G.sim.fhr[i]; if (near) near.type = ty; else G.marks.push({ t: G.pop.t, v: v === v ? v : 140, type: ty }); A.tick(); } closePop(); panel(); }; });
     setTimeout(function () { var b = $('#pop button'); b && b.focus(); }, 10);
   }
   function closePop() { $('#pop').classList.add('hidden'); G.pop = null; if (!G.touch) cv.focus({ preventScroll: true }); }
