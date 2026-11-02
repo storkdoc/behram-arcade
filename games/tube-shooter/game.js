@@ -652,9 +652,9 @@ function jumpDodge(kind) {
    (from level 3) without losing a life ("EXCELLENT!"), or from every green crystal after the AI DROID. Tokens are kept when
    you die. With 3 tokens, the next level clear opens a BONUS WARP before the flight: BONUS.gates glowing gates race up the tube
    and you steer the claw into each gate's lane as it reaches the rim (no shooting, nothing can kill you). Every gate pays
-   gatePts x streak multiplier (x1..x4) with a climbing chime; 75 % or better = EXCELLENT + an extra life, all of them =
-   PERFECT + perfectPts. Steering is the normal claw steering, so keyboard, mouse, touch spinner and gamepad all work. */
-const BONUS = { need: 3, gates: 16, travel: 1.7, lead: 1.6, gap0: 1.15, gap1: 0.72, gatePts: 400, perfectPts: 20000, goodFrac: 0.75, tail: 1.2 };
+   gatePts x streak multiplier (x1..x4) with a climbing chime; 75 % or better = EXCELLENT + goodPts, all of them =
+   PERFECT + perfectPts + an extra life. Steering is the normal claw steering, so keyboard, mouse, touch spinner and gamepad all work. */
+const BONUS = { need: 3, gates: 16, travel: 1.7, lead: 1.6, gap0: 1.15, gap1: 0.72, gatePts: 250, perfectPts: 10000, goodPts: 5000, goodFrac: 0.75, tail: 1.2 };
 let tokens = 0, cleanLevel = true, bonusStats = { rounds: 0, best: 0, last: null };
 function giveToken(why) {
   if (tokens >= BONUS.need) return;
@@ -696,7 +696,7 @@ function updBonus(b, dt) {
     b.done = true; const N = b.gates.length;
     let line;
     if (b.passed === N) { addScore(BONUS.perfectPts); if (lives < 6) lives++; line = 'PERFECT! +' + BONUS.perfectPts + ' + EXTRA LIFE'; Sound.play('life'); }
-    else if (b.passed >= Math.ceil(N * BONUS.goodFrac)) { if (lives < 6) lives++; line = 'EXCELLENT! EXTRA LIFE'; Sound.play('life'); }
+    else if (b.passed >= Math.ceil(N * BONUS.goodFrac)) { addScore(BONUS.goodPts); line = 'EXCELLENT! +' + BONUS.goodPts; }
     else line = 'KEEP CLOSER TO THE GATES';
     msg('BONUS WARP ' + b.passed + '/' + N + '  +' + b.pts, 2.6, 0.42, '#7dffcf', 4.4);
     msg(line, 2.6, 0.5, '#ffffff', 3);

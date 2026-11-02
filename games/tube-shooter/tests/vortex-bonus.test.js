@@ -72,7 +72,7 @@ async function suite(browser, label, ctxOpts, touchDev) {
     return { s: VORTEX.bonus().stats, m: VORTEX.messages(), st: VORTEX.state.state }; });
   const gain = await E(() => VORTEX.score());
   check(r.s.last && r.s.last.passed === 16 && r.s.last.bestStreak === 16 && r.m.some(x => /PERFECT/.test(x)), `perfect run: ${r.s.last && r.s.last.passed}/16 gates, +${r.s.last && r.s.last.pts} gate points`);
-  check(gain - sc0 >= 20000 + 16 * 400, `perfect run pays at least 26 400 (+${gain - sc0})`);
+  check(gain - sc0 >= 10000 + 16 * 250, `perfect run pays at least 14 000 (+${gain - sc0})`);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/vortex-bonus-end-${touchDev ? 'iphone' : 'desktop'}.png` });
   r = await E(() => { VORTEX.step(12, () => VORTEX.state.state === 'play'); return { st: VORTEX.state.state, lv: VORTEX.state.level, lives: VORTEX.state.lives }; });
   check(r.st === 'play' && r.lv === lv0 + 1 && r.lives >= Math.min(6, lives0 + 1), `then warps on to level ${r.lv} with an extra life (plus any 20 000-point life) (${lives0} -> ${r.lives})`);

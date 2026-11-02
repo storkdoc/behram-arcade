@@ -164,12 +164,16 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - BONUS WARP: with 3 tokens the next level clear opens a gate round inside the warp (tokens go back to 0). 16 glowing
   gates race up the tube (1.7 s travel, 1.15 -> 0.72 s apart, the path steps 1 lane, then up to 2, then up to 3);
   the next gate's rim edge lights up as it closes. Steer the claw into its lane as it reaches the rim. No shooting, nothing
-  can hurt you. Each gate = 400 x streak multiplier (x1..x4, every 4 in a row), a chime that climbs a pentatonic scale
-  with the streak; a miss is a low buzz, a small shake and resets the streak. End: all 16 = PERFECT +20000 + extra life;
-  12+ = EXCELLENT + extra life; else "KEEP CLOSER TO THE GATES". Then the normal warp flight (spikes still count).
+  can hurt you. Each gate = 250 x streak multiplier (x1..x4, every 4 in a row), a chime that climbs a pentatonic scale
+  with the streak; a miss is a low buzz, a small shake and resets the streak. End: all 16 = PERFECT +10000 + extra life;
+  12+ = EXCELLENT +5000; else "KEEP CLOSER TO THE GATES". Then the normal warp flight (spikes still count).
 - Inputs: it is ordinary claw steering, so keyboard, mouse, touch spinner/knob and gamepad all work (tested).
 - Hooks: VORTEX.bonus() -> {tokens, clean, active, stats, b:{t, passed, missed, streak, pts, gates[{lane, at, res, z}]}},
   giveToken(), setTokens(n), bonusCfg(). window.__noTokens / window.__noBonus switch them off for other tests.
 - Test: tests/vortex-bonus.test.js (desktop: clean-level token, kept on death, 3 tokens open the bonus, gate path on the web,
   arrow/mouse/pad steer, no fire, perfect bot 16/16 + extra life + next level, ignoring gates = no life and no death;
   iPhone 14 the same with the touch spinner; no console errors). vortex-powerups updated for the 4th-crystal token.
+- Balance (bot, 12 games, fuseball-dodging + gate-following): ~2.75 bonus rounds per 15-minute game. A first version
+  (400/gate, PERFECT +20000 + life, EXCELLENT + life) handed out ~2-3 lives per round (the points also crossed 20 000-point
+  lives) and 6 of 12 bot games ran out the 15-minute cap alive, so it was cut to 250/gate, PERFECT +10000 + 1 life,
+  EXCELLENT +5000 (a perfect round is ~20 750 points).
