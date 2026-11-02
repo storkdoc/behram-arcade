@@ -165,6 +165,13 @@ body.in-hud .screen { padding-top: calc(var(--hud) + var(--sat) + 10px); }
 .vign { font: 400 16px/1.5 var(--serif); color: #1e2d3c; white-space: pre-line; }
 .vign b { font-family: var(--sans); }
 .stem { font: 600 16.5px/1.4 var(--sans); margin: 2px 0 12px; color: #13202c; }
+/* 2026-11-02: the patient's chart stays one tap away during the questions (the vignette used to vanish after Begin) */
+.ptchart { font: 500 13px/1.4 var(--sans); color: #3a4b5d; margin: 0 0 6px; }
+.ptchart summary { cursor: pointer; list-style: none; display: inline-block; padding: 3px 9px; border-radius: 99px; background: #eef3f7; }
+.ptchart summary::-webkit-details-marker { display: none; }
+.ptchart summary span { color: #2b5a86; font-weight: 700; text-decoration: underline; }
+.ptchart[open] summary span { text-decoration: none; }
+.ptchart > div { margin-top: 6px; padding: 8px 10px; border-left: 3px solid #c9d5e0; background: rgba(238,243,247,.6); border-radius: 0 8px 8px 0; white-space: pre-line; }
 .opts { display: grid; gap: 8px; }
 .opt { display: flex; gap: 11px; align-items: flex-start; width: 100%; text-align: left; border: 2px solid #dbe3ea; background: #fff; color: var(--ink); border-radius: 13px; padding: 10px 12px; font: 500 15px/1.35 var(--sans); transition: border-color .15s, background .15s, transform .15s; }
 .opt .l { flex: none; width: 26px; height: 26px; border-radius: 8px; background: #eaf0f5; display: flex; align-items: center; justify-content: center; font: 800 13px/1 var(--sans); color: #2b5a86; }
@@ -285,7 +292,12 @@ body.in-hud .screen { padding-top: calc(var(--hud) + var(--sat) + 10px); }
   .doc { width: 26vw; } .title-wrap { top: calc(8px + var(--sat)); } .t-tag { display: none; }
   .waiting { height: calc(96px + var(--sab)); } .hall-scroll { bottom: calc(96px + var(--sab)); } .wr-p svg { height: 40px; }
   .enc-panel { margin-top: 0; max-height: 100%; }
+  /* 2026-11-02: phone landscape - compact door tags so the topic chip isn't cut off by the waiting room bar */
+  #hud-mode { max-width: 24vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stat b { white-space: nowrap; }
+  .door-tag { width: 176px; font-size: 11px; padding: 5px 8px 6px; } .door-tag .nm { font-size: 13px; margin: 2px 0 1px; } .door-tag .tp { margin-top: 3px; font-size: 10px; }
 }
+/* touch screens: no keyboard hints ("Keys 1-5 to answer", ENTER/SPACE badges) */
+@media (hover: none) and (pointer: coarse) { .btn .k, .hint-line { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 /* light-panel ghost buttons */
 .enc-panel .btn.ghost, .card .btn.ghost, .help .btn.ghost { color: #1d4166; background: #eef3f7; border-color: #c9d5e0; }

@@ -99,6 +99,7 @@
   /* ---------- focus / spatial navigation ---------- */
   var focusIdx = -1, isTouch = false;
   addEventListener('touchstart', function () { isTouch = true; clearFocus(); }, { passive: true });
+  document.addEventListener('toggle', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('ptchart') && enc) enc.chartOpen = t.open; }, true);
   /* Tap rescue: on touch screens a tap that lands just after a screen re-renders (Next -> new question, door -> room)
      can deliver pointerdown/pointerup but no click (seen in mobile Chrome; the old page test timed out on it). If a
      touch/pen press starts and ends on the same button without moving and no click follows within 300 ms, click it
@@ -452,6 +453,7 @@
     } else {
       var q = enc.qs[enc.i], r = enc.res[enc.i];
       html = steps() + '<div class="phase"><span>' + esc(q.phase.toUpperCase()) + ' · QUESTION ' + (enc.i + 1) + ' OF ' + enc.qs.length + '</span><span class="tm" id="tm"></span></div><div class="timer"><i id="tbar"></i></div>' +
+        '<details class="ptchart"' + (enc.chartOpen ? ' open' : '') + '><summary><b>' + esc(p.c.n) + '</b>, ' + p.c.a + (p.c.ga ? ', ' + esc(p.c.ga) : '') + ' \u00B7 <span>chart</span></summary><div>' + esc(p.c.v) + '</div></details>' +
         '<div class="stem">' + esc(q.stem) + '</div><div class="opts">' + q.opts.map(function (o, k) {
           var cls = r ? (o.correct ? 'right' : (r.pick === k ? 'wrong' : 'dim')) : (enc.gone && enc.gone.indexOf(k) >= 0 ? 'gone' : '');
           return '<button class="opt ' + cls + '" data-k="' + k + '"' + (r ? '' : ' data-nav') + '><span class="l">' + LET[k] + '</span><span>' + esc(o.txt) + '</span></button>';

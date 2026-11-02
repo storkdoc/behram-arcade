@@ -908,7 +908,7 @@ COB_BANK.push(
   { n: 'Joan Murphy', a: 66, cc: 'Bone health check',
     v: 'A 66-year-old G3P3, 15 years past menopause, has never had a bone density test. She is thin and smokes, and her mother had a hip fracture.',
     q: [
-    ['Screening', 'What is recommended?',
+    ['Screening', 'Which bone health screening is recommended for her now?',
       ['Hip and spine DXA', 'A plain X-ray of the spine', 'A serum calcium level alone', 'A heel ultrasound for diagnosis', 'No screening until age 75'],
       'USPSTF: screen all women 65 and older with DXA, and younger postmenopausal women at increased risk (FRAX). She has risk factors including low weight, smoking and parental hip fracture. Use DXA of the hip and lumbar spine.'],
     ['Diagnosis', 'Her femoral neck T-score is \u22122.7. What is the diagnosis?',
