@@ -133,7 +133,8 @@ export class Hud {
     // throttle ladder (desktop / non-touch); touch has its own slider
     if (!st.touch) { const tx = I.l + u * 1.4, ty = H * 0.62, th = H * 0.22, cap = S.thrCap(me);
       for (let i = 0; i <= 9; i++) { const yy = ty + th - (i / 9) * th; c.fillStyle = i <= me.thr ? (i > cap ? COL.bad : COL.hud) : 'rgba(127,247,255,0.15)'; c.fillRect(tx, yy - u * 0.35, u * (1.2 + i * 0.12), u * 0.5); }
-      this.text('THR ' + me.thr, tx, ty + th + u * 1.6, u * 0.95, COL.hud); }
+      const td = st.thrustDir || 0; this.text('THR ' + me.thr + (td > 0 ? ' \u25B2' : td < 0 ? ' \u25BC' : ''), tx, ty + th + u * 1.6, u * 0.95, td ? COL.good : COL.hud);
+      this.text('SPD ' + Math.round(me.speed || 0), tx, ty + th + u * 2.8, u * 0.8, COL.dim); }
   }
   /* ---------- attack computer: tracking bars, lock lights A B C, θ Φ R ---------- */
   attackComputer(st) {

@@ -231,12 +231,27 @@ function pollPad() {
 }
 function moveCursor(dx, dy) { const p = me(), cu = sess.cursor || [p.sx, p.sy]; sess.cursor = [clamp(cu[0] + dx, 0, S.W - 1), clamp(cu[1] + dy, 0, S.H - 1)]; AU.click(); }
 
+/** held keyboard thrust: first press steps the throttle at once, holding keeps stepping (ramping up to ~7 steps/s) */
+function thrustKeys(p, on, dt) {
+  let dir = 0;
+  if (on && p && p.alive && !p.warp) for (const k of keys) { const d = dirKey(k); if (d === 'U') dir += 1; else if (d === 'D') dir -= 1; }
+  dir = Math.sign(dir); sess.thrustDir = dir;
+  if (!dir) { sess.thrustT = 0; sess.thrustHeld = 0; return; }
+  sess.thrustHeld = (sess.thrustHeld || 0) + dt; sess.thrustT = (sess.thrustT || 0) - dt;
+  if (sess.thrustT > 0) return;
+  sess.thrustT = sess.thrustHeld < 0.4 ? 0.28 : 0.14;
+  const n = clamp((p.thr | 0) + dir, 0, Math.min(9, S.thrCap(p)));
+  if (n !== p.thr) { if (sess.autoDock) { sess.autoDock = false; toast('AUTO-APPROACH OFF'); } thrSet(n); p.thr = n; }
+}
 /** gather everything the player did this frame into one sim input */
 function gatherInput(dt) {
   const p = me(); const inp = {};
   const pad = pollPad();
   let yaw = 0, pitch = 0; const chart = p && p.view === 'chart';
-  if (!chart) for (const k of keys) { const d = dirKey(k); if (d === 'L') yaw -= 1; if (d === 'R') yaw += 1; if (d === 'U') pitch += 1; if (d === 'D') pitch -= 1; }
+  // Shift + Up/Down (WASD layout: also Shift + W/S) is keyboard thrust, so those keys don't pitch while Shift is held
+  const shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  if (!chart) for (const k of keys) { const d = dirKey(k); if (d === 'L') yaw -= 1; if (d === 'R') yaw += 1; if (shift) continue; if (d === 'U') pitch += 1; if (d === 'D') pitch -= 1; }
+  thrustKeys(p, shift && !chart, dt);
   const kk = Math.exp(-3.2 * dt); ctl.mx *= kk; ctl.my *= kk;   // the virtual mouse stick springs back toward centre
   yaw += ctl.mx; pitch += ctl.my;
   if (!chart) { yaw += ctl.stick[0]; pitch += ctl.stick[1]; if (pad) { yaw += pad[0]; pitch += pad[1]; } }
@@ -654,7 +669,7 @@ function present(dtR, t) {
   R.frame(dtR, { me: p, ships: sess.ships, shots: sess.shots, base: sess.base, buddy: sess.bud, noCockpit: noCk });
   const v = war ? sess.warV : null; syncWarBar(v);
   const buddyCell = war ? null : sess.role === 'guest' ? (sess.gal && sess.gal.bud) : (sess.G.players[1] && sess.G.players[1].alive ? [sess.G.players[1].sx, sess.G.players[1].sy] : null);
-  hud.draw({ me: p, view: p.view, msgs: sess.msgs, dt: dtR, t, R, G, touch: touchDev, ships: hostile, shots: sess.shots, consoleTop: R.consoleTop(), base: sess.base && !noCk, drift: G.C.drift,
+  hud.draw({ me: p, view: p.view, msgs: sess.msgs, dt: dtR, t, R, G, touch: touchDev, thrustDir: sess.thrustDir || 0, ships: hostile, shots: sess.shots, consoleTop: R.consoleTop(), base: sess.base && !noCk, drift: G.C.drift,
     gal: sess.gal || { fleets: [], bases: [] }, siegeMax: sess.gal ? sess.gal.siegeMax : G.C.siege, cursor: sess.cursor, war: v, sel: sess.selF,
     buddyCell, buddyIdx: 1 - p.idx, obj: objective(p, hostile, v) });
   setText('link', app.online && Net.st.status === 'connected' ? (Net.st.ping != null ? 'LINK ' + Net.st.ping + ' MS' : 'LINK …') : '');
@@ -751,7 +766,7 @@ for (const id of ['sfxv', 'psfxv', 'musv', 'pmusv']) {
 setVols();
 function setKeys(k) {
   app.keys = k; LS.set('sr.keys', k); document.querySelectorAll('#keysel .chip').forEach(c => c.classList.toggle('sel', c.dataset.k === k)); setText('pkeys', 'KEYS: ' + (k === 'wasd' ? 'WASD' : 'CLASSIC'));
-  setText('tfoot', touchDev ? 'Stick steers · slider throttles · hold FIRE · CHART, tap a sector, WARP · DOCK auto-approaches' : k === 'wasd' ? 'WASD steer · 0-9 throttle · Space fires · G chart · H hyperwarp · R aft · L scan · E shields · Enter smart action · P pause' : 'Arrows steer · 0-9 throttle · Space fires · G chart · H hyperwarp · F/A fore/aft · L scan · S shields · Enter smart action · P pause');
+  setText('tfoot', touchDev ? 'Stick steers · slider throttles · hold FIRE · CHART, tap a sector, WARP · DOCK auto-approaches' : k === 'wasd' ? 'WASD steer · Shift+W/S thrust · 0-9 throttle · Space fires · G chart · H hyperwarp · R aft · L scan · E shields · Enter smart action · P pause' : 'Arrows steer · Shift+↑/↓ thrust · 0-9 throttle · Space fires · G chart · H hyperwarp · F/A fore/aft · L scan · S shields · Enter smart action · P pause');
 }
 // setup screen
 const MLIST = ['campaign', 'laststand', 'blitz', 'war'];

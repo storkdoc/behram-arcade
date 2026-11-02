@@ -65,6 +65,19 @@ async function runCase(browserType, eng, dev) {
     await wait(1500); await page.keyboard.press('Digit4'); ok(await until(page, () => SR.sess.me.thr === 4, 4000), `${tag}: 4 sets throttle`);
     const q0 = await page.evaluate(() => SR.sess.me.q.slice()); await page.keyboard.down('ArrowLeft'); await wait(450); await page.keyboard.up('ArrowLeft');
     const q1 = await page.evaluate(() => SR.sess.me.q.slice()); ok(Math.abs(q1[1] - q0[1]) > 0.02, `${tag}: arrows steer (q.y ${q0[1].toFixed(3)} -> ${q1[1].toFixed(3)})`);
+    // keyboard thrust: Shift+Up ramps the throttle up without pitching, Shift+Down ramps it down to a stop
+    { const qa = await page.evaluate(() => SR.sess.me.q.slice()), s0 = await page.evaluate(() => SR.sess.me.speed);
+      await page.keyboard.down('Shift'); await page.keyboard.down('ArrowUp'); await wait(1300);
+      const mid = await page.evaluate(() => ({ thr: SR.sess.me.thr, dir: SR.sess.thrustDir }));
+      await page.keyboard.up('ArrowUp'); await page.keyboard.up('Shift');
+      const qb = await page.evaluate(() => SR.sess.me.q.slice());
+      ok(mid.thr >= 6 && mid.dir === 1, `${tag}: Shift+Up ramps throttle 4 -> ${mid.thr}`);
+      ok(Math.abs(qb[0] - qa[0]) < 0.01, `${tag}: Shift+Up does not pitch (q.x ${qa[0].toFixed(3)} -> ${qb[0].toFixed(3)})`);
+      ok(await until(page, s => SR.sess.me.speed > s + 5, 3000, s0), `${tag}: ship speeds up`);
+      await page.keyboard.down('Shift'); await page.keyboard.down('ArrowDown');
+      const z = await until(page, () => SR.sess.me.thr === 0, 5000); await page.keyboard.up('ArrowDown'); await page.keyboard.up('Shift'); await wait(150);
+      ok(z && await page.evaluate(() => SR.sess.thrustDir === 0), `${tag}: Shift+Down ramps throttle to 0`);
+      await page.keyboard.press('Digit4'); await until(page, () => SR.sess.me.thr === 4, 2000); }
     for (let i = 0; i < 6 && !(await page.evaluate(() => SR.sess.fired >= 2)); i++) { await page.keyboard.press('Space'); await until(page, n => (SR.sess.fired || 0) > n, 1500, i); await wait(500); }
     ok(await until(page, () => SR.sess.fired >= 2, 4000), `${tag}: Space fires alternating torpedoes`);
     if (process.env.DIAG) console.log('DIAG', await page.evaluate(() => JSON.stringify({ f: SR.sess.fired, t: SR.sess.G.t, scr: SR.app.screen, p: SR.app.paused, en: SR.sess.me.energy, al: SR.sess.me.alive, dk: SR.sess.me.dock, hs: SR.sess.hitStop, w: !!SR.sess.me.warp })), errs.slice(0, 3));
