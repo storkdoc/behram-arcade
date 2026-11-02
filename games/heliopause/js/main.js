@@ -18,7 +18,7 @@ function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } ca
 function bestStars(i) { var s = save.stars[i] || {}, m = 0; for (var d in s) m = Math.max(m, s[d]); return m; }
 function totalStars() { var n = 0; for (var i = 0; i < D.SECTORS.length; i++) n += bestStars(i); return n; }
 function spentStars() { var n = 0; D.PERKS.forEach(function (p) { for (var r = 0; r < (save.perks[p.id] || 0); r++) n += p.cost[r]; }); return n; }
-function endlessOpen() { return save.unlocked >= 3; }
+function endlessOpen() { return true; }
 function applySettings() {
   AU.toggleMusic(save.set.mus !== '0'); AU.setVol('master', save.set.master / 100); AU.setVol('music', save.set.music / 100); AU.setVol('sfx', save.set.sfx / 100);
   if ($('bMus')) $('bMus').classList.toggle('off', save.set.mus === '0');
