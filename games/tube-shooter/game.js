@@ -365,6 +365,13 @@ const Sound = {
     const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.out); s.start(t, Math.random() * 1.0); s.stop(t + dur + 0.05);
   },
+  // bonus-warp gate: a bright chime that climbs a pentatonic scale with the streak (Tempest 2000 bonus round)
+  gate(k) {
+    Haptics.fire('pup');
+    if (!this.ac || this.muted) return;
+    const P = [0, 2, 4, 7, 9], st = P[k % 5] + 12 * Math.min(2, Math.floor(k / 5)), f = 523.25 * Math.pow(2, st / 12);
+    this.tone('triangle', f, f, 0.2, 0.09); this.tone('sine', f * 2, f * 2.01, 0.14, 0.05, 0.02); this.tone('sine', f * 0.5, f * 0.5, 0.25, 0.05);
+  },
   play(n) {
     Haptics.fire(n);
     if (!this.ac || this.muted) return;
@@ -415,6 +422,10 @@ const Sound = {
       case 'lshoot': this.tone('sawtooth', 2600, 700, 0.07, 0.05); this.tone('sine', 1500, 3200, 0.05, 0.03); break;
       case 'dshoot': this.tone('square', 1600, 1100, 0.04, 0.025); break;
       case 'bonus': [392, 523, 659, 784].forEach((f, i) => this.tone('triangle', f, f, 0.14, 0.12, i * 0.1)); break;
+      case 'token': [1047, 1568, 2093].forEach((f, i) => this.tone('sine', f, f * 1.005, 0.16, 0.08, i * 0.07)); this.tone('triangle', 523, 1047, 0.25, 0.05); break;
+      case 'bonusin': this.tone('sawtooth', 110, 880, 1.1, 0.08); this.tone('sine', 220, 1760, 1.1, 0.07); [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone('triangle', f, f, 0.16, 0.07, 0.5 + i * 0.08)); this.noise(1.2, 0.07, 400, 9000, 0.7); break;
+      case 'gmiss': this.tone('square', 196, 92, 0.22, 0.07); this.noise(0.15, 0.05, 900, 200, 1); break;
+      case 'bonusend': [784, 988, 1175, 1568, 1976, 2349].forEach((f, i) => this.tone('square', f, f, 0.1, 0.07, i * 0.07)); this.tone('sine', 98, 49, 0.9, 0.12); break;
     }
   }
 };
@@ -637,6 +648,64 @@ function jumpDodge(kind) {
   jump.dodged++;
   if (T - jump.lastDodge > 0.4) { jump.lastDodge = T; Sound.play('dodge'); addScore(50); msg(kind === 'shot' ? 'DODGED!' : 'JUMPED IT!', 0.9, 0.3, '#3dff8a', 2.6); }
 }
+/* Day 6 (2026-11-02): WARP TOKENS + BONUS WARP, after Tempest 2000's bonus round. Earn a WARP TOKEN by clearing a level
+   (from level 3) without losing a life ("EXCELLENT!"), or from every green crystal after the AI DROID. Tokens are kept when
+   you die. With 3 tokens, the next level clear opens a BONUS WARP before the flight: BONUS.gates glowing gates race up the tube
+   and you steer the claw into each gate's lane as it reaches the rim (no shooting, nothing can kill you). Every gate pays
+   gatePts x streak multiplier (x1..x4) with a climbing chime; 75 % or better = EXCELLENT + an extra life, all of them =
+   PERFECT + perfectPts. Steering is the normal claw steering, so keyboard, mouse, touch spinner and gamepad all work. */
+const BONUS = { need: 3, gates: 16, travel: 1.7, lead: 1.6, gap0: 1.15, gap1: 0.72, gatePts: 400, perfectPts: 20000, goodFrac: 0.75, tail: 1.2 };
+let tokens = 0, cleanLevel = true, bonusStats = { rounds: 0, best: 0, last: null };
+function giveToken(why) {
+  if (tokens >= BONUS.need) return;
+  tokens++; Sound.play('token');
+  msg(tokens >= BONUS.need ? 'BONUS WARP READY: CLEAR THE LEVEL' : 'WARP TOKEN ' + tokens + '/' + BONUS.need, 2.2, 0.29, '#7dffcf', 3.2);
+  if (why && !seenPup.has('token')) { seenPup.add('token'); msg('3 TOKENS OPEN A BONUS WARP', 2.6, 0.81, '#ffffff', 1.4); }
+}
+function makeBonus() {
+  const n = web.n, g = [], r = Math.random;
+  let lane = player.lane, t = BONUS.lead;
+  for (let i = 0; i < BONUS.gates; i++) {
+    if (i) {
+      const k = i / (BONUS.gates - 1), maxStep = k < 0.35 ? 1 : k < 0.7 ? 2 : 3;
+      let st = 0; while (!st) st = Math.round((r() * 2 - 1) * maxStep);
+      let nl = lane + st;
+      if (!web.closed) { if (nl < 0 || nl >= n) nl = lane - st; nl = clamp(nl, 0, n - 1); }
+      lane = wrapLane(nl);
+      t += lerp(BONUS.gap0, BONUS.gap1, k);
+    }
+    g.push({ lane, at: t, res: 0, fx: 0 });
+  }
+  return { t: 0, gates: g, passed: 0, missed: 0, streak: 0, bestStreak: 0, pts: 0, end: t + BONUS.tail, done: false };
+}
+function bonusMult(streak) { return Math.min(4, 1 + Math.floor(streak / 4)); }
+function updBonus(b, dt) {
+  b.t += dt;
+  for (const g of b.gates) {
+    if (g.res) { g.fx += dt; continue; }
+    if (b.t >= g.at) {
+      if (player.lane === g.lane) {
+        g.res = 1; b.passed++; b.streak++; b.bestStreak = Math.max(b.bestStreak, b.streak);
+        const pts = BONUS.gatePts * bonusMult(b.streak); b.pts += pts; addScore(pts); Sound.gate(b.streak - 1);
+        const cw = clawWorld(); shardBurst([cw[0], cw[1]], cw[2], ['#7dffcf', '#ffffff', '#3dff8a'], 10, 0.7);
+        if (b.streak % 4 === 0 && b.streak <= 12) msg('STREAK x' + bonusMult(b.streak), 0.9, 0.3, '#7dffcf', 3);
+      } else { g.res = -1; b.missed++; b.streak = 0; Sound.play('gmiss'); shake = Math.max(shake, 0.25); }
+    }
+  }
+  if (!b.done && b.t >= b.end) {
+    b.done = true; const N = b.gates.length;
+    let line;
+    if (b.passed === N) { addScore(BONUS.perfectPts); if (lives < 6) lives++; line = 'PERFECT! +' + BONUS.perfectPts + ' + EXTRA LIFE'; Sound.play('life'); }
+    else if (b.passed >= Math.ceil(N * BONUS.goodFrac)) { if (lives < 6) lives++; line = 'EXCELLENT! EXTRA LIFE'; Sound.play('life'); }
+    else line = 'KEEP CLOSER TO THE GATES';
+    msg('BONUS WARP ' + b.passed + '/' + N + '  +' + b.pts, 2.6, 0.42, '#7dffcf', 4.4);
+    msg(line, 2.6, 0.5, '#ffffff', 3);
+    Sound.play('bonusend');
+    bonusStats.rounds++; bonusStats.best = Math.max(bonusStats.best, b.passed); bonusStats.last = { passed: b.passed, n: N, pts: b.pts, bestStreak: b.bestStreak };
+    window.MoodSticker && window.MoodSticker.event(b.passed >= Math.ceil(N * BONUS.goodFrac) ? 'win' : 'big');
+    warp.bonus = null; warp.t = 0; Sound.play('warp');
+  }
+}
 const PUP = { rise: 0.34, rimWait: 2.6, laserSpeed: 1.45, laserHeat: 0.7, droidV: 9, droidCd: 0.45, droidLife: 12, every: [16, 21] };
 let LP = null, spawnTimer = 0, zapUses = 0, zap = { active: false, t: 0, next: 0, flash: 0 }, pulseT = 0, pulseAmt = 0, pulsing = false;
 let autofire = store.get('autofire2', false), invincible = false, fireLock = false;
@@ -730,7 +799,7 @@ function startGame() {
   fireLock = true;
   deathTipCount = {};
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
-  score = 0; lives = 3; nextLife = 20000; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
+  score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
   Sound.play('start');
   beginLevel(startLevel);
@@ -739,7 +808,7 @@ function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
   enemies = []; eshots = []; pshots = []; mines = []; shards = []; bolts = []; zfx = null; zapUses = 0; zap.active = false; rot = 0;
-  jump.t = -1; jump.cd = 0;
+  jump.t = -1; jump.cd = 0; cleanLevel = true;
   placeClaw(web.start, 0); player.z = 0; player.alive = true; player.heat = 0; player.overheat = false;
   pups = []; if (power.droid && power.droid.until < L) power.droid = null; if (power.droid) power.droid.pos = player.pos + web.n / 2;
   Music.play(L);
@@ -760,11 +829,17 @@ function startWarp() {
   if (bonusPending > 0) { addScore(bonusPending); msg('BONUS ' + bonusPending, 2.4, 0.42, '#fff', 4.5); Sound.play('bonus'); bonusPending = 0; }
   if (spikes.some(s => s > 0.02)) msg('AVOID SPIKES', 2.0, 0.58, pal.spike, 4);
   while (pups.length) { pups.shift(); collectPup(); }   // a crystal still in the tube is yours when the level clears
+  if (cleanLevel && level >= 3 && !window.__noTokens) { msg('EXCELLENT! NO LIVES LOST', 2.0, 0.22, '#ffffff', 3.4); giveToken(true); }
+  if (tokens >= BONUS.need && !window.__noBonus) {
+    tokens = 0; warp.bonus = makeBonus(); Sound.play('bonusin');
+    msg('BONUS WARP', 2.4, 0.36, '#7dffcf', 6); msg('STEER INTO EVERY GATE', 2.4, 0.5, '#ffffff', 2.6);
+    window.MoodSticker && window.MoodSticker.screen('bonus');
+  }
 }
 function killPlayer(kind, captor) {
   if (invincible || !player.alive) return;
   if (airborne() && JUMP_DODGE.has(kind)) { jumpDodge(kind); return; }
-  player.alive = false; eshots = [];
+  player.alive = false; eshots = []; cleanLevel = false;
   jump.t = -1; jump.cd = 0;
   if (power.laser || power.droid || power.jump) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
   power = { laser: false, droid: null, jump: false, n: 0 }; pups = [];
@@ -1423,7 +1498,7 @@ function collectPup() {
   if (!power.laser) { power.laser = true; name = 'PARTICLE LASER'; tip = 'SHOTS FLY FASTER, PIERCE AND BURN THROUGH ENEMY FIRE'; }
   else if (!power.jump) { power.jump = true; name = 'JUMP'; tip = touch.on ? 'TAP JUMP TO HOP OVER SHOTS, GRABBERS AND MINE WALLS' : 'SHIFT / J (PAD Y) HOPS OVER SHOTS, GRABBERS AND MINE WALLS'; }
   else if (!power.droid) { power.droid = { pos: player.pos + web.n / 2, cd: 0.4, until: state === 'warp' ? level + 1 : level, lane: -1, life: PUP.droidLife }; name = 'AI DROID'; tip = 'IT GUARDS THE RIM FOR ' + PUP.droidLife + ' SECONDS'; }
-  else { addScore(2500); name = 'BONUS 2500'; }
+  else { addScore(1000); name = 'WARP TOKEN +1000'; giveToken(true); }
   msg(name, 2.2, 0.36, '#3dff8a', 4.2);
   if (tip && !seenPup.has(name)) { seenPup.add(name); msg(tip, 2.8, 0.43, '#ffffff', 1.4); }
   Sound.play('pup'); flash = Math.max(flash, 0.12); flashColor = '#3dff8a';
@@ -1571,6 +1646,7 @@ function update(dt) {
       if (!pool.length && !enemies.length && !zap.active && !window.__noWarp) { mines = []; startWarp(); }
       break;
     case 'warp': {
+      if (warp.bonus) { handleMove(dt); updBonus(warp.bonus, dt); Sound.hum(0); break; }
       handleMove(dt); handleFire(dt); updShots(dt); checkShotHits();
       warp.t += dt; const v = 0.13 + 0.6 * warp.t;
       player.z += v * dt; camZ = player.z * LL * 0.9;
@@ -1609,7 +1685,7 @@ function update(dt) {
 const stars = Array.from({ length: 260 }, () => ({ x: rand(-8, 8), y: rand(-8, 8), z: rand(0.3, 30), c: Math.random() }));
 let starSpeed = 2;
 function updStars(dt) {
-  const target = state === 'warp' ? 42 : state === 'zoom' ? (zoom && zoom.full ? 30 : 12) : (state === 'attract' || state === 'select' || state === 'initials') ? 2.2 : 0;
+  const target = state === 'warp' ? (warp && warp.bonus ? 16 + 10 * Math.min(1, warp.bonus.t / 4) : 42) : state === 'zoom' ? (zoom && zoom.full ? 30 : 12) : (state === 'attract' || state === 'select' || state === 'initials') ? 2.2 : 0;
   starSpeed = lerp(starSpeed, target, Math.min(1, dt * 3));
   for (const s of stars) { s.pz = s.z; s.z -= starSpeed * dt; if (s.z < 0.3) { s.z = 30; s.pz = 30; s.x = rand(-8, 8); s.y = rand(-8, 8); } }
 }
@@ -2011,6 +2087,33 @@ function drawPups() {
     }
   }
 }
+// BONUS WARP gates: a glowing frame across the gate's lane, racing up the tube; the next gate also lights its lane's rim edge.
+function drawBonusGates() {
+  const b = state === 'warp' && warp && warp.bonus; if (!b) return;
+  let next = null; for (const g of b.gates) if (!g.res) { next = g; break; }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = b.gates.length - 1; i >= 0; i--) {
+    const g = b.gates[i], z = (g.at - b.t) / BONUS.travel;
+    if (!g.res && (z > 1 || z < -0.02)) continue;
+    if (g.res && g.fx > 0.45) continue;
+    const A = rail(g.lane), B = rail(g.lane + 1), zw = Math.max(0, z) * LL, d = LL * 0.045, isNext = g === next;
+    const col = g.res > 0 ? '#ffffff' : g.res < 0 ? '#ff3a3a' : isNext ? '#7dffcf' : '#3dff8a';
+    const fade = g.res ? 1 - g.fx / 0.45 : Math.min(1, (1 - z) * 4);
+    ctx.globalAlpha = fade * (isNext ? 0.9 + 0.1 * Math.sin(T * 30) : 0.6);
+    ctx.strokeStyle = col; ctx.lineWidth = LW(isNext ? 2.2 : 1.4); ctx.shadowColor = col; ctx.shadowBlur = (isNext ? 16 : 8) * DPR;
+    const zb = g.res ? zw - g.fx * LL * 0.4 : zw;   // a passed gate flies on past the claw
+    ctx.beginPath(); seg3(A[0], A[1], zb, B[0], B[1], zb); seg3(A[0], A[1], zb + d, B[0], B[1], zb + d); seg3(A[0], A[1], zb, A[0], A[1], zb + d); seg3(B[0], B[1], zb, B[0], B[1], zb + d); ctx.stroke();
+    // inner diamond so the gate reads as a ring you fly through
+    const m = laneMid(g.lane), c = proj(m[0], m[1], zb + d / 2);
+    if (c) { const R = laneWidthPx(g.lane, zb) * 0.22; ctx.beginPath(); ctx.moveTo(c[0], c[1] - R); ctx.lineTo(c[0] + R, c[1]); ctx.lineTo(c[0], c[1] + R); ctx.lineTo(c[0] - R, c[1]); ctx.closePath(); ctx.stroke(); }
+  }
+  if (next) {   // rim cue for the next gate, brighter as it closes
+    const z = clamp((next.at - b.t) / BONUS.travel, 0, 1), A = rail(next.lane), B = rail(next.lane + 1);
+    ctx.globalAlpha = 0.25 + 0.6 * (1 - z); ctx.strokeStyle = '#7dffcf'; ctx.lineWidth = LW(1.2 + 1.8 * (1 - z)); ctx.shadowBlur = 10 * DPR;
+    ctx.beginPath(); seg3(A[0], A[1], 0, B[0], B[1], 0); ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawDroid() {
   const d = power.droid; if (!d || !(state === 'play' || state === 'zoom' || state === 'warp')) return;
   const c = railF(d.pos), zw = (0.035 + Math.sin(T * 5) * 0.01) * LL, q = proj(c[0], c[1], zw); if (!q) return;
@@ -2073,6 +2176,8 @@ function drawHUD() {
   if (Sound.muted && !touch.on) text('SOUND OFF  M', W - U * 3, H - U * 3.2, U * 1.3, '#888', 'right', 0.8);
   if (invincible) text('INVINCIBLE', zx, ty + U * 6.2, U * 1.3, '#f0f', 'right');
   if (inGame() && (power.laser || power.droid || power.jump)) text([power.laser ? 'LASER' : '', power.jump ? 'JUMP' : '', power.droid ? 'DROID' : ''].filter(Boolean).join(' + '), zx, ty + U * 8.4, U * 1.4, '#3dff8a', 'right', 0.9);
+  if (inGame() && tokens > 0) { ctx.lineWidth = LW(1); for (let i = 0; i < BONUS.need; i++) { const cx = zx - U * 0.9 - (BONUS.need - 1 - i) * U * 2.2, cy = ty + U * 12.6, r = U * 0.75; ctx.globalAlpha = i < tokens ? 1 : 0.3; ctx.strokeStyle = '#7dffcf'; ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); ctx.stroke(); if (i < tokens) { ctx.fillStyle = 'rgba(125,255,207,0.45)'; ctx.fill(); } } ctx.globalAlpha = 1; text('WARP', zx - U * 7.6, ty + U * 13.1, U * 1.2, '#7dffcf', 'right', 0.8); }
+  if (state === 'warp' && warp && warp.bonus) { const b = warp.bonus; text('BONUS WARP  ' + b.passed + '/' + b.gates.length + (b.streak >= 4 ? '  x' + bonusMult(b.streak) : ''), W / 2, ty + U * 9.6, U * 2.2, '#7dffcf', 'center', 0.95); }
   if (inGame() && power.jump) { const ready = !airborne() && jump.cd <= 0, k = ready ? 1 : airborne() ? 0 : 1 - jump.cd / JUMP_P.cd;
     ctx.globalAlpha = 0.85; ctx.strokeStyle = '#3dff8a'; ctx.lineWidth = LW(1); ctx.strokeRect(zx - U * 9, ty + U * 10.4, U * 9, U * 0.6);
     ctx.fillStyle = ready ? '#3dff8a' : 'rgba(61,255,138,0.45)'; ctx.fillRect(zx - U * 9, ty + U * 10.4, U * 9 * k, U * 0.6); ctx.globalAlpha = 1; }
@@ -2090,6 +2195,7 @@ function drawGameScene() {
   drawWeb(webColor, showClaw && state !== 'dying' ? pal.lane : null, true);
   drawPulseLanes();
   drawShotWarn();
+  drawBonusGates();
   drawSpikes();
   drawMines();
   for (const e of enemies) drawEnemy(e);
@@ -2636,6 +2742,11 @@ window.VORTEX = {
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
   jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
   doJump: () => doJump(),
+  bonus: () => { const b = warp && warp.bonus; return { tokens, clean: cleanLevel, active: !!(state === 'warp' && b), stats: JSON.parse(JSON.stringify(bonusStats)),
+    b: b ? { t: b.t, passed: b.passed, missed: b.missed, streak: b.streak, pts: b.pts, end: b.end, gates: b.gates.map(g => ({ lane: g.lane, at: g.at, res: g.res, z: (g.at - b.t) / BONUS.travel })) } : null }; },
+  giveToken: () => giveToken(false),
+  setTokens: v => { tokens = clamp(v | 0, 0, BONUS.need); },
+  bonusCfg: () => Object.assign({}, BONUS),
   power: () => ({ laser: power.laser, jump: power.jump, droid: power.droid ? { pos: power.droid.pos, lane: power.droid.lane, until: power.droid.until } : null, n: power.n, kills: pupKills, next: pupNext, stats: Object.assign({}, pupStats) }),
   shotList: () => pshots.map(s => ({ lane: s.lane, z: s.z, laser: !!s.laser, droid: !!s.droid, pierce: s.pierce || 0 })),
   setLane(l, sub) { placeClaw(wrapLane(l), sub || 0); },

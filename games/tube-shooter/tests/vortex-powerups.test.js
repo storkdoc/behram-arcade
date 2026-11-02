@@ -41,9 +41,9 @@ async function suite(browser, label, ctxOpts, tag) {
   check(r.dead && r.dk >= 1 && r.st === 'play', `AI droid shoots an enemy in another lane (droid kills ${r.dk})`);
   if (SHOTS) { await E(() => { const l = VORTEX.playerLane(), n = VORTEX.webInfo().n; VORTEX.spawn('flipper', (l + 5) % n, 0.6); VORTEX.spawn('tanker', (l + 2) % n, 0.8); VORTEX.dropPup((l + 1) % n, 0.4); VORTEX.key('Space', true); VORTEX.step(0.12); VORTEX.key('Space', false); VORTEX.freeze(true); });
     await sleep(400); await page.screenshot({ path: `${SHOTS}/vortex-powerups-${tag}.png` }); await E(() => VORTEX.emptyField()); }
-  // 7. fourth crystal (droid still up) -> BONUS 2500
-  r = await E(() => { VORTEX.emptyField(); const sc = VORTEX.score(); VORTEX.dropPup(VORTEX.playerLane(), 0.02); VORTEX.step(0.3); return { gain: VORTEX.score() - sc, m: VORTEX.messages(), n: VORTEX.power().n }; });
-  check(r.gain >= 2500 && r.m.includes('BONUS 2500'), `fourth crystal pays BONUS 2500 (+${r.gain})`);
+  // 7. fourth crystal (droid still up) -> WARP TOKEN +1000 (Day 6: tokens open the BONUS WARP; was BONUS 2500)
+  r = await E(() => { VORTEX.emptyField(); VORTEX.setTokens(0); const sc = VORTEX.score(); VORTEX.dropPup(VORTEX.playerLane(), 0.02); VORTEX.step(0.3); return { gain: VORTEX.score() - sc, m: VORTEX.messages(), n: VORTEX.power().n, tok: VORTEX.bonus().tokens }; });
+  check(r.gain >= 1000 && r.m.includes('WARP TOKEN +1000') && r.tok === 1, `fourth crystal pays a WARP TOKEN +1000 (+${r.gain}, tokens ${r.tok})`);
   // 7b. the droid is a treat, not a permanent wingman: it powers down 12 s after it was caught
   r = await E(() => { VORTEX.emptyField(); const had = !!VORTEX.power().droid; VORTEX.step(16, () => !VORTEX.power().droid); return { had, now: VORTEX.power().droid, m: VORTEX.messages(), laser: VORTEX.power().laser }; });
   check(r.had && !r.now && r.m.includes('DROID OFFLINE') && r.laser, `AI droid powers down after 12 s (laser kept)`);

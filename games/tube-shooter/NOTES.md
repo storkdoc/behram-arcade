@@ -154,3 +154,22 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Test: tests/vortex-jump.test.js (desktop, iPhone 14, iPhone 14 landscape: gating, launch by key/button/pad/mouse,
   touch button visible and non-overlapping, recharge, shot dodge, airborne grab immunity then grab after landing,
   mine-wall hop, death loses JUMP, no console errors). vortex-powerups updated for the new order.
+
+## Day 6 (2026-11-02): WARP TOKENS + BONUS WARP (Tempest 2000 bonus round)
+- Why: the eval bot (12 games each) dies around level 9-13 and power-ups end at "BONUS 2500", so a clean run had no
+  goal beyond score. Tempest 2000 rewards clean play with a bonus round; this adds one that uses only steering.
+- WARP TOKENS: clear a level from level 3 up without losing a life ("EXCELLENT! NO LIVES LOST"), or catch a 4th+ green
+  crystal (now "WARP TOKEN +1000" instead of BONUS 2500). Tokens are kept when you die and reset on a new game.
+  HUD: three green diamonds under the power-up line (only shown once you have one).
+- BONUS WARP: with 3 tokens the next level clear opens a gate round inside the warp (tokens go back to 0). 16 glowing
+  gates race up the tube (1.7 s travel, 1.15 -> 0.72 s apart, the path steps 1 lane, then up to 2, then up to 3);
+  the next gate's rim edge lights up as it closes. Steer the claw into its lane as it reaches the rim. No shooting, nothing
+  can hurt you. Each gate = 400 x streak multiplier (x1..x4, every 4 in a row), a chime that climbs a pentatonic scale
+  with the streak; a miss is a low buzz, a small shake and resets the streak. End: all 16 = PERFECT +20000 + extra life;
+  12+ = EXCELLENT + extra life; else "KEEP CLOSER TO THE GATES". Then the normal warp flight (spikes still count).
+- Inputs: it is ordinary claw steering, so keyboard, mouse, touch spinner/knob and gamepad all work (tested).
+- Hooks: VORTEX.bonus() -> {tokens, clean, active, stats, b:{t, passed, missed, streak, pts, gates[{lane, at, res, z}]}},
+  giveToken(), setTokens(n), bonusCfg(). window.__noTokens / window.__noBonus switch them off for other tests.
+- Test: tests/vortex-bonus.test.js (desktop: clean-level token, kept on death, 3 tokens open the bonus, gate path on the web,
+  arrow/mouse/pad steer, no fire, perfect bot 16/16 + extra life + next level, ignoring gates = no life and no death;
+  iPhone 14 the same with the touch spinner; no console errors). vortex-powerups updated for the 4th-crystal token.
