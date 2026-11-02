@@ -4,6 +4,7 @@
 var D = window.HPD, Sim = window.HPSim, T = D.TOWERS, A = D.ALIENS, TAU = D.TAU;
 var $ = function (id) { return document.getElementById(id); };
 var cv = $('cv'), R = new window.HPRender(cv), AU = new window.HPAudio();
+R.onSfx = function (e) { AU.sfxEvent(e); }; // invader weapon / debris sounds triggered by the renderer's animations
 var MS = window.MoodSticker || { screen: function () {}, event: function () {}, bindPause: function () {} };
 var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 var DT = 1 / 30;
@@ -550,7 +551,7 @@ function frame(now) {
   if (cardTimer > 0) { cardTimer -= dt; if (cardTimer <= 0) $('card').className = 'hide'; }
   if (R.letterbox > 0 && (!sim.cur || sim.mode !== 'wave' || !sim.cur.boss) && cardTimer <= 0) R.letterbox = Math.max(0, R.letterbox - dt * 0.6);
   if (camFocus) { camFocus.until -= dt; R.cam.tx = camFocus.x; R.cam.ty = camFocus.y; R.cam.tz = R.fitZ * 1.25; if (camFocus.until <= 0) { camFocus = null; R.home(); } }
-  if (sim.mode === 'wave') { AU.intensity = intensity(); var nb = 0, nl = 0; for (var k in sim.structs) { var st = sim.structs[k]; if (st.beam) { if (st.type === 'lance') nl++; else nb++; } } AU.beams = running ? nb : 0; AU.lances = running ? nl : 0; } else { AU.beams = 0; AU.lances = 0; }
+  if (sim.mode === 'wave') { AU.intensity = intensity(); var nb = 0, nl = 0; for (var k in sim.structs) { var st = sim.structs[k]; if (st.beam) { if (st.type === 'lance') nl++; else nb++; } } AU.beams = running ? nb : 0; AU.lances = running ? nl : 0; AU.invaders = running ? sim.aliens.length : 0; } else { AU.beams = 0; AU.lances = 0; AU.invaders = 0; }
   panelT -= dt; if (panelDirty || panelT <= 0) { renderPanel(); panelDirty = false; panelT = 0.25; }
   hud(dt);
   R.frame(sim, running ? dt * speed : dt * (sim.mode === 'build' ? 1 : 0.0001), { sel: ui.sel, hover: ui.hover, previewType: ui.previewType, paths: save.set.paths === '1', ghost: ui.ghost, labels: save.set.labels === '1', showLocked: sim.mode === 'build' });

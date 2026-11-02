@@ -26,12 +26,15 @@ P.init = function () {
   this.rev = c.createConvolver(); this.rev.buffer = ir; var ro = c.createGain(); ro.gain.value = 0.62; this.rev.connect(ro); ro.connect(this.out);
   this.revM = c.createGain(); this.revM.gain.value = 0.9; this.revM.connect(this.rev); this.music.connect(this.revM);
   this.revS = c.createGain(); this.revS.gain.value = 0.45; this.revS.connect(this.rev); this.sfx.connect(this.revS);
+  this.sfxWet = c.createGain(); this.sfxWet.gain.value = this.vol.sfx; this.sfxWet.connect(this.rev); // effect reverb sends, scaled by the SFX volume so the slider silences the tails too
   // shared choir formant bank ("aah")
   this.choir = c.createGain(); this.choir.gain.value = 0.5; var cOut = c.createGain(); cOut.gain.value = 1.2;
   [[750, 7, 1], [1180, 9, 0.55], [2650, 10, 0.25], [350, 3, 0.4]].forEach(function (f) { var b = c.createBiquadFilter(); b.type = 'bandpass'; b.frequency.value = f[0]; b.Q.value = f[1]; var g = c.createGain(); g.gain.value = f[2]; this.choir.connect(b); b.connect(g); g.connect(cOut); }, this);
   cOut.connect(this.music);
   // continuous beam hums
   this.hum = this.drone([mtof(74), mtof(81)], 'sine', 0, this.sfx); this.lhum = this.drone([mtof(62), mtof(69), mtof(78)], 'triangle', 0, this.sfx);
+  // the invading fleet: a low, consonant D-A thrum that swells with the number of ships (inaudible when none)
+  var ihLp = c.createBiquadFilter(); ihLp.type = 'lowpass'; ihLp.frequency.value = 420; ihLp.Q.value = 0.4; ihLp.connect(this.sfx); this.ihum = this.drone([mtof(38), mtof(45), mtof(50), mtof(57) * 1.002], 'triangle', 0, ihLp);
   this.noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate); var nd = this.noiseBuf.getChannelData(0); for (i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
   this.initMusic();
   var self = this; this.timer = setInterval(function () { self.tick(); }, 60);
@@ -44,7 +47,7 @@ P.init = function () {
   c.onstatechange = function () { if (c.state !== 'running' && c.state !== 'closed' && !document.hidden) setTimeout(function () { self.wake(); }, 250); };
   this.watchdog = setInterval(function () { try { self.watch(); } catch (e) { self.note('watchdog error ' + e); /* never let the watchdog die */ } }, 1500);
 };
-P.setVol = function (k, v) { this.vol[k] = v; if (!this.ctx) return; var t = this.ctx.currentTime; if (k === 'master') this.out.gain.setTargetAtTime(v, t, 0.05); if (k === 'music') { this.music.gain.setTargetAtTime(this.musicMuted ? 0 : v * 0.8, t, 0.05); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.05); } if (k === 'sfx') this.sfx.gain.setTargetAtTime(v * 0.7, t, 0.05); };
+P.setVol = function (k, v) { this.vol[k] = v; if (!this.ctx) return; var t = this.ctx.currentTime; if (k === 'master') this.out.gain.setTargetAtTime(v, t, 0.05); if (k === 'music') { this.music.gain.setTargetAtTime(this.musicMuted ? 0 : v * 0.8, t, 0.05); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.05); } if (k === 'sfx') { this.sfx.gain.setTargetAtTime(v * 0.7, t, 0.05); if (this.sfxWet) this.sfxWet.gain.setTargetAtTime(v, t, 0.05); } };
 P.drone = function (freqs, type, vol, dest) { var c = this.ctx, g = c.createGain(); g.gain.value = vol; g.connect(dest); freqs.forEach(function (f) { var o = c.createOscillator(); o.type = type; o.frequency.value = f; var og = c.createGain(); og.gain.value = 1 / freqs.length; o.connect(og); og.connect(g); o.start(); }); return g; };
 /* peak output level since the last call (for tests): {post: after the soft clipper, pre: after the limiter} */
 P.peak = function () { if (!this.meter) return null; var b = new Float32Array(2048), r = {}; [['post', this.meter], ['pre', this.preMeter]].forEach(function (m) { m[1].getFloatTimeDomainData(b); var p = 0; for (var i = 0; i < b.length; i++) p = Math.max(p, Math.abs(b[i])); r[m[0]] = p; }); return r; };
@@ -301,6 +304,7 @@ P.tick = function () {
   var now = this.ctx.currentTime, ahead = now + 0.5, i;
   this.hum.gain.setTargetAtTime(Math.min(0.05, this.beams * 0.014), now, 0.08);
   this.lhum.gain.setTargetAtTime(Math.min(0.05, this.lances * 0.02), now, 0.1);
+  if (this.ihum) this.ihum.gain.setTargetAtTime(Math.min(0.045, Math.sqrt(this.invaders || 0) * 0.008) * (0.85 + 0.15 * Math.sin(now * 0.7)), now, 0.6);
   var m = this.mode;
   if (this.cur && this.recOK) return; // recorded music is playing (the watchdog looks after it)
   if (m === 'dawn' && now > this.dawnEnd) { this.mode = 'ambient'; this.nextChord = now; }
@@ -336,7 +340,7 @@ P.tick = function () {
 
 /* ---------- sound effects ---------- */
 P.pan = function (dest, p) { if (!this.ctx.createStereoPanner) return dest; var s = this.ctx.createStereoPanner(); s.pan.value = Math.max(-1, Math.min(1, p)); s.connect(dest); return s; };
-P.send = function (amt) { var g = this.ctx.createGain(); g.gain.value = amt; g.connect(this.rev); return g; };
+P.send = function (amt) { var g = this.ctx.createGain(); g.gain.value = amt; g.connect(this.sfxWet || this.rev); return g; };
 /* a layered explosion: sub-bass drop, a lowpass-swept roar, crackle, and a long reverb tail. size ~0.3 (small) .. 2 (boss) */
 P.explode = function (t, size, pan) {
   var c = this.ctx, now = c.currentTime; this.booms = (this.booms || []).filter(function (x) { return x > now; });
@@ -371,6 +375,58 @@ P.riser = function (t, dur, vol) {
     og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(vol * 0.35, t + dur * 0.95); og.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05); o.connect(lp); lp.connect(og); og.connect(bus); o.start(t); o.stop(t + dur + 0.1); });
 };
 var PENTA = [62, 64, 66, 69, 71];
+/* ---------- invader sounds: soft, reverberant and consonant (D major pentatonic), voiced to sit under the orchestra.
+   No square waves, no bright crackle; everything runs through the sfx bus (so the SFX slider / mute applies) and the
+   master compressor + limiter. Swarms are rate-limited and voice-capped so a dozen deaths at once stay a gentle shower. */
+// per type: o = chime octave, boom = size of the low boom (0 none), fire = pitch of its shot, plus a signature flourish
+var EV = {
+  drone: { o: 24, boom: 0, fire: 86 }, raider: { o: 12, boom: 0.35, fire: 81 }, cruiser: { o: 12, boom: 0.5, fire: 78 },
+  aegis: { o: 12, boom: 0.6, fire: 74, gliss: 1 }, dread: { o: 0, boom: 1.0, fire: 62, thrum: 1 }, phantom: { o: 12, boom: 0.45, fire: 83, swell: 1 },
+  hydra: { o: 12, boom: 0.6, fire: 76, arp: 1 }, mender: { o: 12, boom: 0.5, fire: 79, triad: 1 }, prism: { o: 24, boom: 0.5, fire: 88, cluster: 1 },
+  carrier: { o: 0, boom: 1.2, fire: 69, thrum: 1 }, siege: { o: 0, boom: 1.0, fire: 57, thrum: 1 }, leviathan: { o: -12, boom: 2, fire: 50, thrum: 1 }
+};
+P.room = function (k, dur, max) { var now = this.ctx.currentTime, l = this.busy || (this.busy = {}), a = (l[k] || []).filter(function (x) { return x > now; }); l[k] = a; if (a.length >= max) return false; a.push(now + dur); return true; };
+/* a glassy chime: a pure tone with the inharmonic shimmer of struck glass, softly low-passed */
+P.glass = function (m, t, vol, dest, dec, att) {
+  var c = this.ctx, f = mtof(m), g = c.createGain(), lp = c.createBiquadFilter(); dec = dec || 2;
+  lp.type = 'lowpass'; lp.frequency.value = 5200; lp.Q.value = 0.3; lp.connect(g); g.connect(dest || this.sfx); this.env(g, t, att || 0.006, vol, 0, dec);
+  this.osc('sine', f, t, dec, lp);
+  [[2.76, 0.16, 0.45], [5.4, 0.05, 0.22]].forEach(function (h) { var pg = c.createGain(); pg.gain.setValueAtTime(h[1], t); pg.gain.exponentialRampToValueAtTime(0.0001, t + dec * h[2]); pg.connect(lp); this.osc('sine', f * h[0], t, dec * h[2], pg); }, this);
+};
+/* a soft sustained tone (for low thrums) */
+P.tone = function (f, t, a, dur, vol, dest, type) { var g = this.ctx.createGain(); g.connect(dest || this.sfx); this.env(g, t, a, vol, 0, dur); this.osc(type || 'sine', f, t, a + dur, g); };
+/* a deep, rounded boom: sub-bass drop, a low-passed "whoomph" and a long reverb tail; big ones add a timpani-like D-A thrum */
+P.softBoom = function (t, size, pan) {
+  var c = this.ctx, now = c.currentTime; this.booms = (this.booms || []).filter(function (x) { return x > now; });
+  var crowd = 1 / Math.sqrt(1 + this.booms.length * 0.7); this.booms.push(t + 0.5 + size * 0.6);
+  var bus = c.createGain(); bus.gain.value = crowd; bus.connect(this.pan(this.sfx, pan || 0)); bus.connect(this.send(0.35 + Math.min(1, size) * 0.35));
+  this.thump(t, 62 + 34 / (0.5 + size), 26, 0.6 + size * 1.1, 0.16 + 0.15 * Math.min(2, size), bus);
+  this.noise(t, 0.35 + size * 0.8, 650 + 450 * Math.min(1, size), 0.05 + 0.05 * Math.min(1.5, size), bus, 'lowpass', 60);
+  if (size >= 0.8) { this.tone(mtof(38), t + 0.01, 0.01, 1.4 + size, 0.05 * Math.min(2, size), bus, 'triangle'); this.tone(mtof(45), t + 0.02, 0.01, 1.2 + size, 0.03 * Math.min(2, size), bus); }
+  if (size > 1.1) this.duck(Math.min(0.45, 0.12 + size * 0.12), 0.5 + size * 0.35);
+};
+/* an invader's death: a chime pitched by size, a boom, and a small per-type flourish */
+P.enemyDeath = function (type, t, pan) {
+  var v = EV[type] || EV.cruiser, a = root.HPD.ALIENS[type], small = a.cost < 2, dest = this.pan(this.sfx, pan), n = PENTA[(Math.random() * 5) | 0] + v.o;
+  if (!this.room('death', small ? 0.5 : 1.2, small ? 6 : 8)) return;
+  var cv = small ? 0.012 : 0.022;
+  if (v.swell) this.glass(n, t, cv, dest, 2.6, 0.25); else this.glass(n, t, cv, dest, small ? 1.1 : 2.4);
+  if (v.gliss) { this.glass(PENTA[2] + v.o, t + 0.09, cv * 0.7, dest, 2); this.glass(PENTA[0] + v.o, t + 0.18, cv * 0.6, dest, 2.2); } // the shield collapsing: a falling D major figure
+  if (v.arp) [0, 2, 4].forEach(function (k, i) { this.glass(PENTA[k] + v.o + 12, t + 0.06 + i * 0.07, cv * 0.5, dest, 1.4); }, this);           // splitting into three
+  if (v.triad) [62, 66, 69].forEach(function (m, i) { this.glass(m + 12, t + i * 0.04, cv * 0.55, dest, 2.6); }, this);
+  if (v.cluster) [74, 78, 81].forEach(function (m, i) { this.glass(m + 12, t + 0.03 * i, cv * 0.45, dest, 1.8); }, this);            // shattering mirror
+  if (v.thrum) this.tone(mtof(PENTA[0] - 24), t, 0.02, 2.2, 0.045, this.send(0.6));
+  if (v.boom) this.softBoom(t, v.boom, pan); else this.noise(t, 0.22, 900, 0.022, dest, 'lowpass', 160); // a swarmer just puffs out
+};
+/* a soft plasma shot: a muted, falling tone with a little reverb (no damage is involved, so it stays very quiet) */
+P.enemyFire = function (type, t, pan) {
+  var v = EV[type] || EV.cruiser, c = this.ctx, f = mtof(v.fire), heavy = type === 'dread' || type === 'leviathan';
+  var bus = c.createGain(); bus.gain.value = 1; bus.connect(this.pan(this.sfx, pan)); bus.connect(this.send(0.35));
+  var g = c.createGain(), lp = c.createBiquadFilter(), o = c.createOscillator(); lp.type = 'lowpass'; lp.Q.value = 0.7; lp.frequency.setValueAtTime(2600, t); lp.frequency.exponentialRampToValueAtTime(700, t + 0.2);
+  o.type = 'triangle'; o.frequency.setValueAtTime(f * 1.5, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.07); o.connect(lp); lp.connect(g); g.connect(bus); this.env(g, t, 0.004, heavy ? 0.022 : 0.014, 0, heavy ? 0.32 : 0.2); o.start(t); o.stop(t + 0.45);
+  if (type === 'prism' || type === 'phantom') this.glass(v.fire + 12, t, 0.006, bus, 0.8);
+  if (heavy) this.thump(t, 130, 55, 0.22, 0.05, bus);
+};
 P.sfxEvent = function (e) {
   if (!this.ctx || this.ctx.state !== 'running') return;
   var t = this.ctx.currentTime + 0.01, A = root.HPD.ALIENS, ex = e.x !== undefined ? e.x : e.x0, pan = ex !== undefined ? Math.max(-0.7, Math.min(0.7, ex / 520)) : (Math.random() - 0.5) * 0.4;
@@ -382,15 +438,21 @@ P.sfxEvent = function (e) {
     case 'emp': if (!this.throttle('emp', 150)) return; this.thump(t, 140, 1800, 0.16, 0.05); this.thump(t + 0.16, 1600, 90, 0.7, 0.07); this.noise(t, 0.8, 3000, 0.05, this.sfx, 'bandpass', 300); this.bell(93, t + 0.1, 0.025); break;
     case 'dshot': if (!this.throttle('dshot', 90)) return; this.thump(t, 1400, 900, 0.05, 0.02); break;
     case 'kill': var a = A[e.type]; if (!a) return;
-      if (e.boss) { this.explode(t, 2, 0); this.explode(t + 0.35, 1.3, -0.4); this.explode(t + 0.8, 1.1, 0.4); [50, 57, 62, 69, 74].forEach(function (m, i) { this.voice(m, t + 0.4 + i * 0.1, 5, 0.06); }, this); this.bell(86, t + 0.9, 0.08, this.sfx, 5); return; }
-      if (!this.throttle('kill', 55)) return;
-      var oct = a.cost < 2 ? 24 : a.cost < 6 ? 12 : a.cost < 15 ? 0 : -12; this.bell(PENTA[(Math.random() * 5) | 0] + oct, t, a.cost < 2 ? 0.02 : 0.04, this.sfx, a.cost < 2 ? 1.2 : 2.6);
-      if (a.cost >= 2) this.explode(t, Math.min(1.2, 0.25 + a.cost / 14), pan); else this.noise(t, 0.12, 2400, 0.03, this.pan(this.sfx, pan), 'lowpass', 400);
-      break;
-    case 'impact': this.explode(t, 1.4, 0); this.voice(51, t, 2, 0.05, -60); break;
-    case 'shell': if (!this.throttle('shell', 300)) return; this.explode(t, 0.6, pan); break;
+      if (e.boss) { this.softBoom(t, 2, 0); this.softBoom(t + 0.4, 1.3, -0.4); this.softBoom(t + 0.9, 1.1, 0.4); [50, 57, 62, 69, 74].forEach(function (m, i) { this.voice(m, t + 0.4 + i * 0.1, 5, 0.06); }, this); this.glass(86, t + 0.9, 0.06, this.sfx, 5); this.glass(81, t + 1.3, 0.04, this.sfx, 5); return; }
+      if (!this.throttle('kill', a.cost < 2 ? 70 : 45)) return;
+      this.enemyDeath(e.type, t, pan); break;
+    case 'efire': if (!this.throttle('efire', 140) || !this.throttle('ef' + e.type, 380) || !this.room('fire', 0.3, 4)) return; this.enemyFire(e.type, t, pan); break;
+    case 'echarge': if (!this.throttle('echarge', 500)) return; // a Bombard gathering a shell: a slow rising, filtered fifth
+      var cb = this.ctx.createGain(), clp = this.ctx.createBiquadFilter(); clp.type = 'lowpass'; clp.frequency.setValueAtTime(250, t); clp.frequency.exponentialRampToValueAtTime(1400, t + 0.85); clp.connect(cb); cb.connect(this.pan(this.sfx, pan)); cb.connect(this.send(0.4));
+      cb.gain.setValueAtTime(0.0001, t); cb.gain.exponentialRampToValueAtTime(0.03, t + 0.8); cb.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+      [45, 52].forEach(function (m) { var o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(mtof(m), t); o.frequency.exponentialRampToValueAtTime(mtof(m + 12), t + 0.85); o.connect(clp); o.start(t); o.stop(t + 1.05); }, this); break;
+    case 'epop': if (!this.throttle('epop', e.boss ? 150 : 110) || !this.room('pop', 0.6, 4)) return; this.softBoom(t, e.boss ? 0.8 : 0.3, pan); break;
+    case 'spawn': if (!this.throttle('spawn', 1100)) return; this.glass(PENTA[(Math.random() * 5) | 0] + 24, t, 0.006, this.send(0.9), 2.5, 0.12); break;
+    case 'impact': this.softBoom(t, 1.4, 0); this.voice(50, t, 2, 0.05, -60); break;
+    case 'shell': if (!this.throttle('shell', 300)) return; // the Bombard's report: a deep "thoom", then the distant landfall
+      var sb = this.ctx.createGain(); sb.gain.value = 1; sb.connect(this.pan(this.sfx, pan)); sb.connect(this.send(0.55)); this.thump(t, 105, 36, 0.9, 0.15, sb); this.noise(t, 0.6, 520, 0.045, sb, 'lowpass', 60); this.softBoom(t + 0.32, 0.5, pan * 0.3); break;
     case 'shieldHit': if (!this.throttle('shh', 120)) return; this.bell(98, t, 0.03, this.sfx, 1); this.noise(t, 0.3, 4000, 0.03, this.sfx, 'highpass'); break;
-    case 'raid': this.bell(63, t, 0.06, this.sfx, 1.5); this.thump(t, 200, 60, 0.4, 0.1); break;
+    case 'raid': this.glass(74, t, 0.03, this.sfx, 1.8); this.glass(69, t + 0.12, 0.025, this.sfx, 2); this.softBoom(t, 0.6, pan); break;
     case 'destroyed': this.explode(t, 1.0, pan); this.voice(50, t, 2.5, 0.05, -100); break;
     case 'build': this.bell(74, t, 0.06); this.bell(81, t + 0.09, 0.05); this.thump(t, 220, 110, 0.12, 0.05); break;
     case 'upgrade': this.bell(74, t, 0.05); this.bell(78, t + 0.08, 0.05); this.bell(81, t + 0.16, 0.06); break;
@@ -404,7 +466,8 @@ P.sfxEvent = function (e) {
     case 'monoOpen': this.bell(93, t, 0.04, this.sfx, 3); this.voice(74, t, 2.5, 0.04); break;
     case 'super': this.riser(t, 0.9, 0.08); this.explode(t + 0.9, 1.8, 0); [50, 57, 62, 66, 69, 74].forEach(function (m) { this.voice(m, t + 0.9, 4, 0.06); }, this); this.brass(50, t + 0.9, 2, 0.15); this.duck(0.55, 1.6); break;
     case 'phase': this.brass(39, t, 3, 0.18); this.voice(51, t, 4, 0.06, 80); this.thump(t, 50, 24, 2.5, 0.3); break;
-    case 'launch': if (!this.throttle('launch', 400)) return; this.noise(t, 0.4, 300, 0.05, this.sfx, 'bandpass', 900); break;
+    case 'launch': if (!this.throttle('launch', 400)) return; // a hangar opening: a soft low thrum, a breath of air and a small chime
+      this.thump(t, 95, 55, 0.4, 0.05, this.pan(this.sfx, pan)); this.noise(t, 0.45, 380, 0.022, this.pan(this.sfx, pan), 'bandpass', 1300); this.glass(PENTA[(Math.random() * 5) | 0] + 12, t + 0.05, 0.01, this.send(0.7), 1.6); break;
     case 'ui': this.bell(e.m || 86, t, 0.025, this.sfx, 0.6); break;
     case 'deny': this.thump(t, 180, 120, 0.15, 0.06); break;
     case 'lost': break;
