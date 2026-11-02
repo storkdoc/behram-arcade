@@ -269,7 +269,7 @@ P.kill = function (a, src) {
   this.stats.kills++; this.score += Math.round(ad.cost * 10);
   this.superCharge = Math.min(100, this.superCharge + ad.cost * 0.35 * (this.has('B5') ? 2 : 1));
   if (ad.split) for (var i = 0; i < ad.split; i++) { var c = this.spawn('drone', a.vec, a.x + Math.cos(i * 2.1) * 6, a.y + Math.sin(i * 2.1) * 6); c.curl = a.curl; }
-  this.emit({ k: 'kill', type: a.type, x: a.x, y: a.y, boss: !!ad.boss, r: ad.r });
+  this.emit({ k: 'kill', type: a.type, x: a.x, y: a.y, boss: !!ad.boss, r: ad.r, id: a.id });
 };
 P.damageEarth = function (n, kind) {
   if (this.esh > 0) { var ab = Math.min(this.esh, n); this.esh -= ab; n -= ab; this.emit({ k: 'shieldHit' }); }
@@ -506,10 +506,10 @@ P.alienStep = function (a, dt, outposts, aegis) {
     if (Math.hypot(targetSt.x - a.x, targetSt.y - a.y) < 5) {
       var prot = 1; for (i = 0; i < aegis.length; i++) { var as = this.stats_(aegis[i]); if (Math.hypot(aegis[i].x - targetSt.x, aegis[i].y - targetSt.y) < as.rng) { prot = 0.35; break; } }
       targetSt.hp -= 45 * prot * (this.cur ? Math.sqrt(this.cur.hpMul) : 1); this.metals = Math.max(0, this.metals - 12);
-      a.alive = false; this.stats.leaked++; this.emit({ k: 'raid', site: targetSt.site, x: a.x, y: a.y });
+      a.alive = false; this.stats.leaked++; this.emit({ k: 'raid', site: targetSt.site, x: a.x, y: a.y, type: a.type, id: a.id });
     }
   } else if (Math.hypot(e.x - a.x, e.y - a.y) < D.BODY.earth.size + ad.r) {
-    a.alive = false; this.stats.leaked++; this.damageEarth(ad.dmg, a.type); this.emit({ k: 'impact', x: a.x, y: a.y, type: a.type });
+    a.alive = false; this.stats.leaked++; this.damageEarth(ad.dmg, a.type); this.emit({ k: 'impact', x: a.x, y: a.y, type: a.type, id: a.id });
   }
 };
 

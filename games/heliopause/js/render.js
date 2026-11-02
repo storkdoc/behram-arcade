@@ -81,7 +81,7 @@ function Renderer(canvas) {
   this.c = canvas; this.x = canvas.getContext('2d', { alpha: false });
   this.cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 }; this.parts = []; this.rings = []; this.beams = []; this.texts = [];
   this.shake = 0; this.flash = 0; this.flashCol = '255,255,255'; this.time = 0; this.quality = 'high';
-  this.globes = {}; this.letterbox = 0; this.tint = 0;
+  this.globes = {}; this.letterbox = 0; this.tint = 0; this.anim = {}; this.wrecks = []; this.bolts = []; this.fn = 0;
   var self = this;
   ['earth', 'jupiter', 'saturn', 'mars', 'venus', 'uranus', 'neptune', 'mercury', 'moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'pluto', 'triton', 'enceladus', 'rhea', 'titania'].forEach(function (id) {
     var big = id === 'jupiter' || id === 'saturn' ? 112 : id === 'earth' ? 96 : /uranus|neptune|mars|venus/.test(id) ? 64 : 32; self.globes[id] = new Globe(id, big); self.globes[id].update(0); });
@@ -156,10 +156,10 @@ R.event = function (e, sim) {
     case 'shell': this.beams.push({ x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, col: '#ff5a3a', life: 0.5, max: 0.5, w: 1.6 }); this.spark(e.x1, e.y1, '#ff8a5a', 10, 30, 0.6); break;
     case 'boom': this.spark(e.x, e.y, '#ffcf7a', e.nova ? 40 : 12, e.nova ? 80 : 45, 0.7, e.nova ? 1.6 : 1); this.ring(e.x, e.y, e.r, e.nova ? '#fff1c0' : '#ffcf7a', e.nova ? 0.7 : 0.4, e.nova ? 3 : 1.5); break;
     case 'emp': this.ring(e.x, e.y, e.r, '#7fffe0', 0.6, 2); break;
-    case 'kill': var a = A[e.type]; this.spark(e.x, e.y, a.col, e.boss ? 160 : Math.min(26, 6 + a.r * 2), e.boss ? 120 : 40 + a.r * 4, e.boss ? 2.2 : 0.8, e.boss ? 2 : 1);
+    case 'kill': var a = A[e.type]; this.wreck(e, 1); this.spark(e.x, e.y, a.col, e.boss ? 160 : Math.min(26, 6 + a.r * 2), e.boss ? 120 : 40 + a.r * 4, e.boss ? 2.2 : 0.8, e.boss ? 2 : 1);
       this.ring(e.x, e.y, (e.r || 4) * 3, a.col, e.boss ? 2 : 0.5, e.boss ? 4 : 1.2); if (e.boss) { this.flash = 1; this.flashCol = '255,255,255'; this.shake = 14; this.ring(e.x, e.y, 200, '#ffffff', 3, 3); } else if (a.cost >= 12) this.shake = Math.max(this.shake, 4); break;
-    case 'impact': this.spark(e.x, e.y, '#ff6a4a', 30, 50, 1); this.ring(e.x, e.y, 14, '#ff6a4a', 0.8, 2); this.shake = Math.max(this.shake, 6); this.flash = Math.max(this.flash, 0.25); this.flashCol = '255,60,40'; break;
-    case 'raid': this.spark(e.x, e.y, '#ffd84a', 20, 40, 0.8); this.ring(e.x, e.y, 10, '#ffd84a', 0.6, 2); break;
+    case 'impact': this.wreck(e, 0.8); this.spark(e.x, e.y, '#ff6a4a', 30, 50, 1); this.ring(e.x, e.y, 14, '#ff6a4a', 0.8, 2); this.shake = Math.max(this.shake, 6); this.flash = Math.max(this.flash, 0.25); this.flashCol = '255,60,40'; break;
+    case 'raid': if (e.type) this.wreck(e, 0.8); this.spark(e.x, e.y, '#ffd84a', 20, 40, 0.8); this.ring(e.x, e.y, 10, '#ffd84a', 0.6, 2); break;
     case 'destroyed': var p = sim.sitePos(e.site); this.spark(p.x, p.y, '#ffb070', 40, 50, 1.2, 1.4); this.ring(p.x, p.y, 20, '#ff9050', 1, 2.5); this.shake = Math.max(this.shake, 5); break;
     case 'shieldHit': var ep = sim.bp.earth; this.ring(ep.x, ep.y, 26, '#8fb8ff', 0.5, 2); break;
     case 'build': case 'upgrade': var q = sim.sitePos(e.site); this.ring(q.x, q.y, 12, '#cfe8ff', 0.6, 1.5); this.spark(q.x, q.y, '#cfe8ff', 10, 18, 0.6); break;
@@ -318,18 +318,19 @@ R.drawRings = function (s, r, sa, back) {
 /* ---------- invaders: small, sleek silhouettes sized to their collision radius ---------- */
 function hullFill(x, r, col) { var g = x.createLinearGradient(0, -r, 0, r); g.addColorStop(0, '#1c1830'); g.addColorStop(0.5, '#07060f'); g.addColorStop(1, '#120c1c'); return g; }
 var SHAPES = {
-  drone: function (x, r) { // a slim dart with a notched tail
-    x.beginPath(); x.moveTo(r * 1.35, 0); x.quadraticCurveTo(-r * 0.1, r * 0.22, -r * 0.95, r * 0.62); x.lineTo(-r * 0.55, 0); x.lineTo(-r * 0.95, -r * 0.62); x.quadraticCurveTo(-r * 0.1, -r * 0.22, r * 1.35, 0); x.closePath(); },
-  raider: function (x, r) { // a needle with long swept blades
-    x.beginPath(); x.moveTo(r * 1.6, 0); x.lineTo(r * 0.1, r * 0.16); x.lineTo(-r * 0.9, r * 0.95); x.lineTo(-r * 0.55, r * 0.14); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 0.55, -r * 0.14); x.lineTo(-r * 0.9, -r * 0.95); x.lineTo(r * 0.1, -r * 0.16); x.closePath(); },
-  cruiser: function (x, r) { // a leaf-shaped hull with fins
-    x.beginPath(); x.moveTo(r * 1.4, 0); x.bezierCurveTo(r * 0.7, r * 0.6, -r * 0.5, r * 0.62, -r * 1.15, r * 0.3); x.lineTo(-r * 1.4, r * 0.62); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 1.4, -r * 0.62); x.lineTo(-r * 1.15, -r * 0.3); x.bezierCurveTo(-r * 0.5, -r * 0.62, r * 0.7, -r * 0.6, r * 1.4, 0); x.closePath(); },
+  drone: function (x, r, t, k) { // a slim dart with a notched tail; k flexes the tail wings
+    k = k || 1; x.beginPath(); x.moveTo(r * 1.35, 0); x.quadraticCurveTo(-r * 0.1, r * 0.22, -r * 0.95, r * 0.62 * k); x.lineTo(-r * 0.55, 0); x.lineTo(-r * 0.95, -r * 0.62 * k); x.quadraticCurveTo(-r * 0.1, -r * 0.22, r * 1.35, 0); x.closePath(); },
+  raider: function (x, r, t, k) { // a needle with long swept blades; k < 1 sweeps them back at speed
+    k = k || 1; var bx = -r * (0.9 + (1 - k) * 0.7), by = r * 0.95 * k;
+    x.beginPath(); x.moveTo(r * 1.6, 0); x.lineTo(r * 0.1, r * 0.16); x.lineTo(bx, by); x.lineTo(-r * 0.55, r * 0.14); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 0.55, -r * 0.14); x.lineTo(bx, -by); x.lineTo(r * 0.1, -r * 0.16); x.closePath(); },
+  cruiser: function (x, r, t, k) { // a leaf-shaped hull with fins; k trims the fins
+    k = k || 1; x.beginPath(); x.moveTo(r * 1.4, 0); x.bezierCurveTo(r * 0.7, r * 0.6, -r * 0.5, r * 0.62, -r * 1.15, r * 0.3); x.lineTo(-r * 1.4, r * 0.62 * k); x.lineTo(-r * 1.05, 0); x.lineTo(-r * 1.4, -r * 0.62 * k); x.lineTo(-r * 1.15, -r * 0.3); x.bezierCurveTo(-r * 0.5, -r * 0.62, r * 0.7, -r * 0.6, r * 1.4, 0); x.closePath(); },
   aegis: function (x, r) { // an elongated hexagonal lozenge
     x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(r * 0.5, r * 0.62); x.lineTo(-r * 0.7, r * 0.62); x.lineTo(-r * 1.15, 0); x.lineTo(-r * 0.7, -r * 0.62); x.lineTo(r * 0.5, -r * 0.62); x.closePath(); },
   dread: function (x, r) { // a heavy layered chevron wedge
     x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(-r * 0.35, r * 0.92); x.lineTo(-r * 1.1, r * 0.92); x.lineTo(-r * 0.75, r * 0.38); x.lineTo(-r * 1.2, 0); x.lineTo(-r * 0.75, -r * 0.38); x.lineTo(-r * 1.1, -r * 0.92); x.lineTo(-r * 0.35, -r * 0.92); x.closePath(); },
-  phantom: function (x, r) { // a manta crescent
-    x.beginPath(); x.moveTo(r * 1.1, 0); x.bezierCurveTo(r * 0.6, r * 0.5, -r * 0.2, r * 1.2, -r * 1.1, r * 1.0); x.quadraticCurveTo(-r * 0.4, r * 0.3, -r * 0.75, 0); x.quadraticCurveTo(-r * 0.4, -r * 0.3, -r * 1.1, -r * 1.0); x.bezierCurveTo(-r * 0.2, -r * 1.2, r * 0.6, -r * 0.5, r * 1.1, 0); x.closePath(); },
+  phantom: function (x, r, t, k) { // a manta crescent; k is the slow beat of its wings
+    k = k || 1; x.beginPath(); x.moveTo(r * 1.1, 0); x.bezierCurveTo(r * 0.6, r * 0.5, -r * 0.2, r * 1.2 * k, -r * 1.1, r * 1.0 * k); x.quadraticCurveTo(-r * 0.4, r * 0.3, -r * 0.75, 0); x.quadraticCurveTo(-r * 0.4, -r * 0.3, -r * 1.1, -r * 1.0 * k); x.bezierCurveTo(-r * 0.2, -r * 1.2 * k, r * 0.6, -r * 0.5, r * 1.1, 0); x.closePath(); },
   hydra: function (x, r) { // three curved blades around a hub
     x.beginPath(); for (var i = 0; i < 3; i++) { var a = i * TAU / 3, c = Math.cos(a), s = Math.sin(a), c2 = Math.cos(a + 0.9), s2 = Math.sin(a + 0.9);
       x.moveTo(c * r * 0.2, s * r * 0.2); x.quadraticCurveTo(c2 * r * 0.9, s2 * r * 0.9, c * r * 1.15, s * r * 1.15); x.quadraticCurveTo(c * r * 0.6 - s * r * 0.15, s * r * 0.6 + c * r * 0.15, c * r * 0.2, s * r * 0.2); }
@@ -340,71 +341,225 @@ var SHAPES = {
     x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(r * 0.15, r * 0.7); x.lineTo(-r * 1.0, r * 0.25); x.lineTo(-r * 1.0, -r * 0.25); x.lineTo(r * 0.15, -r * 0.7); x.closePath(); },
   carrier: function (x, r) { // a long flat-decked hull
     x.beginPath(); x.moveTo(r * 1.35, 0); x.lineTo(r * 1.05, r * 0.4); x.lineTo(-r * 1.0, r * 0.5); x.lineTo(-r * 1.3, r * 0.3); x.lineTo(-r * 1.3, -r * 0.3); x.lineTo(-r * 1.0, -r * 0.5); x.lineTo(r * 1.05, -r * 0.4); x.closePath(); },
-  siege: function (x, r) { // a long barrel on a finned body
-    x.beginPath(); x.moveTo(r * 1.7, -r * 0.08); x.lineTo(r * 1.7, r * 0.08); x.lineTo(r * 0.3, r * 0.14); x.lineTo(-r * 0.4, r * 0.62); x.lineTo(-r * 1.1, r * 0.75); x.lineTo(-r * 0.8, r * 0.2); x.lineTo(-r * 1.1, 0); x.lineTo(-r * 0.8, -r * 0.2); x.lineTo(-r * 1.1, -r * 0.75); x.lineTo(-r * 0.4, -r * 0.62); x.lineTo(r * 0.3, -r * 0.14); x.closePath(); },
+  siege: function (x, r, t, k) { // a long barrel on a finned body; k > 1 spreads the stabiliser fins when it digs in to fire
+    k = k || 1; x.beginPath(); x.moveTo(r * 1.7, -r * 0.08); x.lineTo(r * 1.7, r * 0.08); x.lineTo(r * 0.3, r * 0.14); x.lineTo(-r * 0.4, r * 0.62); x.lineTo(-r * 1.1, r * 0.75 * k); x.lineTo(-r * 0.8, r * 0.2); x.lineTo(-r * 1.1, 0); x.lineTo(-r * 0.8, -r * 0.2); x.lineTo(-r * 1.1, -r * 0.75 * k); x.lineTo(-r * 0.4, -r * 0.62); x.lineTo(r * 0.3, -r * 0.14); x.closePath(); },
   leviathan: function (x, r, t) { // a ribbed organic ark
     x.beginPath(); x.moveTo(r * 1.3, 0); x.bezierCurveTo(r * 1.0, r * 0.42, r * 0.2, r * 0.55, -r * 0.6, r * 0.5); x.bezierCurveTo(-r * 1.0, r * 0.46, -r * 1.2, r * 0.25, -r * 1.35, r * 0.32 + Math.sin(t * 2) * r * 0.05);
     x.lineTo(-r * 1.2, 0); x.lineTo(-r * 1.35, -r * 0.32 - Math.sin(t * 2) * r * 0.05); x.bezierCurveTo(-r * 1.2, -r * 0.25, -r * 1.0, -r * 0.46, -r * 0.6, -r * 0.5); x.bezierCurveTo(r * 0.2, -r * 0.55, r * 1.0, -r * 0.42, r * 1.3, 0); x.closePath(); }
 };
+/* ---------- invader animation state (render-only: the simulation, hitboxes and balance never see any of this) ----------
+   Each ship gets a smoothed heading (so it banks and rotates into turns), a thrust level that drives its engine plume,
+   a weapon charge / muzzle-flash / recoil cycle, and per-type operating animations. Line ships take harmless potshots at
+   outposts and Earth when close (the bolts are deflected by shields); Bombards, hangars and the Sentinel animate their
+   real attacks from the simulation's own timers. When a ship dies its hull breaks into tumbling, glowing shards. */
+// type: [seconds between shots, charge-up seconds, barrels]
+var COMBAT = { drone: [3.4, 0.22, 1], raider: [2.4, 0.18, 2], cruiser: [2.9, 0.38, 1], aegis: [3.6, 0.5, 1], dread: [3.1, 0.6, 2], phantom: [3.0, 0.32, 1], hydra: [2.7, 0.4, 1], prism: [3.3, 0.5, 1], leviathan: [3.2, 0.9, 2] };
+// where the weapon sits along the hull (in units of r) and how far apart twin barrels are
+var NOSE = { drone: 1.3, raider: 1.5, cruiser: 1.35, aegis: 1.15, dread: 1.2, phantom: 1.05, hydra: 0, mender: 0, prism: 1.15, carrier: 1.3, siege: 1.75, leviathan: 1.25 };
+var BAR = { raider: 0.2, dread: 0.4, leviathan: 0.3 };
+var NOANIM = {};
+function wrapA(a) { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; }
+R.sfx = function (e) { if (this.onSfx) this.onSfx(e); };
+R.animStep = function (sim, dt) {
+  var A = D.ALIENS, i, e = sim.bp.earth, fn = ++this.fn; this.lastDt = dt;
+  if (this.simRef !== sim) { this.simRef = sim; this.anim = {}; this.wrecks.length = 0; this.bolts.length = 0; }
+  var an = this.anim, tg = this.tgts || (this.tgts = []); tg.length = 0;
+  if (sim.mode === 'wave') for (var sid in sim.structs) { var sp = sim.sitePos(sid); tg.push(sp.x, sp.y); }
+  var k = dt > 0 ? 1 - Math.exp(-dt * 7) : 0, live = dt > 1e-5;
+  for (i = 0; i < sim.aliens.length; i++) {
+    var a = sim.aliens[i], ad = A[a.type], s = an[a.id], cb = COMBAT[a.type];
+    var h = (a.hx || a.hy) ? Math.atan2(a.hy * TILT, a.hx) : null;
+    if (!s || s.type !== a.type) s = an[a.id] = { type: a.type, ang: h !== null ? h : Math.atan2((e.y - a.y) * TILT, e.x - a.x), bank: 0, thr: 1, chg: 0, flash: 0, recoil: 0, heat: 0, dep: 0, bay: 0,
+      fcd: 0.8 + ((a.id * 0.618) % 1) * (cb ? cb[0] : 2), px: a.x, py: a.y, pf: a.fire, ps: a.spawnT, pp: a.pulse, dang: 0, heal: null };
+    s.seen = fn;
+    // rotate smoothly into turns; the turn rate becomes a bank (roll) angle
+    if (h !== null && !a.sieging) { var d = wrapA(h - s.ang) * k; s.ang = wrapA(s.ang + d); if (live) s.bank += (Math.max(-1, Math.min(1, d / dt * 0.4)) - s.bank) * Math.min(1, dt * 5); }
+    var still = a.stun > 0 || a.frozen > 0 || a.sieging;
+    if (live) { var mv = Math.hypot(a.x - s.px, a.y - s.py) / dt; s.thr += ((still ? 0.12 : Math.min(1.15, 0.35 + mv / Math.max(4, ad.spd) * 0.75)) - s.thr) * Math.min(1, dt * 4); }
+    s.px = a.x; s.py = a.y;
+    s.flash = Math.max(0, s.flash - dt * 5); s.recoil = Math.max(0, s.recoil - dt * 3.5); s.heat = Math.max(0, s.heat - dt * 0.6);
+    s.dep += ((a.sieging ? 1 : 0) - s.dep) * Math.min(1, dt * 2);
+    // real weapons, read from the simulation's own timers
+    if (ad.siege) {
+      if (a.sieging && a.fire !== undefined) { s.chg = a.fire < 0.9 ? Math.max(0, (0.9 - a.fire) / 0.9) : 0;
+        if (s.pf !== undefined && a.fire > s.pf + 0.5) { this.muzzle(s, 1.3); s.heat = 1; }
+        if (a.fire < 0.9 && s.pf !== undefined && s.pf >= 0.9) this.sfx({ k: 'echarge', type: a.type, x: a.x }); }
+      else s.chg = 0;
+      s.pf = a.fire;
+    }
+    if (ad.spawn) { if (s.ps !== undefined && a.spawnT > s.ps + 0.5) s.bayFlash = 1; s.ps = a.spawnT; s.bay = a.spawnT < 1.3 ? 1 - a.spawnT / 1.3 : 0; s.bayFlash = Math.max(0, (s.bayFlash || 0) - dt * 2.5); }
+    if (ad.mono) { if (s.pp !== undefined && a.pulse > s.pp + 0.5) s.flash = 1; s.pp = a.pulse; s.chg = a.pulse < 1.8 ? 1 - a.pulse / 1.8 : 0; }
+    if (ad.heal && fn % 4 === 0) { // which wounded allies the Mender is tending (looked up every few frames)
+      var hl = s.heal || (s.heal = []); hl.length = 0;
+      for (var j = 0; j < sim.aliens.length && hl.length < 3; j++) { var b = sim.aliens[j]; if (b !== a && b.alive && b.hp < b.hpMax && Math.abs(b.x - a.x) < 42 && Math.abs(b.y - a.y) < 42 && Math.hypot(b.x - a.x, b.y - a.y) < 42) hl.push(b); }
+    }
+    // line ships: harmless potshots at whatever is close (charge, then fire)
+    if (cb && live && !still && (!ad.cloak || a.rev) && sim.mode === 'wave') {
+      if (s.chg > 0) { s.chg += dt / cb[1]; if (s.chg >= 1) { s.chg = 0; this.fireBolt(s, a, ad, cb); } }
+      else { s.fcd -= dt; if (s.fcd <= 0) { s.fcd = cb[0] * (0.75 + Math.random() * 0.5); if (this.pickBolt(s, a, e)) s.chg = 0.001; } }
+    }
+  }
+  for (var id in an) if (an[id].seen !== fn) delete an[id];
+};
+R.pickBolt = function (s, a, e) {
+  if (this.bolts.length >= (this.quality === 'low' ? 14 : 32)) return false;
+  var tg = this.tgts, bd = 1e9, dx = e.x - a.x, dy = e.y - a.y, d2 = dx * dx + dy * dy;
+  if (d2 < 72 * 72) { bd = d2; s.tx = e.x; s.ty = e.y; s.te = 1; }
+  for (var i = 0; i < tg.length; i += 2) { dx = tg[i] - a.x; dy = tg[i + 1] - a.y; d2 = dx * dx + dy * dy; if (d2 < 42 * 42 && d2 < bd) { bd = d2; s.tx = tg[i]; s.ty = tg[i + 1]; s.te = 0; } }
+  return bd < 1e9;
+};
+R.muzzle = function (s, kick) { s.flash = 1; s.recoil = Math.min(1.4, kick || 1); };
+R.fireBolt = function (s, a, ad, cb) {
+  var wx = Math.cos(s.ang), wy = Math.sin(s.ang) / TILT, wl = Math.hypot(wx, wy) || 1; wx /= wl; wy /= wl;
+  var nose = (NOSE[a.type] || 1.2) * ad.r * 0.8, sep = (BAR[a.type] || 0) * ad.r * 0.8, n = cb[2];
+  for (var i = 0; i < n; i++) {
+    var o = n > 1 ? (i ? 1 : -1) * sep : 0, x0 = a.x + wx * nose - wy * o, y0 = a.y + wy * nose + wx * o;
+    var jx = (Math.random() - 0.5) * (s.te ? 6 : 3), jy = (Math.random() - 0.5) * (s.te ? 6 : 3), x1 = s.tx + jx, y1 = s.ty + jy, L = Math.hypot(x1 - x0, y1 - y0);
+    this.bolts.push({ x0: x0, y0: y0, x1: x1, y1: y1, t: -i * 0.07, dur: Math.max(0.18, L / 150), col: ad.col, big: a.type === 'dread' || a.type === 'leviathan', prism: a.type === 'prism', e: s.te });
+  }
+  this.muzzle(s, a.type === 'dread' || a.type === 'leviathan' ? 1.2 : 1);
+  this.sfx({ k: 'efire', type: a.type, x: a.x });
+};
+R.drawBolts = function (dt) {
+  var x = this.x, z = this.cam.z, i; x.globalCompositeOperation = 'lighter'; x.lineCap = 'round';
+  for (i = this.bolts.length - 1; i >= 0; i--) {
+    var b = this.bolts[i]; b.t += dt; if (b.t < 0) continue;
+    var f = b.t / b.dur;
+    if (f >= 1) { // deflected by the shield / atmosphere: a small glassy shimmer, no damage
+      this.spark(b.x1, b.y1, b.e ? '#bfe0ff' : '#dfe8ff', 3, 14, 0.35, 0.6); this.ring(b.x1, b.y1, b.e ? 4 : 2.5, b.e ? '#8fb8ff' : '#cfe0ff', 0.3, 0.8);
+      this.bolts[i] = this.bolts[this.bolts.length - 1]; this.bolts.pop(); continue; }
+    var px = b.x0 + (b.x1 - b.x0) * f, py = b.y0 + (b.y1 - b.y0) * f, s1 = this.toScreen(px, py), s0 = this.toScreen(b.x0, b.y0);
+    var dx = s1.x - s0.x, dy = s1.y - s0.y, dl = Math.hypot(dx, dy) || 1, L = Math.min(dl, (b.big ? 7 : 4.5) * Math.max(1, z));
+    var tx = s1.x - dx / dl * L, ty = s1.y - dy / dl * L, w = (b.big ? 1.6 : 1) * Math.max(0.8, Math.min(2, z * 0.6));
+    x.globalAlpha = 0.55; x.strokeStyle = b.col; x.lineWidth = w * 2.4; x.beginPath(); x.moveTo(tx, ty); x.lineTo(s1.x, s1.y); x.stroke();
+    x.globalAlpha = 0.95; x.strokeStyle = '#ffffff'; x.lineWidth = w * 0.7; x.stroke();
+    if (b.prism) { x.globalAlpha = 0.5; x.strokeStyle = '#7fd0ff'; x.lineWidth = w * 0.6; x.beginPath(); x.moveTo(tx + 1.2, ty - 1.2); x.lineTo(s1.x + 1.2, s1.y - 1.2); x.stroke(); x.strokeStyle = '#ff8ab0'; x.beginPath(); x.moveTo(tx - 1.2, ty + 1.2); x.lineTo(s1.x - 1.2, s1.y + 1.2); x.stroke(); }
+    x.globalAlpha = 1; this.glowAt(s1.x, s1.y, w * 4, b.col, 0.7, 0);
+  }
+  x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+};
+
 R.drawAlien = function (a, t) {
-  var ad = D.ALIENS[a.type], x = this.x, s = this.toScreen(a.x, a.y), z = this.cam.z;
+  var ad = D.ALIENS[a.type], x = this.x, s = this.toScreen(a.x, a.y), z = this.cam.z, hi = this.quality !== 'low';
   // r is chosen so each hull's half-length is about the collision radius the simulation uses (ad.r world units)
   var r = Math.max(ad.boss ? 6 : 2.4, ad.r * Math.max(0.9, z) * 0.8);
   if (s.x < -80 || s.y < -80 || s.x > this.W + 80 || s.y > this.H + 80) return;
-  var ang = Math.atan2(a.hy * TILT, a.hx), cloaked = ad.cloak && !a.rev, i;
+  var S = this.anim[a.id] || NOANIM, ty = a.type;
+  var ang = S.ang !== undefined ? S.ang : Math.atan2(a.hy * TILT, a.hx), cloaked = ad.cloak && !a.rev, i;
   var alpha = cloaked ? 0.16 + 0.08 * Math.sin(t * 6 + a.id) : 1, col = ad.col, lw = Math.max(0.7, r * 0.1);
-  var stun = a.stun > 0 || a.frozen > 0;
+  var stun = a.stun > 0 || a.frozen > 0, ph = a.id * 1.37; // per-ship phase so a fleet never pulses in lockstep
+  var thr = S.thr === undefined ? 1 : S.thr, chg = S.chg || 0, fl = S.flash || 0;
+  var flick = 0.8 + 0.2 * Math.sin(t * 31 + ph) * Math.sin(t * 17.3 + ph * 2);
+  var ca = Math.cos(ang), sa = Math.sin(ang), rk = S.recoil ? Math.min(1, S.recoil) * S.recoil * r * 0.22 : 0, sx = s.x - ca * rk, sy = s.y - sa * rk;
+  var spinner = ty === 'hydra' || ty === 'mender';
   x.globalCompositeOperation = 'lighter';
-  if (!cloaked) this.glowAt(s.x, s.y, r * (ad.boss ? 3.2 : 2.3), col, ad.boss ? 0.42 : 0.24, 1);
-  // engine trail: a thin tapered streak plus the hot nozzle
-  if (!a.sieging && !ad.mono && a.type !== 'hydra' && a.type !== 'mender') {
-    var tl = r * (ad.boss ? 3 : 4.2), bx = s.x - Math.cos(ang) * r, by = s.y - Math.sin(ang) * r;
-    x.globalAlpha = 0.45 * alpha; var g = x.createLinearGradient(bx, by, bx - Math.cos(ang) * tl, by - Math.sin(ang) * tl); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-    x.strokeStyle = g; x.lineCap = 'round'; x.lineWidth = Math.max(0.8, r * (ad.boss ? 0.35 : 0.28)); x.beginPath(); x.moveTo(bx, by); x.lineTo(bx - Math.cos(ang) * tl, by - Math.sin(ang) * tl); x.stroke();
-    x.globalAlpha = alpha; this.glowAt(bx, by, Math.max(2, r * 0.7), '#ffffff', 0.5, 0); x.globalAlpha = 1;
+  if (!cloaked) this.glowAt(sx, sy, r * (ad.boss ? 3.2 : 2.3), col, (ad.boss ? 0.42 : 0.24) * (0.88 + 0.12 * Math.sin(t * 2.3 + ph)), 1);
+  // Mender: soft healing tethers to the wounded ships it is tending
+  if (S.heal && S.heal.length && !stun) for (i = 0; i < S.heal.length; i++) {
+    var hb = S.heal[i]; if (!hb.alive) continue; var hs = this.toScreen(hb.x, hb.y);
+    x.globalAlpha = 0.22 + 0.1 * Math.sin(t * 5 + i); x.strokeStyle = col; x.lineWidth = Math.max(0.6, r * 0.12); x.beginPath(); x.moveTo(sx, sy); x.lineTo(hs.x, hs.y); x.stroke(); x.globalAlpha = 1;
+    for (var q = 0; q < 2; q++) { var u = (t * 1.1 + q * 0.5 + i * 0.3) % 1; this.glowAt(sx + (hs.x - sx) * u, sy + (hs.y - sy) * u, Math.max(1.5, r * 0.35), col, 0.7 * Math.sin(Math.PI * u), 0); }
+    this.glowAt(hs.x, hs.y, Math.max(3, r * 0.9), col, 0.25 + 0.15 * Math.sin(t * 6 + i), 1);
+  }
+  // engine: a flickering tapered plume whose length follows thrust, a hot nozzle and a white-blue core
+  if (!a.sieging && !ad.mono && !spinner) {
+    var tl = r * (ad.boss ? 3 : 4.2) * (0.3 + 0.7 * Math.min(1, thr)) * flick, bx = sx - ca * r, by = sy - sa * r;
+    x.globalAlpha = (0.3 + 0.2 * Math.min(1, thr)) * alpha; var g = x.createLinearGradient(bx, by, bx - ca * tl, by - sa * tl); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.strokeStyle = g; x.lineCap = 'round'; x.lineWidth = Math.max(0.8, r * (ad.boss ? 0.35 : 0.28) * (0.85 + 0.15 * flick)); x.beginPath(); x.moveTo(bx, by); x.lineTo(bx - ca * tl, by - sa * tl); x.stroke();
+    if (r > 3) { x.globalAlpha = 0.5 * alpha * Math.min(1, thr); x.strokeStyle = '#e8f4ff'; x.lineWidth = Math.max(0.5, r * 0.09); x.beginPath(); x.moveTo(bx, by); x.lineTo(bx - ca * tl * 0.4, by - sa * tl * 0.4); x.stroke(); }
+    x.globalAlpha = alpha; this.glowAt(bx, by, Math.max(2, r * 0.7) * (0.75 + 0.35 * flick * Math.min(1, thr)), '#ffffff', 0.5, 0); x.globalAlpha = 1;
+  }
+  // exhaust motes left behind by mid-size and larger ships (rate is per second of game time, so pausing stops them)
+  if (hi && !cloaked && ad.cost >= 3 && !ad.mono && !a.sieging && !spinner && this.parts.length < 900 && Math.random() < (ad.boss ? 14 : 4) * thr * this.lastDt) {
+    var hx = a.hx || 0, hy = a.hy || 0, er = ad.r * 1.05;
+    this.parts.push({ x: a.x - hx * er, y: a.y - hy * er, vx: -hx * 5 + (Math.random() - 0.5) * 2, vy: -hy * 5 + (Math.random() - 0.5) * 2, life: 0.7, max: 0.9, col: col, sz: ad.boss ? 0.9 : 0.45 });
   }
   x.globalCompositeOperation = 'source-over';
-  x.save(); x.translate(s.x, s.y); x.globalAlpha = alpha; x.lineJoin = 'round'; x.lineCap = 'round';
+  x.save(); x.translate(sx, sy); x.globalAlpha = alpha; x.lineJoin = 'round'; x.lineCap = 'round';
   if (ad.mono) {
     var h = r * 2.4, w = h * (4 / 9);
-    if (a.type === 'elder') { // the First Choir: a great slab ringed by six lesser ones and a slow ring of light
-      x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(200,195,255,0.35)'; x.lineWidth = 1; x.beginPath(); x.ellipse(0, 0, r * 1.7, r * 1.7 * TILT, 0, 0, TAU); x.stroke();
+    if (ty === 'elder') { // the First Choir: a great slab ringed by six lesser ones and a slow ring of light
+      x.globalCompositeOperation = 'lighter'; x.strokeStyle = 'rgba(200,195,255,' + (0.35 + 0.4 * chg) + ')'; x.lineWidth = 1; x.beginPath(); x.ellipse(0, 0, r * 1.7, r * 1.7 * TILT, 0, 0, TAU); x.stroke();
       x.strokeStyle = 'rgba(200,195,255,0.15)'; x.beginPath(); x.ellipse(0, 0, r * 2.05, r * 2.05 * TILT, 0, t * 0.3, t * 0.3 + 2.5); x.stroke(); x.globalCompositeOperation = 'source-over';
-      for (i = 0; i < 6; i++) { var oa = i * TAU / 6 + t * 0.25, ox = Math.cos(oa) * r * 1.7, oy = Math.sin(oa) * r * 1.7 * TILT, sw = w * 0.22, sh = h * 0.3;
-        x.fillStyle = '#000'; x.fillRect(ox - sw / 2, oy - sh / 2, sw, sh); x.strokeStyle = 'rgba(225,228,255,0.6)'; x.lineWidth = 0.8; x.strokeRect(ox - sw / 2, oy - sh / 2, sw, sh); }
+      for (i = 0; i < 6; i++) { var oa = i * TAU / 6 + t * 0.25 * (1 + chg), ox = Math.cos(oa) * r * 1.7, oy = Math.sin(oa) * r * 1.7 * TILT, sw = w * 0.22, sh = h * 0.3;
+        x.fillStyle = '#000'; x.fillRect(ox - sw / 2, oy - sh / 2, sw, sh); x.strokeStyle = 'rgba(225,228,255,' + (0.5 + 0.2 * Math.sin(t * 1.5 + i)) + ')'; x.lineWidth = 0.8; x.strokeRect(ox - sw / 2, oy - sh / 2, sw, sh); }
     }
     x.fillStyle = '#000'; x.fillRect(-w / 2, -h / 2, w, h);
     var eg = x.createLinearGradient(-w / 2, 0, w / 2, 0); eg.addColorStop(0, 'rgba(255,255,255,0.14)'); eg.addColorStop(0.12, 'rgba(255,255,255,0.02)'); eg.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = eg; x.fillRect(-w / 2, -h / 2, w, h);
-    x.strokeStyle = 'rgba(220,225,255,' + (a.open ? 0.95 : 0.5) + ')'; x.lineWidth = 1; x.strokeRect(-w / 2, -h / 2, w, h);
-    // a glint that slides down the edge
+    // the edges brighten as its pulse gathers, and flare when it is released
+    x.strokeStyle = 'rgba(220,225,255,' + Math.min(1, (a.open ? 0.95 : 0.5) + chg * 0.45 + fl * 0.5) + ')'; x.lineWidth = 1 + chg * 0.8 + fl; x.strokeRect(-w / 2, -h / 2, w, h);
     x.globalCompositeOperation = 'lighter'; var gy = -h / 2 + ((t * 0.25 + a.id * 0.13) % 1) * h; this.glowAt(-w / 2, gy, Math.max(3, w * 0.35), '#e8e4ff', 0.7, 0);
+    if (chg > 0) { this.glowAt(0, 0, h * (0.6 + 0.6 * chg), '#b8b0ff', 0.12 + 0.3 * chg * chg, 1); for (i = 0; i < 4; i++) { var cq = t * 1.7 + i * TAU / 4; this.glowAt(Math.cos(cq) * w * (1.4 - chg), Math.sin(cq) * h * 0.5 * (1.2 - chg), Math.max(2, w * 0.2), '#e8e4ff', 0.6 * chg, 0); } }
+    if (fl > 0) this.glowAt(0, 0, h * (1 + fl), '#ffffff', 0.45 * fl, 1);
     if (a.open) { var g2 = x.createLinearGradient(0, -h / 2, 0, h / 2); g2.addColorStop(0, 'rgba(160,140,255,0)'); g2.addColorStop(0.5, 'rgba(255,255,255,0.95)'); g2.addColorStop(1, 'rgba(160,140,255,0)'); x.fillStyle = g2; x.fillRect(-w * 0.06, -h / 2, w * 0.12, h); this.glowAt(0, 0, h * 1.1, '#c8c0ff', 0.55, 1); }
-    x.globalCompositeOperation = 'source-over';
+    x.globalCompositeOperation = 'source-over'; S.dang = 0;
   } else {
-    var spin = a.type === 'hydra' ? t * 0.9 + a.id : a.type === 'mender' ? t * 0.4 : ang;
-    if (a.type === 'siege' && a.sieging) spin = Math.atan2((this.ey - a.y) * TILT, this.ex - a.x);
-    x.rotate(spin);
-    SHAPES[a.type](x, r, t);
+    var spin = ty === 'hydra' ? t * 0.9 + a.id + chg * 1.2 : ty === 'mender' ? t * 0.4 + a.id : ang;
+    if (ty === 'siege' && a.sieging) spin = Math.atan2((this.ey - a.y) * TILT, this.ex - a.x);
+    x.rotate(spin); S.dang = spin;
+    var bank = spinner ? 0 : (S.bank || 0), ab = Math.abs(bank);
+    if (ab > 0.01) x.scale(1, 1 - Math.min(0.3, ab * 0.3)); // the hull foreshortens as it rolls into a turn
+    if (ty === 'mender') { var br = 1 + 0.06 * Math.sin(t * 2 + ph); x.scale(br, br); }
+    // articulation: wings flex with thrust and turns, the Phantom's wings beat, the Bombard's fins open when it digs in
+    var art = ty === 'drone' ? 1 + 0.07 * Math.sin(t * 9 + ph) - ab * 0.12 : ty === 'raider' ? 1.05 - 0.15 * Math.min(1, thr) + 0.03 * Math.sin(t * 6 + ph) : ty === 'cruiser' ? 1 - ab * 0.15 + 0.03 * Math.sin(t * 3 + ph)
+      : ty === 'phantom' ? 1 + 0.09 * Math.sin(t * 2.4 + ph) : ty === 'siege' ? 1 + 0.2 * (S.dep || 0) : 1;
+    SHAPES[ty](x, r, t, art);
     x.fillStyle = hullFill(x, r, col); x.fill('evenodd');
     x.strokeStyle = col; x.lineWidth = lw; x.globalAlpha = alpha * 0.9; x.stroke(); x.globalAlpha = alpha;
-    // luminous details
     x.globalCompositeOperation = 'lighter'; x.lineWidth = Math.max(0.5, lw * 0.6);
-    switch (a.type) {
-      case 'drone': this.glowAt(r * 0.35, 0, Math.max(1.5, r * 0.4), col, 0.8, 0); break;
-      case 'raider': x.strokeStyle = 'rgba(255,255,255,0.5)'; x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(-r * 0.4, 0); x.stroke(); break;
-      case 'cruiser': x.strokeStyle = col; x.globalAlpha = 0.7; x.beginPath(); x.moveTo(r * 1.0, 0); x.lineTo(-r * 0.8, 0); x.stroke(); x.globalAlpha = 1; this.glowAt(r * 0.5, 0, r * 0.35, '#fff', 0.6, 0); break;
-      case 'aegis': if (a.sh > 0) { x.strokeStyle = 'rgba(111,182,255,' + (0.2 + 0.55 * a.sh / a.shMax) + ')'; x.lineWidth = Math.max(0.7, r * 0.08); x.beginPath(); x.arc(0, 0, r * 1.55 + Math.sin(t * 5) * 0.4, -1.2, 1.2); x.stroke(); x.globalAlpha = 0.4; x.beginPath(); x.arc(0, 0, r * 1.55, 1.9, 4.4); x.stroke(); x.globalAlpha = 1; } break;
-      case 'dread': x.strokeStyle = col; x.globalAlpha = 0.55; for (i = -1; i <= 1; i += 2) { x.beginPath(); x.moveTo(r * 0.9, i * r * 0.12); x.lineTo(-r * 0.2, i * r * 0.62); x.stroke(); } x.globalAlpha = 1; this.glowAt(r * 0.4, 0, r * 0.3, '#ffe0c0', 0.7, 0); break;
-      case 'phantom': x.strokeStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, r * 0.6, -r * 0.8, r * 0.75); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, -r * 0.6, -r * 0.8, -r * 0.75); x.stroke(); break;
-      case 'hydra': this.glowAt(0, 0, r * 0.5, col, 0.9, 0); break;
-      case 'mender': var mp = (t * 0.7 + a.id * 0.17) % 1; x.strokeStyle = 'rgba(94,255,232,' + (0.4 * (1 - mp)) + ')'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r + mp * 42 * z * 0.9, 0, TAU); x.stroke(); x.strokeStyle = col; x.globalAlpha = 0.8; x.beginPath(); x.arc(0, 0, r * 1.1, 0, TAU); x.stroke(); x.globalAlpha = 1; this.glowAt(0, 0, r * 0.4, '#fff', 0.7, 0); break;
-      case 'prism': var cols = ['#ff5a7a', '#5affb0', '#5a8aff']; for (i = 0; i < 3; i++) { var pa = t * 1.6 + i * 2.1 + a.id; this.glowAt(Math.cos(pa) * r * 0.5, Math.sin(pa) * r * 0.35, r * 0.35, cols[i], 0.7, 0); }
-        x.strokeStyle = 'rgba(255,255,255,0.4)'; x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(-r * 1.0, 0); x.moveTo(r * 0.15, r * 0.7); x.lineTo(r * 0.15, -r * 0.7); x.stroke(); break;
-      case 'carrier': for (i = 0; i < 5; i++) { x.fillStyle = 'rgba(255,90,150,' + (0.45 + 0.45 * Math.sin(t * 4 + i)) + ')'; x.fillRect(-r * 0.85 + i * r * 0.4, r * 0.28, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); x.fillRect(-r * 0.85 + i * r * 0.4, -r * 0.36, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); } break;
-      case 'siege': if (a.sieging) this.glowAt(r * 1.7, 0, r * 1.0, '#ff5a3a', 0.55 + 0.35 * Math.sin(t * 6), 1); else this.glowAt(r * 1.7, 0, r * 0.3, '#ff8a6a', 0.6, 0); break;
-      case 'leviathan': x.strokeStyle = col; for (i = -3; i <= 3; i++) { var lx = i * r * 0.3; x.globalAlpha = 0.35; x.beginPath(); x.moveTo(lx + r * 0.08, -r * 0.48 * Math.cos(i / 4.2)); x.quadraticCurveTo(lx - r * 0.06, 0, lx + r * 0.08, r * 0.48 * Math.cos(i / 4.2)); x.stroke(); }
-        x.globalAlpha = 1; for (i = 0; i < 7; i++) { x.fillStyle = 'rgba(255,170,90,' + (0.35 + 0.4 * Math.sin(t * 3 + i)) + ')'; x.beginPath(); x.arc(-r * 0.9 + i * r * 0.3, r * 0.05 * Math.sin(i), Math.max(0.7, r * 0.04), 0, TAU); x.fill(); }
-        this.glowAt(r * 0.95, 0, r * 0.25, '#fff2d0', 0.8, 0); for (i = -1; i <= 1; i += 2) this.glowAt(-r * 1.3, i * r * 0.22, r * 0.35, col, 0.8, 0); break;
+    // the wing lifted by the roll catches the light
+    if (ab > 0.08 && !cloaked) { var sg = bank > 0 ? -1 : 1; x.strokeStyle = 'rgba(255,255,255,' + Math.min(0.4, ab * 0.55) + ')'; x.beginPath(); x.moveTo(r * 1.1, 0); x.quadraticCurveTo(0, sg * r * 0.4, -r * 0.85, sg * r * 0.6); x.stroke(); }
+    // luminous details and operating animations
+    var p1 = 0.5 + 0.5 * Math.sin(t * 4 + ph), on;
+    switch (ty) {
+      case 'drone': this.glowAt(r * 0.35, 0, Math.max(1.5, r * 0.4), col, 0.55 + 0.35 * p1, 0);
+        on = Math.sin(t * 5 + ph) > 0; this.glowAt(-r * 0.9, r * 0.58 * art, Math.max(1, r * 0.22), on ? '#ffffff' : col, on ? 0.8 : 0.2, 0); this.glowAt(-r * 0.9, -r * 0.58 * art, Math.max(1, r * 0.22), on ? col : '#ffffff', on ? 0.2 : 0.8, 0); break;
+      case 'raider': x.strokeStyle = 'rgba(255,255,255,0.5)'; x.beginPath(); x.moveTo(r * 1.3, 0); x.lineTo(-r * 0.4, 0); x.stroke();
+        this.glowAt(r * 1.3 - ((t * 1.4 + ph) % 1) * r * 1.7, 0, Math.max(1.2, r * 0.3), '#ffffff', 0.6, 0);
+        on = ((t * 1.3 + ph) % 1) < 0.09; var rbx = -r * (0.9 + (1 - art) * 0.7), rby = r * 0.95 * art; this.glowAt(rbx, rby, Math.max(1, r * 0.25), '#fff6c0', on ? 0.95 : 0.15, 0); this.glowAt(rbx, -rby, Math.max(1, r * 0.25), '#fff6c0', on ? 0.95 : 0.15, 0); break;
+      case 'cruiser': x.strokeStyle = col; x.globalAlpha = 0.7; x.beginPath(); x.moveTo(r * 1.0, 0); x.lineTo(-r * 0.8, 0); x.stroke(); x.globalAlpha = 1; this.glowAt(r * 0.5, 0, r * 0.35, '#fff', 0.45 + 0.25 * p1, 0);
+        if (hi && !cloaked) { var sc = Math.sin(t * 1.1 + ph) * 0.45; x.fillStyle = col; x.globalAlpha = 0.07 + 0.05 * chg; x.beginPath(); x.moveTo(r * 1.4, 0); x.lineTo(r * 1.4 + Math.cos(sc - 0.13) * r * 3.4, Math.sin(sc - 0.13) * r * 3.4); x.lineTo(r * 1.4 + Math.cos(sc + 0.13) * r * 3.4, Math.sin(sc + 0.13) * r * 3.4); x.closePath(); x.fill(); x.globalAlpha = 1; }
+        for (i = 0; i < 3; i++) { on = (((t * 1.8 + ph - i * 0.3) % 1) + 1) % 1 < 0.22; this.glowAt(r * (0.55 - i * 0.55), r * 0.3, Math.max(0.9, r * 0.14), '#ffd0f0', on ? 0.85 : 0.15, 0); this.glowAt(r * (0.55 - i * 0.55), -r * 0.3, Math.max(0.9, r * 0.14), '#ffd0f0', on ? 0.85 : 0.15, 0); } break;
+      case 'aegis': this.glowAt(0, 0, r * 0.3, '#cfe6ff', 0.5 + 0.3 * p1, 0);
+        x.strokeStyle = 'rgba(160,210,255,0.5)'; x.beginPath(); x.ellipse(0, 0, r * 0.45, r * 0.45 * Math.abs(Math.cos(t * 2.5 + ph)) + 0.1, 0, 0, TAU); x.stroke();
+        if (a.sh > 0) { var sf = a.sh / a.shMax, sr = r * 1.55 + Math.sin(t * 5 + ph) * 0.4, sj = 0.85 + 0.15 * Math.sin(t * 23 + ph);
+          x.strokeStyle = 'rgba(111,182,255,' + (0.2 + 0.5 * sf) * sj + ')'; x.lineWidth = Math.max(0.7, r * 0.08); x.beginPath(); x.arc(0, 0, sr, -1.2, 1.2); x.stroke(); x.globalAlpha = 0.4; x.beginPath(); x.arc(0, 0, sr, 1.9, 4.4); x.stroke(); x.globalAlpha = 1;
+          var s0 = t * 2.2 + ph; x.strokeStyle = 'rgba(220,240,255,' + 0.55 * sf + ')'; x.beginPath(); x.arc(0, 0, sr, s0, s0 + 0.5); x.stroke();
+          if (hi) for (i = 0; i < 3; i++) { var gk = hash(i + a.id, Math.floor(t * 4 + i * 0.37)), ga = gk * TAU; this.glowAt(Math.cos(ga) * sr, Math.sin(ga) * sr, Math.max(1.2, r * 0.3), '#cfe8ff', 0.6 * sf * (1 - ((t * 4 + i * 0.37) % 1)), 0); } }
+        break;
+      case 'dread': x.strokeStyle = col; x.globalAlpha = 0.55; for (i = -1; i <= 1; i += 2) { x.beginPath(); x.moveTo(r * 0.9, i * r * 0.12); x.lineTo(-r * 0.2, i * r * 0.62); x.stroke(); } x.globalAlpha = 1; this.glowAt(r * 0.4, 0, r * 0.3, '#ffe0c0', 0.5 + 0.3 * p1, 0);
+        for (i = 0; i < 4; i++) { var du = i / 3; on = (((t * 1.5 + ph - du) % 1) + 1) % 1 < 0.2; var dlx = r * (0.9 - 1.1 * du), dly = r * (0.12 + 0.5 * du); this.glowAt(dlx, dly, Math.max(0.9, r * 0.12), '#ffd0a0', on ? 0.9 : 0.12, 0); this.glowAt(dlx, -dly, Math.max(0.9, r * 0.12), '#ffd0a0', on ? 0.9 : 0.12, 0); }
+        var tu = chg > 0 ? 0 : Math.sin(t * 0.7 + ph) * 0.9; x.strokeStyle = 'rgba(255,220,190,0.7)'; x.lineWidth = Math.max(0.6, r * 0.08); x.beginPath(); x.moveTo(-r * 0.1, 0); x.lineTo(-r * 0.1 + Math.cos(tu) * r * 0.45, Math.sin(tu) * r * 0.45); x.stroke();
+        for (i = -1; i <= 1; i += 2) this.glowAt(-r * 0.85, i * r * 0.22, r * 0.28, '#ff8a4a', 0.25 + 0.25 * Math.sin(t * 3 + ph + i), 0); break;
+      case 'phantom': x.strokeStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, r * 0.6 * art, -r * 0.8, r * 0.75 * art); x.moveTo(r * 0.8, 0); x.quadraticCurveTo(-r * 0.2, -r * 0.6 * art, -r * 0.8, -r * 0.75 * art); x.stroke();
+        for (i = 0; i < 2; i++) { var pu = (t * 0.7 + ph + i * 0.5) % 1, m1 = 1 - pu, qx = m1 * m1 * r * 0.8 + 2 * m1 * pu * -r * 0.2 + pu * pu * -r * 0.8, qy = (2 * m1 * pu * r * 0.6 + pu * pu * r * 0.75) * art, pa2 = 0.8 * Math.sin(Math.PI * pu) * (cloaked ? 0.5 : 1);
+          this.glowAt(qx, qy, Math.max(1.2, r * 0.28), col, pa2, 0); this.glowAt(qx, -qy, Math.max(1.2, r * 0.28), col, pa2, 0); }
+        if (cloaked) { x.globalAlpha = 0.12 + 0.1 * Math.sin(t * 9 + ph); x.strokeStyle = '#e8e0ff'; x.save(); x.scale(1.1, 1.1); SHAPES.phantom(x, r, t, art); x.stroke(); x.restore(); x.globalAlpha = alpha; } break;
+      case 'hydra': this.glowAt(0, 0, r * 0.5, col, 0.7 + 0.25 * p1 + 0.3 * chg, 0);
+        for (i = 0; i < 3; i++) { var ha = i * TAU / 3; this.glowAt(Math.cos(ha) * r * 1.12, Math.sin(ha) * r * 1.12, Math.max(1, r * 0.22), '#e8ffc0', 0.35 + 0.3 * Math.sin(t * 4 + i * 2 + ph), 0); } break;
+      case 'mender': var mp = (t * 0.7 + a.id * 0.17) % 1; x.strokeStyle = 'rgba(94,255,232,' + (0.4 * (1 - mp)) + ')'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r + mp * 42 * z * 0.9, 0, TAU); x.stroke(); x.strokeStyle = col; x.globalAlpha = 0.8; x.beginPath(); x.arc(0, 0, r * 1.1, 0, TAU); x.stroke(); x.globalAlpha = 1; this.glowAt(0, 0, r * 0.4, '#fff', 0.5 + 0.3 * p1, 0);
+        for (i = 0; i < 4; i++) { var ma = i * TAU / 4 + TAU / 8; this.glowAt(Math.cos(ma) * r * 0.95, Math.sin(ma) * r * 0.95, Math.max(1, r * 0.16), col, 0.3 + 0.5 * Math.max(0, Math.sin(t * 3 - i * 1.57 + ph)), 0); } break;
+      case 'prism': var cols = ['#ff5a7a', '#5affb0', '#5a8aff']; for (i = 0; i < 3; i++) { var pa = t * 1.6 + i * 2.1 + a.id; this.glowAt(Math.cos(pa) * r * 0.5, Math.sin(pa) * r * 0.35, r * 0.35, cols[i], 0.6 + 0.3 * chg, 0); }
+        x.strokeStyle = 'rgba(255,255,255,0.4)'; x.beginPath(); x.moveTo(r * 1.2, 0); x.lineTo(-r * 1.0, 0); x.moveTo(r * 0.15, r * 0.7); x.lineTo(r * 0.15, -r * 0.7); x.stroke();
+        var rl = t * 0.8 + ph; x.strokeStyle = 'rgba(255,255,255,0.22)'; x.beginPath(); x.moveTo(Math.cos(rl) * r * 0.7, Math.sin(rl) * r * 0.45); x.lineTo(-Math.cos(rl) * r * 0.7, -Math.sin(rl) * r * 0.45); x.stroke();
+        var gl = (t * 0.45 + ph) % 1; if (gl < 0.12) this.glowAt(r * 0.15, (gl < 0.06 ? -1 : 1) * r * 0.62, r * 0.5, '#ffffff', 0.8 * Math.sin(Math.PI * gl / 0.12), 0); break;
+      case 'carrier': for (i = 0; i < 5; i++) { x.fillStyle = 'rgba(255,90,150,' + (0.45 + 0.45 * Math.sin(t * 4 + i)) + ')'; x.fillRect(-r * 0.85 + i * r * 0.4, r * 0.28, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); x.fillRect(-r * 0.85 + i * r * 0.4, -r * 0.36, Math.max(1, r * 0.12), Math.max(1, r * 0.08)); }
+        var bay = Math.max(S.bay || 0, S.bayFlash || 0); if (bay > 0) for (i = -1; i <= 1; i += 2) { this.glowAt(-r * 0.1, i * r * 0.32, r * (0.3 + 0.6 * bay), '#ff7ab0', 0.7 * bay, 0); x.strokeStyle = 'rgba(255,170,210,' + 0.8 * bay + ')'; x.beginPath(); x.moveTo(-r * 0.6, i * r * 0.32); x.lineTo(r * 0.4, i * r * 0.32); x.stroke(); }
+        var bc = t * 2.2 + ph; x.strokeStyle = 'rgba(255,200,225,0.35)'; x.beginPath(); x.moveTo(r * 0.7, 0); x.lineTo(r * 0.7 + Math.cos(bc) * r * 0.5, Math.sin(bc) * r * 0.5); x.stroke(); this.glowAt(r * 0.7, 0, Math.max(1, r * 0.15), '#ffe0ee', 0.7, 0); break;
+      case 'siege': if (a.sieging) this.glowAt(r * 1.7, 0, r * (0.7 + 0.8 * chg), '#ff5a3a', 0.35 + 0.25 * Math.sin(t * 6) + 0.4 * chg, 1); else this.glowAt(r * 1.7, 0, r * 0.3, '#ff8a6a', 0.6, 0);
+        if (S.heat > 0) { x.strokeStyle = 'rgba(255,' + (110 + 100 * S.heat) + ',60,' + 0.7 * S.heat + ')'; x.lineWidth = Math.max(0.6, r * 0.12); x.beginPath(); x.moveTo(r * 0.3, 0); x.lineTo(r * 1.7, 0); x.stroke(); }
+        if (S.dep > 0.05) for (i = -1; i <= 1; i += 2) this.glowAt(-r * 1.05, i * r * 0.75 * art, Math.max(1, r * 0.18), '#ffb090', 0.6 * S.dep * (0.6 + 0.4 * Math.sin(t * 3 + i)), 0); break;
+      case 'leviathan': var rb = 1 + 0.07 * Math.sin(t * 1.3 + ph); x.strokeStyle = col; for (i = -3; i <= 3; i++) { var lx = i * r * 0.3; x.globalAlpha = 0.35; x.beginPath(); x.moveTo(lx + r * 0.08, -r * 0.48 * rb * Math.cos(i / 4.2)); x.quadraticCurveTo(lx - r * 0.06, 0, lx + r * 0.08, r * 0.48 * rb * Math.cos(i / 4.2)); x.stroke(); }
+        x.globalAlpha = 1; for (i = 0; i < 7; i++) { x.fillStyle = 'rgba(255,170,90,' + (0.35 + 0.4 * Math.sin(t * 3 - i * 0.8)) + ')'; x.beginPath(); x.arc(-r * 0.9 + i * r * 0.3, r * 0.05 * Math.sin(i), Math.max(0.7, r * 0.04), 0, TAU); x.fill(); }
+        this.glowAt(r * 0.95, 0, r * 0.25, '#fff2d0', 0.8, 0); for (i = -1; i <= 1; i += 2) this.glowAt(-r * 1.3, i * r * 0.22, r * 0.35 * flick, col, 0.8, 0);
+        var lb = Math.max(S.bay || 0, S.bayFlash || 0); if (lb > 0) this.glowAt(-r * 0.1, 0, r * (0.3 + 0.5 * lb), '#ffc080', 0.6 * lb, 1); break;
+    }
+    // weapon charge-up (light gathering at the muzzle) and the muzzle flash
+    var nz = NOSE[ty] === undefined ? 1.2 : NOSE[ty], bs = BAR[ty] || 0;
+    if ((chg > 0 || fl > 0) && !cloaked) for (var bi = 0; bi < (bs ? 2 : 1); bi++) {
+      var my = bs ? (bi ? 1 : -1) * bs * r : 0, mx = nz * r;
+      if (chg > 0 && ty !== 'siege') { this.glowAt(mx, my, Math.max(1.5, r * (0.25 + 0.6 * chg)), col, 0.25 + 0.6 * chg, 0); if (hi) for (i = 0; i < 3; i++) { var cq2 = t * 9 + i * 2.1 + ph, cr = r * (0.2 + 1.1 * (1 - chg)); this.glowAt(mx + Math.cos(cq2) * cr, my + Math.sin(cq2) * cr, Math.max(0.8, r * 0.13), '#ffffff', 0.8 * chg, 0); } }
+      if (fl > 0) { this.glowAt(mx, my, Math.max(2, r * (0.5 + 1.1 * fl)), '#ffffff', 0.85 * fl, 0); x.strokeStyle = 'rgba(255,255,255,' + 0.7 * fl + ')'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(mx - r * 0.3, my); x.lineTo(mx + r * (0.6 + 1.6 * fl), my); x.moveTo(mx, my - r * 0.7 * fl); x.lineTo(mx, my + r * 0.7 * fl); x.stroke(); }
     }
     x.globalCompositeOperation = 'source-over';
   }
@@ -417,6 +572,58 @@ R.drawAlien = function (a, t) {
     x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(s.x - bw / 2, byy, bw, 2);
     x.fillStyle = ad.boss ? '#fff' : '#ff8fb0'; x.fillRect(s.x - bw / 2, byy, bw * Math.max(0, a.hp / a.hpMax), 2);
     if (a.shMax) { x.fillStyle = '#6fb6ff'; x.fillRect(s.x - bw / 2, byy - 2.5, bw * Math.max(0, a.sh / a.shMax), 1.5); }
+  }
+};
+
+/* ---------- destruction: the hull breaks into wedge-shaped shards that tumble away, their fractures glowing and cooling ---------- */
+function hullPath(x, type, r, t) {
+  var ad = D.ALIENS[type];
+  if (ad.mono) { var h = r * 2.4, w = h * (4 / 9); x.beginPath(); x.rect(-w / 2, -h / 2, w, h); return; }
+  SHAPES[type](x, r, t, 1);
+}
+R.wreck = function (e, sc) {
+  var ad = D.ALIENS[e.type]; if (!ad || e.x === undefined) return;
+  var hi = this.quality !== 'low', S = (e.id && this.anim[e.id]) || NOANIM, boss = !!ad.boss;
+  var cap = hi ? 16 : 8; while (this.wrecks.length >= cap) { var k = 0; while (k < this.wrecks.length - 1 && this.wrecks[k].boss) k++; this.wrecks.splice(k, 1); }
+  var n = boss ? 9 : ad.cost < 2 ? 3 : ad.cost < 6 ? 4 : ad.cost < 15 ? 5 : 6; if (!hi) n = Math.min(n, boss ? 5 : 3);
+  var ps = [], a0 = Math.random() * TAU, sp = (boss ? 7 : 7 + ad.r * 0.9) * (sc || 1);
+  for (var i = 0; i < n; i++) {
+    var w0 = a0 + i * TAU / n + (i ? (Math.random() - 0.5) * 0.5 * TAU / n : 0), w1 = a0 + (i + 1) * TAU / n + (i < n - 1 ? (Math.random() - 0.5) * 0.5 * TAU / n : 0), mid = (w0 + w1) / 2, v = sp * (0.55 + Math.random() * 0.8);
+    ps.push({ a0: w0, a1: w1, m: mid, vx: Math.cos(mid) * v, vy: Math.sin(mid) * v, vr: (Math.random() - 0.5) * (boss ? 1.6 : 8) });
+  }
+  var pops = []; if (ad.cost >= 8) for (i = 0; i < (boss ? 6 : ad.cost >= 14 ? 2 : 1); i++) pops.push({ t: 0.18 + Math.random() * (boss ? 2.2 : 0.5), p: (Math.random() * n) | 0 });
+  this.wrecks.push({ type: e.type, x: e.x, y: e.y, ang: S.dang !== undefined ? S.dang : (S.ang !== undefined ? S.ang : Math.random() * TAU), t: 0, life: boss ? 4.5 : 1.25 + ad.r * 0.07, boss: boss, p: ps, pops: pops, col: ad.col });
+  // a scatter of slow embers that drift and cool after the bright sparks are gone
+  this.spark(e.x, e.y, '#ffb070', boss ? 50 : Math.round(Math.min(10, 3 + ad.r) * (this.wrecks.length > 8 ? 0.4 : 1)), (boss ? 30 : 10 + ad.r * 1.5) * (sc || 1), boss ? 3 : 1.6, boss ? 1.2 : 0.6);
+};
+R.drawWrecks = function (dt, t) {
+  var x = this.x, z = this.cam.z, i, j, nw = this.wrecks.length;
+  for (i = this.wrecks.length - 1; i >= 0; i--) {
+    var w = this.wrecks[i]; w.t += dt; if (w.t > w.life) { this.wrecks.splice(i, 1); continue; }
+    var ad = D.ALIENS[w.type], s = this.toScreen(w.x, w.y), r = Math.max(ad.boss ? 6 : 2.4, ad.r * Math.max(0.9, z) * 0.8);
+    if (s.x < -150 || s.y < -150 || s.x > this.W + 150 || s.y > this.H + 150) continue;
+    var f = w.t / w.life, brk = 0.08, tt = Math.max(0, w.t - brk), dd = (1 - Math.exp(-tt * 1.4)) / 1.4, heat = Math.max(0, 1 - f * 1.5), fade = f < 0.55 ? 1 : 1 - (f - 0.55) / 0.45;
+    var ca = Math.cos(w.ang), sa = Math.sin(w.ang), R2 = r * 3;
+    // the flash of the reactor letting go
+    x.globalCompositeOperation = 'lighter';
+    if (w.t < 0.3) { var q = w.t / 0.3; this.glowAt(s.x, s.y, r * (1.5 + 3.5 * q), '#ffffff', 0.9 * (1 - q), 0); this.glowAt(s.x, s.y, r * (3 + 5 * q), w.col, 0.5 * (1 - q), 1); }
+    x.globalCompositeOperation = 'source-over';
+    for (j = 0; j < w.p.length; j++) {
+      var p = w.p[j], lx = p.vx * dd, ly = p.vy * dd, ox = (ca * lx - sa * ly) * z, oy = (sa * lx + ca * ly) * z, cx = Math.cos(p.m) * r * 0.45, cy = Math.sin(p.m) * r * 0.45;
+      x.save(); x.translate(s.x + ox, s.y + oy); x.rotate(w.ang); x.translate(cx, cy); x.rotate(p.vr * dd * 0.5); x.translate(-cx, -cy);
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(p.a0) * R2, Math.sin(p.a0) * R2); x.lineTo(Math.cos(p.m) * R2 * 1.2, Math.sin(p.m) * R2 * 1.2); x.lineTo(Math.cos(p.a1) * R2, Math.sin(p.a1) * R2); x.closePath(); x.clip();
+      hullPath(x, w.type, r, t); x.globalAlpha = fade; x.fillStyle = hullFill(x, r, w.col); x.fill('evenodd');
+      x.strokeStyle = w.col; x.lineWidth = Math.max(0.6, r * 0.09); x.globalAlpha = fade * (0.35 + 0.55 * heat); x.stroke();
+      // glowing fracture lines, white-hot at first and cooling to a dull ember
+      x.globalCompositeOperation = 'lighter'; var FL = r * 0.95; x.beginPath(); x.moveTo(Math.cos(p.a0) * FL, Math.sin(p.a0) * FL); x.lineTo(0, 0); x.lineTo(Math.cos(p.a1) * FL, Math.sin(p.a1) * FL);
+      x.strokeStyle = 'rgba(255,' + Math.round(120 + 135 * heat) + ',' + Math.round(50 + 180 * heat * heat) + ',' + (fade * Math.max(0.12, heat)) + ')'; x.lineWidth = Math.max(0.7, r * (0.1 + 0.1 * heat)); x.globalAlpha = 1; x.stroke();
+      if (heat > 0.05 && nw < 9) this.glowAt(cx * 0.6, cy * 0.6, Math.max(1.5, r * 0.4), '#ff9a50', 0.5 * heat * fade, 0);
+      x.restore();
+    }
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    // secondary detonations among the larger wrecks
+    for (j = 0; j < w.pops.length; j++) { var pp = w.pops[j]; if (pp.done || w.t < pp.t) continue; pp.done = 1; var pc = w.p[pp.p], ddd = (1 - Math.exp(-Math.max(0, pp.t - brk) * 1.4)) / 1.4, plx = pc.vx * ddd, ply = pc.vy * ddd;
+      var wx = w.x + (ca * plx - sa * ply), wy = w.y + (sa * plx + ca * ply) / TILT; this.spark(wx, wy, '#ffcf7a', w.boss ? 14 : 6, w.boss ? 40 : 20, 0.6, w.boss ? 1.4 : 0.8); this.ring(wx, wy, w.boss ? 14 : ad.r * 1.4, w.col, 0.45, 1.2); this.sfx({ k: 'epop', type: w.type, x: wx, boss: w.boss }); }
   }
 };
 
@@ -534,7 +741,9 @@ R.frame = function (sim, dt, ui) {
     var ss = this.toScreen(sp2.x, sp2.y); x.strokeStyle = '#fff'; x.lineWidth = 1; x.beginPath(); x.arc(ss.x, ss.y, 11 + Math.sin(t * 4), 0, TAU); x.stroke();
   }
   // aliens
+  this.animStep(sim, dt);
   for (i = 0; i < sim.aliens.length; i++) this.drawAlien(sim.aliens[i], t);
+  this.drawWrecks(dt, t); this.drawBolts(dt);
   this.drawBeams(sim, t);
   // sunfire wave
   if (sim.sunfire) { x.globalCompositeOperation = 'lighter'; this.ell(0, 0, sim.sunfire.r); x.strokeStyle = 'rgba(255,170,80,0.7)'; x.lineWidth = 10 * c.z; x.stroke(); x.strokeStyle = 'rgba(255,240,200,0.9)'; x.lineWidth = 2; x.stroke(); x.globalCompositeOperation = 'source-over'; }
