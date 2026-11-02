@@ -90,6 +90,7 @@ function buildLegacy() {
 function buildSettings() {
   [['vMaster', 'master'], ['vMusic', 'music'], ['vSfx', 'sfx']].forEach(function (p) { var el = $(p[0]); el.value = save.set[p[1]]; el.setAttribute('data-nav', ''); el.oninput = function () { save.set[p[1]] = +el.value; applySettings(); persist(); }; el.onchange = function () { AU.sfxEvent({ k: 'ui' }); }; });
   [['sQual', 'qual'], ['sPaths', 'paths'], ['sLabels', 'labels'], ['sMusic', 'mus']].forEach(function (p) { var el = $(p[0]); el.value = save.set[p[1]]; el.setAttribute('data-nav', ''); el.onchange = function () { save.set[p[1]] = el.value; applySettings(); persist(); }; });
+  $('musNext').setAttribute('data-nav', ''); $('musNext').onclick = function () { musicNext(); this.blur(); };
   $('resetSave').onclick = function () { if (!confirm('Erase all chapters, stars and legacy?')) return; var st = save.set; save = defSave(); save.set = st; persist(); toast('PROGRESS ERASED'); };
 }
 function buildCredits() {
@@ -99,6 +100,9 @@ function buildCredits() {
   }).join('<br><br>') + '<br><br>Full sources in <i>music/CREDITS.md</i>. If the recordings cannot play, an original synthesized score takes over.<br><br><b>GAME</b> — design, code, art and sound effects made for the Behram Arcade. All sound effects are synthesized live.';
 }
 function musicToggle() { save.set.mus = save.set.mus === '0' ? '1' : '0'; persist(); applySettings(); toast(save.set.mus === '0' ? 'MUSIC MUTED · M' : 'MUSIC ON · M'); if ($('sMusic')) $('sMusic').value = save.set.mus; }
+/* skip to the next piece; also the cure-all if the music has stopped (fresh audio elements, context resumed) */
+function musicNext() { if (save.set.mus === '0') { musicToggle(); return; } AU.restartMusic(true); toast('♪ NEXT PIECE · N'); }
+var blockedToastT = 0; AU.onBlocked = function () { var n = Date.now(); if (n - blockedToastT < 15000) return; blockedToastT = n; toast('SOUND PAUSED BY THE DEVICE · TAP TO RESUME'); };
 AU.onTrack = function (t) { var el = $('nowPlaying'); el.innerHTML = '♪ <b>' + t.t + '</b> — ' + t.c + '<small>' + t.p + '</small>'; el.className = ''; void el.offsetWidth; el.className = 'on'; };
 function buildHow() {
   $('howtxt').innerHTML = [
@@ -109,7 +113,7 @@ function buildHow() {
     '<b>RESEARCH</b> unlocks lasers, gravity wells, EMP, the solar lance, shields, carriers, radar, propulsion to the outer worlds, a doctrine and a super-weapon (choose one of each). Xenobiology needs specimens: kill enough of a species first. Open the tree with R: arrows lead from each prerequisite, amber OR lines mark either-or choices, and you can drag, pinch or use + / − to zoom.',
     '<b>UPGRADES.</b> Each structure has three levels, then a branching fourth: choose A or B. Read the invaders: lasers melt shields but bounce off Prisms; slugs crack Dreadnought armour; splash clears swarms; radar reveals Phantoms; Menders must die first.',
     '<b>SUPER-WEAPON.</b> Charges with time and kills. Press ENTER (gamepad Y) during a wave.',
-    '<b>KEYBOARD</b> Space launch wave / quick pause · Enter super-weapon · arrows / Tab select site · 1–9 build or choose · U upgrade · A / B branch · X sell · T targeting · R research · F speed · H recentre · M music on / off · + / − zoom · Esc pause',
+    '<b>KEYBOARD</b> Space launch wave / quick pause · Enter super-weapon · arrows / Tab select site · 1–9 build or choose · U upgrade · A / B branch · X sell · T targeting · R research · F speed · H recentre · M music on / off · N next music piece (restarts music if it stopped) · + / − zoom · Esc pause',
     '<b>MOUSE &amp; TOUCH</b> click / tap to select · drag to pan · wheel / pinch to zoom',
     '<b>GAMEPAD</b> stick / d-pad select site · LB / RB choose option · A confirm · B back · X launch wave · Y super-weapon · right stick pan · LT / RT zoom · Start pause · Select research'
   ].map(function (p) { return '<p>' + p + '</p>'; }).join('');
@@ -157,6 +161,7 @@ function openPause() { if (state !== 'game') return; setState('pause'); var l = 
   l.appendChild(mkBtn('RESTART CHAPTER', '', function () { var si = sim.sectorIdx; startGame(si < 0 ? 'endless' : si, sim.diffId); }));
   l.appendChild(mkBtn('HOW TO PLAY', '', function () { backTo = 'pause'; setState('howto'); buildHow(); }));
   l.appendChild(mkBtn('SETTINGS', '', function () { backTo = 'pause'; setState('settings'); buildSettings(); }));
+  l.appendChild(mkBtn('NEXT MUSIC PIECE', 'restarts the music if it stopped · N', function () { musicNext(); }));
   l.appendChild(mkBtn('SAVE &amp; QUIT', sim.mode === 'wave' ? 'resumes from the start of this wave' : '', function () { toMenu(); }));
 }
 function resume() { setState('game'); }
@@ -449,6 +454,7 @@ document.addEventListener('keydown', function (e) {
   var k = e.key, code = e.code;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if ((k === 'm' || k === 'M') && state !== 'begin') { musicToggle(); return; }
+  if ((k === 'n' || k === 'N') && state !== 'begin' && state !== 'title') { musicNext(); return; }
   if (state === 'begin') { e.preventDefault(); begin(); return; }
   if (state === 'title') { e.preventDefault(); skipTitle(); return; }
   if (state === 'game') {

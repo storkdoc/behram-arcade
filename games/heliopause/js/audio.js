@@ -35,7 +35,14 @@ P.init = function () {
   this.noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate); var nd = this.noiseBuf.getChannelData(0); for (i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
   this.initMusic();
   var self = this; this.timer = setInterval(function () { self.tick(); }, 60);
-  document.addEventListener('visibilitychange', function () { if (!self.ctx) return; if (document.hidden) self.ctx.suspend(); else self.ctx.resume(); });
+  /* keep the context alive: we suspend it ourselves while the tab is hidden; anything else that stops it (an iOS
+     interruption such as a call, Siri, the lock screen, another app's audio, a Bluetooth change, or a resume() the
+     browser refused without a gesture) is undone on the next chance: becoming visible, focus, or any user input. */
+  document.addEventListener('visibilitychange', function () { if (!self.ctx) return; if (document.hidden) { self.ctx.suspend(); if (self.cur) self.cur.el.pause(); } else self.wake(); });
+  ['focus', 'pageshow'].forEach(function (ev) { window.addEventListener(ev, function () { self.wake(); }); });
+  ['pointerdown', 'pointerup', 'mousedown', 'touchend', 'click', 'keydown'].forEach(function (ev) { document.addEventListener(ev, function () { self.wake(true); }, true); });
+  c.onstatechange = function () { if (c.state !== 'running' && c.state !== 'closed' && !document.hidden) setTimeout(function () { self.wake(); }, 250); };
+  this.watchdog = setInterval(function () { try { self.watch(); } catch (e) { self.note('watchdog error ' + e); /* never let the watchdog die */ } }, 1500);
 };
 P.setVol = function (k, v) { this.vol[k] = v; if (!this.ctx) return; var t = this.ctx.currentTime; if (k === 'master') this.out.gain.setTargetAtTime(v, t, 0.05); if (k === 'music') { this.music.gain.setTargetAtTime(this.musicMuted ? 0 : v * 0.8, t, 0.05); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.05); } if (k === 'sfx') this.sfx.gain.setTargetAtTime(v * 0.7, t, 0.05); };
 P.drone = function (freqs, type, vol, dest) { var c = this.ctx, g = c.createGain(); g.gain.value = vol; g.connect(dest); freqs.forEach(function (f) { var o = c.createOscillator(); o.type = type; o.frequency.value = f; var og = c.createGain(); og.gain.value = 1 / freqs.length; o.connect(og); og.connect(g); o.start(); }); return g; };
@@ -60,47 +67,165 @@ var LISTS = { dawn: ['danube'], menu: ['danube', 'gymnopedie', 'clairdelune'], b
 var RESTART = { victory: 1, defeat: 1 };
 Audio.TRACKS = TRACKS;
 P.initMusic = function () {
-  var c = this.ctx, self = this; this.recOK = true; this.shown = {}; this.pos = {}; this.listIdx = {}; this.bad = {};
+  var self = this; this.recOK = true; this.shown = {}; this.pos = {}; this.listIdx = {}; this.bad = {}; this.rebuilds = 0; this.anOK = false; this.log = [];
+  var c = this.ctx;
   this.recBus = c.createGain(); this.recBus.gain.value = this.musicLevel(); this.duckG = c.createGain(); this.recBus.connect(this.duckG); this.duckG.connect(this.out);
-  this.decks = [0, 1].map(function (i) {
-    var el = document.createElement('audio'); el.preload = 'none'; el.setAttribute('playsinline', ''); el.crossOrigin = 'anonymous';
-    var d = { el: el, g: c.createGain(), id: null, i: i }; d.g.gain.value = 0;
-    try { c.createMediaElementSource(el).connect(d.g); d.g.connect(self.recBus); } catch (e) { self.recOK = false; }
-    el.addEventListener('ended', function () { if (self.cur === d) { self.pos[d.id] = 0; self.nextTrack(); } });
-    el.addEventListener('error', function () { if (d.id) { self.bad[d.id] = 1; if (self.cur === d) self.nextTrack(); } });
-    return d; });
+  this.anSink = c.createGain(); this.anSink.gain.value = 0; this.anSink.connect(c.destination); // keeps the deck analysers pulled (Safari)
+  this.decks = [0, 1].map(function (i) { var d = { g: c.createGain(), id: null, i: i, tok: 0 }; d.g.gain.value = 0; d.g.connect(self.recBus); self.newEl(d); return d; });
   this.cur = null;
-  // retry playback on the next gesture if the browser refused autoplay
-  var kick = function () { if (self.cur && self.cur.el.paused && self.cur.id && !document.hidden) self.cur.el.play().catch(function () {}); };
-  ['pointerdown', 'keydown', 'touchend'].forEach(function (ev) { document.addEventListener(ev, kick, true); });
-  document.addEventListener('visibilitychange', function () { if (!self.cur) return; if (document.hidden) self.cur.el.pause(); else kick(); });
 };
+/* (re)create a deck's <audio> element and its WebAudio source. A fresh element is the cure for a media pipeline that
+   has wedged (stalled stream, or Safari's media-element source going silent after an interruption). */
+P.newEl = function (d) {
+  var self = this, c = this.ctx, old = d.el;
+  if (old) { try { old.pause(); old.removeAttribute('src'); old.load(); } catch (e) { /* ignore */ } if (d.src) try { d.src.disconnect(); } catch (e) { /* ignore */ } }
+  var el = document.createElement('audio'); el.preload = 'none'; el.setAttribute('playsinline', ''); el.crossOrigin = 'anonymous';
+  d.el = el; d.lastT = 0; d.lastProg = performance.now(); d.silent = 0; d.stalls = 0; d.errs = 0;
+  try { d.src = c.createMediaElementSource(el); d.src.connect(d.g); d.an = c.createAnalyser(); d.an.fftSize = 1024; d.src.connect(d.an); d.an.connect(this.anSink); } catch (e) { this.recOK = false; this.recCap = false; this.note('no media source: ' + e); }
+  el.addEventListener('ended', function () { if (self.cur === d && d.el === el) { self.pos[d.id] = 0; self.nextTrack(); } });
+  el.addEventListener('error', function () { if (d.el === el && d.id) self.onErr(d); });
+};
+P.note = function (m) { this.log.push(Math.round(performance.now() / 100) / 10 + 's ' + m); if (this.log.length > 40) this.log.shift(); };
 P.musicLevel = function () { return this.musicMuted ? 0 : this.vol.music * 0.95; };
-P.useRec = function () { if (!this.recOK) return false; var l = LISTS[this.mode] || LISTS.menu; for (var i = 0; i < l.length; i++) if (!this.bad[l[i]]) return true; return false; };
+P.isBad = function (id) { var b = this.bad[id]; return b === true || (b && b > performance.now()); };
+P.listMode = function (m) { m = m || this.mode; return RESTART[m] ? m : LISTS[m] && m !== 'dawn' ? m : 'menu'; };
+P.useRec = function () { if (!this.recOK || !this.decks) return false; var l = LISTS[this.mode] || LISTS.menu; for (var i = 0; i < l.length; i++) if (!this.isBad(l[i])) return true; return false; };
 P.recMode = function (m) {
   if (!this.decks) return; var list = LISTS[m]; if (!list) return;
   if (this.cur && this.cur.id && list.indexOf(this.cur.id) >= 0 && !RESTART[m]) return; // the current piece suits this mode too
   var idx = this.listIdx[m] || 0, id = null;
-  for (var k = 0; k < list.length; k++) { var cand = list[(idx + k) % list.length]; if (!this.bad[cand]) { id = cand; this.listIdx[m] = (idx + k + 1) % list.length; break; } }
-  if (!id) { this.recFallback(); return; }
+  for (var k = 0; k < list.length; k++) { var cand = list[(idx + k) % list.length]; if (!this.isBad(cand)) { id = cand; this.listIdx[m] = (idx + k + 1) % list.length; break; } }
+  if (!id) { this.synthStart(); return; }
   this.playTrack(id, RESTART[m] ? 0 : this.pos[id] || 0);
 };
-P.nextTrack = function () { var m = this.mode === 'dawn' || this.mode === 'ambient' ? 'menu' : this.mode, d = this.cur; this.cur = null; if (d) { var ended = d.el.ended; this.fadeOut(d); if (ended) this.pos[d.id] = 0; } if (RESTART[m] || !LISTS[m]) return; this.recMode(m); };
-P.fadeOut = function (d) { var c = this.ctx, t = c.currentTime, self = this; if (d.id) this.pos[d.id] = d.el.currentTime || 0; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0, t + 2.5); var tok = d.tok = (d.tok || 0) + 1; setTimeout(function () { if (d.tok === tok && self.cur !== d) d.el.pause(); }, 2700); };
-P.playTrack = function (id, at) {
-  var c = this.ctx, self = this, old = this.cur, d = this.decks[old === this.decks[0] ? 1 : 0], tr = TRACKS[id];
-  if (old) this.fadeOut(old);
-  d.tok = (d.tok || 0) + 1; d.id = id; this.cur = d; this.nowPlaying = tr;
-  var src = 'music/' + tr.f; if (d.el.getAttribute('src') !== src) { d.el.src = src; d.el.preload = 'auto'; }
-  var seek = function () { try { if (at && Math.abs(d.el.currentTime - at) > 1) d.el.currentTime = at; } catch (e) { /* not seekable yet */ } };
-  if (d.el.readyState >= 1) seek(); else d.el.addEventListener('loadedmetadata', seek, { once: true });
-  var t = c.currentTime; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(1, t + (old ? 2.5 : 1.2));
-  var p = d.el.play(); if (p && p.catch) p.catch(function (e) { if (e && e.name === 'NotSupportedError') { self.bad[id] = 1; if (self.cur === d) self.nextTrack(); } });
-  var tok = d.tok; d.el.addEventListener('playing', function () { if (d.tok === tok && self.cur === d && self.onTrack && !self.shown[tok + d.id]) { self.shown[tok + d.id] = 1; self.onTrack(tr); } }, { once: true });
+/* the current piece finished (or failed): move on. Playlists loop forever; after the one-shot victory / defeat piece
+   the menu playlist carries on, so the music never just stops. */
+P.nextTrack = function () {
+  var d = this.cur; this.cur = null; if (d) { var ended = d.el.ended; this.fadeOut(d); if (ended) this.pos[d.id] = 0; }
+  var m = this.mode === 'dawn' || this.mode === 'ambient' || RESTART[this.mode] || !LISTS[this.mode] ? 'menu' : this.mode;
+  if (this.useRec()) this.recMode(m); else this.synthStart();
 };
-P.recFallback = function () { this.recOK = false; if (this.cur) this.fadeOut(this.cur); this.cur = null; var m = this.mode; this.mode = null; this.setMode(m); };
-P.duck = function (amt, rel) { if (!this.duckG) return; var t = this.ctx.currentTime, g = this.duckG.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(1 - amt, t + 0.04); g.setTargetAtTime(1, t + 0.25, rel || 0.6); };
-P.toggleMusic = function (on) { this.musicMuted = on === undefined ? !this.musicMuted : !on; if (!this.ctx) return; var t = this.ctx.currentTime; this.music.gain.setTargetAtTime(this.musicMuted ? 0 : this.vol.music * 0.8, t, 0.08); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.08); return !this.musicMuted; };
+P.fadeOut = function (d, dur) { var c = this.ctx, t = c.currentTime, self = this; dur = dur || 2.5; if (d.id && !d.el.ended) this.pos[d.id] = d.el.currentTime || 0; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0, t + dur); d.fadeAt = performance.now() + dur * 1000; var tok = d.tok = (d.tok || 0) + 1; setTimeout(function () { if (d.tok === tok && self.cur !== d) d.el.pause(); }, dur * 1000 + 200); };
+P.playTrack = function (id, at, deck) {
+  var c = this.ctx, self = this, old = this.cur, d = deck || this.decks[old === this.decks[0] ? 1 : 0], tr = TRACKS[id];
+  if (old) this.fadeOut(old);
+  else { var o = this.decks[d.i ? 0 : 1]; if (o.id && !o.el.paused && o.fadeAt === undefined) this.fadeOut(o); }
+  d.tok = (d.tok || 0) + 1; d.id = id; this.cur = d; this.nowPlaying = tr; d.started = performance.now(); d.lastProg = d.started; d.lastT = -1; d.silent = 0; d.fadeAt = undefined;
+  var src = 'music/' + tr.f; if (d.el.getAttribute('src') !== src) { if (d.lastId !== id) { d.stalls = 0; d.errs = 0; } d.el.src = src; d.el.preload = 'auto'; } d.lastId = id;
+  var tok = d.tok, el = d.el;
+  var seek = function () { if (d.tok !== tok || d.el !== el) return; try { if (at && Math.abs(el.currentTime - at) > 1 && (!el.duration || at < el.duration - 3)) el.currentTime = at; } catch (e) { /* not seekable yet */ } };
+  if (el.readyState >= 1) seek(); else el.addEventListener('loadedmetadata', seek, { once: true });
+  var t = c.currentTime; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(1, t + (old ? 2.5 : 1.2));
+  this.playEl(d);
+  el.addEventListener('playing', function () { if (d.tok === tok && self.cur === d && self.onTrack && !self.shown[tok + d.id]) { self.shown[tok + d.id] = 1; self.onTrack(tr); } }, { once: true });
+  this.note('play ' + id + ' @' + Math.round(at || 0) + ' deck' + d.i);
+};
+P.playEl = function (d) {
+  var self = this, el = d.el, p; try { p = el.play(); } catch (e) { return; }
+  if (p && p.catch) p.catch(function (e) { var n = e && e.name; if (n === 'NotAllowedError') { self.blocked = true; self.note('autoplay refused'); if (self.onBlocked) self.onBlocked(); } else if (n === 'NotSupportedError' && d.el === el && d.id) { self.bad[d.id] = performance.now() + 120000; self.note('unsupported ' + d.id); if (self.cur === d) self.nextTrack(); } });
+};
+/* a stream error: retry the same piece from where it was (twice), then rest it for two minutes and move on.
+   Nothing is ever written off for good: a flaky connection must not silence the recordings for the session. */
+P.onErr = function (d) {
+  var code = d.el.error ? d.el.error.code : 0, id = d.id; this.note('error ' + code + ' ' + id);
+  if (code === 3) { this.bad[id] = performance.now() + 120000; if (this.cur === d) this.nextTrack(); return; } // undecodable: rest it (code 4 is also what a dropped connection looks like, so it gets retries)
+  if (this.cur !== d) return;
+  if (++d.errs <= 2) { this.reload(d); return; }
+  this.bad[id] = performance.now() + 120000; this.nextTrack();
+};
+P.reload = function (d) { // fresh element, same piece, same place, same deck
+  var id = d.id, at = this.pos[id] = Math.max(d.lastT > 0 ? d.lastT : 0, d.el.currentTime || 0, d.el.ended ? 0 : this.pos[id] || 0), errs = d.errs, stalls = d.stalls;
+  this.note('reload ' + id + ' @' + Math.round(at)); this.newEl(d); d.errs = errs; d.stalls = stalls;
+  var t = this.ctx.currentTime; d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(0, t);
+  this.cur = null; this.playTrack(id, at, d);
+};
+/* synthesized score when no recording can play */
+P.synthStart = function () {
+  if (this.cur) this.fadeOut(this.cur); this.cur = null; if (!this.ctx) return;
+  var now = this.ctx.currentTime + 0.2; this.mt = now; this.nextChord = now; this.nextVoice = now; this.pulseT = 0; this.bossMotif = 0;
+  if (this.mode === 'victory') this.victory(now); else if (this.mode === 'defeat') this.defeat(now); else if (this.mode === 'dawn') this.dawnEnd = now; // straight to the ambient choir
+  this.note('synth ' + this.mode);
+};
+P.recFallback = function () { this.recOK = false; this.synthStart(); };
+P.duck = function (amt, rel) { if (!this.duckG) return; var t = this.ctx.currentTime, g = this.duckG.gain; this.duckAt = performance.now(); g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(1 - amt, t + 0.04); g.setTargetAtTime(1, t + 0.25, rel || 0.6); };
+P.toggleMusic = function (on) {
+  var was = this.musicMuted; this.musicMuted = on === undefined ? !this.musicMuted : !on; if (!this.ctx) return !this.musicMuted;
+  var t = this.ctx.currentTime; this.music.gain.setTargetAtTime(this.musicMuted ? 0 : this.vol.music * 0.8, t, 0.08); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.08); this.volAt = performance.now();
+  if (was && !this.musicMuted) { this.revive(); if (this.mode && this.decks && this.recOK && this.useRec() && performance.now() - (this.restartAt || 0) > 1500) this.restartMusic(false); } // switching music back on is a guaranteed restart (same piece, same place, fresh audio elements)
+  return !this.musicMuted;
+};
+/* resume the context and the current deck if anything stopped them (call from user input for iOS) */
+P.wake = function (gesture) {
+  var c = this.ctx; if (!c || document.hidden) return;
+  if (c.state !== 'running' && c.state !== 'closed') { var self = this; try { var p = c.resume(); if (p && p.then) p.then(function () { self.blocked = false; self.resetProg(); }, function () {}); } catch (e) { /* ignore */ } }
+  var d = this.cur; if (d && d.id && d.el.paused && !d.el.ended && (gesture || !this.blocked)) { this.playEl(d); d.lastProg = performance.now(); }
+  if (gesture) this.blocked = false;
+};
+P.resetProg = function () { var n = performance.now(); if (this.decks) this.decks.forEach(function (d) { d.lastProg = n; d.silent = 0; }); };
+/* is the current piece genuinely playing? */
+P.stuck = function () { var d = this.cur; if (!d) return true; var el = d.el; return el.paused || el.ended || !!el.error || performance.now() - d.lastProg > 3500 || (performance.now() - d.started > 4000 && d.g.gain.value < 0.5); };
+P.fixGains = function () {
+  if (!this.ctx) return; var t = this.ctx.currentTime;
+  var g = this.duckG.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(1, t, 0.15);
+  this.recBus.gain.cancelScheduledValues(t); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.1);
+  this.music.gain.cancelScheduledValues(t); this.music.gain.setTargetAtTime(this.musicMuted ? 0 : this.vol.music * 0.8, t, 0.1);
+};
+/* M / ♪ switched on, or anything else that should make sure music is going */
+P.revive = function () { if (!this.ctx) return; this.revivedAt = performance.now(); this.wake(true); this.fixGains(); if (this.recOK && this.useRec() && this.stuck()) this.restartMusic(false); };
+/* hard restart: fresh elements; skip=true moves to the next piece of the current playlist */
+P.restartMusic = function (skip) {
+  if (!this.ctx || !this.decks) return; this.revivedAt = this.restartAt = performance.now(); this.wake(true); this.fixGains(); this.blocked = false;
+  for (var k in this.bad) if (this.bad[k] !== true) delete this.bad[k];
+  if (this.recCap !== false && !this.recOK) { this.recOK = true; this.rebuilds = 0; } // give the recordings another chance
+  var d = this.cur, id = d && d.id, at = id ? (d.lastT > 0 ? d.lastT : d.el.currentTime || this.pos[id] || 0) : 0; if (id) this.pos[id] = at;
+  this.note('restart' + (skip ? ' (next)' : ''));
+  var t = this.ctx.currentTime, self = this; this.cur = null;
+  this.decks.forEach(function (x) { x.tok++; x.g.gain.cancelScheduledValues(t); x.g.gain.setValueAtTime(0, t); x.id = null; self.newEl(x); });
+  var m = this.listMode(); if (RESTART[m] && skip) m = 'menu';
+  if (!this.useRec()) { this.synthStart(); return; }
+  if (!skip && id && (LISTS[m] || []).indexOf(id) >= 0 && !this.isBad(id)) this.playTrack(id, at); else this.recMode(m);
+};
+/* the music watchdog: every 1.5 s make sure something audible is happening and repair whatever is not */
+P.watch = function () {
+  var c = this.ctx, now = performance.now(); if (!c) return;
+  var gap = now - (this.wdLast || now); this.wdLast = now; if (gap > 4000) this.resetProg(); // timers were throttled: no stall verdicts from stale data
+  if (document.hidden) return;
+  if (c.state !== 'running') { this.wake(); this.ctxStuck = (this.ctxStuck || 0) + 1; if (this.ctxStuck === 3 && this.onBlocked) this.onBlocked(); this.resetProg(); return; }
+  this.ctxStuck = 0; var t = c.currentTime;
+  // ducks always come back; volumes match the settings
+  if (this.duckG.gain.value < 0.97 && now - (this.duckAt || 0) > 5000) { this.note('duck stuck ' + this.duckG.gain.value.toFixed(2)); var g = this.duckG.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(1, t, 0.3); }
+  if (now - (this.volAt || 0) > 2000) {
+    if (Math.abs(this.recBus.gain.value - this.musicLevel()) > 0.03) { this.recBus.gain.cancelScheduledValues(t); this.recBus.gain.setTargetAtTime(this.musicLevel(), t, 0.2); }
+    var mg = this.musicMuted ? 0 : this.vol.music * 0.8; if (Math.abs(this.music.gain.value - mg) > 0.03) { this.music.gain.cancelScheduledValues(t); this.music.gain.setTargetAtTime(mg, t, 0.2); }
+  }
+  if (!this.decks || !this.mode) return;
+  var d = this.cur;
+  if (!d) { if (this.useRec()) { this.note('watchdog: nothing playing'); this.recMode(this.listMode()); } return; }
+  var el = d.el;
+  // a deck that faded out must be silent and paused
+  this.decks.forEach(function (x) { if (x !== d && x.fadeAt !== undefined && now > x.fadeAt + 1500 && (!x.el.paused || x.g.gain.value > 0.01)) { x.g.gain.cancelScheduledValues(t); x.g.gain.setValueAtTime(0, t); x.el.pause(); } });
+  if (el.ended) { this.note('watchdog: ended'); this.pos[d.id] = 0; this.nextTrack(); return; }
+  if (el.error) { this.onErr(d); return; }
+  if (now - d.started > 4000 && d.g.gain.value < 0.9) { this.note('deck gain stuck ' + d.g.gain.value.toFixed(2)); d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.setTargetAtTime(1, t, 0.3); }
+  if (el.paused) { if (!this.blocked) { this.note('watchdog: paused, playing'); this.playEl(d); } d.lastProg = now; return; }
+  var ct = el.currentTime;
+  if (d.lastT < 0) d.lastT = ct; // first look at a fresh element
+  else if (ct > d.lastT + 0.1 || ct < d.lastT - 1) { d.lastT = ct; d.lastProg = now; d.stalls = 0; }
+  else if (now - d.lastProg > (el.readyState >= 3 ? 8000 : 12000)) { // not advancing: the stream has stalled
+    d.lastProg = now; this.note('stall ' + d.id + ' @' + ct.toFixed(1) + ' rs' + el.readyState);
+    if (++d.stalls <= 1) this.reload(d); else { this.bad[d.id] = now + 120000; d.stalls = 0; this.nextTrack(); }
+    return;
+  }
+  // advancing but nothing comes out of the media source (Safari can leave it silent after an interruption)
+  if (d.an && now - d.started > 3000) {
+    var b = this.anBuf || (this.anBuf = new Float32Array(1024)), pk = 0; d.an.getFloatTimeDomainData(b); for (var i = 0; i < b.length; i += 2) pk = Math.max(pk, Math.abs(b[i]));
+    if (pk > 1e-4) { this.anOK = true; d.silent = 0; if (now - d.started > 8000) this.rebuilds = 0; }
+    else if (this.anOK && ct > 2 && ++d.silent >= 5) {
+      d.silent = 0; this.note('silent source ' + d.id);
+      if (this.rebuilds++ < 3) this.reload(d); else { this.note('media path broken: synth'); this.recFallback(); }
+    }
+  }
+};
 
 /* ---------- instruments ---------- */
 P.env = function (g, t, a, peak, hold, rel) { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.exponentialRampToValueAtTime(0.0001, t + a + hold + rel); };
@@ -177,7 +302,7 @@ P.tick = function () {
   this.hum.gain.setTargetAtTime(Math.min(0.05, this.beams * 0.014), now, 0.08);
   this.lhum.gain.setTargetAtTime(Math.min(0.05, this.lances * 0.02), now, 0.1);
   var m = this.mode;
-  if (this.cur && this.recOK) return; // recorded music is playing
+  if (this.cur && this.recOK) return; // recorded music is playing (the watchdog looks after it)
   if (m === 'dawn' && now > this.dawnEnd) { this.mode = 'ambient'; this.nextChord = now; }
   if (m === 'ambient' || m === 'menu') {
     while (this.nextChord < ahead) { var ch = AMBIENT[this.bar++ % 4], t = this.nextChord; ch.forEach(function (mm, k) { if (k) this.voice(mm, t, 7.5, 0.035); }, this); this.organ([ch[0] - 12, ch[0]], t, 8, 0.1);
