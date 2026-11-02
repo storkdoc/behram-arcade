@@ -78,7 +78,7 @@ COB_BANK.push(
       ['TSH/free T4 and a chest x-ray', 'CA-125 and CEA tumor markers', 'Head CT and pelvic MRI', 'Maternal serum AFP and inhibin A', 'Parental peripheral blood karyotypes'],
       'Very high hCG can stimulate the TSH receptor and cause hyperthyroidism (even thyroid storm at evacuation), so check TSH and free T4 first. A chest X-ray is the baseline for the lungs, the most common site of metastatic gestational trophoblastic disease.'],
     ['Management', 'What is the definitive management for a patient who wants future fertility?',
-      ['Suction curettage (uterine aspiration)', 'Medical evacuation with misoprostol', 'Hysterotomy to remove the mole', 'Methotrexate as the first treatment', 'Methotrexate as the first-line treatment'],
+      ['Suction curettage (uterine aspiration)', 'Medical evacuation with misoprostol', 'Hysterotomy to remove the mole', 'Methotrexate as the first treatment', 'Hysterectomy, keeping both ovaries'],
       'Suction curettage is preferred whatever the uterine size when fertility is desired. Medical evacuation and hysterotomy increase blood loss, incomplete evacuation and the risk of postmolar neoplasia. Hysterectomy is an option only for those who have finished childbearing.'],
     ['Follow-up', 'Which follow-up plan is most appropriate after evacuation?',
       ['Serial hCG until normal and sustained, with contraception', 'A single hCG at 6 weeks, and stop if negative', 'Serial pelvic ultrasounds until the uterus looks normal again', 'Monthly CA-125 levels for one year after evacuation', 'Avoid hormonal contraception for a year after evacuation'],
@@ -141,7 +141,7 @@ COB_BANK.push(
       ['Ultrasound for fetal growth and amniotic fluid', 'Reassure her and recheck at the next visit', 'A nonstress test', 'Deliver at 34 weeks', 'Repeat glucose testing'],
       'Between about 20 and 36 weeks, fundal height in cm is roughly equal to gestational age in weeks. A discrepancy of more than 2\u20133 cm needs an ultrasound to look for fetal growth restriction or oligohydramnios (or confirm dating).'],
     ['Interpretation', 'Her CBC shows hemoglobin 9.6 g/dL and MCV 74 fL. What is the most likely diagnosis and treatment?',
-      ['Iron deficiency anemia; oral iron supplementation', 'Physiologic dilutional anemia; no treatment', 'Physiologic dilutional anemia; no treatment needed', 'Vitamin B12 deficiency; IM B12', 'Folate deficiency; folic acid 4 mg'],
+      ['Iron deficiency anemia; oral iron supplementation', 'Physiologic dilutional anemia; no treatment', 'Anemia of chronic disease; IV iron now', 'Vitamin B12 deficiency; IM B12', 'Folate deficiency; folic acid 4 mg'],
       'Anemia in pregnancy is a hemoglobin below 11 (1st and 3rd trimesters) or below 10.5 g/dL (2nd trimester). Dilutional anemia is normocytic and mild. Microcytosis points to iron deficiency, the most common cause. Check a ferritin, treat with oral iron, and consider hemoglobin electrophoresis if it does not respond.'],
     ['Counseling', 'What is the best counseling about fetal movement?',
       ['Learn her baby\u2019s pattern; report any decrease the same day', 'Expect movement to slow late in pregnancy; a decrease is normal', 'Wait 24 hours before calling about decreased movement', 'Drink a caffeinated drink and recheck movement the next day', 'Formal kick counts start at 36 weeks'],
@@ -1064,7 +1064,7 @@ COB_BANK.push(
       ['Gonorrhea and chlamydia', 'Hepatitis A antibody', 'Influenza A and B', 'Latent tuberculosis', 'Lyme disease serology testing'],
       'Although most Bartholin abscesses are polymicrobial, N. gonorrhoeae and C. trachomatis can be involved. Testing in sexually active patients is reasonable. Test with a NAAT.'],
     ['Management', 'A different patient, aged 52, has a new, firm, painless Bartholin gland mass. What is recommended?',
-      ['Excise or biopsy: exclude carcinoma', 'Word catheter placement and close follow-up', 'Observation and recheck in 6 months', 'Oral antibiotics for 10 days', 'Oral antibiotics for the next 10 days'],
+      ['Excise or biopsy: exclude carcinoma', 'Word catheter placement and close follow-up', 'Observation and recheck in 6 months', 'Oral antibiotics for 10 days', 'Needle aspiration and culture only'],
       'Bartholin gland carcinoma is rare but occurs mostly after menopause. ACOG recommends biopsy for a new or solid mass in patients over 40, or one that does not resolve.']
     ]}
   ]},

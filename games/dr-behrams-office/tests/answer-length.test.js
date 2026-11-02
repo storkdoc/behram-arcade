@@ -13,6 +13,15 @@ ok(all.filter(q => q.game === 'surgery').length >= 30, 'loaded the SUTURE SELF! 
 ok(all.filter(q => q.id.startsWith('mini/breech/')).length === 3, 'loaded the breech mini-quiz');
 ok(all.every(q => q.opts.length >= 4 && q.opts.every(o => typeof o === 'string' && o.trim())), 'every question has 4+ non-empty options');
 ok(all.every(q => new Set(q.opts.map(o => o.trim().toLowerCase())).size === q.opts.length), 'no duplicate options');
+// Near-duplicates (2026-11-02): two options that differ only by filler words ("first" vs "first-line", "no treatment" vs
+// "no treatment needed") give away that neither is right and shrink a 5-option item to 4.
+const NDSTOP = new Set(['a','an','the','of','to','for','and','or','with','as','is','are','be','it','her','she','in','on','at','now','next','needed','only','alone','first','line']);
+const ndNorm = o => o.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && !NDSTOP.has(w));
+const ndNear = (a, b) => { const A = ndNorm(a), B = ndNorm(b); if (!A.length || !B.length) return false; if (A.join(' ') === B.join(' ')) return true;
+  const SA = new Set(A), SB = new Set(B), inter = [...SA].filter(x => SB.has(x)).length; return inter / new Set([...SA, ...SB]).size >= 0.85; };
+const nearDup = [];
+for (const q of all) for (let i = 0; i < q.opts.length; i++) for (let j = i + 1; j < q.opts.length; j++) if (ndNear(q.opts[i], q.opts[j])) nearDup.push(q.id + ': ' + q.opts[i] + ' ~ ' + q.opts[j]);
+ok(nearDup.length === 0, 'no near-duplicate options (same words apart from filler) ' + JSON.stringify(nearDup));
 
 for (const g of ['clinic', 'surgery']) {
   const s = stats(all.filter(q => q.game === g)), ch = s.chancePct;
