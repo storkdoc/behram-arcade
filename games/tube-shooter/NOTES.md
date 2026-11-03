@@ -177,3 +177,19 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
   (400/gate, PERFECT +20000 + life, EXCELLENT + life) handed out ~2-3 lives per round (the points also crossed 20 000-point
   lives) and 6 of 12 bot games ran out the 15-minute cap alive, so it was cut to 250/gate, PERFECT +10000 + 1 life,
   EXCELLENT +5000 (a perfect round is ~20 750 points).
+
+## Day 7 (2026-11-03): RIM GRAB WARNING
+- Why: in today's bot eval (6 games, sharp + average, the bot now uses JUMP on close shots), rim grabs were the joint #1
+  death cause (13 of 36 deaths, the same as enemy shots). JUMP had taken the edge off shots, but nothing telegraphed a grabber
+  sliding along the rim toward the claw. Death level: sharp 12/14/17, average 13/14/13.
+- What: a grabber on the rim (flipper, pulsar, phaser, warden, a climbing mine layer) within 2 lanes of the claw draws
+  pulsing orange chevrons in its lane, just inside the rim, pointing at the claw (>> = next lane, > = 2 lanes away).
+  In the claw's own lane the rim edge burns orange, then white-hot, with the grab countdown (`landT / grabDelay`).
+  When it reaches the next lane, a low sawtooth 'wup-wup' plays once (unlike the high shot beep), with a pad rumble
+  (`grabwarn` haptic). There's a 0.35 s global throttle, and the cue re-arms once it is 2+ lanes away again. Fuseballs
+  (dodge them) and enemies still down the tube aren't flagged. It only telegraphs: the timed rim shot is still the skill.
+- The capture death tip now reads "ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST".
+- Hooks: `VORTEX.grabWarn()` -> {threats:[{id,type,d}], frames, cues}.
+- Test: tests/vortex-grabwarn.test.js (desktop, iPhone 14, iPhone 14 landscape: far = none, 2 lanes = drawn, no cue;
+  adjacent = one cue, no repeat; kill clears it; fuseball / climbing flipper not flagged; in-lane countdown flagged before the
+  grab; capture tip; no console errors).

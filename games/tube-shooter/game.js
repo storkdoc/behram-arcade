@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -397,6 +397,7 @@ const Sound = {
       case 'fizz': this.noise(0.32, 0.12, 2500, 9000, 2, 'highpass'); break;
       case 'bump': this.tone('triangle', 140, 60, 0.09, 0.14); break;
       case 'shotwarn': this.tone('square', 980, 620, 0.07, 0.06); this.tone('square', 980, 620, 0.07, 0.05, 0.085); break;   // incoming shot in your lane
+      case 'grabwarn': this.tone('sawtooth', 190, 300, 0.09, 0.055); this.tone('sawtooth', 240, 380, 0.09, 0.05, 0.1); this.tone('sine', 95, 95, 0.2, 0.05); break;   // a rim grabber next to the claw (low 'wup-wup', unlike the high shot beep)
       case 'mineboom': this.noise(0.6, 0.5, 2600, 90, 0.7); this.tone('sawtooth', 300, 40, 0.4, 0.12); break;
       case 'sparkspawn': this.noise(0.28, 0.08, 9000, 3000, 4); this.tone('sawtooth', 2200, 3300, 0.1, 0.02); break;
       case 'sparkwarn': this.tone('square', 1400, 2300, 0.1, 0.05); this.tone('square', 1400, 2300, 0.1, 0.05, 0.13); break;
@@ -855,7 +856,7 @@ function explodePlayer() {
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
   shot: ['HIT BY AN ENEMY SHOT', 'RED RIM = SHOT INCOMING. SHOOT IT OR STEP ASIDE'],
-  capture: ['GRABBED AT THE RIM', 'SHOOT THEM BEFORE THEY GRAB, OR SUPERZAP'],
+  capture: ['GRABBED AT THE RIM', 'ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'LEAVE A LANE THAT FLASHES WHITE'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
@@ -1467,6 +1468,7 @@ function updPulse(dt) {
   if (pulsing && player.alive && state === 'play') for (const e of enemies) if (e.type === 'pulsar' && !e.flipping && e.spawnT >= 1 && e.lane === player.lane && e.z < 0.8) { killPlayer('zap'); break; }
 }
 function updEnemies(dt) {
+  grabWarnUpdate(dt);
   for (const e of enemies) {
     if (e.dead) continue;
     if (e.spawnT < 1) { e.spawnT = Math.min(1, e.spawnT + dt / 0.4); continue; }
@@ -1748,6 +1750,59 @@ function drawShotWarn() {
   ctx.strokeStyle = '#ff2a2a'; ctx.lineWidth = LW(1.4 + 2.2 * w);
   ctx.shadowColor = '#ff3030'; ctx.shadowBlur = 14 * DPR * w;
   ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); seg3(a[0], a[1], 0, a[0], a[1], z); seg3(b[0], b[1], 0, b[0], b[1], z); ctx.stroke();
+  ctx.restore();
+}
+/* GRAB WARNING (2026-11-03). Rim grabs became the joint #1 death cause in the bot eval once JUMP took the edge off
+   enemy shots (13 of 36 deaths). A grabber on the rim (flipper, pulsar, phaser, warden, or a climbing mine layer) within
+   2 lanes of the claw draws pulsing orange chevrons on the rim rail it will flip over, pointing at the claw (>> = next
+   lane, > = 2 lanes). In the claw's own lane the rim edge burns hot with the grab countdown. A low 'wup-wup' (+ a pad
+   rumble) plays once when it reaches the next lane. It only telegraphs: shooting it in time is still the skill. */
+const GRABBERS = new Set(['flipper', 'pulsar', 'phaser', 'warden', 'layer']), GRAB_WARN_LANES = 2;
+let grabWarnFrames = 0, grabWarnCues = 0, grabWarnCd = 0;
+function isRimGrabber(e) { return !e.dead && GRABBERS.has(e.type) && e.z <= 0 && e.spawnT >= 1 && !e.ph && (e.type !== 'layer' || e.mode === 'climb'); }
+function rimThreats() {
+  if (state !== 'play' || !player.alive) return [];
+  const out = [];
+  for (const e of enemies) { if (!isRimGrabber(e)) continue; const d = laneDiff(player.lane, e.lane); if (Math.abs(d) <= GRAB_WARN_LANES) out.push({ e, d }); }
+  return out;
+}
+function grabWarnUpdate(dt) {
+  grabWarnCd = Math.max(0, grabWarnCd - dt);
+  if (state !== 'play' || !player.alive) return;
+  for (const e of enemies) {
+    if (!isRimGrabber(e)) { e.gwarned = false; continue; }
+    const d = Math.abs(laneDiff(player.lane, e.lane));
+    if (d >= 2) e.gwarned = false;
+    else if (!e.gwarned) { e.gwarned = true; if (grabWarnCd <= 0) { grabWarnCd = 0.35; grabWarnCues++; Sound.play('grabwarn'); } }
+  }
+}
+function drawGrabWarn() {
+  const th = rimThreats(); if (!th.length) return;
+  grabWarnFrames++;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const { e, d } of th) {
+    const s = d > 0 ? -1 : 1;                       // rim direction from the grabber toward the claw
+    const near = Math.abs(d) <= 1, pulse = 0.7 + 0.3 * Math.sin(T * (near ? 34 : 18));
+    if (d === 0) {                                  // in the claw's lane: the grab countdown burns along the rim edge
+      const k = clamp((e.landT || 0) / Math.max(0.01, LP.grabDelay), 0, 1), a = rail(e.lane), b = rail(e.lane + 1);
+      ctx.globalAlpha = (0.55 + 0.45 * k) * pulse; ctx.strokeStyle = k > 0.6 ? '#fff2c0' : '#ff8a1a';
+      ctx.shadowColor = '#ff7a00'; ctx.shadowBlur = 16 * DPR; ctx.lineWidth = LW(2 + 2.5 * k);
+      ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); ctx.stroke();
+      continue;
+    }
+    const r = s < 0 ? e.lane : e.lane + 1;          // the shared rail it will flip over
+    const n = near ? 2 : 1, r0 = rail(r), r1 = rail(r + s);
+    let tx = r1[0] - r0[0], ty = r1[1] - r0[1]; const lw = Math.hypot(tx, ty) || 1; tx /= lw; ty /= lw;   // along the rim, toward the claw
+    const nx = -ty, ny = tx, a = lw * 0.2, cz = LL * 0.06;   // just inside the rim, so they sit in the lane          // chevrons lie flat on the rim plane, sized to the lane
+    ctx.globalAlpha = (near ? 0.95 : 0.55) * pulse; ctx.strokeStyle = '#ff8a1a'; ctx.shadowColor = '#ff6a00'; ctx.shadowBlur = (near ? 14 : 8) * DPR;
+    ctx.lineWidth = LW(near ? 2.2 : 1.5);
+    ctx.beginPath();
+    for (let k = 0; k < n; k++) {
+      const off = lw * (0.06 + 0.24 * k + 0.04 * Math.sin(T * 9)), px = r0[0] - tx * off, py = r0[1] - ty * off;   // in the grabber's lane, tips at the rail
+      seg3(px - tx * a + nx * a, py - ty * a + ny * a, cz, px, py, cz); seg3(px, py, cz, px - tx * a - nx * a, py - ty * a - ny * a, cz);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 function drawPulseLanes() {
@@ -2195,6 +2250,7 @@ function drawGameScene() {
   drawWeb(webColor, showClaw && state !== 'dying' ? pal.lane : null, true);
   drawPulseLanes();
   drawShotWarn();
+  drawGrabWarn();
   drawBonusGates();
   drawSpikes();
   drawMines();
@@ -2768,6 +2824,7 @@ window.VORTEX = {
   eshotList: () => eshots.map(s => ({ lane: s.lane, z: s.z, warned: !!s.warned })),
   haptics: () => ({ on: Haptics.on, src: Haptics.src, log: Haptics.log.slice(), padHeld: Object.keys(pad.prev).filter(k => pad.prev[k]) }),
   shotWarnFrames: () => shotWarnFrames,
+  grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d })), frames: grabWarnFrames, cues: grabWarnCues }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),
   // touch-test helpers (CSS px)
