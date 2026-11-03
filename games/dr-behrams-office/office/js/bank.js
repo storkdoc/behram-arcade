@@ -373,7 +373,7 @@ COB_BANK.push(
     q: [
     ['Management', 'What is the most appropriate recommendation?',
       ['Offer induction now, or fetal testing if she waits', 'Wait for spontaneous labor up to 43 weeks', 'Schedule a cesarean delivery for this week', 'Induce only if the NST is nonreactive', 'Weekly visits, with no fetal testing until 42 6/7 weeks'],
-      'ACOG: induction between 41 0/7 and 42 0/7 weeks can be considered, and is recommended after 42 0/7 weeks and by 42 6/7. Trials such as SWEPIS showed lower perinatal mortality with induction at 41 weeks. If she declines, start antenatal surveillance (NST plus fluid assessment). Induction is recommended between 41 0/7 and 42 0/7 weeks; if she prefers to wait, start fetal surveillance.'],
+      'ACOG: induction between 41 0/7 and 42 0/7 weeks can be considered, and is recommended after 42 0/7 weeks and by 42 6/7. Trials such as SWEPIS showed lower perinatal mortality with induction at 41 weeks. If she prefers to wait, start antenatal surveillance (NST plus amniotic fluid assessment).'],
     ['Exam', 'Her cervix is closed, 30% effaced, firm and posterior, with the head at \u22123 station. What is her Bishop score, and what does it mean?',
       ['0: unfavorable, so cervical ripening is indicated', '3: favorable, so start oxytocin', '6: borderline, so perform amniotomy', '8: favorable, so start oxytocin', 'The Bishop score does not apply to nulliparas'],
       'Bishop components: dilation, effacement, station, consistency and position. Closed (0), 0\u201330% (0), \u22123 (0), firm (0), posterior (0) gives 0. A score of 6 or less is unfavorable, so ripen the cervix first.'],
@@ -502,7 +502,7 @@ COB_BANK.push(
       'USPSTF (2021): annual low-dose CT for adults 50\u201380 with 20 or more pack-years who currently smoke or quit within the past 15 years. She qualifies. A chest X-ray does not reduce mortality.'],
     ['Screening', 'When is her next cervical cancer screening due?',
       ['In 2 years', 'Today, at this visit', 'In 1 year', 'Never again', 'In 10 years'],
-      'For ages 30\u201365, the options are primary HPV testing every 5 years, cotesting every 5 years, or cytology alone every 3 years. Her negative cotest was 3 years ago, so she is due in 2 years. After a negative cotest she is due again in 5 years, and hers was 3 years ago.'],
+      'For ages 30\u201365, the options are primary HPV testing every 5 years, cotesting every 5 years, or cytology alone every 3 years. Her negative cotest was 3 years ago, so she is due in 2 years.'],
     ['Screening', 'What breast cancer screening does USPSTF recommend for her?',
       ['Mammography every 2 years', 'Annual breast MRI', 'Annual breast ultrasound', 'No screening between 50 and 74', 'Mammography if there is a family history'],
       'USPSTF (2024): biennial mammography for ages 40\u201374. ACOG recommends offering screening every 1\u20132 years starting at 40. MRI is added only for high-risk patients (for example, lifetime risk of 20% or more, or BRCA carriers). ACOG also supports annual screening after shared decision-making.'],
@@ -685,7 +685,7 @@ COB_BANK.push(
       'CDC 2021 added metronidazole to routine PID treatment for anaerobic coverage. Re-evaluate in 72 hours, and admit if she is not improving. Doses: ceftriaxone 500 mg IM once; doxycycline 100 mg and metronidazole 500 mg twice daily for 14 days.'],
     ['Management', 'What should be done about her copper IUD?',
       ['It stays in while she is treated', 'Remove it immediately, before antibiotics are started', 'Remove it and avoid future IUDs', 'Replace it with a new IUD today', 'Leave it in, but withhold antibiotics until cultures return'],
-      'CDC: there is no need to remove an IUD in a patient with PID. If she is not clinically improved within 48\u201372 hours, consider removal. Remove it only if she has not improved within 48\u201372 hours.'],
+      'CDC: there is no need to remove an IUD in a patient with PID. Treat her with the IUD in place, and consider removing it only if she has not improved clinically within 48\u201372 hours.'],
     ['Counseling', 'Which is a well-known long-term complication of PID?',
       ['Tubal infertility and ectopic pregnancy', 'Endometrial hyperplasia and endometrial cancer', 'Polycystic ovary syndrome', 'Cervical cancer and CIN', 'Recurrent ovarian torsion'],
       'Scarring of the tubes after PID causes infertility (the risk rises with each episode), ectopic pregnancy and chronic pelvic pain. Fitz-Hugh\u2013Curtis perihepatitis causes right upper quadrant pain in the acute phase.']
@@ -758,7 +758,7 @@ COB_BANK.push(
       'Pregnancy is the most common cause of secondary amenorrhea. After that, check TSH, prolactin and FSH (plus estradiol), and androgens if there are signs of hyperandrogenism.'],
     ['Diagnosis', 'hCG is negative. FSH and LH are low-normal, estradiol is low, and TSH and prolactin are normal. What is the diagnosis?',
       ['Functional hypothalamic amenorrhea', 'Primary ovarian insufficiency (POI)', 'Polycystic ovary syndrome', 'Asherman syndrome (adhesions)', 'Pituitary prolactinoma'],
-      'Low energy availability, from too little intake for the exercise load, suppresses GnRH pulsatility, causing low or normal gonadotropins and hypoestrogenism. This is part of the female athlete triad (relative energy deficiency in sport, RED-S). POI has a HIGH FSH. It reflects low energy availability.'],
+      'Low energy availability, from too little intake for the exercise load, suppresses GnRH pulsatility, causing low or normal gonadotropins and hypoestrogenism. This is part of the female athlete triad (relative energy deficiency in sport, RED-S). Primary ovarian insufficiency (POI) would show a HIGH FSH instead.'],
     ['Management', 'What is the first-line treatment?',
       ['More calories and less training, with team support', 'Combined oral contraceptives to restore her bone density', 'Clomiphene for 5 days to restart ovulation', 'Bisphosphonates to prevent further stress fractures', 'Hysteroscopy to look for intrauterine adhesions'],
       'Restoring energy balance is the cornerstone. COCs give monthly bleeding but do not restore bone and may mask recovery. Screen for an eating disorder. The team includes a dietitian and mental-health support.'],
@@ -875,7 +875,7 @@ COB_BANK.push(
       'ASRM defines recurrent pregnancy loss as two or more failed clinical pregnancies. Some guidelines use 3, but evaluation after 2 is reasonable. About half of patients have no identifiable cause, and the outlook remains good.'],
     ['Workup', 'Which evaluation is recommended?',
       ['Antiphospholipid antibodies, cavity imaging, parental karyotypes', 'Inherited thrombophilia testing (factor V Leiden) alone', 'HLA typing of both partners', 'Natural killer cell and cytokine testing', 'No evaluation until a third loss'],
-      'The evidence-based workup is APS antibodies (lupus anticoagulant, anticardiolipin, anti-\u03b22-glycoprotein I), cavity imaging (SIS, hysteroscopy or 3D US), parental karyotypes, and screening for thyroid and diabetes. Routine inherited thrombophilia testing is not recommended. Also screen for thyroid disease and diabetes.'],
+      'The evidence-based workup is APS antibodies (lupus anticoagulant, anticardiolipin, anti-\u03b22-glycoprotein I), cavity imaging (SIS, hysteroscopy or 3D US), parental karyotypes, and screening for thyroid disease and diabetes. Routine inherited thrombophilia testing is not recommended.'],
     ['Workup', 'Her anticardiolipin IgG is moderately elevated. What is needed to diagnose antiphospholipid syndrome?',
       ['Positive again after 12 weeks', 'Nothing more; a single test confirms it', 'A positive ANA plus anti-dsDNA antibodies', 'Platelets below 50,000 on two counts', 'A brain MRI showing white matter lesions'],
       'Antiphospholipid antibodies can be transiently positive, so they must be persistent on two tests at least 12 weeks apart. Clinical criteria include thrombosis or pregnancy morbidity (recurrent early losses, fetal death, early preeclampsia or placental insufficiency).'],
@@ -948,7 +948,7 @@ COB_BANK.push(
     q: [
     ['Workup', 'TVUS shows an endometrial thickness of 3 mm with a well-seen stripe. What is the most appropriate next step?',
       ['Low risk; treat atrophy and sample if bleeding persists', 'Hysterectomy, because any postmenopausal bleeding requires it', 'Immediate D&C, whatever the endometrial thickness', 'A CA-125 level to screen for endometrial cancer', 'A CT of the abdomen and pelvis for a hidden cancer'],
-      'A thin (4 mm or less), well-visualized endometrium makes cancer very unlikely. If the stripe cannot be seen clearly, or the bleeding persists, sampling is required anyway. A thin, well-seen stripe (4 mm or less) means low cancer risk.'],
+      'A thin (4 mm or less), well-visualized endometrium makes cancer very unlikely. If the stripe cannot be seen clearly, or the bleeding persists, sampling is required anyway.'],
     ['Diagnosis', 'What is the most common cause of postmenopausal bleeding?',
       ['Genitourinary atrophy', 'Endometrial carcinoma (type 1)', 'Invasive cervical cancer', 'Degenerating uterine fibroids', 'Estrogen-secreting ovarian tumor'],
       'Atrophy accounts for about 60% of cases. Others include polyps, hyperplasia and cancer (about 10%). Cancer must still be excluded.'],
@@ -957,7 +957,7 @@ COB_BANK.push(
       'Persistent or recurrent bleeding requires tissue sampling even with a thin endometrium, since some cancers (such as type 2/serous) can occur with a thin stripe.'],
     ['Counseling', 'A different patient takes tamoxifen for breast cancer. What is true about her endometrial risk?',
       ['It raises hyperplasia, polyp and cancer risk', 'Tamoxifen protects the endometrium from cancer', 'She needs routine annual ultrasound without symptoms', 'Aromatase inhibitors carry the same endometrial risk', 'Tamoxifen raises the ovarian cancer risk instead'],
-      'Tamoxifen is an estrogen agonist on the endometrium. Routine screening ultrasound without symptoms is NOT recommended, but any bleeding must be evaluated. Aromatase inhibitors do not stimulate the endometrium. Any bleeding on tamoxifen needs evaluation.']
+      'Tamoxifen is an estrogen agonist on the endometrium. Routine screening ultrasound without symptoms is NOT recommended, but any bleeding on tamoxifen must be evaluated. Aromatase inhibitors do not stimulate the endometrium.']
     ]}
   ]},
 { id: 'breast', t: 'Breast Lump', cat: 'GYN', tier: 2, icon: 'search', preg: 0,
@@ -992,7 +992,7 @@ COB_BANK.push(
       'Mammography misses 10\u201315% of palpable cancers, especially in dense breasts. A clinically suspicious mass requires a biopsy whatever the imaging shows.'],
     ['Diagnosis', 'A different patient has a red, warm, swollen breast with peau d\u2019orange covering a third of the breast, with no fever, and it did not respond to antibiotics. What is the main concern?',
       ['Inflammatory breast cancer; punch biopsy', 'Mastitis needing a stronger oral antibiotic', 'Contact dermatitis; topical steroids', 'A simple cyst; aspiration', 'Fat necrosis; observation'],
-      'Inflammatory breast cancer progresses rapidly; tumor emboli block the dermal lymphatics. Any \u201cmastitis\u201d that does not respond or occurs outside lactation needs imaging and a biopsy, including the skin. Image the breast and take a skin punch biopsy.'],
+      'Inflammatory breast cancer progresses rapidly; tumor emboli block the dermal lymphatics. Any \u201cmastitis\u201d that does not respond or occurs outside lactation needs breast imaging and a biopsy that includes a skin punch biopsy.'],
     ['Counseling', 'Her sister had breast cancer at 42 and her paternal aunt had ovarian cancer. What should be offered?',
       ['Genetic counseling and testing', 'Nothing; paternal history does not count', 'Prophylactic mastectomy without testing', 'A CA-125 every year', 'Tamoxifen chemoprevention now'],
       'Breast cancer before 50 and ovarian cancer at any age in relatives, on either side, warrant genetic risk assessment. Paternal relatives pass on BRCA mutations as well. Test BRCA1/2 with a multigene panel.']
