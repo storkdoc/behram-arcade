@@ -131,6 +131,7 @@ body.compact .card { display: none; background: none; border: 0; backdrop-filter
 body.compact .card.on { display: flex; }
 body.compact #cardGenome.on { display: grid; }
 body.compact .meters { width: 140px; padding: 5px 7px; font-size: 10px; }
+body.pongtall.phone .meters { width: 122px; padding: 4px 6px; font-size: 9px; } body.pongtall.phone .meters .mrow.small { font-size: 8.5px; }
 body.compact .mrow { grid-template-columns: 62px 1fr; margin: 1px 0; }
 body.compact .mh { margin-bottom: 1px; }
 body.compact #score b { font-size: 24px; }

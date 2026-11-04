@@ -13,8 +13,31 @@ const CW = COURT.W * S, CH = COURT.H * S;
 const hash = (i, k) => { let x = Math.imul(i + 1, 0x9E3779B1) ^ Math.imul(k + 7, 0x85EBCA77); x ^= x >>> 15; x = Math.imul(x, 0x2C1B3C6D); x ^= x >>> 12; return (x >>> 0) / 4294967296; };
 const AREA_COL = { TH_E: [1.0, 0.68, 0.25], TH_I: [1.0, 0.35, 0.75], S_E: [0.2, 0.95, 0.82], S_I: [1.0, 0.32, 0.8], A_E: [0.6, 0.48, 1.0], A_I: [1.0, 0.3, 0.85], M_UP: [0.36, 1.0, 0.6], M_DN: [1.0, 0.55, 0.22], M_I: [1.0, 0.3, 0.8] };
 export const REGION_LABELS = [
-  ['Sensory', -0.56, 0.74], ['Thalamus', -0.12, -0.84], ['Association', 0.06, 0.8], ['Motor UP', 0.66, 0.52], ['Motor DOWN', 0.66, -0.36],
+  ['Sensory', -0.56, 0.74], ['Thalamus', -0.12, -0.84], ['Association', 0.06, 0.8], ['Motor RIGHT', 0.66, 0.52], ['Motor LEFT', 0.66, -0.36],
 ];
+// Pong is drawn transposed: the paddles run along the bottom and top edges and move left/right. The physics keeps its own
+// frame (x = depth from player 0's end, y = position along the paddle line); on screen, court y -> right and court x -> up
+// (player 0 at the bottom), or court x -> down when flipped (Play: the human, player 1, sits at the bottom).
+// Choice contests keep the old landscape box (their 2D stage is placed over it).
+// stageLayout returns the court centre, its orientation, the two brains (x, y, signed scale, y-rotation) and the extents.
+export function stageLayout(rect, W, H, view = {}) {
+  const asp = rect.w / Math.max(1, rect.h), tall = asp < 1.15 || (W < H && W < 700), mode = tall ? 'tall' : 'wide';
+  if (!view.pong) {
+    if (!tall) { const s = 1.2, X = CW / 2 + 0.25 + 1.0 * s; return { mode, orient: 0, court: [0, 0], brains: [[-X, 0.05, s, 0.28], [X, 0.05, -s, -0.28]], bs: s, bw: 2 * (X + 1.05 * s), bh: Math.max(CH + 0.2, 2.0 * s), center: [0, -0.02] }; }
+    const s = 1.02, gap = 0.25;
+    return { mode, orient: 0, court: [0, CH / 2 + gap], brains: [[-1.08, -0.95 * s - 0.05, s, 0.16], [1.08, -0.95 * s - 0.05, -s, -0.16]], bs: s, bw: Math.max(CW + 0.2, 2 * (1.08 + 1.08 * s)), bh: CH + gap + 2.0 * s + 0.2, center: [0, (CH + gap - 1.95 * s) / 2 - 0.02] };
+  }
+  const orient = view.flip ? -1 : 1, cw = CH, chh = CW, bh = chh + 0.2;   // on-screen court: CH wide, CW tall
+  const ppuH = rect.h / (bh * 1.06), wAvail = rect.w / (1.1 * ppuH);
+  if (!tall) {   // brains left and right of the court, as large as the width allows
+    const s = Math.max(0.55, Math.min(1.2, (wAvail - cw - 0.4) / 4.1)), X = cw / 2 + 0.2 + 1.0 * s, yb = Math.max(0.05, chh / 2 - 1.05 * s);   // raised: the meter cards fit below
+    return { mode, orient, court: [0, 0], brains: [[-X, yb, s, 0.28], [X, yb, -s, -0.28]], bs: s, bw: 2 * (X + 1.05 * s), bh: Math.max(bh, 2.0 * s), center: [0, -0.02] };
+  }
+  // tall screens: the court fills the height on the left; the two brains stack on the right, each beside its own paddle
+  const s = Math.max(0.45, Math.min(0.8, (wAvail - cw - 0.15) / 2.1)), X = cw / 2 + 0.12 + 1.05 * s, yb = 0.97 * s + 0.04;
+  const left = -cw / 2, right = X + 1.07 * s, top = Math.max(chh / 2, yb + s), bw = right - left;
+  return { mode, orient, court: [0, 0], brains: [[X, -orient * yb, -s, -0.2], [X, orient * yb, -s, -0.2]], bs: s, bw, bh: Math.max(bh, 2 * top + 0.1), center: [(left + right) / 2, 0] };
+}
 
 // neuron positions in brain-local coordinates: x toward the court, y up, z toward the viewer
 export function layout() {
@@ -79,7 +102,7 @@ export class Render3D {
     this.buildBackdrop(); this.buildCourt();
     this.brains = [this.buildBrain(0), this.buildBrain(1)];
     this.buildTraffic();
-    this.composer = null; this.rect = null; this.mode = 'wide';
+    this.composer = null; this.rect = null; this.mode = 'wide'; this.view = { pong: true, flip: false }; this.bs = 1.2;
     this.v3 = new THREE.Vector3();
   }
   buildBackdrop() {
@@ -91,7 +114,7 @@ export class Render3D {
   }
   buildCourt() {
     const g = this.court = new THREE.Group(); this.scene.add(g);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(CW + 0.3, CH + 0.3), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uFlash: { value: new THREE.Vector4(0, 0, 0, 0) } },
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(CW + 0.3, CH + 0.3), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uFlash: { value: new THREE.Vector4(0, 0, 0, 0) } },
       vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `varying vec2 vU; uniform vec4 uFlash; void main(){ vec2 g = abs(fract(vU * vec2(${(CW + 0.3) / 0.2}, ${(CH + 0.3) / 0.2})) - 0.5);
         float line = smoothstep(0.47, 0.5, max(g.x, g.y)); vec3 c = vec3(0.01, 0.018, 0.045) + vec3(0.04, 0.08, 0.2) * line * 0.5;
@@ -121,7 +144,7 @@ export class Render3D {
       fragmentShader: 'varying float vA; void main(){ vec2 p = gl_PointCoord*2.0-1.0; float r = dot(p,p); if (r>1.0) discard; gl_FragColor = vec4(vec3(1.2,1.1,2.0) * vA * exp(-r*3.0), 1.0); }' }));
     this.trailPts.frustumCulled = false; g.add(this.trailPts);
     // hit rings
-    this.rings = Array.from({ length: 6 }, () => { const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(2, 2, 2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); m.visible = false; m.t = 0; g.add(m); return m; });
+    this.rings = Array.from({ length: 6 }, () => { const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(2, 2, 2), side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); m.visible = false; m.t = 0; g.add(m); return m; });
     this.flash = [0, 0];
   }
   buildBrain(side) {
@@ -196,29 +219,20 @@ export class Render3D {
   ringAt(x, y, c) { const r = this.rings.find(m => !m.visible) || this.rings[0]; r.visible = true; r.t = 0; r.position.set(x * S - CW / 2, y * S - CH / 2, 0.03); r.material.color.setRGB(c[0], c[1], c[2]); }
   goal(p) { this.flash[p] = 1; }
   // ---------------------------------------------------------------- layout & camera
+  // view: { pong, flip } (see stageLayout); re-lays out the scene
+  setView(v) { const o = this.view; this.view = { ...o, ...v }; if (this.rect && (o.pong !== this.view.pong || o.flip !== this.view.flip)) this.setLayout(this.rect, this.W, this.H); }
   setLayout(rect, W, H) {
-    this.rect = rect; const asp = rect.w / Math.max(1, rect.h);
-    const tall = asp < 1.15 || (W < H && W < 700); this.mode = tall ? 'tall' : 'wide';
-    const A = this.brains[0].grp, B = this.brains[1].grp;
-    let bw, bh;
-    if (!tall) {
-      const s = 1.2, X = CW / 2 + 0.25 + 1.0 * s;
-      this.court.position.set(0, 0, 0); A.position.set(-X, 0.05, 0); B.position.set(X, 0.05, 0); A.scale.set(s, s, s); B.scale.set(-s, s, s);
-      A.rotation.y = 0.28; B.rotation.y = -0.28; bw = 2 * (X + 1.05 * s); bh = Math.max(CH + 0.2, 2.0 * s);
-      this.center = new THREE.Vector3(0, -0.02, 0);
-    } else {
-      const s = 1.02, gap = 0.25;
-      this.court.position.set(0, CH / 2 + gap, 0);
-      A.position.set(-1.08, -0.95 * s - 0.05, 0); B.position.set(1.08, -0.95 * s - 0.05, 0); A.scale.set(s, s, s); B.scale.set(-s, s, s);
-      A.rotation.y = 0.16; B.rotation.y = -0.16; bw = Math.max(CW + 0.2, 2 * (1.08 + 1.08 * s)); bh = CH + gap + 2.0 * s + 0.2;
-      this.center = new THREE.Vector3(0, (CH + gap - 1.95 * s) / 2 - 0.02, 0);
-    }
+    this.rect = rect; const Lo = stageLayout(rect, W, H, this.view); this.mode = Lo.mode; this.bs = Lo.bs;
+    this.court.position.set(Lo.court[0], Lo.court[1], 0);
+    if (Lo.orient) { this.court.rotation.z = Lo.orient * Math.PI / 2; this.court.scale.set(1, Lo.orient > 0 ? -1 : 1, 1); } else { this.court.rotation.z = 0; this.court.scale.set(1, 1, 1); }
+    this.brains.forEach((b, k) => { const [x, y, sc, ry] = Lo.brains[k]; b.grp.position.set(x, y, 0); b.grp.scale.set(sc, Math.abs(sc), Math.abs(sc)); b.grp.rotation.y = ry; });
+    const bw = Lo.bw, bh = Lo.bh; this.center = new THREE.Vector3(Lo.center[0], Lo.center[1], 0);
     const cam = this.camera, f = Math.tan(cam.fov * Math.PI / 360);
     const ppu = Math.min(rect.w / (bw * 1.1), rect.h / (bh * 1.06)), d = H / (2 * f * ppu);
     cam.position.set(this.center.x, this.center.y - d * 0.05, d); cam.lookAt(this.center);
     cam.aspect = W / H; cam.near = d * 0.2; cam.far = d * 4;
     cam.setViewOffset(W, H, W / 2 - (rect.x + rect.w / 2), H / 2 - (rect.y + rect.h / 2), W, H);
-    cam.updateProjectionMatrix();
+    cam.updateProjectionMatrix(); cam.updateMatrixWorld(); this.scene.updateMatrixWorld(true);
     this.ppu = ppu;
   }
   resize(W, H, rect) {
@@ -239,8 +253,8 @@ export class Render3D {
   toCourt(sx, sy) {
     const ndc = new THREE.Vector3(sx / this.W * 2 - 1, -(sy / this.H) * 2 + 1, 0.5).unproject(this.camera);
     const o = this.camera.position, dir = ndc.sub(o).normalize(), zc = this.court.position.z;
-    const t = (zc - o.z) / dir.z, p = o.clone().addScaledVector(dir, t);
-    return { x: (p.x - this.court.position.x + CW / 2) / S, y: (p.y - this.court.position.y + CH / 2) / S };
+    const t = (zc - o.z) / dir.z, p = this.court.worldToLocal(o.clone().addScaledVector(dir, t));
+    return { x: (p.x + CW / 2) / S, y: (p.y + CH / 2) / S };
   }
   project(v) { const p = v.clone().project(this.camera); return { x: (p.x + 1) / 2 * this.W, y: (1 - p.y) / 2 * this.H, ok: p.z < 1 }; }
   anchor(k, x, y, z = 0.1) { return this.project(this.brains[k].grp.localToWorld(this.v3.set(x, y, z))); }

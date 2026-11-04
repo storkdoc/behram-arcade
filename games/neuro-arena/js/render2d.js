@@ -1,6 +1,6 @@
 /* NEURO ARENA fallback renderer (Canvas 2D): used when WebGL is unavailable or draws nothing.
    Same interface as Render3D: the two brains as glowing neuron maps with labeled regions, and the neon court. */
-import { layout, S } from './render3d.js';
+import { layout, S, stageLayout } from './render3d.js';
 import { L, N, AREA_DEF } from './brain.js';
 import { COURT } from './pong.js';
 
@@ -18,7 +18,7 @@ export class Render2D {
     AREA_DEF.forEach(([k], ai) => { for (let i = L[k].s; i < L[k].e; i++) this.area[i] = ai; });
     this.brains = [0, 1].map(side => ({ side, act: new Float32Array(N), sx: new Float32Array(N), sy: new Float32Array(N) }));
     this.dopa = [0, 0]; this.daS = [0, 0]; this.flash = [0, 0]; this.rings = []; this.f = null;
-    this.trail = []; this.mode = 'wide'; this.ppu = 100; this.W = 1; this.H = 1; this.time = 0;
+    this.trail = []; this.mode = 'wide'; this.view = { pong: true, flip: false }; this.orient = 0; this.ppu = 100; this.W = 1; this.H = 1; this.time = 0;
   }
   resize(W, H, rect) {
     this.W = W; this.H = H;
@@ -26,30 +26,24 @@ export class Render2D {
     this.canvas.style.width = W + 'px'; this.canvas.style.height = H + 'px';
     this.setLayout(rect, W, H);
   }
+  setView(v) { const o = this.view; this.view = { ...o, ...v }; if (this.rect && (o.pong !== this.view.pong || o.flip !== this.view.flip)) this.setLayout(this.rect, this.W, this.H); }
   setLayout(rect, W, H) {
-    this.rect = rect; const asp = rect.w / Math.max(1, rect.h);
-    const tall = asp < 1.15 || (W < H && W < 700); this.mode = tall ? 'tall' : 'wide';
-    let bw, bh;
-    if (!tall) {
-      const s = 1.2, X = CW / 2 + 0.25 + 1.0 * s;
-      this.court = [0, 0]; this.bp = [[-X, 0.05, s], [X, 0.05, -s]]; this.bs = s;
-      bw = 2 * (X + 1.05 * s); bh = Math.max(CH + 0.2, 2.0 * s); this.center = [0, -0.02];
-    } else {
-      const s = 1.02, gap = 0.25;
-      this.court = [0, CH / 2 + gap]; this.bp = [[-1.08, -0.95 * s - 0.05, s], [1.08, -0.95 * s - 0.05, -s]]; this.bs = s;
-      bw = Math.max(CW + 0.2, 2 * (1.08 + 1.08 * s)); bh = CH + gap + 2.0 * s + 0.2; this.center = [0, (CH + gap - 1.95 * s) / 2 - 0.02];
-    }
-    this.ppu = Math.min(rect.w / (bw * 1.1), rect.h / (bh * 1.06));
+    this.rect = rect; const Lo = stageLayout(rect, W, H, this.view); this.mode = Lo.mode; this.orient = Lo.orient;
+    this.court = Lo.court; this.bp = Lo.brains.map(([x, y, sc]) => [x, y, sc]); this.bs = Lo.bs; this.center = Lo.center;
+    this.ppu = Math.min(rect.w / (Lo.bw * 1.1), rect.h / (Lo.bh * 1.06));
     this.cx = rect.x + rect.w / 2; this.cy = rect.y + rect.h / 2;
     const P = this.L.pos;
     for (const b of this.brains) for (let i = 0; i < N; i++) { const p = this.anchor(b.side, P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); b.sx[i] = p.x; b.sy[i] = p.y; }
   }
   w2s(wx, wy) { return { x: this.cx + (wx - this.center[0]) * this.ppu, y: this.cy - (wy - this.center[1]) * this.ppu, ok: true }; }
   anchor(k, x, y, z = 0.1) { const [bx, by, sx] = this.bp[k]; return this.w2s(bx + sx * (x - z * 0.12), by + this.bs * (y + z * 0.1)); }
-  courtAnchor(x, y) { return this.w2s(this.court[0] + x * S - CW / 2, this.court[1] + y * S - CH / 2); }
+  // court (x, y) -> world, the same transform as the 3D court group (see stageLayout)
+  c2w(x, y) { const lx = x * S - CW / 2, ly = y * S - CH / 2, o = this.orient; return o ? [this.court[0] + ly, this.court[1] + o * lx] : [this.court[0] + lx, this.court[1] + ly]; }
+  courtAnchor(x, y) { const [wx, wy] = this.c2w(x, y); return this.w2s(wx, wy); }
   toCourt(sx, sy) {
-    const wx = (sx - this.cx) / this.ppu + this.center[0], wy = -(sy - this.cy) / this.ppu + this.center[1];
-    return { x: (wx - this.court[0] + CW / 2) / S, y: (wy - this.court[1] + CH / 2) / S };
+    const wx = (sx - this.cx) / this.ppu + this.center[0] - this.court[0], wy = -(sy - this.cy) / this.ppu + this.center[1] - this.court[1], o = this.orient;
+    const lx = o ? wy * o : wx, ly = o ? wx : wy;
+    return { x: (lx + CW / 2) / S, y: (ly + CH / 2) / S };
   }
   spikes(k, spk, off) { const act = this.brains[k].act; for (let i = 0; i < N; i++) if (spk[off + i]) act[i] = 1; }
   setDopamine(k, v) { this.dopa[k] = v; }
@@ -65,13 +59,14 @@ export class Render2D {
     // court (choice contests are drawn on the 2D stage overlay instead)
     const choice = !!(f && f.kind === 'choice');
     if (!choice) {
-    const c0 = this.courtAnchor(0, 1), c1 = this.courtAnchor(COURT.W, 0), cw = c1.x - c0.x, ch = c1.y - c0.y;
+    const q0 = this.courtAnchor(0, 0), q1 = this.courtAnchor(COURT.W, 1), c0 = { x: Math.min(q0.x, q1.x), y: Math.min(q0.y, q1.y) }, c1 = { x: Math.max(q0.x, q1.x), y: Math.max(q0.y, q1.y) }, cw = c1.x - c0.x, ch = c1.y - c0.y;
     x.fillStyle = 'rgba(4,8,22,.92)'; x.fillRect(c0.x, c0.y, cw, ch);
     x.strokeStyle = 'rgba(40,70,170,.35)'; x.lineWidth = 1; x.beginPath();
     const gs = 0.2 * u; for (let gx = c0.x + gs; gx < c1.x; gx += gs) { x.moveTo(gx, c0.y); x.lineTo(gx, c1.y); } for (let gy = c0.y + gs; gy < c1.y; gy += gs) { x.moveTo(c0.x, gy); x.lineTo(c1.x, gy); } x.stroke();
-    for (let p = 0; p < 2; p++) { this.flash[p] *= Math.exp(-dt / 0.25); if (this.flash[p] > 0.02) { const gg = x.createLinearGradient(p ? c1.x : c0.x, 0, p ? c1.x - cw * 0.35 : c0.x + cw * 0.35, 0); const col = p ? '200,0,170' : '0,170,200'; gg.addColorStop(0, `rgba(${col},${0.7 * this.flash[p]})`); gg.addColorStop(1, `rgba(${col},0)`); x.fillStyle = gg; x.fillRect(c0.x, c0.y, cw, ch); } }
+    for (let p = 0; p < 2; p++) { this.flash[p] *= Math.exp(-dt / 0.25); if (this.flash[p] > 0.02) { const e0 = this.courtAnchor(p ? COURT.W : 0, 0.5), e1 = this.courtAnchor(COURT.W * (p ? 0.65 : 0.35), 0.5); const gg = x.createLinearGradient(e0.x, e0.y, e1.x, e1.y); const col = p ? '200,0,170' : '0,170,200'; gg.addColorStop(0, `rgba(${col},${0.7 * this.flash[p]})`); gg.addColorStop(1, `rgba(${col},0)`); x.fillStyle = gg; x.fillRect(c0.x, c0.y, cw, ch); } }
     x.strokeStyle = 'rgba(110,160,255,.85)'; x.lineWidth = 1.5; x.strokeRect(c0.x, c0.y, cw, ch);
-    x.setLineDash([0.06 * u, 0.06 * u]); x.strokeStyle = 'rgba(90,110,240,.6)'; x.beginPath(); x.moveTo(c0.x + cw / 2, c0.y); x.lineTo(c0.x + cw / 2, c1.y); x.stroke(); x.setLineDash([]);
+    const n0 = this.courtAnchor(COURT.W / 2, 0), n1 = this.courtAnchor(COURT.W / 2, 1);
+    x.setLineDash([0.06 * u, 0.06 * u]); x.strokeStyle = 'rgba(90,110,240,.6)'; x.beginPath(); x.moveTo(n0.x, n0.y); x.lineTo(n1.x, n1.y); x.stroke(); x.setLineDash([]);
     }
     // brains: shells, then dim neurons, then spiking neurons (additive)
     for (const b of this.brains) {
@@ -98,8 +93,10 @@ export class Render2D {
     x.globalAlpha = 1;
     // paddles, ball + trail, hit rings
     if (f && !choice) {
-      const ph = COURT.padH * S * u, pw = Math.max(3, 0.035 * u);
-      ['rgba(60,230,255,1)', 'rgba(255,70,220,1)'].forEach((col, p) => { const q = this.courtAnchor(COURT.padX[p] + (p ? 0.01 : -0.01), f.pad[p]); x.fillStyle = col; x.fillRect(q.x - pw / 2, q.y - ph / 2, pw, ph); x.fillStyle = col.replace(',1)', ',.18)'); x.fillRect(q.x - pw * 2, q.y - ph / 2 - pw, pw * 4, ph + pw * 2); });
+      const pw = Math.max(3, 0.035 * u);
+      ['rgba(60,230,255,1)', 'rgba(255,70,220,1)'].forEach((col, p) => { const px = COURT.padX[p] + (p ? 0.01 : -0.01), a = this.courtAnchor(px, f.pad[p] - COURT.padH / 2), b = this.courtAnchor(px, f.pad[p] + COURT.padH / 2);
+        x.lineCap = 'butt'; x.strokeStyle = col.replace(',1)', ',.18)'); x.lineWidth = pw * 4; x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke();
+        x.strokeStyle = col; x.lineWidth = pw; x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); });
       const bq = this.courtAnchor(f.bx, f.by);
       this.trail.unshift(bq); if (this.trail.length > 20) this.trail.length = 20;
       if (live) this.trail.forEach((t, i) => { x.fillStyle = `rgba(170,160,255,${0.5 * (1 - i / 20)})`; x.beginPath(); x.arc(t.x, t.y, Math.max(1, COURT.r * S * u * (1 - i / 24)), 0, 7); x.fill(); });

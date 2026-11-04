@@ -26,9 +26,10 @@ export const AREA_DEF = [
 export const L = {}; { let o = 0; for (const [k, n, t] of AREA_DEF) { L[k] = { s: o, n, e: o + n, t }; o += n; } L.N = o; }
 export const N = L.N;
 const NA = L.A_E.n, NM = L.M_UP.n + L.M_DN.n, M0 = L.M_UP.s;
-// sensory channels: 0 ball height relative to the own paddle (foveal, magnified near 0), 1 own paddle y,
-// 2 ball distance (x, egocentric), 3 ball vertical velocity
-export const CH = ['ball − paddle', 'paddle y', 'ball x', 'ball vy'];
+// sensory channels: 0 ball position along the paddle line relative to the own paddle (foveal, magnified near 0),
+// 1 own paddle position, 2 ball distance (x, egocentric), 3 ball sideways velocity. On screen the paddle line is
+// horizontal (court y -> right), so 'y' / 'UP' in the code is RIGHT on screen and 'DOWN' is LEFT.
+export const CH = ['ball − paddle', 'paddle x', 'ball distance', 'ball sideways v'];
 export const FOV = 0.22;   // foveal magnification: channel 0 = 0.5 + 0.5 tanh((ball y - paddle y) / FOV)
 export const fovea = d => 0.5 + 0.5 * Math.tanh(d / FOV);
 const TH_SPLIT = [112, 112, 48, 48];
@@ -46,18 +47,18 @@ import { UX_SRC } from './understand.js';
 const TH_SPLIT_U = [96, 64, 48, 48], NCTX_P = 16, CXC = 4;   // TH cells per channel, context symbols, cells/symbol
 const UCH = { 0: 0, 1: 1, 3: 2, 4: 3 };   // unit input source -> sensory channel (src 2 = context)
 export const PONG_UX = {
-  id: 'pong', labels: ['UP', 'DOWN'], uN: 88, n: { 0: 8, 1: 8, 3: 6, 4: 6 }, srcs: [[0, 8, 0.25], [1, 8, 0.15], [3, 6, 0.2], [4, 6, 0.1]], ctxW: 0.3, reflexSrc: [0], reflexInit: 0.08,
-  ctx_: [['my paddle moving up', 'self'], ['my paddle still', 'self'], ['my paddle moving down', 'self'], ['I won the last point', 'self'], ['I lost the last point', 'self'], ['I hit the ball last', 'self'],
-    ...[0, 1, 2, 3, 4, 5].map(k => [`enemy paddle in band ${k + 1}/6 (${k < 2 ? 'low' : k < 4 ? 'middle' : 'high'})`, 'enemy']), ['enemy moving up', 'enemy'], ['enemy still', 'enemy'], ['enemy moving down', 'enemy'], ['enemy hit the ball last', 'enemy']].map(([name, grp]) => ({ name, grp })),
+  id: 'pong', labels: ['RIGHT', 'LEFT'], uN: 88, n: { 0: 8, 1: 8, 3: 6, 4: 6 }, srcs: [[0, 8, 0.25], [1, 8, 0.15], [3, 6, 0.2], [4, 6, 0.1]], ctxW: 0.3, reflexSrc: [0], reflexInit: 0.08,
+  ctx_: [['my paddle moving right', 'self'], ['my paddle still', 'self'], ['my paddle moving left', 'self'], ['I won the last point', 'self'], ['I lost the last point', 'self'], ['I hit the ball last', 'self'],
+    ...[0, 1, 2, 3, 4, 5].map(k => [`enemy paddle in band ${k + 1}/6 (${k < 2 ? 'left' : k < 4 ? 'middle' : 'right'})`, 'enemy']), ['enemy moving right', 'enemy'], ['enemy still', 'enemy'], ['enemy moving left', 'enemy'], ['enemy hit the ball last', 'enemy']].map(([name, grp]) => ({ name, grp })),
   symName: (src, b) => { const n = PONG_UX.n[src], lo = Math.round(100 * b / n), hi = Math.round(100 * (b + 1) / n);
-    return src === 0 ? `ball ${b < n / 2 ? 'below' : 'above'} my paddle (${['far', 'well', 'just', 'just'][Math.min(3, Math.abs(b - (n - 1) / 2) > 2.5 ? 0 : Math.abs(b - (n - 1) / 2) > 1.5 ? 1 : 2)]}, bin ${b + 1}/${n})` : src === 1 ? `my paddle at ${lo}-${hi}% height` : src === 3 ? `ball ${b >= n - 2 ? 'near me' : b < 2 ? 'far away' : 'mid-court'} (${b + 1}/${n})` : `ball moving ${b < n / 2 ? 'down' : 'up'} (${b + 1}/${n})`; },
+    return src === 0 ? `ball ${b < n / 2 ? 'left of' : 'right of'} my paddle (${['far', 'well', 'just', 'just'][Math.min(3, Math.abs(b - (n - 1) / 2) > 2.5 ? 0 : Math.abs(b - (n - 1) / 2) > 1.5 ? 1 : 2)]}, bin ${b + 1}/${n})` : src === 1 ? `my paddle at ${lo}-${hi}% across` : src === 3 ? `ball ${b >= n - 2 ? 'near me' : b < 2 ? 'far away' : 'mid-court'} (${b + 1}/${n})` : `ball drifting ${b < n / 2 ? 'left' : 'right'} (${b + 1}/${n})`; },
   uClass: u => { const s = u.i.map(c => Math.floor(c / UX_SRC)).filter(x => x !== 2); return new Set(s).size < s.length ? 'clash' : s.includes(0) ? 'tracking+' : 'task'; },
   uLocal: (code, r) => { const src = Math.floor(code / UX_SRC), b = code % UX_SRC; if (src === 2) return null; const n = PONG_UX.n[src], b2 = b + (r() < 0.5 ? -1 : 1); return b2 < 0 || b2 >= n ? null : src * UX_SRC + b2; },
   nbrClasses: ['enemy'],
   reflexText: 'In Pong the reflex is tracking: move the paddle to where the ball is. It returns the ball, but only to wherever the bounce happens to send it.',
   understandText: 'where the enemy paddle sits and where it is going, combined with where the ball is on my own paddle',
-  selfText: 'its own paddle\'s height and motion, who won the last point, who hit last', enemyText: 'where the enemy paddle sits, which way it moves, whether it just hit',
-  probeName: 'the enemy is a statue parked high (or low), so a return aimed at the open side always wins',
+  selfText: 'its own paddle\'s position and motion, who won the last point, who hit last', enemyText: 'where the enemy paddle sits, which way it moves, whether it just hit',
+  probeName: 'the enemy is a statue parked far right (or far left), so a return aimed at the open side always wins',
   beyondText: 'Beyond-reflex = the share of the brain\'s returns that beat the statue, minus the share a perfect tracker\'s returns do',
 };
 const UXQ = { w: 1.2, bias: -3, bias3: -4.5, pIn: 0.5, wRec: 0.03 };

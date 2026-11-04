@@ -117,7 +117,8 @@ function layout() {
     if (b.contains('dockctl')) { right = W - 300; $('carousel').style.right = '306px'; }
   }
   if (b.contains('thumb')) { top = 70; bottom = H - 10; right = W; }
-  rect = { x: left + 6, y: top, w: Math.max(50, right - left - 12), h: Math.max(50, bottom - top - (compact ? 40 : 66)) };
+  const pongV = !!(C && !isChoice()), reserve = pongV ? 12 : compact ? 40 : 66;
+  rect = { x: left + 6, y: top, w: Math.max(50, right - left - 12), h: Math.max(50, bottom - top - reserve) };
   if (R) R.resize(W, H, rect);
   document.querySelectorAll('.card').forEach(c => c.classList.toggle('on', c.dataset.card === ui.tab));
   ui.stageR = null; renderCarousel(); drawChart();
@@ -125,15 +126,26 @@ function layout() {
 addEventListener('resize', () => { clearTimeout(layout.t); layout.t = setTimeout(layout, 60); });
 addEventListener('orientationchange', () => setTimeout(layout, 250));
 
+// Pong is drawn with the paddles along the bottom and top (moving left/right); in Play the court is flipped so you are at the bottom
+function syncView() {
+  if (!R || !R.setView) return; const pong = !isChoice();
+  R.setView({ pong, flip: ui.mode === 'play' && pong });
+  if (ui.vPong !== pong) { ui.vPong = pong; layout(); }   // Pong reserves less room under the stage (its cards sit beside the court)
+}
+// the court's on-screen box (any orientation)
+function courtBox() { const a = R.courtAnchor(0, 0), b = R.courtAnchor(COURT.W, 1); return { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), y0: Math.min(a.y, b.y), y1: Math.max(a.y, b.y) }; }
 function placeOverlays() {
   if (!R) return;
+  syncView(); document.body.classList.toggle('pongtall', !isChoice() && R.mode === 'tall');
   for (let k = 0; k < 2; k++) {
-    const short = R.ppu < 75, AB = ['Sens.', 'Thal.', 'Assoc.', 'Motor ▲', 'Motor ▼'], ch = isChoice();
+    const short = R.ppu * (R.bs || 1.2) < 85, AB = ['Sens.', 'Thal.', 'Assoc.', 'Motor ▶', 'Motor ◀'], ch = isChoice();
     REGION_LABELS.forEach(([t, x, y], j) => { const p = R.anchor(k, x, y); const el = regionEls[k][j]; let txt = short ? AB[j] : t; if (ch && j === 3) txt = short ? 'Choices' : `${C.K} choice pops`; if (ch && j === 4) txt = ''; if (el.textContent !== txt) el.textContent = txt; el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.style.opacity = ui.mode === 'play' && k === 1 ? 0.25 : 1; });
     const p = R.anchor(k, 0, 1.06); nameEls[k].style.left = p.x + 'px'; nameEls[k].style.top = p.y + 'px';
     const m = $(k ? 'metB' : 'metA'), q = R.anchor(k, 0, -1.0), w = m.offsetWidth, h = m.offsetHeight;
     let x = q.x - w / 2, y = q.y + 4;
-    const maxY = rect.y + rect.h + (document.body.classList.contains('compact') ? 40 : 60) - h;
+    const pongV = !isChoice(), maxY = rect.y + rect.h + (pongV ? 10 : document.body.classList.contains('compact') ? 40 : 60) - h;
+    // Pong on tall screens stacks the brains: the upper brain's card sits inside its own lower half, clear of the other brain
+    if (pongV && R.mode === 'tall' && q.y < R.anchor(1 - k, 0, -1.0).y) y = q.y - h - 2;
     x = Math.max(6, Math.min(innerWidth - w - 6, x)); y = Math.min(y, maxY);
     m.style.left = x + 'px'; m.style.top = y + 'px';
     // when the card has to sit up inside the brain (short screens), keep the region labels clear of it
@@ -142,8 +154,8 @@ function placeOverlays() {
       if (ly > y - 9 && ly < y + h + 9 && lx + hw > x && lx - hw < x + w) el.style.top = (y - 10) + 'px';
     });
   }
-  const c = R.courtAnchor(COURT.W / 2, 1.0), sc = $('score');
-  sc.style.top = Math.max(52 + ui.carh, c.y - sc.offsetHeight - 6) + 'px'; sc.style.left = c.x + 'px';
+  const cb = courtBox(), sc = $('score');
+  const sw = sc.offsetWidth / 2 + 6; sc.style.top = Math.max(52 + ui.carh, cb.y0 - sc.offsetHeight - 6) + 'px'; sc.style.left = Math.max(sw, Math.min(innerWidth - sw, (cb.x0 + cb.x1) / 2)) + 'px';
   if (isChoice()) {
     // the stage takes the court's place (a little larger), clamped to the arena rectangle
     const a = R.courtAnchor(0, 1), b = R.courtAnchor(COURT.W, 0), cw = b.x - a.x, chh = b.y - a.y;
@@ -327,9 +339,12 @@ function tickLive() {
 // ------------------------------------------------------------------ input (play mode)
 const input = {
   keys: new Set(), y: null, serve: false, gp: 0, answer: null, typed: '',
-  cmd() { let c = 0; if (this.keys.has('up')) c += 1; if (this.keys.has('down')) c -= 1; if (!c && Math.abs(this.gp) > 0.18) c = this.gp; return Math.max(-1, Math.min(1, c)); },
+  cmd() { let c = 0; if (this.keys.has('right')) c += 1; if (this.keys.has('left')) c -= 1; if (!c && Math.abs(this.gp) > 0.18) c = this.gp; return Math.max(-1, Math.min(1, c)); },
 };
-const KMAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down' };
+// Pong in Play: your paddle runs along the bottom; ← → or A D move it (+1 = right = the court's +y)
+const KMAP = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
+const pongPlay = () => ui.mode === 'play' && !isChoice();
+function newPongGame() { const lv = ui.live; if (!lv || lv.kind !== 'play' || isChoice()) return; lv.reset = true; lv.over = false; toast('New game: first to 11'); }
 // choice contests in Play: type the answer (or press its button). "1" waits briefly in case "12" follows.
 function typeAnswer(ch) {
   const L = C.labels, t = (input.typed + ch).toUpperCase();
@@ -347,11 +362,12 @@ addEventListener('keydown', e => {
     if (C.race && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) { pressAnswer(e.code === 'ArrowLeft' ? 0 : 1); e.preventDefault(); return; }
     if (e.key && e.key.length === 1 && e.key !== ' ' && typeAnswer(e.key)) { e.preventDefault(); return; }
   }
+  if (pongPlay() && !e.metaKey && !e.ctrlKey && KMAP[e.code]) { input.keys.add(KMAP[e.code]); input.y = null; e.preventDefault(); return; }
+  if (pongPlay() && e.code === 'Enter') { if (!e.repeat) newPongGame(); e.preventDefault(); return; }
   if (e.code === 'BracketLeft' || (e.code === 'ArrowLeft' && !e.repeat)) { stepContest(-1); e.preventDefault(); return; }
   if (e.code === 'BracketRight' || (e.code === 'ArrowRight' && !e.repeat)) { stepContest(1); e.preventDefault(); return; }
   if (e.code === 'KeyL') { toggleLab(true); return; }
-  if (KMAP[e.code]) { input.keys.add(KMAP[e.code]); input.y = null; e.preventDefault(); }
-  else if (e.code === 'Space') { input.serve = true; e.preventDefault(); }
+  if (e.code === 'Space') { input.serve = true; e.preventDefault(); }
   else if (e.code === 'Digit1') setMode('watch'); else if (e.code === 'Digit2') setMode('turbo'); else if (e.code === 'Digit3') setMode('play');
   else if (e.code === 'KeyI') toggleInfo(); else if (e.code === 'Escape') { toggleInfo(false); document.body.classList.remove('ctl'); }
 });
@@ -368,7 +384,9 @@ onCanvas('pointermove', e => { if (ui.mode !== 'play') return; if (e.pointerType
 addEventListener('pointerup', e => { if (input.drag === e.pointerId) input.drag = null; });
 function pollGamepad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : []; let v = 0;
-  for (const g of gps) { if (!g) continue; v = -(g.axes[1] || 0); if (g.buttons[12]?.pressed) v = 1; if (g.buttons[13]?.pressed) v = -1; if (g.buttons[0]?.pressed && !input.gpA) input.serve = true; input.gpA = g.buttons[0]?.pressed; break; }
+  for (const g of gps) { if (!g) continue; v = g.axes[0] || 0; if (g.buttons[15]?.pressed) v = 1; if (g.buttons[14]?.pressed) v = -1;   // left stick / D-pad left-right
+    if (g.buttons[0]?.pressed && !input.gpA) input.serve = true; input.gpA = g.buttons[0]?.pressed;   // A / cross serves
+    if (g.buttons[9]?.pressed && !input.gpS) newPongGame(); input.gpS = g.buttons[9]?.pressed; break; }   // Start: new game
   input.gp = v;
 }
 
@@ -406,7 +424,7 @@ function updateMeters(f) {
     });
     return;
   }
-  ['A', 'B'].forEach(s => { $('lu' + s).textContent = 'Motor UP'; $('ld' + s).textContent = 'Motor DOWN'; });
+  ['A', 'B'].forEach(s => { $('lu' + s).textContent = 'Motor RIGHT'; $('ld' + s).textContent = 'Motor LEFT'; });
   if (!(ui.live && ui.live.benching)) $('clock').textContent = ui.mode === 'play' ? 'first to 11' : `${(f.time / 1000).toFixed(1)} / ${evo.opts.matchSec} s`;
   f.br.forEach((b, k) => {
     if (!b) return; const s = k ? 'B' : 'A';
@@ -414,7 +432,7 @@ function updateMeters(f) {
     const d = $('da' + s), v = Math.max(-1, Math.min(1, b.rpe * 0.8));
     d.style.width = Math.abs(v) * 50 + '%'; d.style.left = v < 0 ? (50 + v * 50) + '%' : '50%'; d.classList.toggle('neg', v < 0);
     const h = f.stats.hits[k], m = f.stats.miss[k];
-    $('hr' + s).textContent = `returned ${h}/${h + m}${h + m ? ` · ${Math.round(100 * h / (h + m))}%` : ''} · ${b.out > 0.15 ? '▲ UP' : b.out < -0.15 ? '▼ DOWN' : '• hold'}`;
+    $('hr' + s).textContent = `returned ${h}/${h + m}${h + m ? ` · ${Math.round(100 * h / (h + m))}%` : ''} · ${b.out > 0.15 ? '▶ RIGHT' : b.out < -0.15 ? '◀ LEFT' : '• hold'}`;
   });
 }
 function recentRally(n = 20) { const h = evo.history.slice(-n); return h.length ? h.reduce((a, e) => a + e.rally, 0) / h.length : 0; }
@@ -485,7 +503,7 @@ function drawChoiceMap(c, m) {
   x.putImageData(img, 0, 0);
 }
 function drawMaps() {
-  $('mapNote').textContent = isChoice() ? `Each pixel is one association cell: rows = first symbol, columns = second (a ${C.n[0]}×${C.n[1]} grid of tiles). Green = it votes for the correct answer, red = for a wrong one; brighter = stronger preference.` : 'Each pixel is one association cell (ball relative to paddle ↑ vs paddle height →). Green drives UP, orange drives DOWN. A good player learns a horizontal split: green above the middle, orange below.';
+  $('mapNote').textContent = isChoice() ? `Each pixel is one association cell: rows = first symbol, columns = second (a ${C.n[0]}×${C.n[1]} grid of tiles). Green = it votes for the correct answer, red = for a wrong one; brighter = stronger preference.` : 'Each pixel is one association cell (rows: where the ball is relative to the paddle, ball-to-the-right at the top; columns: the paddle\'s position, left → right). Green drives RIGHT, orange drives LEFT. A good player learns a horizontal split: green above the middle, orange below.';
   [0, 1].forEach(k => {
     const c = $(k ? 'polB' : 'polA'), x = c.getContext('2d'), m = ui.polMaps[k];
     if (m && m.G) { drawChoiceMap(c, m); return; }

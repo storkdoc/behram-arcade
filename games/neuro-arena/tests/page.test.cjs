@@ -48,17 +48,25 @@ const ok = (c, m) => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fai
     await p.waitForTimeout(800);
     const y0 = await p.evaluate(() => NA.ui.frame.pad[1]);
     if (opts.hasTouch) {
-      // drag on the court near the top of the right half
+      // tap on the court towards the right, in your own (bottom) half: your paddle slides right
       const pt = await p.evaluate(() => NA.courtPoint(1.2, 0.9));
       await p.touchscreen.tap(pt.x, pt.y);
       await p.waitForTimeout(3000);
     } else {
       await p.keyboard.press('Space');
-      await p.keyboard.down('ArrowUp'); await p.waitForTimeout(2500); await p.keyboard.up('ArrowUp');
+      await p.keyboard.down('ArrowRight'); await p.waitForTimeout(2500); await p.keyboard.up('ArrowRight');
+      ok(await p.evaluate(() => NA.contest.id) === 'pong', 'play mode: ← / → move the paddle and do not change the contest');
     }
     const s2 = await p.evaluate(() => ({ y: NA.ui.frame.pad[1], hold: NA.ui.frame.hold && NA.ui.frame.stats.score[0] + NA.ui.frame.stats.score[1] === 0, t: NA.ui.frame.time, bx: NA.ui.frame.bx }));
     ok(s2.y > y0 + 0.1, `play mode: human paddle responds (${y0.toFixed(2)} → ${s2.y.toFixed(2)})`);
     ok(!s2.hold, `play mode: ball served (t ${s2.t} ms)`);
+    if (!opts.hasTouch) {
+      await p.keyboard.down('KeyA'); await p.waitForTimeout(1500); await p.keyboard.up('KeyA');
+      const y3 = await p.evaluate(() => NA.ui.frame.pad[1]);
+      ok(y3 < s2.y - 0.1, `play mode: A / ← slide the paddle back left (${s2.y.toFixed(2)} → ${y3.toFixed(2)})`);
+      const sc = await p.evaluate(() => { const a = NA.courtPoint(1.54, 0), b = NA.courtPoint(1.54, 1), c = NA.courtPoint(0.06, 0.5); return { horiz: Math.abs(b.x - a.x) > Math.abs(b.y - a.y), bottom: a.y > c.y }; });
+      ok(sc.horiz && sc.bottom, 'play mode: your paddle runs left/right along the bottom of the court');
+    }
     await p.waitForTimeout(1500);
     await shot(p, { path: `/tmp/na_${name.replace(/\W+/g, '_')}_play.png` });
     if ((await p.evaluate(() => document.body.className)).includes('compact')) {
