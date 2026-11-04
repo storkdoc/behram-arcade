@@ -169,17 +169,28 @@
       // crop of the existing Congressional OB GYN headshot
       g.drawImage(img, 120, 0, 360, 360, 0, 6 * s, size, size);
       g.fillStyle = '#3f7fb8'; g.fillRect(0, 108 * s, size, 20 * s); // scrub top
-      // fitted bouffant scrub cap with a fun print: a soft puff that follows his skull, gathered by an elastic band that sits at
-      // the hairline and runs down over the temples to just above the ears (covers his hair, no flat slab across the frame)
-      var cap = new Path2D(); cap.moveTo(19 * s, 72 * s);
-      cap.bezierCurveTo(10 * s, 44 * s, 18 * s, 4 * s, 62 * s, 3 * s); cap.bezierCurveTo(106 * s, 4 * s, 114 * s, 42 * s, 105 * s, 67 * s);
-      cap.bezierCurveTo(100 * s, 52 * s, 86 * s, 45 * s, 62 * s, 45 * s); cap.bezierCurveTo(40 * s, 45 * s, 24 * s, 54 * s, 19 * s, 72 * s); cap.closePath();
-      var cg = g.createRadialGradient(52 * s, 12 * s, 4 * s, 62 * s, 36 * s, 64 * s); cg.addColorStop(0, '#4a8ad0'); cg.addColorStop(0.6, '#2f6fb0'); cg.addColorStop(1, '#1f5490');
-      g.fillStyle = cg; g.fill(cap);
+      // cloth bouffant scrub cap with a fun print: low profile hugging the skull, hem at the hairline (forehead and a little
+      // gray hair at the temples show), softly scalloped outline, gentle folds and a thin gathered elastic hem
+      // outline sampled from a skull-hugging curve, nudged outward in soft lobes so the edge reads as gathered cloth
+      var cap = new Path2D(), i, t, u, P0 = [24, 43], C1 = [13, 22], C2 = [31, 3.5], M = [62, 4], D1 = [93, 3.5], D2 = [111, 22], P3 = [98, 41];
+      function bz(p0, p1, p2, p3, t) { var v = 1 - t; return [v * v * v * p0[0] + 3 * v * v * t * p1[0] + 3 * v * t * t * p2[0] + t * t * t * p3[0], v * v * v * p0[1] + 3 * v * v * t * p1[1] + 3 * v * t * t * p2[1] + t * t * t * p3[1]]; }
+      var pts = []; for (i = 0; i <= 24; i++) pts.push(bz(P0, C1, C2, M, i / 24)); for (i = 1; i <= 24; i++) pts.push(bz(M, D1, D2, P3, i / 24));
+      pts.forEach(function (q, j) { var dx = q[0] - 62, dy = q[1] - 40, L = Math.sqrt(dx * dx + dy * dy) || 1, o = 0.9 * Math.abs(Math.sin(j * Math.PI / 8)); var X = (q[0] + dx / L * o) * s, Y = (q[1] + dy / L * o) * s; if (j) cap.lineTo(X, Y); else cap.moveTo(X, Y); });
+      cap.quadraticCurveTo(62 * s, 22 * s, 24 * s, 43 * s); cap.closePath();
+      var cg = g.createRadialGradient(54 * s, 12 * s, 2 * s, 62 * s, 28 * s, 46 * s); cg.addColorStop(0, '#5f9ad8'); cg.addColorStop(0.55, '#3a78b8'); cg.addColorStop(1, '#285f99');
+      g.save(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 4 * s; g.shadowOffsetY = 1.5 * s; g.fillStyle = cg; g.fill(cap); g.restore();
       g.save(); g.clip(cap);
-      g.fillStyle = 'rgba(255,255,255,.85)'; for (var k = 0; k < 11; k++) { var px = (28 + (k % 6) * 13 + (Math.floor(k / 6) ? 6 : 0)) * s, py = (14 + Math.floor(k / 6) * 14 + (k % 2) * 4) * s; g.beginPath(); g.arc(px, py, 2 * s, 0, 7); g.fill(); g.beginPath(); g.arc(px + 2.4 * s, py - 2.4 * s, 1.1 * s, 0, 7); g.fill(); }
+      g.fillStyle = 'rgba(255,255,255,.7)'; for (var k = 0; k < 8; k++) { var px = (34 + (k % 4) * 17 + (k > 3 ? 8 : 0)) * s, py = (k > 3 ? 23 : 13) * s + (k % 2) * 3 * s; g.beginPath(); g.arc(px, py, 1.8 * s, 0, 7); g.fill(); g.beginPath(); g.arc(px + 2.2 * s, py - 2.2 * s, 1 * s, 0, 7); g.fill(); }
+      g.lineCap = 'round'; // soft folds running up from the gathered hem
+      [[33, 37, 38, 12], [52, 32, 54, 7], [72, 32, 74, 7], [90, 37, 88, 13]].forEach(function (f, j) {
+        g.strokeStyle = 'rgba(15,45,85,.14)'; g.lineWidth = 2.6 * s; g.beginPath(); g.moveTo(f[0] * s, f[1] * s); g.quadraticCurveTo((f[0] + f[2]) / 2 * s + (j % 2 ? 3 : -3) * s, (f[1] + f[3]) / 2 * s, f[2] * s, f[3] * s); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,.1)'; g.lineWidth = 2 * s; g.beginPath(); g.moveTo((f[0] + 4) * s, f[1] * s); g.quadraticCurveTo(((f[0] + f[2]) / 2 + 4 + (j % 2 ? 3 : -3)) * s, (f[1] + f[3]) / 2 * s, (f[2] + 4) * s, f[3] * s); g.stroke(); });
       g.restore();
-      g.strokeStyle = '#1d4c82'; g.lineWidth = 3.4 * s; g.lineCap = 'round'; g.beginPath(); /* elastic band */ g.moveTo(20 * s, 71 * s); g.bezierCurveTo(25 * s, 54 * s, 40 * s, 46 * s, 62 * s, 46 * s); g.bezierCurveTo(86 * s, 46 * s, 100 * s, 52 * s, 104 * s, 65 * s); g.stroke(); g.lineCap = 'butt';
+      // thin elastic hem with little gathers
+      g.strokeStyle = '#2a5f96'; g.lineWidth = 1.8 * s; g.lineCap = 'round'; g.beginPath(); g.moveTo(24.5 * s, 42.5 * s); g.quadraticCurveTo(62 * s, 21 * s, 97.5 * s, 40.5 * s); g.stroke();
+      g.strokeStyle = 'rgba(15,45,85,.18)'; g.lineWidth = 1.2 * s;
+      for (i = 1; i < 9; i++) { t = i / 9 + (i % 2 ? 0.012 : -0.012); var hx = (1 - t) * (1 - t) * 24.5 + 2 * (1 - t) * t * 62 + t * t * 97.5, hy = (1 - t) * (1 - t) * 42.5 + 2 * (1 - t) * t * 21 + t * t * 40.5; g.beginPath(); g.moveTo(hx * s, (hy - 0.8) * s); g.quadraticCurveTo((hx + 1.2) * s, (hy - 2.4) * s, (hx + 0.6) * s, (hy - 4) * s); g.stroke(); }
+      g.lineCap = 'butt';
       // mask pulled down around the neck
       g.fillStyle = '#7fb6d9'; g.beginPath(); g.moveTo(30 * s, 104 * s); g.quadraticCurveTo(64 * s, 120 * s, 98 * s, 104 * s); g.lineTo(96 * s, 114 * s); g.quadraticCurveTo(64 * s, 128 * s, 32 * s, 114 * s); g.fill();
     } else if (P) {
