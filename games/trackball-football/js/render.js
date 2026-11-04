@@ -208,7 +208,7 @@ const Render = (() => {
     for (const lx of [8, 42, 78, 112]) {
       const p = proj(lx, -34, 26); if (p[1] < -40 || p[0] < -200 || p[0] > W + 200) continue;
       const sc = cam.F / p[2], bw = sc * 7, bh = sc * 2.6;
-      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowTex, p[0] - bw * 2.2, p[1] - bw * 2.2, bw * 4.4, bw * 4.4); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      if (quality.level > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowTex, p[0] - bw * 2.2, p[1] - bw * 2.2, bw * 4.4, bw * 4.4); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
       ctx.fillStyle = '#2a2f40'; ctx.fillRect(p[0] - bw / 2 - 2, p[1] - bh / 2 - 2, bw + 4, bh + 4);
       for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) { ctx.fillStyle = '#fffbea'; ctx.beginPath(); ctx.arc(p[0] - bw / 2 + (c + 0.5) * bw / 8, p[1] - bh / 2 + (r + 0.5) * bh / 3, Math.max(0.8, bw / 22), 0, 7); ctx.fill(); }
     }
@@ -231,12 +231,14 @@ const Render = (() => {
     for (let x = Math.max(10, Math.floor(x0 / 5) * 5); x < Math.min(110, x1); x += 5) {
       ctx.beginPath(); quad(ctx, x - 0.03, 0, x + 5.03, FIELD_W); ctx.fillStyle = stripes[(x / 5) % 2]; ctx.fill();
     }
-    ctx.beginPath(); for (let k = 0; k < 8; k += 2) quad(ctx, Math.max(10, x0), k * FIELD_W / 8, Math.min(110, x1), (k + 1) * FIELD_W / 8);
-    ctx.fillStyle = 'rgba(0,20,0,0.07)'; ctx.fill();
+    const lo = quality.level === 0; // low quality: skip the purely decorative overdraw passes
+    if (!lo) { ctx.beginPath(); for (let k = 0; k < 8; k += 2) quad(ctx, Math.max(10, x0), k * FIELD_W / 8, Math.min(110, x1), (k + 1) * FIELD_W / 8);
+    ctx.fillStyle = 'rgba(0,20,0,0.07)'; ctx.fill(); }
     for (let e = 0; e < 2; e++) {
       const ex0 = e ? 110 : 0; if (ex0 + 10 < x0 || ex0 > x1) continue;
       ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, FIELD_W); ctx.fillStyle = shade(TEAM[e].ez); ctx.fill();
       // painted end zone: diagonal pinstripes and a darker border band
+      if (lo) continue;
       ctx.save(); ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, FIELD_W); ctx.clip(); ctx.beginPath();
       for (let yy = -12; yy < FIELD_W + 12; yy += 1.6) { const a = proj(ex0 - 1, yy), b = proj(ex0 + 11, yy + 12); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
       ctx.strokeStyle = 'rgba(0,0,0,0.13)'; ctx.lineWidth = Math.max(1, pxAt(MID_Y) * 0.32); ctx.stroke();
