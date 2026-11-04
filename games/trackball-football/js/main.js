@@ -509,7 +509,7 @@ const GameScreen = {
       case 'hit': case 'deflect': Sound.play('hit'); if (e.x != null) R.spawn('turf', e.x, e.y); shake(0.12); break;
       case 'tackle': Sound.play('tackle'); if (e.x != null) R.spawn('turf', e.x, e.y); shake(0.22); break;
       case 'bighit': Sound.play('bighit'); if (e.x != null) { R.spawn('turf', e.x, e.y); R.spawn('ring', e.x, e.y); } shake(0.6); break;
-      case 'td': Sound.play('td'); R.spawn('fw'); setTimeout(() => R.spawn('fw'), 700); shake(0.35); break;
+      case 'td': Sound.play('td'); if (e.x != null && R.celebrate) R.celebrate(e.t | 0, e.x, e.y); R.spawn('fw'); setTimeout(() => R.spawn('fw'), 700); shake(0.35); break;
       case 'fg': Sound.play('fg'); R.spawn('fw'); break;
       case 'fumble': Sound.play('fumble'); Sound.play('bounce'); shake(0.3); break;
       case 'switch': if (e.t == null || e.t === App.me) { Sound.play('switch'); if (e.sel && e.i != null) R.selFlash(e.i); } break;

@@ -19,11 +19,14 @@ const SKIN = ['#8d5524', '#c68642', '#e0ac69', '#f1c27d', '#5c3a1e', '#a86b3c', 
 const Render = (() => {
   let W = 1, H = 1, DPR = 1;
   const cam = { tx: 60, ty: MID_Y, vx: 0, F: 900, D: 80, p: 50 * Math.PI / 180, cx: 0, cy: 0, k: 14, rect: { x: 0, y: 0, w: 1, h: 1 }, shake: 0, followY: false, cp: 0, sp: 0 };
-  let crowdTex = [null, null], grassTile = null, vignette = null, t = 0;
+  let crowdTex = [null, null], grassTile = null, vignette = null, t = 0, poolTex = null, dotTex = null, glowTex = null, grassPat = null;
+  const TOWERS = [[8, -34], [42, -34], [78, -34], [112, -34], [20, FIELD_W + 36], [100, FIELD_W + 36]]; // floodlight banks (x, y), ~26 yd up
+  const cel = { team: -1, t0: -9, x: 0, y: 0 }; // touchdown celebration (cosmetic)
   const anim = []; // per player client-side animation state
   const parts = [], fireworks = [];
-  for (let i = 0; i < 14; i++) anim.push({ ph: Math.random() * 6, tilt: 0, x: 0, y: 0, skin: SKIN[(i * 5 + 3) % SKIN.length], crouch: 0 });
+  for (let i = 0; i < 14; i++) anim.push({ ph: Math.random() * 6, tilt: 0, x: 0, y: 0, skin: SKIN[(i * 5 + 3) % SKIN.length], crouch: 0, pfa: 0, cutT: 0, fell: 0, hop: 0 });
   const quality = { level: 2 };
+  const PS = 1.2; // players are drawn 20% larger than their (unchanged) collision footprint so the art reads on phones
 
   /* ---------------- camera ---------------- */
   function layout(w, h, dpr, rect, mobile) {
@@ -65,10 +68,31 @@ const Render = (() => {
 
   /* ---------------- generated textures ---------------- */
   function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function radialTex(n, stops) { const c = mk(n, n), x = c.getContext('2d'), g = x.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2); for (const [o, col] of stops) g.addColorStop(o, col); x.fillStyle = g; x.fillRect(0, 0, n, n); return c; }
+  let logoTex = null;
+  /** midfield logo, drawn top-down once into a sprite: a 1978-style trackball star seal (invented, no real marks) */
+  function buildLogo() {
+    const c = mk(512, 512), x = c.getContext('2d'), u = 256 / 5.4; x.translate(256, 256);
+    const poly = (r, n, rot, sp) => { x.beginPath(); for (let k = 0; k <= n; k++) { const a = rot + k / n * Math.PI * 2, rr = sp && k % 2 ? r * sp : r; k ? x.lineTo(Math.cos(a) * rr * u, Math.sin(a) * rr * u) : x.moveTo(Math.cos(a) * rr * u, Math.sin(a) * rr * u); } };
+    poly(5.2, 64, 0); x.fillStyle = 'rgba(10,14,34,0.62)'; x.fill(); x.lineWidth = u * 0.2; x.strokeStyle = 'rgba(255,210,60,0.92)'; x.stroke();
+    poly(4.45, 64, 0); x.lineWidth = u * 0.07; x.strokeStyle = 'rgba(255,255,255,0.72)'; x.stroke();
+    poly(3.6, 10, -Math.PI / 2, 0.55); x.fillStyle = 'rgba(200,36,28,0.88)'; x.fill(); x.lineWidth = u * 0.09; x.strokeStyle = 'rgba(255,233,168,0.92)'; x.stroke();
+    x.font = `italic 900 ${u * 2.4}px ${DFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.lineWidth = u * 0.24; x.strokeStyle = 'rgba(60,8,4,0.85)'; x.strokeText('TB', 0, u * 0.1); x.fillStyle = '#ffe9a8'; x.fillText('TB', 0, u * 0.1);
+    const ring = 'TRACKBALL \u2605 FOOTBALL \u2605 '; x.font = `900 ${u * 0.62}px ${DFONT}`; x.fillStyle = '#ffd23c';
+    for (let k = 0; k < ring.length; k++) { const a = -Math.PI / 2 + (k + 0.5) / ring.length * Math.PI * 2; x.save(); x.rotate(a + Math.PI / 2); x.fillText(ring[k], 0, -4.83 * u); x.restore(); }
+    return c;
+  }
+  function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
   function buildTextures() {
+    // soft sprites, built once: light pool, contact-shadow dot, additive glow (no per-frame gradient objects)
+    poolTex = radialTex(256, [[0, 'rgba(255,248,222,1)'], [0.35, 'rgba(255,244,210,0.55)'], [0.7, 'rgba(255,240,200,0.14)'], [1, 'rgba(255,240,200,0)']]);
+    dotTex = radialTex(64, [[0, 'rgba(0,0,0,1)'], [0.45, 'rgba(0,0,0,0.6)'], [1, 'rgba(0,0,0,0)']]);
+    glowTex = radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.2, 'rgba(255,255,255,0.7)'], [0.5, 'rgba(255,255,255,0.15)'], [1, 'rgba(255,255,255,0)']]);
     // grass blades tile
     grassTile = mk(256, 256); const g = grassTile.getContext('2d');
-    for (let i = 0; i < 2600; i++) {
+    for (let i = 0; i < 90; i++) { g.fillStyle = Math.random() < 0.5 ? `rgba(0,30,0,${0.05 + Math.random() * 0.07})` : `rgba(150,220,110,${0.03 + Math.random() * 0.05})`; g.beginPath(); g.ellipse(Math.random() * 256, Math.random() * 256, 6 + Math.random() * 16, 3 + Math.random() * 8, Math.random() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 3400; i++) {
       const x = Math.random() * 256, y = Math.random() * 256, l = 2 + Math.random() * 5, a = -Math.PI / 2 + (Math.random() - 0.5) * 0.9;
       const lt = Math.random(); g.strokeStyle = lt < 0.5 ? `rgba(10,40,8,${0.18 + Math.random() * 0.25})` : `rgba(170,230,120,${0.08 + Math.random() * 0.14})`;
       g.lineWidth = 0.8 + Math.random() * 0.8; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
@@ -78,6 +102,7 @@ const Render = (() => {
     const t2 = mk(256, 256), g2 = t2.getContext('2d');
     for (const [ox, oy] of [[0, 0], [-256, 0], [0, -256], [-256, -256]]) g2.drawImage(grassTile, ox + 128, oy + 128);
     g.globalAlpha = 0.5; g.drawImage(t2, 0, 0); g.globalAlpha = 1;
+    grassPat = null;
     // crowd strips: 2 variants (seated, cheering)
     const pal = ['#c8283c', '#e23b4f', '#1f4fbf', '#2e6ae6', '#f2f2f2', '#ffd23c', '#222', '#4a4a55', '#8a1022', '#0e2a6b', '#d0d4dc', '#ff8a3c', '#3a7d44'];
     for (let v = 0; v < 2; v++) {
@@ -105,7 +130,7 @@ const Render = (() => {
     vignette = mk(Math.max(1, Math.round(W / 2)), Math.max(1, Math.round(H / 2)));
     const v = vignette.getContext('2d'), w = vignette.width, h = vignette.height;
     const g = v.createRadialGradient(w / 2, h * 0.55, Math.min(w, h) * 0.35, w / 2, h * 0.55, Math.hypot(w, h) * 0.62);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.5)'); v.fillStyle = g; v.fillRect(0, 0, w, h);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.55, 'rgba(0,3,14,0.22)'); g.addColorStop(1, 'rgba(0,2,10,0.62)'); v.fillStyle = g; v.fillRect(0, 0, w, h);
   }
 
   /* ---------------- primitives ---------------- */
@@ -128,8 +153,10 @@ const Render = (() => {
 
   /* ---------------- stadium ---------------- */
   function drawSky(ctx) {
-    const g = ctx.createLinearGradient(0, 0, 0, H * 0.5); g.addColorStop(0, '#03040a'); g.addColorStop(1, '#101a33');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const g = ctx.createLinearGradient(0, 0, 0, H * 0.5); g.addColorStop(0, '#020308'); g.addColorStop(0.6, '#0b1430'); g.addColorStop(1, '#16244a');
+    // only the strip above the stands needs sky (saves a full-screen fill every frame)
+    const top = proj(cam.tx, -8 - 26, 1.3 + 26 * 0.78 + 1)[1] - 38;
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, clamp(top, 0, H));
   }
   function drawStands(ctx, S) {
     const ex = S ? S.ex || 0 : 0, rows = 26, xs = visibleX(-8);
@@ -156,12 +183,11 @@ const Render = (() => {
       ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0, a[1] - 0.5, W, Math.max(0.6, hgt * 0.08));
     }
     // camera flashes in the crowd
-    const nf = Math.floor((0.25 + ex * 3.5) * (quality.level > 0 ? 1 : 0.4));
+    const nf = Math.floor((0.6 + ex * 6 + (t - cel.t0 < 4 ? 8 : 0)) * (quality.level > 0 ? 1 : 0.4));
     for (let k = 0; k < nf; k++) if (Math.random() < 0.5) {
       const i = Math.floor(Math.random() * rows), y = -8 - i, z = 1.3 + i * 0.78 + 0.6, x = xs[0] + Math.random() * (xs[1] - xs[0] + 40);
       const p = proj(x, y, z); const r = 1.5 + Math.random() * 2.5;
-      const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r * 4); g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(p[0] - r * 4, p[1] - r * 4, r * 8, r * 8);
+      ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(glowTex, p[0] - r * 4, p[1] - r * 4, r * 8, r * 8); ctx.globalCompositeOperation = 'source-over';
     }
     // front wall with sponsor panels
     const wy = -6.6, wz = 1.25;
@@ -182,8 +208,7 @@ const Render = (() => {
     for (const lx of [8, 42, 78, 112]) {
       const p = proj(lx, -34, 26); if (p[1] < -40 || p[0] < -200 || p[0] > W + 200) continue;
       const sc = cam.F / p[2], bw = sc * 7, bh = sc * 2.6;
-      const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], bw * 1.6); g.addColorStop(0, 'rgba(255,250,225,0.55)'); g.addColorStop(0.35, 'rgba(255,240,200,0.12)'); g.addColorStop(1, 'rgba(255,240,200,0)');
-      ctx.fillStyle = g; ctx.fillRect(p[0] - bw * 1.6, p[1] - bw * 1.6, bw * 3.2, bw * 3.2);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowTex, p[0] - bw * 2.2, p[1] - bw * 2.2, bw * 4.4, bw * 4.4); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = '#2a2f40'; ctx.fillRect(p[0] - bw / 2 - 2, p[1] - bh / 2 - 2, bw + 4, bh + 4);
       for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) { ctx.fillStyle = '#fffbea'; ctx.beginPath(); ctx.arc(p[0] - bw / 2 + (c + 0.5) * bw / 8, p[1] - bh / 2 + (r + 0.5) * bh / 3, Math.max(0.8, bw / 22), 0, 7); ctx.fill(); }
     }
@@ -193,26 +218,40 @@ const Render = (() => {
   function drawField(ctx, S) {
     const xsF = visibleX(-2), x0 = Math.max(-12, Math.floor(xsF[0])), x1 = Math.min(132, Math.ceil(xsF[1]));
     // surrounding turf (sidelines, beyond end lines)
-    ctx.beginPath(); quad(ctx, x0 - 5, -6.6, x1 + 5, FIELD_W + 14);
-    ctx.fillStyle = '#245a22'; ctx.fill();
-    // field stripes (5 yd), end zones
-    const near = proj(cam.tx, FIELD_W).slice(), far = proj(cam.tx, 0);
-    const lg = ctx.createLinearGradient(0, far[1], 0, near[1]);
-    const stripes = [['#3b8a35', '#347c2f'], ['#43933a', '#3a8533']];
+    // night game: every base fill carries the same far/mid/near shade (one gradient per colour, no extra full-screen pass)
+    const near = proj(cam.tx, FIELD_W), far = proj(cam.tx, 0);
+    const shade = col => { const g = ctx.createLinearGradient(0, far[1], 0, near[1]), c = hexRgb(col);
+      for (const [o, a] of [[0, 0.42], [0.45, 0.16], [1, 0.34]]) g.addColorStop(o, `rgb(${c.map((v, j) => Math.round(v * (1 - a) + [0, 4, 16][j] * a)).join(',')})`); return g; };
+    // surround only where the stripes/end zones don't paint (less overdraw)
+    ctx.beginPath(); quad(ctx, x0 - 5, -6.6, x1 + 5, 0.02); quad(ctx, x0 - 5, FIELD_W - 0.02, x1 + 5, FIELD_W + 14);
+    if (x0 < 0) quad(ctx, x0 - 5, 0, 0.02, FIELD_W); if (x1 > 120) quad(ctx, 119.98, 0, x1 + 5, FIELD_W);
+    ctx.fillStyle = shade('#1f5320'); ctx.fill();
+    // mowing pattern: 5-yd stripes, cut the other way across the field (a soft checkerboard)
+    const stripes = [shade('#2f7f2b'), shade('#3c9535')];
     for (let x = Math.max(10, Math.floor(x0 / 5) * 5); x < Math.min(110, x1); x += 5) {
-      ctx.beginPath(); quad(ctx, x, 0, x + 5, FIELD_W); ctx.fillStyle = stripes[(x / 5) % 2][0]; ctx.fill();
+      ctx.beginPath(); quad(ctx, x - 0.03, 0, x + 5.03, FIELD_W); ctx.fillStyle = stripes[(x / 5) % 2]; ctx.fill();
     }
+    ctx.beginPath(); for (let k = 0; k < 8; k += 2) quad(ctx, Math.max(10, x0), k * FIELD_W / 8, Math.min(110, x1), (k + 1) * FIELD_W / 8);
+    ctx.fillStyle = 'rgba(0,20,0,0.07)'; ctx.fill();
     for (let e = 0; e < 2; e++) {
       const ex0 = e ? 110 : 0; if (ex0 + 10 < x0 || ex0 > x1) continue;
-      ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, FIELD_W); ctx.fillStyle = TEAM[e].ez; ctx.fill();
+      ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, FIELD_W); ctx.fillStyle = shade(TEAM[e].ez); ctx.fill();
+      // painted end zone: diagonal pinstripes and a darker border band
+      ctx.save(); ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, FIELD_W); ctx.clip(); ctx.beginPath();
+      for (let yy = -12; yy < FIELD_W + 12; yy += 1.6) { const a = proj(ex0 - 1, yy), b = proj(ex0 + 11, yy + 12); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+      ctx.strokeStyle = 'rgba(0,0,0,0.13)'; ctx.lineWidth = Math.max(1, pxAt(MID_Y) * 0.32); ctx.stroke();
+      ctx.beginPath(); quad(ctx, ex0, 0, ex0 + 10, 1.2); quad(ctx, ex0, FIELD_W - 1.2, ex0 + 10, FIELD_W); quad(ctx, e ? 118.8 : 0, 0, e ? 120 : 1.2, FIELD_W);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fill(); ctx.restore();
     }
     // beyond-the-field sideline turf, slightly darker band
-    ctx.beginPath(); quad(ctx, x0 - 5, -6.6, x1 + 5, -2); quad(ctx, x0 - 5, FIELD_W + 2, x1 + 5, FIELD_W + 14); ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fill();
+    ctx.beginPath(); quad(ctx, x0 - 5, -6.6, x1 + 5, -2); quad(ctx, x0 - 5, FIELD_W + 2, x1 + 5, FIELD_W + 14); ctx.fillStyle = 'rgba(0,0,0,0.26)'; ctx.fill();
+    // the bench-area apron: painted in the home blue with a white border band
+    ctx.beginPath(); quad(ctx, Math.max(x0 - 5, 25), -6.6, Math.min(x1 + 5, 95), -3.2); quad(ctx, Math.max(x0 - 5, 25), FIELD_W + 3.2, Math.min(x1 + 5, 95), FIELD_W + 14); ctx.fillStyle = 'rgba(20,40,110,0.42)'; ctx.fill();
+    ctx.beginPath(); quad(ctx, -0.33, -2.0, 120.33, -1.6); quad(ctx, -0.33, FIELD_W + 1.6, 120.33, FIELD_W + 2.0); ctx.fillStyle = 'rgba(250,250,245,0.55)'; ctx.fill();
     // grass blades overlay, in depth bands so it lies on the ground
     if (quality.level > 0) drawGrass(ctx, x0, x1);
-    // light falloff: brighter centre, darker far side
-    lg.addColorStop(0, 'rgba(0,0,0,0.22)'); lg.addColorStop(0.45, 'rgba(255,255,230,0.04)'); lg.addColorStop(1, 'rgba(0,0,0,0.12)');
-    ctx.beginPath(); quad(ctx, x0 - 5, -6.6, x1 + 5, FIELD_W + 14); ctx.fillStyle = lg; ctx.fill();
+    // night game: the turf falls off into shade between the floodlight pools, which add warm light back on top
+    if (quality.level > 0) drawPools(ctx, x0, x1, 0.3);
     // white paint
     ctx.beginPath();
     quad(ctx, -0.33, -0.33, 120.33, 0); quad(ctx, -0.33, FIELD_W, 120.33, FIELD_W + 0.33);
@@ -234,8 +273,8 @@ const Render = (() => {
       for (const side of [0, 1]) {
         const y = side ? FIELD_W - 11.5 : 11.5, ux = side ? [1, 0] : [-1, 0], uy = side ? [0, 1] : [0, -1];
         const off = side ? 1 : -1;
-        groundText(ctx, s[0], x - 0.95 * off, y, 2.0, ux, uy, nf, 'rgba(250,250,245,0.9)');
-        groundText(ctx, s[1], x + 0.95 * off, y, 2.0, ux, uy, nf, 'rgba(250,250,245,0.9)');
+        groundText(ctx, s[0], x - 0.95 * off, y, 2.0, ux, uy, nf, 'rgba(250,250,245,0.92)', 'rgba(0,30,0,0.28)', 9);
+        groundText(ctx, s[1], x + 0.95 * off, y, 2.0, ux, uy, nf, 'rgba(250,250,245,0.92)', 'rgba(0,30,0,0.28)', 9);
         if (n !== 50) { // arrow pointing to the nearer goal
           const ax = x + (x < 60 ? -1 : 1) * 2.3, ay = y + (side ? -0.55 : 0.55), d = x < 60 ? -1 : 1;
           ctx.beginPath(); const a = proj(ax + d * 0.5, ay), b = proj(ax - d * 0.2, ay - 0.3), c = proj(ax - d * 0.2, ay + 0.3);
@@ -244,17 +283,42 @@ const Render = (() => {
       }
     }
     // midfield logo: a trackball
-    if (x0 < 66 && x1 > 54) {
-      const r = 3.6; ctx.beginPath();
-      for (let k = 0; k <= 40; k++) { const a = k / 40 * Math.PI * 2, p = proj(60 + Math.cos(a) * r, MID_Y + Math.sin(a) * r); k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
-      ctx.fillStyle = 'rgba(20,24,40,0.55)'; ctx.fill(); ctx.lineWidth = Math.max(1, pxAt(MID_Y) * 0.25); ctx.strokeStyle = 'rgba(255,210,60,0.85)'; ctx.stroke();
-      ctx.beginPath(); for (let k = 0; k <= 40; k++) { const a = k / 40 * Math.PI * 2, p = proj(60 + Math.cos(a) * r * 0.62, MID_Y + Math.sin(a) * r * 0.62); k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
-      ctx.fillStyle = 'rgba(190,40,30,0.8)'; ctx.fill();
-      groundText(ctx, 'TB', 60, MID_Y, 2.6, [1, 0], [0, 1], `italic 900 100px ${DFONT}`, '#ffe9a8', 'rgba(60,8,4,0.8)', 10);
+    if (x0 < 68 && x1 > 52) {
+      if (!logoTex) logoTex = buildLogo();
+      // the flat logo sprite (built once) is laid on the turf with the local ground transform
+      const R = 5.4, o = proj(60, MID_Y), ax = proj(60 + R, MID_Y), ay = proj(60, MID_Y + R), k = 1 / 256;
+      ctx.save(); ctx.setTransform(DPR * (ax[0] - o[0]) * k, DPR * (ax[1] - o[1]) * k, DPR * (ay[0] - o[0]) * k, DPR * (ay[1] - o[1]) * k, DPR * o[0], DPR * o[1]);
+      ctx.drawImage(logoTex, -256, -256, 512, 512); ctx.restore();
     }
     // end zone lettering
     if (x0 < 11) for (let k = 0, s = TEAM[0].name; k < s.length; k++) groundText(ctx, s[k], 5, MID_Y + (s.length / 2 - k - 0.5) * 4.6, 5.4, [0, -1], [1, 0], `italic 900 100px ${DFONT}`, '#ffffff', 'rgba(40,0,6,0.6)', 7);
     if (x1 > 109) for (let k = 0, s = TEAM[1].name; k < s.length; k++) groundText(ctx, s[k], 115, MID_Y - (s.length / 2 - k - 0.5) * 4.6, 5.4, [0, 1], [-1, 0], `italic 900 100px ${DFONT}`, '#ffcc33', 'rgba(0,8,40,0.6)', 7);
+  }
+  /** warm floodlight pools on the turf (pre-rendered sprite, additive) */
+  // all floodlight pools baked once into one top-down light map (2 px per yard), laid on the turf in depth bands:
+  // a single additive pass instead of six overlapping sprites
+  const LM = { x0: -14, y0: -8, ppy: 2, c: null };
+  function buildLightMap(a) {
+    const w = 148 * LM.ppy, h = (FIELD_W + 24) * LM.ppy, c = mk(w, h), x = c.getContext('2d');
+    for (const [lx, ly] of TOWERS) {
+      const px = lx + (lx < 60 ? 6 : -6), py = ly < 0 ? 15 : FIELD_W - 15, R = 19;
+      x.globalAlpha = a * (ly < 0 ? 1 : 0.8); x.globalCompositeOperation = 'lighter';
+      x.drawImage(poolTex, (px - R - LM.x0) * LM.ppy, (py - R - LM.y0) * LM.ppy, 2 * R * LM.ppy, 2 * R * LM.ppy);
+    }
+    return c;
+  }
+  function drawPools(ctx, x0, x1, a) {
+    if (!poolTex) return;
+    const c = LM.c || (LM.c = buildLightMap(a)), bands = 12, ya0 = -6.6, yb1 = FIELD_W + 14;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < bands; k++) {
+      const ya = ya0 + (yb1 - ya0) * k / bands, yb = ya0 + (yb1 - ya0) * (k + 1) / bands, ym = (ya + yb) / 2;
+      const pa = proj(cam.tx, ya), pb = proj(cam.tx, yb); if (pb[1] < 0 || pa[1] > H) continue;
+      const sc = pxAt(ym), cx = proj(cam.tx, ym)[0];
+      const sx = (x0 - 6 - LM.x0) * LM.ppy, sw = (x1 - x0 + 12) * LM.ppy, sy = (ya - LM.y0) * LM.ppy, sh = (yb - ya) * LM.ppy;
+      ctx.drawImage(c, Math.max(0, sx), sy, Math.min(sw, c.width - Math.max(0, sx)), sh, cx + (Math.max(LM.x0, x0 - 6) - cam.tx) * sc, pa[1], Math.min(sw, c.width - Math.max(0, sx)) / LM.ppy * sc, pb[1] - pa[1]);
+    }
+    ctx.restore();
   }
   function drawGrass(ctx, x0, x1) {
     const bands = quality.level > 1 ? 14 : 7, y0 = -6.6, y1 = FIELD_W + 12;
@@ -266,8 +330,7 @@ const Render = (() => {
       const tileYd = 2.2, s = sc * tileYd / 256, o = proj(0, ym);
       ctx.setTransform(DPR * s, 0, 0, DPR * s * vs, DPR * o[0], DPR * o[1]);
       ctx.globalAlpha = 0.55;
-      const pat = ctx.createPattern(grassTile, 'repeat');
-      ctx.fillStyle = pat;
+      ctx.fillStyle = grassPat || (grassPat = ctx.createPattern(grassTile, 'repeat'));
       const L = (0 - o[0]) / s, Rr = (W - o[0]) / s, T = (pa[1] - o[1]) / (s * vs), B = (pb[1] - o[1]) / (s * vs);
       ctx.fillRect(L, T - 2, Rr - L, B - T + 4);
       ctx.restore();
@@ -275,8 +338,20 @@ const Render = (() => {
   }
   function drawLines(ctx, S) { // broadcast line of scrimmage + first down
     if (!S || !(S.ph === 'select' || S.ph === 'presnap' || S.ph === 'live')) return;
-    ctx.beginPath(); quad(ctx, S.los - 0.15, 0, S.los + 0.15, FIELD_W); ctx.fillStyle = 'rgba(60,140,255,0.85)'; ctx.fill();
-    if (!S.gtg) { ctx.beginPath(); quad(ctx, S.fd - 0.15, 0, S.fd + 0.15, FIELD_W); ctx.fillStyle = 'rgba(255,214,0,0.9)'; ctx.fill(); }
+    const ln = (x, core, glow) => { ctx.beginPath(); quad(ctx, x - 0.45, 0, x + 0.45, FIELD_W); ctx.fillStyle = glow; ctx.fill(); ctx.beginPath(); quad(ctx, x - 0.15, 0, x + 0.15, FIELD_W); ctx.fillStyle = core; ctx.fill(); ctx.beginPath(); quad(ctx, x - 0.04, 0, x + 0.04, FIELD_W); ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill(); };
+    if (!S.gtg) { // the yards to gain, lightly tinted
+      ctx.beginPath(); quad(ctx, Math.min(S.los, S.fd), 0, Math.max(S.los, S.fd), FIELD_W); ctx.fillStyle = 'rgba(255,220,60,0.045)'; ctx.fill();
+    }
+    ln(S.los, 'rgba(70,150,255,0.92)', 'rgba(70,150,255,0.2)');
+    if (!S.gtg) ln(S.fd, 'rgba(255,214,0,0.95)', 'rgba(255,214,0,0.22)');
+    // sideline chain crew: two orange poles with the chain between, and the down box at the line
+    const cy = -1.25, pole = (x, h, w, col) => { const a = proj(x, cy, 0), b = proj(x, cy, h); ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, pxAt(cy) * w); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); return b; };
+    ctx.lineCap = 'round';
+    if (!S.gtg) { const st = S.fd - 10 * (S.off === 0 ? 1 : -1), a = proj(st, cy, 0.05), b = proj(S.fd, cy, 0.05), u = pxAt(cy);
+      ctx.strokeStyle = 'rgba(25,25,25,0.75)'; ctx.lineWidth = Math.max(1, u * 0.05); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      for (const x of [st, S.fd]) { const tp = pole(x, 2.1, 0.09, '#ff7a1a'); ctx.fillStyle = '#ff7a1a'; ctx.fillRect(tp[0] - u * 0.22, tp[1] - u * 0.22, u * 0.44, u * 0.44); } }
+    { const tp = pole(S.los, 2.5, 0.08, '#222'), z = pxAt(cy) * 0.75; ctx.fillStyle = '#ff7a1a'; ctx.fillRect(tp[0] - z / 2, tp[1] - z, z, z); ctx.strokeStyle = '#1a0a00'; ctx.lineWidth = 1; ctx.strokeRect(tp[0] - z / 2, tp[1] - z, z, z);
+      if (z > 7) { ctx.font = `900 ${(z * 0.8).toFixed(1)}px ${DFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#111'; ctx.fillText(String(S.dn || 1), tp[0], tp[1] - z / 2 + 0.5); } }
   }
   function drawPosts(ctx, farHalf) {
     for (const gx of [0, 120]) {
@@ -300,51 +375,59 @@ const Render = (() => {
 
   /* ---------------- players ---------------- */
   function drawShadow(ctx, x, y, tilt, fa) {
-    const sc = pxAt(y);
-    // contact shadow + two faint floodlight shadows
-    const dirs = [[0.55, 0.5, 0.11], [-0.6, 0.45, 0.09]];
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
-    for (const [dx, dy, a] of dirs) {
-      const L = 1.7 + tilt, n = Math.hypot(dx, dy), ux = dx / n, uy = dy / n, px = -uy * 0.24, py = ux * 0.24;
-      const p = [proj(x + px, y + py), proj(x + ux * L + px * 0.6, y + uy * L + py * 0.6), proj(x + ux * L - px * 0.6, y + uy * L - py * 0.6), proj(x - px, y - py)];
-      ctx.globalAlpha = a / 0.1; ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]); ctx.closePath(); ctx.fill();
+    const sc = pxAt(y) * PS, nL = quality.level > 1 ? 4 : quality.level > 0 ? 2 : 1;
+    // multi-directional floodlight shadows: each of the nearest light banks throws a faint, tapered shadow away from it
+    const ls = TOWERS.map(T => [T, hyp(T[0] - x, T[1] - y)]).sort((p, q) => p[1] - q[1]).slice(0, nL);
+    ctx.fillStyle = '#000';
+    for (const [T, dist] of ls) {
+      let ux = x - T[0], uy = y - T[1]; const n = hyp(ux, uy) || 1; ux /= n; uy /= n;
+      const L = (clamp(1.3 * dist / 26, 0.8, 1.9) + tilt * 0.6) * PS, px = -uy * 0.3 * PS, py = ux * 0.3 * PS;
+      const p0 = proj(x + px, y + py), p1 = proj(x + ux * L + px * 0.45, y + uy * L + py * 0.45), p2 = proj(x + ux * (L + 0.25), y + uy * (L + 0.25)), p3 = proj(x + ux * L - px * 0.45, y + uy * L - py * 0.45), p4 = proj(x - px, y - py);
+      ctx.globalAlpha = 0.3 / Math.sqrt(nL) * clamp(36 / dist, 0.6, 1.2);
+      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.quadraticCurveTo(p2[0], p2[1], p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]); ctx.closePath(); ctx.fill();
     }
-    ctx.globalAlpha = 1;
     const c = proj(x + Math.cos(fa) * tilt * 0.8, y + Math.sin(fa) * tilt * 0.8);
-    const rx = sc * (0.48 + tilt * 0.5), ry = rx * 0.55;
-    const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], rx);
-    g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(c[0], c[1], rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    const rx = sc * (0.62 + tilt * 0.55), ry = rx * 0.5;
+    ctx.globalAlpha = 0.62; ctx.drawImage(dotTex, c[0] - rx, c[1] - ry, rx * 2, ry * 2); ctx.globalAlpha = 1;
   }
   function drawPlayer(ctx, S, i, dt, info) {
     const q = S.pl[i], team = i < 7 ? 0 : 1, T = TEAM[team], A = anim[i];
     const x = q[0], y = q[1], fa = q[2], spd = q[3], st = q[4];
     // gait + pose (client-side)
     A.ph += spd * dt * Math.PI * 2 / (1.5 + spd * 0.11);
+    // cosmetic effects from the motion: turf kicked up on hard cuts, a puff of dust when he hits the ground
+    if (dt > 0) {
+      let dfa = fa - A.pfa; dfa = Math.atan2(Math.sin(dfa), Math.cos(dfa)); A.pfa = fa; A.cutT -= dt;
+      if (spd > 5 && Math.abs(dfa) / dt > 4.2 && A.cutT <= 0 && st === 0) { A.cutT = 0.18; spawn('cut', x, y, fa); }
+      if (st === 1 && !A.fell) { A.fell = 1; spawn('dust', x + Math.cos(fa) * 0.9, y + Math.sin(fa) * 0.9); } else if (st !== 1) A.fell = 0;
+    }
+    const celA = cel.team === team && t - cel.t0 < 3.2 && hyp(x - cel.x, y - cel.y) < 22 && st === 0 ? Math.min(1, (t - cel.t0) * 4) * Math.min(1, (3.2 - (t - cel.t0)) * 3) : 0;
     const tiltTarget = st === 1 ? 1.45 : st === 2 ? 1.15 : st === 5 ? 0.7 : st === 3 ? 0.42 : Math.min(0.32, spd * 0.03);
     A.tilt += (tiltTarget - A.tilt) * Math.min(1, dt * (st === 1 ? 7 : 9));
     const lineman = info.role === 'C' || info.role === 'LG' || info.role === 'RG' || info.role === 'DT' || info.role === 'DE';
     const crouchT = (S.ph === 'presnap' || (S.ph === 'select' && spd < 0.4)) ? (lineman ? 1 : info.role === 'QB' ? 0.25 : 0.55) : 0;
     A.crouch += (crouchT - A.crouch) * Math.min(1, dt * 6);
     const tilt = A.tilt + A.crouch * (lineman ? 0.55 : 0.25);
-    const amp = Math.min(1, spd / 8.5) * 0.55, ph = A.ph;
+    const amp = Math.min(1, spd / 8.5) * 0.62, ph = A.ph;
+    const bob = Math.abs(Math.sin(ph)) * amp * 0.09 + (celA ? Math.max(0, Math.sin(t * 9 + i)) * 0.32 * celA : 0);
     const cf = Math.cos(fa), sf = Math.sin(fa), fw = [cf, sf], sd = [-sf, cf];
     const ct = Math.cos(tilt), stt = Math.sin(tilt), drop = A.crouch * (lineman ? 0.32 : 0.18);
     // body point (a fwd, b side, c up) -> screen
     const P = (a, b, c, noTilt) => {
       let aa = a, cc = c;
-      if (!noTilt) { cc = c - drop * Math.min(1, c / 1.0); aa = a * ct + cc * stt; cc = -a * stt + cc * ct; }
+      if (!noTilt) { cc = c - drop * Math.min(1, c / 1.0) + bob * Math.min(1, c / 0.6); aa = a * ct + cc * stt; cc = -a * stt + cc * ct; }
+      aa *= PS; b *= PS; cc *= PS;
       return proj(x + fw[0] * aa + sd[0] * b, y + fw[1] * aa + sd[1] * b, Math.max(0.04, cc));
     };
-    const sc = pxAt(y);
+    const sc = pxAt(y) * PS;
     drawShadow(ctx, x, y, A.tilt > 0.8 ? 1.2 : 0, fa);
     // which side is nearer the camera (+y)
     const nearSide = sd[1] > 0 ? 1 : -1;
     const legs = [], arms = [];
     for (const s of [-1, 1]) {
-      const p = ph + (s > 0 ? Math.PI : 0), fwdF = Math.sin(p) * amp, lift = Math.max(0, Math.cos(p)) * amp * 0.45;
+      const p = ph + (s > 0 ? Math.PI : 0), fwdF = Math.sin(p) * amp, lift = Math.max(0, Math.cos(p)) * amp * 0.62;
       const hip = [0, s * 0.13, 0.95], foot = [fwdF + (A.crouch * (lineman ? (s > 0 ? -0.35 : 0.1) : 0)), s * (0.16 + A.crouch * 0.12), lift + 0.04];
-      const knee = [(hip[0] + foot[0]) / 2 + 0.13 + A.crouch * 0.22 + lift * 0.4, s * 0.15, (hip[2] + foot[2]) / 2 + 0.02];
+      const knee = [(hip[0] + foot[0]) / 2 + 0.13 + A.crouch * 0.22 + lift * 0.62, s * 0.15, (hip[2] + foot[2]) / 2 + 0.02 + lift * 0.18];
       legs.push({ s, hip, knee, foot });
       let hand, elbow, sh = [0, s * 0.27, 1.5];
       const asw = -Math.sin(p) * amp * 0.8;
@@ -356,19 +439,26 @@ const Render = (() => {
       if (info.hasBall && s === info.ballSide) hand = info.qbHold ? [0.28, s * 0.08, 1.3] : [0.22, s * 0.2, 1.22];
       if (info.qbHold && s !== info.ballSide) hand = [0.3, -s * 0.04, 1.32];
       if (q[6] && s === 1) hand = [-0.15 + (info.thr || 0) * 0.5, 0.25, 2.05];
-      elbow = [(sh[0] + hand[0]) / 2 - 0.12, s * 0.34, (sh[2] + hand[2]) / 2 - 0.05];
+      if (celA && !(info.hasBall && s === info.ballSide)) hand = [0.12 + 0.1 * Math.sin(t * 9 + s), s * (0.42 + 0.08 * Math.sin(t * 7)), 1.5 + 0.75 * celA];
+      elbow = [(sh[0] + hand[0]) / 2 - 0.12 - amp * 0.12, s * 0.34, (sh[2] + hand[2]) / 2 - 0.05];
       arms.push({ s, sh, elbow, hand });
     }
     const L = (a, b, w, col) => { const p = P(...a), r = P(...b); ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.8, w * sc); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(r[0], r[1]); ctx.stroke(); };
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const det = sc > 9;
     const drawLeg = l => {
-      L(l.hip, l.knee, 0.23, T.pants2); L(l.hip, l.knee, 0.19, T.pants);
-      L(l.knee, l.foot, 0.16, T.sock); L([l.knee[0], l.knee[1], l.knee[2] - 0.05], [l.knee[0] - 0.02, l.knee[1], l.knee[2] - 0.12], 0.17, '#f3f3f3');
-      const f = P(...l.foot), f2 = P(l.foot[0] + 0.16, l.foot[1], l.foot[2]);
-      ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(0.8, 0.13 * sc); ctx.beginPath(); ctx.moveTo(f[0], f[1]); ctx.lineTo(f2[0], f2[1]); ctx.stroke();
+      L(l.hip, l.knee, 0.25, T.pants2); L(l.hip, l.knee, 0.2, T.pants);
+      if (det) L([l.hip[0], l.s * 0.22, l.hip[2] - 0.02], [l.knee[0], l.s * 0.22, l.knee[2] + 0.06], 0.035, T.stripe);
+      const ank = [l.foot[0] - 0.02, l.foot[1], l.foot[2] + 0.12];
+      L(l.knee, ank, 0.16, T.sock); L([l.knee[0], l.knee[1], l.knee[2] - 0.05], [l.knee[0] - 0.02, l.knee[1], l.knee[2] - 0.12], 0.17, '#f3f3f3');
+      if (det) L([ank[0] + (l.knee[0] - ank[0]) * 0.35, ank[1], ank[2] + (l.knee[2] - ank[2]) * 0.35], [ank[0] + (l.knee[0] - ank[0]) * 0.5, ank[1], ank[2] + (l.knee[2] - ank[2]) * 0.5], 0.165, T.stripe);
+      L(ank, l.foot, 0.13, team ? '#e9e9e9' : '#1a1a1a');
+      const f = P(l.foot[0] - 0.04, l.foot[1], l.foot[2]), f2 = P(l.foot[0] + 0.17, l.foot[1], l.foot[2]);
+      ctx.strokeStyle = team ? '#f4f4f4' : '#121212'; ctx.lineWidth = Math.max(0.9, 0.14 * sc); ctx.beginPath(); ctx.moveTo(f[0], f[1]); ctx.lineTo(f2[0], f2[1]); ctx.stroke();
     };
     const drawArm = a => {
-      L(a.sh, a.elbow, 0.17, T.jersey2); L(a.sh, a.elbow, 0.14, T.jersey);
+      L(a.sh, a.elbow, 0.19, T.jersey2); L(a.sh, a.elbow, 0.15, T.jersey);
+      if (det) { const m = k => [a.sh[0] + (a.elbow[0] - a.sh[0]) * k, a.sh[1] + (a.elbow[1] - a.sh[1]) * k, a.sh[2] + (a.elbow[2] - a.sh[2]) * k]; L(m(0.62), m(0.78), 0.16, T.stripe); }
       L(a.elbow, a.hand, 0.12, A.skin);
       const h = P(...a.hand); ctx.fillStyle = team ? '#f1f1f1' : '#1b1b1b'; ctx.beginPath(); ctx.arc(h[0], h[1], Math.max(0.8, 0.075 * sc), 0, 7); ctx.fill();
     };
@@ -384,8 +474,9 @@ const Render = (() => {
     ctx.fillStyle = grd; ctx.strokeStyle = grd; ctx.lineWidth = 0.13 * sc;
     ctx.beginPath(); ctx.moveTo(sL[0], sL[1]); ctx.lineTo(sR[0], sR[1]); ctx.lineTo(hR[0], hR[1]); ctx.lineTo(hL[0], hL[1]); ctx.closePath(); ctx.fill(); ctx.stroke();
     // shoulder pads
-    L([0, 0.3, 1.53], [0, -0.3, 1.53], 0.25, T.jersey);
-    L([0.02, 0.18, 1.6], [0.02, -0.18, 1.6], 0.12, 'rgba(255,255,255,0.18)');
+    L([0, 0.32, 1.53], [0, -0.32, 1.53], 0.27, T.jersey2); L([0, 0.3, 1.55], [0, -0.3, 1.55], 0.22, T.jersey);
+    L([0.02, 0.2, 1.63], [0.02, -0.2, 1.63], 0.1, 'rgba(255,250,230,0.32)'); // floodlight rim on the pads
+    if (det) { L([0.1, 0.17, 1.12], [0.1, -0.17, 1.12], 0.05, T.stripe); }
     // jersey number (front and back), when the chest or back faces the camera
     const face = Math.abs(sd[0]); // side axis along screen x => chest faces camera
     if (sc > 7 && face > 0.35 && A.tilt < 0.9) {
@@ -403,12 +494,15 @@ const Render = (() => {
     const hg = ctx.createRadialGradient(hc[0] - hr * 0.35, hc[1] - hr * 0.45, hr * 0.1, hc[0], hc[1], hr * 1.05);
     hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.18, T.helmet); hg.addColorStop(1, T.helmet2);
     ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(hc[0], hc[1], hr, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = Math.max(0.6, hr * 0.12); ctx.stroke();
+    if (hr > 3) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(hc[0] - hr * 0.35, hc[1] - hr * 0.42, hr * 0.28, hr * 0.15, -0.6, 0, 7); ctx.fill(); }
     // center stripe
     { const a = P(0.17, 0, 1.86), b = P(-0.15, 0, 1.9), m = P(0.02, 0, 1.97); ctx.strokeStyle = T.stripe; ctx.lineWidth = Math.max(0.6, 0.045 * sc); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(m[0], m[1], b[0], b[1]); ctx.stroke(); }
     // facemask (when the face is not turned away)
     if (fw[1] > -0.55 && A.tilt < 1.2) {
       const f1 = P(0.19, 0.09, 1.76), f2 = P(0.19, -0.09, 1.76), f3 = P(0.18, 0.08, 1.69), f4 = P(0.18, -0.08, 1.69), f5 = P(0.2, 0, 1.79), f6 = P(0.17, 0, 1.66);
-      ctx.strokeStyle = '#cfd3da'; ctx.lineWidth = Math.max(0.6, 0.03 * sc); ctx.beginPath();
+      if (fw[1] > 0.1 && sc > 10) { const fc = P(0.15, 0, 1.73); ctx.fillStyle = A.skin; ctx.beginPath(); ctx.arc(fc[0], fc[1], hr * 0.42, 0, 7); ctx.fill(); }
+      ctx.strokeStyle = team ? '#c9a227' : '#d8dce4'; ctx.lineWidth = Math.max(0.7, 0.036 * sc); ctx.beginPath();
       ctx.moveTo(f1[0], f1[1]); ctx.lineTo(f2[0], f2[1]); ctx.moveTo(f3[0], f3[1]); ctx.lineTo(f4[0], f4[1]); ctx.moveTo(f5[0], f5[1]); ctx.lineTo(f6[0], f6[1]); ctx.stroke();
     }
     // helmet decal (X or O) on the side facing us
@@ -422,52 +516,82 @@ const Render = (() => {
     A.x = x; A.y = y; A.head = hc; A.sc = sc;
   }
   function drawBallAt(ctx, sx, sy, sc, ang, spin) {
-    const L = Math.max(2.2, 0.2 * sc), Wd = L * 0.6;
+    const L = Math.max(2.4, 0.21 * sc), Wd = L * 0.6;
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
-    const g = ctx.createRadialGradient(-L * 0.25, -Wd * 0.4, 0, 0, 0, L);
-    g.addColorStop(0, '#c27a42'); g.addColorStop(0.5, '#7a3c16'); g.addColorStop(1, '#3a1606');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, L, Wd, 0, 0, Math.PI * 2); ctx.fill();
-    const lv = Math.cos(spin);
-    if (lv > -0.2 && sc > 6) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(0.5, L * 0.08); const ly = -Wd * 0.35 * lv;
-      ctx.beginPath(); ctx.moveTo(-L * 0.35, ly); ctx.lineTo(L * 0.35, ly); for (let k = -2; k <= 2; k++) { ctx.moveTo(k * L * 0.14, ly - L * 0.08); ctx.lineTo(k * L * 0.14, ly + L * 0.08); } ctx.stroke();
+    const g = ctx.createLinearGradient(0, -Wd, 0, Wd);
+    g.addColorStop(0, '#d08a4e'); g.addColorStop(0.35, '#9a4e1f'); g.addColorStop(0.75, '#5e2a0c'); g.addColorStop(1, '#2e1204');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-L, 0); ctx.bezierCurveTo(-L * 0.6, -Wd * 1.32, L * 0.6, -Wd * 1.32, L, 0); ctx.bezierCurveTo(L * 0.6, Wd * 1.32, -L * 0.6, Wd * 1.32, -L, 0); ctx.fill();
+    if (L > 3) { ctx.strokeStyle = 'rgba(30,10,0,0.7)'; ctx.lineWidth = Math.max(0.5, L * 0.05); ctx.stroke(); }
+    const lv = Math.cos(spin), ly = -Wd * 0.42 * Math.sin(spin + 1.2);
+    if (lv > -0.3 && sc > 5) {
+      ctx.globalAlpha = 0.45 + 0.55 * Math.max(0, lv);
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = Math.max(0.5, L * 0.08);
+      ctx.beginPath(); ctx.moveTo(-L * 0.34, ly); ctx.lineTo(L * 0.34, ly); for (let k = -3; k <= 3; k++) { ctx.moveTo(k * L * 0.1, ly - L * 0.09); ctx.lineTo(k * L * 0.1, ly + L * 0.09); } ctx.stroke();
+      ctx.globalAlpha = 1;
     }
+    if (L > 3) { ctx.fillStyle = 'rgba(255,230,200,0.35)'; ctx.beginPath(); ctx.ellipse(-L * 0.2, -Wd * 0.45, L * 0.38, Wd * 0.18, 0, 0, 7); ctx.fill(); }
     ctx.restore();
   }
   function drawBall(ctx, S, dt) {
     const b = S.b; if (b[3] === 0 && b[4] >= 0) return; // carried: drawn with the player
     const x = b[0], y = b[1], z = b[2];
     const sh = proj(x, y, 0), sc = pxAt(y);
-    const a = Math.max(0.1, 0.42 - z * 0.025);
-    ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.beginPath(); ctx.ellipse(sh[0], sh[1], sc * 0.22, sc * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+    // height shadow: tight and dark on the ground, wide and faint high in the air
+    const a = clamp(0.55 - z * 0.035, 0.12, 0.55), sw = sc * (0.3 + z * 0.045);
+    ctx.globalAlpha = a; ctx.drawImage(dotTex, sh[0] - sw, sh[1] - sw * 0.5, sw * 2, sw); ctx.globalAlpha = 1;
     const p = proj(x, y, z);
     // flight direction on screen
     let ang = drawBall.ang || 0;
     if (drawBall.prev) { const dx = p[0] - drawBall.prev[0], dy = p[1] - drawBall.prev[1]; if (Math.hypot(dx, dy) > 0.5) ang = Math.atan2(dy, dx); }
     drawBall.prev = p; drawBall.ang = ang;
-    drawBall.spin = (drawBall.spin || 0) + dt * (b[3] === 1 ? 32 : 0);
-    if (b[3] === 1 && b[5]) { // spiral trail
-      const tr = drawBall.trail || (drawBall.trail = []); tr.push([p[0], p[1]]); if (tr.length > 9) tr.shift();
-      for (let k = 1; k < tr.length; k++) { ctx.strokeStyle = `rgba(255,255,255,${0.05 * k})`; ctx.lineWidth = Math.max(0.6, sc * 0.06 * k / tr.length); ctx.beginPath(); ctx.moveTo(tr[k - 1][0], tr[k - 1][1]); ctx.lineTo(tr[k][0], tr[k][1]); ctx.stroke(); }
-    } else drawBall.trail = [];
+    drawBall.spin = (drawBall.spin || 0) + dt * (b[3] === 1 ? 26 : b[3] === 2 ? 9 : 0);
+    if (b[3] === 1 && b[5]) { // motion trail (passes: white streak; kicks: a gold arc that lingers)
+      const kick = z > 7.5 || drawBall.kick, tr = drawBall.trail || (drawBall.trail = []); if (z > 7.5) drawBall.kick = 1;
+      tr.push([x, y, z]); if (tr.length > (kick ? 60 : 14)) tr.shift();
+      ctx.lineCap = 'round';
+      for (let k = 1; k < tr.length; k++) {
+        const u = k / tr.length, q0 = proj(tr[k - 1][0], tr[k - 1][1], tr[k - 1][2]), q1 = proj(tr[k][0], tr[k][1], tr[k][2]);
+        ctx.strokeStyle = kick ? `rgba(255,214,90,${0.45 * u})` : `rgba(255,255,255,${0.42 * u * u})`; ctx.lineWidth = Math.max(0.7, sc * (kick ? 0.07 : 0.13) * u);
+        if (kick && k % 2) continue;
+        ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.stroke();
+      }
+    } else { drawBall.trail = []; drawBall.kick = 0; }
     drawBallAt(ctx, p[0], p[1], sc * 1.1, b[3] === 3 || b[3] === 2 ? 0.2 : ang, drawBall.spin);
   }
 
   /* ---------------- particles / effects ---------------- */
-  function spawn(kind, x, y) {
-    if (kind === 'turf') for (let k = 0; k < 16; k++) parts.push({ x, y, z: 0.1, vx: rand(-3, 3), vy: rand(-3, 3), vz: rand(2, 6), l: rand(0.5, 1.1), c: Math.random() < 0.6 ? '#3f8f37' : '#6b4a26', s: rand(0.05, 0.1) });
-    if (kind === 'ring') parts.push({ ring: 1, x, y, l: 0.45, L: 0.45 });
+  const MAXP = 420;
+  const push = p => { if (parts.length < MAXP * (quality.level > 0 ? 1 : 0.5)) parts.push(p); };
+  const TURF = ['#3f8f37', '#2f7429', '#5aa548', '#6b4a26', '#4a3218'];
+  function spawn(kind, x, y, fa) {
+    if (kind === 'turf') { for (let k = 0; k < 22; k++) push({ x, y, z: 0.1, vx: rand(-3.5, 3.5), vy: rand(-3.5, 3.5), vz: rand(2, 7), l: rand(0.5, 1.2), c: TURF[Math.floor(rand(0, 5))], s: rand(0.05, 0.12) }); spawn('dust', x, y); }
+    if (kind === 'cut') { const bx = -Math.cos(fa || 0), by = -Math.sin(fa || 0); for (let k = 0; k < 7; k++) push({ x, y, z: 0.05, vx: bx * rand(1, 4) + rand(-1.5, 1.5), vy: by * rand(1, 4) + rand(-1.5, 1.5), vz: rand(1.5, 4.5), l: rand(0.35, 0.7), c: TURF[Math.floor(rand(0, 5))], s: rand(0.04, 0.09) }); }
+    if (kind === 'dust') for (let k = 0; k < 4; k++) push({ dust: 1, x: x + rand(-0.4, 0.4), y: y + rand(-0.4, 0.4), z: 0.2, vx: rand(-0.8, 0.8), vy: rand(-0.8, 0.8), vz: rand(0.3, 0.9), l: rand(0.6, 1), L: 1, s: rand(0.5, 0.9) });
+    if (kind === 'ring') push({ ring: 1, x, y, l: 0.45, L: 0.45 });
+    if (kind === 'confetti') { const cols = [TEAM[fa || 0].ui, TEAM[fa || 0].stripe, '#ffffff', '#ffd23c', TEAM[fa || 0].jersey];
+      for (let k = 0; k < 160; k++) push({ conf: 1, x: x + rand(-14, 14), y: y + rand(-16, 16), z: rand(6, 15), vx: rand(-1, 1), vy: rand(-1, 1), vz: rand(-0.5, 1.5), l: rand(2.4, 4), c: cols[Math.floor(rand(0, cols.length))], s: rand(0.12, 0.2), r: rand(0, 6), w: rand(4, 9) }); }
     if (kind === 'fw') for (let n = 0; n < 3; n++) {
       const cx = rand(0.15, 0.85) * W, cy = rand(0.05, 0.25) * H, col = ['#ffd23c', '#ff4060', '#5fa0ff', '#ffffff', '#7cff7a'][Math.floor(rand(0, 5))], dl = n * 0.35;
       for (let k = 0; k < 46; k++) { const a = k / 46 * Math.PI * 2, s = rand(60, 140); fireworks.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: 1.4 + rand(0, 0.5), d: dl, c: col }); }
     }
   }
+  /** touchdown: the scoring team celebrates near the ball (cosmetic) */
+  function celebrate(team, x, y) { cel.team = team; cel.t0 = t; cel.x = x; cel.y = y; spawn('confetti', x, y, team); }
   function drawParts(ctx, dt) {
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i]; p.l -= dt; if (p.l <= 0) { parts.splice(i, 1); continue; }
       if (p.ring) {
         const r = (1 - p.l / p.L) * 1.6 + 0.3; ctx.strokeStyle = `rgba(255,255,255,${p.l / p.L * 0.7})`; ctx.lineWidth = Math.max(1, pxAt(p.y) * 0.08);
         ctx.beginPath(); for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 2, q = proj(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); } ctx.stroke(); continue;
+      }
+      if (p.dust) {
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; const q = proj(p.x, p.y, p.z), k = 1 - p.l / p.L, r = pxAt(p.y) * p.s * (0.6 + k * 1.4);
+        ctx.globalAlpha = 0.32 * (1 - k); ctx.fillStyle = '#b7a98a'; ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue;
+      }
+      if (p.conf) {
+        p.vz = Math.max(p.vz - 3 * dt, -1.6); p.r += p.w * dt; p.x += (p.vx + Math.sin(p.r * 0.7) * 0.8) * dt; p.y += p.vy * dt; p.z = Math.max(0, p.z + p.vz * dt);
+        const q = proj(p.x, p.y, p.z), s = Math.max(1, pxAt(p.y) * p.s);
+        ctx.globalAlpha = Math.min(1, p.l); ctx.fillStyle = p.c; ctx.fillRect(q[0] - s / 2, q[1] - s * 0.3 * Math.abs(Math.sin(p.r)), s, Math.max(0.6, s * 0.6 * Math.abs(Math.sin(p.r)))); ctx.globalAlpha = 1; continue;
       }
       p.vz -= 14 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z = Math.max(0, p.z + p.vz * dt);
       const q = proj(p.x, p.y, p.z), s = Math.max(0.7, pxAt(p.y) * p.s);
@@ -613,5 +737,5 @@ const Render = (() => {
     }
   }
 
-  return { cam, quality, layout, proj, pxAt, follow, draw, spawn, selFlash, drawTrackball, drawBallAt, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, anim, parts };
+  return { cam, quality, layout, proj, pxAt, follow, draw, spawn, celebrate, selFlash, drawTrackball, drawBallAt, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; }, anim, parts };
 })();
