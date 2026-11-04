@@ -193,3 +193,21 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Test: tests/vortex-grabwarn.test.js (desktop, iPhone 14, iPhone 14 landscape: far = none, 2 lanes = drawn, no cue;
   adjacent = one cue, no repeat; kill clears it; fuseball / climbing flipper not flagged; in-lane countdown flagged before the
   grab; capture tip; no console errors).
+
+## Day 8 (2026-11-04): WARP SPIKE GUIDE + landscape MODE button
+- Why: today's bot eval (8 games, fuseball-dodging bot, sharp + average) died to: enemy shots 15, fuseballs 10, rim grabs 9,
+  zaps 7, spikes 4 of 45 (death level sharp 14/11/10/13, average 13/12/12/9). Rim grabs dropped from #1 (yesterday 13 of 36)
+  after the rim grab warning. Spike deaths are few but every one lands during the warp ~ the instant the level ends, the only
+  death in the game with no on-screen tell beyond a thin spike line rushing at you.
+- What: during the end-of-level warp, a spike in the claw's lane burns red, then white-hot, with a white tip dot, and a
+  'parking sensor' blip (triangle + sine, `spikewarn` haptic) repeats faster as the tip closes in (gap 0.40 s -> 0.07 s).
+  The nearest spike-free (or already passed) lane each way lights green just ahead of the claw. Steering out of the lane
+  stops it at once. First time per game: "SPIKE AHEAD! STEER TO A GREEN LANE". Off during the bonus warp (the gate path
+  is the guide there). It only telegraphs: you still have to steer (or shoot it short).
+- Phone landscape: the touch MODE: SPINNER/ARROWS button sat under the feedback sticker (top-left, 48 px down). It now
+  starts at least 100 px from the top (below the sticker). Portrait unchanged.
+- Hooks: `VORTEX.spikeGuide()` -> {ahead, dz, lane, safe[], frames, beeps, steered}, `VORTEX.setSpike(lane, depth)`.
+- Tests: tests/vortex-spikewarn.test.js (desktop 1440x900, iPhone 14, iPhone 14 landscape: flagged, safe lanes, blip starts
+  and speeds up, tip, standing still = spike death, steering away clears it and the warp reaches the next level with no life
+  lost, clear lane silent, bonus warp unaffected, no console errors). tests/vortex-modebtn.test.js (iPhone 14 / SE / Pixel 7
+  landscape + iPhone 14 portrait: MODE clear of sticker, knob, arrows; still toggles).

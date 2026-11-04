@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], spikewarn: [45, 0.1, 0.35]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -371,6 +371,13 @@ const Sound = {
     if (!this.ac || this.muted) return;
     const P = [0, 2, 4, 7, 9], st = P[k % 5] + 12 * Math.min(2, Math.floor(k / 5)), f = 523.25 * Math.pow(2, st / 12);
     this.tone('triangle', f, f, 0.2, 0.09); this.tone('sine', f * 2, f * 2.01, 0.14, 0.05, 0.02); this.tone('sine', f * 0.5, f * 0.5, 0.25, 0.05);
+  },
+  // warp spike guide: a 'parking sensor' blip, higher and faster as the spike tip gets closer (k: 0 far .. 1 at the tip)
+  spikeBeep(k) {
+    Haptics.fire('spikewarn');
+    if (!this.ac || this.muted) return;
+    const f = 520 * Math.pow(2, 1.6 * k);
+    this.tone('triangle', f, f * 1.03, 0.05, 0.075); this.tone('sine', f * 2, f * 2, 0.03, 0.03);
   },
   play(n) {
     Haptics.fire(n);
@@ -798,7 +805,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 /* ============================== flow ============================== */
 function startGame() {
   fireLock = true;
-  deathTipCount = {};
+  deathTipCount = {}; spikeGuide.tipShown = false;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
@@ -1653,6 +1660,7 @@ function update(dt) {
       warp.t += dt; const v = 0.13 + 0.6 * warp.t;
       player.z += v * dt; camZ = player.z * LL * 0.9;
       if (player.z <= 1 && spikes[player.lane] > 0 && player.z >= 1 - spikes[player.lane] - 0.01) { killPlayer('spike'); break; }
+      spikeGuideUpdate(dt);
       if (player.z >= 1.42) { player.z = 0; beginLevel(level + 1); }
       Sound.hum(0);
       break;
@@ -1820,6 +1828,54 @@ function drawPulseLanes() {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+/* WARP SPIKE GUIDE (2026-11-04). Daily bot eval: about 1 death in 9 was a spike hit in the warp, right after clearing
+   the level ("since 0"), the most deflating way to lose a life, and the only cue was a generic AVOID SPIKES line. Now,
+   while you fly the warp, the spike in the claw's lane burns red-hot and pulses faster as its tip gets closer, a
+   parking-sensor blip rises in pitch and rate (plus a light rumble on pads / Android), and the nearest spike-free lane on
+   each side lights green so you know which way to steer. Steering or shooting the spike down are both still on you;
+   nothing is removed. Not shown in the BONUS WARP gate round (it has no spikes). */
+const SPIKE_GUIDE = { minGap: 0.07, maxGap: 0.4, far: 0.75 };
+const spikeGuide = { ahead: false, dz: 0, lane: -1, frames: 0, beeps: 0, next: 0, steered: 0, wasLane: -1, safe: [], tipShown: false };
+function spikeTip(l) { const s = spikes[l]; return s > 0.02 ? 1 - s : null; }
+function spikeSafeLanes() {
+  const out = [], me = player.lane;
+  for (const dir of [-1, 1]) for (let d = 1; d <= Math.floor(web.n / 2); d++) {
+    let l = me + dir * d; if (web.closed) l = wrapLane(l); else if (l < 0 || l >= web.n) break;
+    const tip = spikeTip(l); if (tip === null || tip <= player.z) { out.push(l); break; }
+  }
+  return out;
+}
+function spikeGuideUpdate(dt) {
+  const G = spikeGuide, live = state === 'warp' && warp && !warp.bonus && player.alive;
+  const tip = live ? spikeTip(player.lane) : null, ahead = tip !== null && tip > player.z;
+  if (!ahead) {
+    if (G.ahead && live && player.lane !== G.wasLane) G.steered++;   // left a spiked lane in time
+    G.ahead = false; G.dz = 0; G.lane = -1; G.next = 0; G.safe = []; return;
+  }
+  G.dz = tip - player.z; G.lane = player.lane; G.wasLane = player.lane; G.safe = spikeSafeLanes();
+  if (!G.ahead && !G.tipShown) { G.tipShown = true; msg('SPIKE AHEAD! STEER TO A GREEN LANE', 2.4, 0.36, '#ff6a4a', 2.1); }
+  G.ahead = true;
+  G.next -= dt;
+  if (G.next <= 0) { const k = 1 - clamp(G.dz / SPIKE_GUIDE.far, 0, 1); Sound.spikeBeep(k); G.beeps++; G.next = lerp(SPIKE_GUIDE.maxGap, SPIKE_GUIDE.minGap, k); }
+}
+function drawSpikeGuide() {
+  const G = spikeGuide; if (!G.ahead || state !== 'warp' || G.lane < 0) return;
+  G.frames++;
+  const k = 1 - clamp(G.dz / SPIKE_GUIDE.far, 0, 1), pulse = 0.6 + 0.4 * Math.sin(T * (14 + 40 * k));
+  const m = laneMid(G.lane), tz = (G.dz + player.z) * LL;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  // the spike in your lane: red-hot core, white-hot as it closes
+  ctx.globalAlpha = 0.55 + 0.45 * pulse; ctx.strokeStyle = k > 0.7 ? '#ffe0d0' : '#ff3a2a'; ctx.shadowColor = '#ff2a10'; ctx.shadowBlur = (10 + 14 * k) * DPR;
+  ctx.lineWidth = LW(2.2 + 2.2 * k); ctx.beginPath(); seg3(m[0], m[1], LL, m[0], m[1], tz); ctx.stroke();
+  const p = proj(m[0], m[1], tz); if (p) { const r = Math.max(3 * DPR, scaleAt(tz) * (0.03 + 0.03 * k)); ctx.fillStyle = '#fff'; ctx.globalAlpha = pulse; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU); ctx.fill(); }
+  // the nearest clear lane each way: green rails just ahead of the claw
+  const z0 = player.z * LL + LL * 0.02, z1 = Math.min(LL, z0 + LL * 0.35);
+  ctx.strokeStyle = '#3dff8a'; ctx.shadowColor = '#00ff66'; ctx.shadowBlur = 10 * DPR; ctx.lineWidth = LW(2.6); ctx.globalAlpha = 0.75 + 0.25 * Math.sin(T * 10);
+  ctx.beginPath();
+  for (const l of G.safe) { const a = rail(l), b = rail(l + 1); seg3(a[0], a[1], z0, a[0], a[1], z1); seg3(b[0], b[1], z0, b[0], b[1], z1); seg3(a[0], a[1], z0, b[0], b[1], z0); }
+  ctx.stroke();
+  ctx.restore();
 }
 function drawSpikes() {
   ctx.strokeStyle = pal.spike; ctx.lineWidth = LW(1.15);
@@ -2253,6 +2309,7 @@ function drawGameScene() {
   drawGrabWarn();
   drawBonusGates();
   drawSpikes();
+  drawSpikeGuide();
   drawMines();
   for (const e of enemies) drawEnemy(e);
   drawPups();
@@ -2660,7 +2717,8 @@ function touchLayout() {
     place(E.knob, lx + (side - knobD) / 2, bot - 8 - knobD, knobD, knobD);
     const ab = clamp((side - 34) / 2, 58, 120);
     place(E.left, lx + side / 2 - ab - 6, bot - 8 - ab, ab, ab); place(E.right, lx + side / 2 + 6, bot - 8 - ab, ab, ab);
-    place(E.mode, lx + 10, hudH + 4, Math.min(side - 20, 150), 32);
+    // below the feedback sticker's top-left spot (48px + up to 46px tall), so the two never overlap (2026-11-04)
+    place(E.mode, lx + 10, Math.max(hudH + 4, sa.t + 100), Math.min(side - 20, 150), 32);
     const fx = iw - sa.r - 14 - fireD, fy = bot - 8 - fireD;
     place(E.fire, fx, fy, fireD, fireD); place(E.start, fx, fy, fireD, fireD);
     place(E.zap, Math.max(rx + 6, fx - zapD * 0.3), fy - zapD - 12, zapD, zapD);
@@ -2785,6 +2843,7 @@ window.VORTEX = {
   clearLevel() { pool = []; enemies = []; eshots = []; if (state === 'play') startWarp(); },
   spawn(type, lane, z) { const e = makeEnemy(type, lane, z == null ? 1 : z); e.spawnT = 1; enemies.push(e); return e.id; },
   setSpikes(v) { for (let i = 0; i < web.n; i++) spikes[i] = v; },
+  setSpike(l, v) { spikes[wrapLane(l)] = v; },
   hiscores: () => hiscores.slice(),
   setLives(v) { lives = v; },
   addScore(v) { addScore(v); },
@@ -2824,6 +2883,7 @@ window.VORTEX = {
   eshotList: () => eshots.map(s => ({ lane: s.lane, z: s.z, warned: !!s.warned })),
   haptics: () => ({ on: Haptics.on, src: Haptics.src, log: Haptics.log.slice(), padHeld: Object.keys(pad.prev).filter(k => pad.prev[k]) }),
   shotWarnFrames: () => shotWarnFrames,
+  spikeGuide: () => ({ ahead: spikeGuide.ahead, dz: spikeGuide.dz, lane: spikeGuide.lane, safe: spikeGuide.safe.slice(), frames: spikeGuide.frames, beeps: spikeGuide.beeps, steered: spikeGuide.steered }),
   grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d })), frames: grabWarnFrames, cues: grabWarnCues }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),
