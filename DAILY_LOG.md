@@ -411,3 +411,75 @@ session (about 7 min, Oct 31 4:01 PM EDT) in Clinic Day (`congressional-obgyn`, 
 - Run plateau on/off on 3+ seeds before claiming it helps. The iPhone landscape encounter layout is still not probed.
 - Bot playthroughs to measure how JUMP changes VORTEX death level. The DROID now arrives later.
 - The PIN is still in git history (unchanged; only a salted hash in the current tree).
+
+## 2026-11-04 (day 8): gameplay evaluation + fixes
+
+The Nov 2 and Nov 3 daily runs pushed code (Nov 2: `4338f23`, `2c86922` VORTEX Bonus Warp, `d9d2137`, `3aaa109` Clinic Day;
+Nov 3: `3fbe3ac` VORTEX rim grab warning, `0f4ee36` Clinic Day explanations) but never wrote a log entry, and the
+Nov 3 run is reported as failed. Their VORTEX work is written up in games/tube-shooter/NOTES.md (days 6–7); the Nov 3
+Neuro Arena numbers were recovered from its work dir and are below. Today ran in a fresh worktree
+`/workspace/arcade-daily-2026-11-04` from `0f4ee36`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14
+(+ landscape). The box was loaded (load average 12–28).
+
+### Player feedback (Nov 3)
+`node tools/read-feedback.mjs --date 2026-11-03`: **0 submissions** (0 test records either; Nov 2 also 0). The store is
+reachable (the Oct 31 document still reads back), so this is no feedback, not a broken pipe. No ratings, no suggestions
+to cluster or act on.
+
+### Findings
+- **Smoke, all 21 games + home, desktop and iPhone 14**: no console or page errors anywhere. Screenshot timeouts only in
+  the two WebGL-heavy games (jax-adventures, planet-guardian), same as every day: software GL, not a real-device signal.
+- **Dr. Behram's Office / Clinic Day** (the old congressional-obgyn URL redirects to `#office`): access, core, bank-cues,
+  answer-length, feud access/engine, triage cases/CTG, surgery cases (590 checks), vitals (942) and the office page test
+  (desktop + iPhone, touch encounter) all pass. Correct option is the longest in 19.8% of questions (≈ chance) and
+  position is randomized. Instructor PIN: still only a salted hash in the tree; tests use the throwaway testpin.js, and
+  student codes validate. A 14-question sample read for accuracy was all correct (recurrent VVC, hydrosalpinx before IVF,
+  Tdap 27–36 wk, ACE-inhibitor switch in pregnancy, mastitis per ABM, fezolinetant, alendronate, PID minimum criteria,
+  fundal height, lichen sclerosus, Shingrix, fetal movement, cerclage). Copy remains generic ("student name"), no faces.
+  hub.test timed out once under load and passed on the re-run.
+- **Star Raider**: sim asserts all OK (Novice sloppy bot wins 75%, Commander hard; last-stand 0% by design), war test OK.
+- **MELTDOWN**: sim 47/47.
+- **VORTEX (Tempest)**, 8 bot games each: original bot death level sharp 14/14/13/15, average 7/11/15/9 (fuseballs
+  over-counted: that bot steers into rim fuseballs). Fuseball-dodging bot: sharp 14/11/10/13, average 13/12/12/9; deaths
+  shots 15, fuseballs 10, **rim grabs 9 (was #1 yesterday, 13/36, before the grab warning)**, zaps 7, spikes 4 of 45.
+  Deaths come 7–29 s after a respawn (no respawn-grace problem). All spike deaths land during the warp, the only death
+  with almost no tell. On phone landscape the touch "MODE: SPINNER" button sat under the feedback sticker.
+  All VORTEX tests pass; root `tests/vortex-rim.test.js` fails intermittently (one random camping trial survives) on
+  both today's code and unmodified origin/main (1 of 2 runs each), so it's a pre-existing random flake, not a regression.
+
+### Changes
+1. `5efcc9d` **VORTEX warp spike guide** (games/tube-shooter): during the warp a spike in the claw's lane burns red →
+   white-hot with a tip dot and a "parking sensor" blip that speeds up as it closes (0.40 → 0.07 s); the nearest
+   spike-free lane each way lights green; steering out stops it. First-time tip "SPIKE AHEAD! STEER TO A GREEN LANE".
+   Off in the bonus warp. New tests/vortex-spikewarn.test.js (desktop, iPhone 14, iPhone 14 landscape: standing still
+   still dies to the spike, steering away reaches the next level with no life lost).
+2. `5efcc9d` **VORTEX landscape MODE button** moved below the feedback sticker. tests/vortex-modebtn.test.js (iPhone 14 /
+   SE / Pixel 7 landscape + portrait: no overlap with sticker, knob or arrows; still toggles).
+- Live-verified: https://storkdoc.github.io/behram-arcade/games/tube-shooter/game.js served both changes ~1 min after the
+  push (Nov 4 ~7:45 AM EST).
+
+### Neuro Arena (seed 1104; 10 rounds × K=4, Lamarck, 30 s, size 2800, ABL=5) — Nov 3 (seed 1103) for comparison
+| contest | chance | champ by round (today) | full task vs reflex prior | beyond reflex | Nov 3 champ / full |
+|---|---|---|---|---|---|
+| divisor | 8% | 30→50→58→63→71→76→…→78% | 46% vs 66% | −0.20 | 31→72%, full 66% |
+| simon | 25% | 53→70→…→78% | 45% vs 26% | **+0.19** | 47→78%, full 48% |
+| text | 8% | 26→36→44→52→54% | 16% vs 25% | −0.09 | 38→46%, full 16% |
+| add | 5% | 33→56→…→94→66→81% (level 1) | 13% | +0.03 | 22→67% |
+| sub | 10% | 67→92→70→…→100→73→97→74% (level 3) | 25% vs 18% | +0.13 | 67→85% (level 1) |
+| big | 50% | 60→70→…→93% | – | +0.16 | 72→92% |
+| pattern | 13% | 65→85→95→100% | – | +0.50 | 70→100% |
+| pong | – | 38% ×6 → 40% ×4 | – | +0.13 (units ablated: 40→18%) | 40% flat |
+| echo, dots, rps, tug | | ~100% | – | – | saturated, uninformative |
+- Honest read: only simon (and weakly sub, big, pattern) shows learning beyond what a reflex gets. Divisor and text
+  champions win duels but on the full task stay **below the frequency/position baseline** (memorising the duel set more
+  than understanding). Sub/add swings follow curriculum level-ups. **Pong is stagnant for the 4th straight run**
+  (champion never displaced; 0 reaps). The plateau rule for Pong was re-tested on Nov 3 (seeds 1103–1105, test-only):
+  one seed broke out (38→80% vs 40% off), one tied (40/40), one was slightly worse (90 vs 96%); with the Oct 30 result
+  that is 1 better / 2 worse / 1 tie, so Pong stays excluded. No Neuro Arena code was changed.
+
+### For tomorrow
+- Pong stagnation: try a different lever than plateau mutation (e.g. more duels per child or a harder opponent pool),
+  test-only first, 3+ seeds.
+- Divisor/text below baseline on the full task: look at whether the duel set is too small (memorisation).
+- VORTEX: re-run the bot to see if warp spike deaths drop; enemy shots are still #1.
+- PIN still in git history from before the hash (only the salted hash in the tree).
