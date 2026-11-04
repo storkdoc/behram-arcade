@@ -811,7 +811,7 @@ function restartUX(reflex, wiring) {
   toast(`${C.name}: new experiment · Reflex ${['Full', 'Limited', 'None'][reflex]} · ${wiring} wiring`);
 }
 $('uReflex').onchange = e => restartUX(+e.target.value, evo.champ.genome.ux ? 'evolved' : 'designed');
-$('uWire').onchange = e => restartUX(+(evo.opts.reflex ?? 1), e.target.value);
+$('uWire').onchange = e => restartUX(+(evo.opts.reflex ?? (C.id === 'pong' ? 0 : 1)), e.target.value);
 let ablW = null;
 $('uAbl').onclick = () => {
   if (ui.ablating) return; const c = evo.champ, ev0 = evo; ui.ablating = true; drawUnderstanding(); toast('Ablation running in the background (about a minute)…');

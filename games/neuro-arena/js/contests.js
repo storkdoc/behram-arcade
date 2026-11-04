@@ -99,7 +99,7 @@ const SM_ITEMS = (() => { const o = []; for (const L of SM_LEN) for (let k = 0; 
 /* a contest: K answers (labels), two input slots with n[c] symbols (sym[c] names them for the display),
    all(): every distinct item [x0, x1, answerIndex, display]; items are drawn uniformly from all() */
 export const CONTESTS = [
-  { id: 'pong', name: 'Pong', icon: '🏓', kind: 'pong', save: 3, blurb: 'Return the ball. A miss gives the other brain the point.' },
+  { id: 'pong', name: 'Pong', icon: '🏓', kind: 'pong', save: 4, blurb: 'Return the ball. A miss gives the other brain the point.' },
   // the symbolic contests with a curriculum: levels[] = the largest operand (or number) of each level; inLevel(item, L)
   { id: 'add', name: 'Addition', icon: '➕', kind: 'choice', blurb: 'a + b, starting at 0–2 + 0–2 and growing to 0–9 + 0–9 as the brains pass 80% (two-digit answers are judged per digit).',
     n: [10, 10], labels: D(19), rf: [0.35, 0.35], levels: [2, 3, 4, 5, 6, 7, 8, 9], inLevel: (it, L) => it[0] <= L && it[1] <= L, levelName: L => `0–${L} + 0–${L}`,

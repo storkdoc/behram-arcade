@@ -86,6 +86,14 @@ export function runDuel(job) {
   const cg = job.side === 0 ? job.gA : job.gB, up = job.uprobe && cg.ux ? pongUnderstanding(cg, job.side === 0 ? wA : wB, job.ablate) : null;
   return { id: job.id, stats: st, wA: job.lamarck ? wA : null, wB: job.lamarck ? wB : null, bench, up, aim: [m.aim[0], m.aim[1]] };
 }
+// a generation-0 Pong genome as the game makes it (tests/pong-learn.mjs uses this to start from the game's own brain)
+export function newPongGenome(seed = 1234, o = {}) { const g = initGenomeUX(PONG_UX, gen0(PONG_C, seed), o.reflex ?? REFLEX0(PONG_C), o.uxSeed ?? seed); if (o.wiring === 'designed') delete g.ux; return g; }
+// Pong's generation 0 (save v4, Nov 2026): the reflex defaults to Full and the decoder gain starts at 3. With the old
+// Limited reflex (row cap 20% + decay) and gain 1.5 a Pong brain could not learn within a lifetime at all: its learning
+// copy did no better than its frozen copy (tests/pong-learn.mjs; NOTES.md, "Pong learns again"). Other contests are unchanged.
+const PONG_C = 'pong', isPong = id => !id || id === 'pong';
+function REFLEX0(id) { return isPong(id) ? 0 : 1; }
+function gen0(id, seed) { const g = gen0Genome(seed); if (isPong(id)) g.kDec = 3; return g; }
 export const winnerOf = st => st.score[0] !== st.score[1] ? (st.score[0] > st.score[1] ? 0 : 1) : st.hitRate[0] !== st.hitRate[1] ? (st.hitRate[0] > st.hitRate[1] ? 0 : 1) : 0;
 
 export class Evolution {
@@ -93,7 +101,7 @@ export class Evolution {
     this.opts = { ...DEFAULTS, ...opts };
     if (state) { Object.assign(this, state); this.rnd = mulberry32((this.seedCounter = (this.seedCounter || 1) + 1) * 977); this.lexInit(); return; }
     this.gen = 0; this.seedCounter = 1; this.nextId = 2;
-    this.champ = { id: 1, genome: initGenomeUX(uxC(this.opts.contest), gen0Genome(), this.opts.reflex ?? 1, this.opts.uxSeed), weights: null, born: 0, n: 0, fit: 0, bench: null, scores: [] };
+    this.champ = { id: 1, genome: initGenomeUX(uxC(this.opts.contest), gen0(this.opts.contest), this.opts.reflex ?? REFLEX0(this.opts.contest), this.opts.uxSeed), weights: null, born: 0, n: 0, fit: 0, bench: null, scores: [] };
     if (this.opts.wiring === 'designed') delete this.champ.genome.ux;
     this.history = []; this.hof = []; this.log = []; this.best = null;
     this.rnd = mulberry32(12345); this.lexInit();
