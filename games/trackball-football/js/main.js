@@ -231,6 +231,24 @@ function backdrop(c, dt) {
   const g = c.createLinearGradient(0, 0, 0, L.H); g.addColorStop(0, 'rgba(0,0,8,0.78)'); g.addColorStop(0.5, 'rgba(0,0,8,0.45)'); g.addColorStop(1, 'rgba(0,0,8,0.82)');
   c.fillStyle = g; c.fillRect(0, 0, L.W, L.H);
 }
+/** title-screen showbiz: sweeping searchlights and a glow behind the logo (purely cosmetic) */
+function titleLights(c, L, t, ly, s) {
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const beams = [[0.08, 1.02, '255,214,120'], [0.92, 1.02, '140,180,255'], [0.3, 1.05, '255,255,255'], [0.7, 1.05, '255,120,140']];
+  beams.forEach(([bx, by, col], k) => {
+    const ox = L.W * bx, oy = L.H * by, a = -Math.PI / 2 + Math.sin(t * (0.35 + k * 0.07) + k * 1.9) * 0.55, len = Math.hypot(L.W, L.H), wd = 0.075;
+    const g = c.createLinearGradient(ox, oy, ox + Math.cos(a) * len, oy + Math.sin(a) * len);
+    g.addColorStop(0, `rgba(${col},0.20)`); g.addColorStop(0.6, `rgba(${col},0.06)`); g.addColorStop(1, `rgba(${col},0)`);
+    c.fillStyle = g; c.beginPath(); c.moveTo(ox, oy);
+    c.lineTo(ox + Math.cos(a - wd) * len, oy + Math.sin(a - wd) * len); c.lineTo(ox + Math.cos(a + wd) * len, oy + Math.sin(a + wd) * len); c.closePath(); c.fill();
+  });
+  const rg = c.createRadialGradient(L.W / 2, ly, 0, L.W / 2, ly, s * 4.2); rg.addColorStop(0, 'rgba(255,190,70,0.22)'); rg.addColorStop(0.5, 'rgba(255,120,40,0.06)'); rg.addColorStop(1, 'rgba(255,120,40,0)');
+  c.fillStyle = rg; c.fillRect(L.W / 2 - s * 4.2, ly - s * 4.2, s * 8.4, s * 8.4);
+  // rotating sunburst rays behind the logo
+  c.translate(L.W / 2, ly - s * 0.1); c.rotate(t * 0.08);
+  for (let k = 0; k < 16; k++) { c.rotate(Math.PI / 8); c.fillStyle = 'rgba(255,200,90,0.045)'; c.beginPath(); c.moveTo(0, 0); c.lineTo(s * 4.5, -s * 0.32); c.lineTo(s * 4.5, s * 0.32); c.closePath(); c.fill(); }
+  c.restore();
+}
 function runAttract(dt) {
   if (App.mode !== 'attract' || !Sim.G) App.startAttract();
   App.acc = Math.min(App.acc + dt, 0.1);
@@ -258,7 +276,13 @@ const Title = {
     const L = App.L; backdrop(c, dt);
     const s = Math.min(L.W / 7.2, L.H / (L.small ? 6.2 : 7.5), 110);
     const ly = L.safe.t + s * 1.15 + (L.small ? 6 : 24);
+    titleLights(c, L, this.t, ly, s);
+    Render.drawBallAt(c, L.W / 2 + s * 2.9, ly - s * 0.62, s * 2.6, -0.5 + Math.sin(this.t * 1.3) * 0.08, this.t * 2.2);
     UI.logo(c, L.W / 2, ly, s);
+    // glint that runs across the logo every few seconds
+    { const k = (this.t % 4.5) / 0.9; if (k < 1) { const gx = L.W / 2 - s * 3.6 + k * s * 7.2; c.save(); c.globalCompositeOperation = 'lighter'; c.translate(gx, ly); c.transform(1, 0, -0.35, 1, 0, 0);
+      const gg = c.createLinearGradient(-s * 0.3, 0, s * 0.3, 0); gg.addColorStop(0, 'rgba(255,255,255,0)'); gg.addColorStop(0.5, 'rgba(255,250,220,0.35)'); gg.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gg; c.fillRect(-s * 0.3, -s * 1.0, s * 0.6, s * 1.95); c.restore(); } }
     UI.text(c, 'PRO STADIUM EDITION · 7 ON 7 · INSPIRED BY THE 1978 COIN-OP', L.W / 2, ly + s * 1.05, UI.f(700, L.small ? 11 : 14, DFONT), '#c9d0ee');
     const top = Math.max(ly + s * 1.35, L.H * 0.42);
     const yEnd = menuColumn(c, [

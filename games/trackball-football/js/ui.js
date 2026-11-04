@@ -21,6 +21,8 @@ const UI = (() => {
     g.addColorStop(0, hot ? '#ffe27a' : o.bg || 'rgba(40,48,78,0.92)'); g.addColorStop(1, hot ? '#e3a51a' : o.bg2 || 'rgba(18,22,40,0.92)');
     ctx.fillStyle = g; rr(ctx, x, y, w, h, Math.min(12, h / 3)); ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = hot ? '#fff3c4' : 'rgba(150,170,255,0.35)'; ctx.stroke();
+    if (h >= 30) { const gl = ctx.createLinearGradient(0, y, 0, y + h * 0.5); gl.addColorStop(0, hot ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.16)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gl; rr(ctx, x + 2, y + 1.5, w - 4, h * 0.5, Math.min(10, h / 3.4)); ctx.fill(); }
     const z = fit(ctx, label, w - 16, 800, o.size || Math.min(20, h * 0.42), o.fam);
     text(ctx, label, x + w / 2, y + h / 2 + 1, f(800, z, o.fam), hot ? '#1b1000' : o.col || '#f2f4ff');
     return foc;
@@ -77,7 +79,12 @@ const UI = (() => {
     if (tw > maxW) { items[3].hide = true; tw -= items[3].w; }
     if (tw > maxW) { items[2].hide = true; tw -= items[2].w; }
     let x = Math.round(L.W / 2 - tw / 2);
-    ctx.fillStyle = 'rgba(6,8,16,0.86)'; rr(ctx, x - 3, y - 3, tw + 6, h + 6, 9); ctx.fill();
+    // broadcast scorebug: dark glass slab, gold accent rule, gloss
+    { const g = ctx.createLinearGradient(0, y - 3, 0, y + h + 3); g.addColorStop(0, 'rgba(34,40,62,0.94)'); g.addColorStop(0.5, 'rgba(10,12,24,0.94)'); g.addColorStop(1, 'rgba(4,5,12,0.94)');
+      ctx.fillStyle = g; rr(ctx, x - 3, y - 3, tw + 6, h + 6, 9); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#ffc928'; ctx.fillRect(x + 6, y + h + 1, tw - 12, sm ? 1.5 : 2); }
+    const x00 = x;
     for (const it of items) {
       if (it.hide) continue;
       if (it.t != null) {
@@ -89,10 +96,15 @@ const UI = (() => {
         text(ctx, String(S.sc[it.t]), x + it.w - (sm ? 17 : 21.5), y + h / 2 + 1, f(900, fs * 1.1, FONT), '#fff');
         if (S.off === it.t && S.ph !== 'over') { Render.drawBallAt(ctx, x + h * 0.95 + it.nw + bg / 2 + 1, y + h / 2, sm ? 30 : 36, 0, 0); }
       } else {
-        text(ctx, it.s, x + it.w / 2, y + h / 2 + 1, f(800, fs, DFONT), it.k === 'clk' && S.clk < 20 && S.ph === 'live' ? '#ff6a6a' : '#e9ecff');
+        const hot = it.k === 'dn' && (S.dn >= 3 || S.gtg) && S.ph !== 'over' && S.ph !== 'half';
+        if (hot) { ctx.fillStyle = S.dn >= 4 ? 'rgba(255,70,60,0.32)' : 'rgba(255,201,40,0.24)'; rr(ctx, x + 3, y + 3, it.w - 6, h - 6, 5); ctx.fill(); }
+        if (it.k === 'clk') { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y + 3, it.w, h - 6); }
+        text(ctx, it.s, x + it.w / 2, y + h / 2 + 1, f(800, fs, DFONT), it.k === 'clk' && S.clk < 20 && S.ph === 'live' ? '#ff6a6a' : hot ? (S.dn >= 4 ? '#ffb0a8' : '#ffe08a') : '#e9ecff');
       }
       x += it.w;
     }
+    { const g = ctx.createLinearGradient(0, y, 0, y + h * 0.5); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0.02)');
+      ctx.fillStyle = g; rr(ctx, x00 + 1, y - 1, tw - 2, h * 0.48, 7); ctx.fill(); }
     L.hudBottom = y + h + 4;
     const extra = [items[2], items[3]].filter(i => i.hide).map(i => i.s).join('   ·   ');
     if (extra) {
@@ -112,10 +124,23 @@ const UI = (() => {
     const cy = L.field.y + L.field.h * (big ? 0.42 : 0.7), k = Math.min(1, bnT / 0.22), e = 1 - Math.pow(1 - k, 3);
     const w = Math.min(L.W - 20, sz * S.bn[0].length * 0.62 + 80), x = L.W / 2 - w / 2 + (1 - e) * -L.W * 0.4;
     ctx.save(); ctx.globalAlpha = e;
-    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, 'rgba(8,10,24,0)'); g.addColorStop(0.12, 'rgba(8,10,24,0.85)'); g.addColorStop(0.88, 'rgba(8,10,24,0.85)'); g.addColorStop(1, 'rgba(8,10,24,0)');
     const bh = sz * (S.bn[1] ? 1.75 : 1.3);
-    ctx.fillStyle = g; ctx.fillRect(x, cy - bh / 2, w, bh);
-    ctx.fillStyle = S.bn[2]; ctx.fillRect(x + w * 0.12, cy - bh / 2, w * 0.76, 2); ctx.fillRect(x + w * 0.12, cy + bh / 2 - 2, w * 0.76, 2);
+    if (big) {
+      const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, 'rgba(8,10,24,0)'); g.addColorStop(0.12, 'rgba(8,10,24,0.88)'); g.addColorStop(0.88, 'rgba(8,10,24,0.88)'); g.addColorStop(1, 'rgba(8,10,24,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, cy - bh / 2, w, bh);
+      ctx.fillStyle = S.bn[2]; ctx.fillRect(x + w * 0.12, cy - bh / 2, w * 0.76, 3); ctx.fillRect(x + w * 0.12, cy + bh / 2 - 3, w * 0.76, 3);
+      // a light sweep across the slab
+      const sx = x + ((bnT * 0.9) % 1.6) * w * 1.1 - w * 0.25; ctx.save(); ctx.beginPath(); ctx.rect(x + w * 0.1, cy - bh / 2, w * 0.8, bh); ctx.clip();
+      const sg = ctx.createLinearGradient(sx - 60, 0, sx + 60, 0); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.16)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sg; ctx.transform(1, 0, -0.4, 1, cy * 0.4, 0); ctx.fillRect(sx - 60, cy - bh / 2, 120, bh); ctx.restore();
+    } else { // slanted lower-third
+      const sk = bh * 0.35, x0 = x + w * 0.06, x1 = x + w * 0.94, y0 = cy - bh / 2, y1 = cy + bh / 2;
+      const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(30,36,60,0.94)'); g.addColorStop(0.55, 'rgba(10,12,26,0.94)'); g.addColorStop(1, 'rgba(4,5,14,0.94)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0 + sk, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1 - sk, y1); ctx.lineTo(x0, y1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = S.bn[2]; ctx.beginPath(); ctx.moveTo(x0 + sk - 4, y0); ctx.lineTo(x0 + sk + 10, y0); ctx.lineTo(x0 + 10, y1); ctx.lineTo(x0 - 4, y1); ctx.closePath(); ctx.fill();
+      ctx.fillRect(x0 + sk, y1 - 2.5, x1 - x0 - sk * 2, 2.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.moveTo(x0 + sk, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1 - sk * 0.45, y0 + bh * 0.45); ctx.lineTo(x0 + sk * 0.55, y0 + bh * 0.45); ctx.closePath(); ctx.fill();
+    }
     ctx.font = f('italic 900', sz, DFONT); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = sz * 0.12; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineJoin = 'round';
     const ty = cy - (S.bn[1] ? sz * 0.28 : 0);
