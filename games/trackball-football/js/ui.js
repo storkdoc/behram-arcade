@@ -229,11 +229,13 @@ const UI = (() => {
   }
 
   /* ---------------- play select overlay ---------------- */
+  /** card columns for n plays (shared with the keyboard / gamepad grid navigation) */
+  function selCols(n, portrait) { return portrait ? (n > 8 ? 3 : 2) : Math.min(4, Math.ceil(n / 2)); }
   function selectPanel(ctx, S, L, Sel, me, opts) {
     const offense = S.off === me, list = Sel.list, n = list.length;
     const portrait = L.portrait, sm = L.small;
     const rl = L.selBox ? L.selBox.l : L.safe.l + 8, rr2 = L.selBox ? L.selBox.r : L.W - L.safe.r - 8;
-    const pw = Math.min(rr2 - rl, portrait ? 520 : 940), cols = portrait ? 2 : Math.min(4, Math.ceil(n / 2)), rows = Math.ceil(n / cols);
+    const pw = Math.min(rr2 - rl, portrait ? 520 : 940), cols = selCols(n, portrait), rows = Math.ceil(n / cols);
     const top = (L.hudBottom || 40) + 4, bottomLimit = portrait ? L.field.y + L.field.h : L.H - L.safe.b - 6;
     const headH = sm ? 40 : 56, footH = sm ? 26 : 34, gap = sm ? 6 : 10;
     let cw = (pw - gap * (cols + 1)) / cols, ch = cw * 0.66 + (sm ? 18 : 26);
@@ -294,5 +296,5 @@ const UI = (() => {
     }
   }
 
-  return { beginFrame, button, handleKeys, tap, text, rr, f, fit, logo, hud, bannerDraw, callsDraw, wrapMeter, selectPanel, diagram, resetFocus, clockStr, get hits() { return prevHits; }, get liveHits() { return hits; }, kbd: false };
+  return { selCols, beginFrame, button, handleKeys, tap, text, rr, f, fit, logo, hud, bannerDraw, callsDraw, wrapMeter, selectPanel, diagram, resetFocus, clockStr, get hits() { return prevHits; }, get liveHits() { return hits; }, kbd: false };
 })();

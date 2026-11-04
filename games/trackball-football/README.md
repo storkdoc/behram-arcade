@@ -24,6 +24,17 @@ until friction stops it.
 - Passing: **tap a receiver on the field** to throw straight to him (or use the red button for the ringed target).
 - Tap a play card to pick it and tap it again (or LOCK IN) to call it. Tap **FLIP** (or the blue button) to mirror it.
 
+## Playbook
+- **Offense**: DIVE, SWEEP, SLANTS, POST + CURL, BOMB, SCREEN, plus three fundamentals: **OFF TACKLE** (line blocks
+  down, the near WR seals the edge, the back hits outside the tackle), **CURL-FLAT** (curl at 10 over the back in the
+  flat: a high-low on the corner) and **PLAY-ACTION SEAM** (fake the dive, the far WR runs the seam behind the
+  linebacker, the near WR runs a deep out). Then PUNT and FIELD GOAL. Keys **1-9, 0, -** pick a card directly.
+- **Defense**: MAN-TO-MAN, COVER 3 ZONE, **COVER 2** (corners squat the flats, safety and MLB split the deep halves),
+  **COVER 1 LB BLITZ** (MLB blitzes, the end peels with the back, corners man up, one safety deep), BLITZ, RUN STUFF,
+  **GOAL LINE** (everyone in the box, press corners, safety on the back), PREVENT and SELL OUT. Every offensive play
+  has its own SELL OUT counter. The CPU calls goal line inside the 5 (Pro and up), cover 2 against passing teams,
+  off tackle on short yardage and play-action once it has been running the ball.
+
 ## Passing
 - The big pulsing ring (and arrow) is your target. It starts on the **most open** eligible receiver and follows the
   open man until you pick one yourself with NEXT (then it stays put). Small rings on the other receivers show how open
@@ -98,4 +109,5 @@ node games/trackball-football/tests/mp.test.js     # online flow + play-call and
 node games/trackball-football/tests/run-defense.test.js # pure Node, no server: run-exploit bots must stay under TD-rate caps
 node games/trackball-football/tests/play-counter.test.js # pure Node: repeat/alternate/random/anti-adaptive bots vs the learning defense (GAMES=n)
 node games/trackball-football/tests/passing.test.js      # pure Node: completion % / picks per level for casual/reasonable/expert QB models (N=n)
+node games/trackball-football/tests/new-plays.test.js    # pure Node: the fundamentals package: every matchup, no exploit, counters, CPU usage, 2P picks (N=n)
 ```

@@ -25,15 +25,25 @@ const OFFENSE = [
   { id: 'slants', name: 'SLANTS', kind: 'pass', desc: 'Quick crossing slants, RB in the flat',
     qb: [[-6, 0]],
     r: { 5: [[2.5, -12], [8, -6], [16, 2]], 6: [[2.5, 11], [8, 5], [16, -3]], 4: [[-3.5, 6], [1.5, 12], [4, 17]] } },
-  { id: 'post', name: 'POST + CURL', kind: 'pass', desc: 'Deep post, curl and a check-down',
+  { id: 'post', name: 'POST + CURL', kind: 'pass', desc: 'Deep post, curl and a check-down', deep: 1,
     qb: [[-7, 0]],
     r: { 5: [[11, -12], [27, -3]], 6: [[11, 11], [8.5, 12.5]], 4: [[-2.5, 3.5], [4, 2]] } },
-  { id: 'bomb', name: 'BOMB', kind: 'pass', desc: 'Everybody deep. RB blocks.',
+  { id: 'bomb', name: 'BOMB', kind: 'pass', desc: 'Everybody deep. RB blocks.', deep: 1,
     qb: [[-8.5, 0]],
     r: { 5: [[45, -13]], 6: [[45, 12]], 4: 'blk' } },
   { id: 'screen', name: 'SCREEN', kind: 'pass', desc: 'Let them rush, dump it to the RB',
     qb: [[-8, 0]], screen: 1,
     r: { 4: [[-4.5, 5], [-2.5, 10], [-1.5, 11]], 5: [[20, -12]], 6: [[3, 11], [4, 7]] } },
+  // fundamentals: an off-tackle run, the high-low on the corner, and a run-action shot up the seam
+  { id: 'offtackle', name: 'OFF TACKLE', kind: 'run', desc: 'Line blocks down, WR seals the edge, RB hits off tackle',
+    qb: [[-4.5, 0.8], [-6, -3]], hand: 4,
+    r: { 4: [[-3.6, 2.4], [-0.8, 3.2], [14, 3.4]], 6: 'blk', 5: [[8, -12], [30, -12]] } },
+  { id: 'curlflat', name: 'CURL-FLAT', kind: 'pass', desc: 'Curl at 10 over the RB in the flat: high-low the corner',
+    qb: [[-6.5, 0]],
+    r: { 6: [[10.5, 11], [8.5, 10]], 4: [[-3.6, 4.5], [0, 10], [2.5, 13.5]], 5: [[12, -12], [32, -12]] } },
+  { id: 'paseam', name: 'PLAY-ACTION SEAM', kind: 'pass', desc: 'Fake the dive, hit the seam behind the linebacker', pa: 1, deep: 1,
+    qb: [[-4.4, -1.1], [-7.8, -0.4]],
+    r: { 4: [[-4.2, 0.4], [-0.8, 0.2]], 5: [[4, -9], [14, -6], [34, -5]], 6: [[13, 11], [15.5, 13]] } },
   { id: 'punt', name: 'PUNT', kind: 'punt', desc: 'Kick it away' },
   { id: 'fg', name: 'FIELD GOAL', kind: 'fg', desc: 'Kick for three' },
 ];
@@ -41,8 +51,11 @@ const OFFENSE = [
 const DEFENSE = [
   { id: 'man', name: 'MAN-TO-MAN', desc: 'Lock on, safety over the top', a: [['rush'], ['rush'], ['rush'], ['man', 4, 2], ['man', 5, 3], ['man', 6, 3], ['zone', 16, 0]] },
   { id: 'zone', name: 'COVER 3 ZONE', desc: 'Three deep, linebacker underneath', a: [['rush'], ['rush'], ['rush'], ['zone', 6, 0], ['zone', 15, -13], ['zone', 15, 13], ['zone', 19, 0]] },
+  { id: 'cover2', name: 'COVER 2', desc: 'Corners squat the flats, safety and MLB split the deep halves', a: [['rush'], ['rush'], ['rush'], ['zone', 18, 7], ['zone', 4, -12], ['zone', 4, 11], ['zone', 19, -7]] },
+  { id: 'cover1', name: 'COVER 1 LB BLITZ', desc: 'MLB blitzes, the end peels with the back, corners man up, safety alone deep', a: [['rush'], ['rush'], ['man', 4, 1.5], ['rush'], ['man', 5, 2.6], ['man', 6, 2.6], ['zone', 17, 0]] },
   { id: 'blitz', name: 'BLITZ', desc: 'Send the LB and safety. Press coverage.', a: [['rush'], ['rush'], ['rush'], ['rush'], ['man', 5, 0.8], ['man', 6, 0.8], ['rush']] },
   { id: 'stuff', name: 'RUN STUFF', desc: 'Crash the line, safety comes down', a: [['rush'], ['rush'], ['rush'], ['fill'], ['man', 5, 2.5], ['man', 6, 2.5], ['fill']] },
+  { id: 'goalline', name: 'GOAL LINE', desc: 'Everyone in the box: press corners, safety takes the back', a: [['rush'], ['rush'], ['rush'], ['fill'], ['man', 5, 0.9], ['man', 6, 0.9], ['man', 4, 1.2]] },
   { id: 'prevent', name: 'PREVENT', desc: 'Nothing deep. Bend, don\u2019t break.', a: [['rush'], ['rush'], ['rush'], ['zone', 9, 0], ['zone', 22, -12], ['zone', 22, 12], ['zone', 30, 0]] },
   // SELL OUT: bet on the offense's habit. At the snap it becomes the COUNTER for the play the scouting report
   // expects (lined up to that play's side). Right, and the play dies; wrong, and the holes it leaves get gashed.
@@ -60,6 +73,9 @@ const COUNTER = {
   slants: { name: 'JUMP THE SLANTS', tag: 'THE SLANTS', weak: 'deep and the run', a: [['rush'], ['rush'], ['rush'], ['jump', 4, 1.5, 12], ['jump', 5, 6.5, -7.5], ['jump', 6, 6.5, 6.5], ['zone', 10, 0]] },
   post: { name: 'BRACKET THE POST', tag: 'THE POST', weak: 'the run and the flat', a: [['rush'], ['rush'], ['rush'], ['jump', 4, 3.5, 2.2], ['man', 5, 1.2], ['jump', 6, 9.5, 12.5], ['bracket', 5, 3.5]] },
   bomb: { name: 'DEEP BRACKET + BLITZ', tag: 'THE BOMB', weak: 'everything short', a: [['rush'], ['rush'], ['rush'], ['crash', -7.5, 0.5, 'blitz'], ['bracket', 5, 5], ['bracket', 6, 5], ['crash', -7, -2, 'blitz']] },
+  offtackle: { name: 'SPILL THE OFF TACKLE', tag: 'THE OFF TACKLE', weak: 'the edges and deep', a: [['crash', -2.4, 0.6, 'gap'], ['rush'], ['crash', -2.6, 3.2, 'spill'], ['crash', -1.6, 2.6, 'scrape'], ['man', 5, 1.5], ['man', 6, 1.5], ['crash', 0.8, 2.2, 'fit']] },
+  curlflat: { name: 'SINK AND SQUAT', tag: 'THE CURL-FLAT', weak: 'deep and the run', a: [['rush'], ['rush'], ['rush'], ['jump', 6, 7.5, 9.5], ['man', 5, 3], ['jump', 4, 2.5, 12.5], ['zone', 14, 4]] },
+  paseam: { name: 'STAY HOME ON THE SEAM', tag: 'THE PLAY-ACTION', weak: 'the run and the flat', a: [['rush'], ['rush'], ['rush'], ['man', 4, 1.2], ['jump', 5, 12, -6], ['man', 6, 3], ['bracket', 5, 4]] },
   screen: { name: 'SNIFF THE SCREEN', tag: 'THE SCREEN', weak: 'deep and the dive', a: [['rush'], ['rush'], ['crash', -3.2, 9.5, 'sniff'], ['crash', -2.6, 10.5, 'sniff'], ['man', 5, 3], ['man', 6, 1.2], ['zone', 12, 0]] },
 };
 const COUNTER_SYM = { dive: 1, slants: 1, bomb: 1 }; // counters that don't care which way the call was flipped

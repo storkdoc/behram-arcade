@@ -317,6 +317,7 @@ const Options = {
 const HOWTO = [
   ['THE TRACKBALL', 'Your player runs as fast as the ball spins. Stroke it hard and he sprints; stroke it gently and he jogs; let go and the ball coasts and slows on its own, just like the heavy cabinet ball. Stroke against the spin to brake.\n\nMAC: click the field to grab the trackball (the pointer disappears) and roll your mouse or trackpad. Or just two-finger swipe on the trackpad. Esc lets go.\nIPHONE / IPAD: swipe and flick anywhere in the trackball area (the big red ball). Keep your finger on it to stop.\nKEYS / GAMEPAD also work: arrows or WASD, Space = action, Shift = next, F = flip.'],
   ['CALLING PLAYS', 'Before every down both sides secretly call a play. You only ever see your own playbook, and your opponent only sees that you are choosing or locked in. Both calls are revealed at the snap.\n\nRoll the trackball or use the arrow keys to pick a card, then click / Space / tap again to lock it in. You have 14 seconds.\nFLIP mirrors your play left-right (formation, routes, run direction, coverage): press F or Shift (or right-click), tap FLIP or the blue button, or a gamepad shoulder button. The diagrams flip so you can see it. Your flip stays secret until the snap too.'],
+  ['THE PLAYBOOK', 'OFFENSE: DIVE and OFF TACKLE hit inside and just outside the tackle; SWEEP gets the edge behind a pulling guard. SLANTS, CURL-FLAT (curl over the back in the flat) and SCREEN are the quick passes; POST + CURL, PLAY-ACTION SEAM (fake the dive, throw up the seam) and BOMB go deep.\n\nDEFENSE: MAN-TO-MAN, COVER 3 ZONE, COVER 2 (corners squat the flats, two deep halves), COVER 1 LB BLITZ (four rush, man under, one deep), BLITZ, RUN STUFF, GOAL LINE (everyone in the box), PREVENT, and SELL OUT once you know their habit.\n\nKeys 1-9, 0 and - pick a card directly.'],
   ['OFFENSE', 'Press ACTION (click / Space / the red button) to hike. You control the quarterback: drop back; the big pulsing ring is your target and starts on the most open man (green = open, yellow = tight, red = covered). NEXT or Shift picks another; on a phone you can just tap a receiver to throw to him. ACTION throws, leading him for you, and then he runs to the white X on his own. If the defense sold out on your call, though, throws get picked.\nOn runs the ball is handed off and you take over the runner. ACTION is a juke: time it when a tackler is 1-2 yards away to fake him out (with nobody near it just wastes your legs). With the ball you can’t outrun everyone: you tire on long runs and hard cuts cost speed unless you juke. The defense takes angles, keeps a man over the top and learns your habits, so mix in passes. Wrapped up? Spin the trackball and mash ACTION to break free.\nFourth down: PUNT or FIELD GOAL (when in range).'],
   ['DEFENSE', 'You control the defender with the yellow ring. ACTION (Space / click / red button) jumps you to the defender closest to the ball: the runner, or where a pass is coming down. Near the runner, ACTION is a DIVING TACKLE. NEXT (Shift) cycles defenders. Before the snap ACTION picks your man.\nWhen you grab the runner, spin the trackball hard to drive him down. Hit him at full speed for a BIG HIT and maybe a fumble.'],
   ['MIX UP YOUR PLAYS', 'The defense learns. It remembers what you called and spots it when you keep running the same play (or just swap between two). Once it is sure, it can SELL OUT: it calls the counter built for that play (an edge blitz for the sweep, a run blitz for the dive, defenders jumping the slants, a bracket on the post or the bomb, a screen sniffer) and the play usually dies for a loss, a sack or a pick. It never sees your call, only your habits.\nThe tell: before the snap you may hear the crowd stir and see DEFENSE READS IT! It is usually real, sometimes a bluff. Change it up: a defense that sold out the wrong way leaves big holes. Your play-call screen warns you when your habit is showing.\nOn defense you can do it too: the scouting report under your calls shows the offense\u2019s habit, and SELL OUT bets on it (a wrong bet gets burned). All-Pro defenses learn fastest; Rookie ones are slower and leakier.'],
@@ -563,13 +564,13 @@ const GameScreen = {
   selectInput(S, typed, aP, bP) {
     const A = App, Sel = A.Sel; if (!Sel.list.length) this.resetSelect(S);
     if (Sel.locked || S.lk[A.me]) { Sel.locked = true; Track.clearNav(); return; }
-    const n = Sel.list.length, cols = A.L.portrait ? 2 : Math.min(4, Math.ceil(n / 2));
+    const n = Sel.list.length, cols = UI.selCols(n, A.L.portrait);
     const mv = (dx, dy) => { let i = Sel.idx + dx + dy * cols; i = ((i % n) + n) % n; if (i !== Sel.idx) { Sel.idx = i; Sound.play('move'); } };
     let keyed = false;
     for (const e of typed) {
       if (e.code === 'ArrowRight' || e.code === 'KeyD') { mv(1, 0); keyed = true; } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') { mv(-1, 0); keyed = true; }
       else if (e.code === 'ArrowDown' || e.code === 'KeyS') { mv(0, 1); keyed = true; } else if (e.code === 'ArrowUp' || e.code === 'KeyW') { mv(0, -1); keyed = true; }
-      else if (/^Digit[1-8]$/.test(e.code)) { const k = +e.code.slice(5) - 1; if (k < n) { Sel.idx = k; Sound.play('move'); } }
+      else if (/^(Digit|Numpad)[0-9]$/.test(e.code) || e.code === 'Minus') { const dg = e.code === 'Minus' ? 11 : +e.code.slice(-1), k = (dg === 0 ? 10 : dg) - 1; if (k < n) { Sel.idx = k; Sound.play('move'); } }
       else if (e.code === 'KeyF') this.toggleFlip();
     }
     if (bP) this.toggleFlip(); // Shift / X / right-click / blue button / gamepad B also flip while calling
@@ -721,7 +722,8 @@ function frame(ts) {
   } catch (e) { console.error(e); }
   // adaptive effects quality (never resolution): drop grass detail / crowd animation on slow devices
   App.lastFrameMs += ((dt * 1000) - App.lastFrameMs) * 0.05;
-  if (App.lastFrameMs > 21) { if (++slow > 90 && Render.quality.level > 0) { Render.quality.level--; slow = 0; } } else slow = 0;
+  // (timed, not counted: a device at 15 fps steps down as fast as one at 50; very slow frames step down sooner)
+  if (App.lastFrameMs > 21) { slow += dt || 1 / 60; if (slow > (App.lastFrameMs > 40 ? 0.6 : 1.5) && Render.quality.level > 0) { Render.quality.level--; slow = 0; } } else slow = 0;
   requestAnimationFrame(frame);
 }
 

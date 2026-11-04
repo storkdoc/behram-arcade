@@ -171,7 +171,13 @@ const Sim = (() => {
       }
       if (late && !behind && G.score[team] - G.score[1 - team] <= 2 && kick <= 45) return 'fg';
       const w = togo > 7 ? { dive: 1, sweep: 1.5, slants: 3, post: 3, bomb: 2, screen: 1.5 } : togo <= 3 ? { dive: 4, sweep: 2.5, slants: 2, post: 1, bomb: 0.6, screen: 1 } : { dive: 2.5, sweep: 2, slants: 2.5, post: 2, bomb: 1.2, screen: 1.5 };
-      if (toGoal < 12) w.bomb = 0.3;
+      // the fundamentals package: OFF TACKLE on short yardage, CURL-FLAT on medium/long, PLAY-ACTION once it has run the ball
+      // (a rookie CPU leans on them less and reads the situation less; an all-pro uses them most)
+      const nk = [0.7, 1, 1.15][G.opts.diff] || 1, ran = mix(team, 0.7);
+      Object.assign(w, togo > 7 ? { offtackle: 0.8, curlflat: 2.2, paseam: 1.6 } : togo <= 3 ? { offtackle: 3.5, curlflat: 1.5, paseam: 1.1 } : { offtackle: 2, curlflat: 2.2, paseam: 1.3 });
+      if (G.opts.diff > 0 && ran.n >= 3) w.paseam *= 0.7 + 1.2 * (1 - ran.pass); // play-action sells best after runs
+      for (const k of ['offtackle', 'curlflat', 'paseam']) w[k] *= nk;
+      if (toGoal < 12) { w.bomb = 0.3; w.paseam *= 0.5; }
       // don't be a tendency: go easy on what it just called, and play against what a scout would guess next
       const h = G.sc[team].h, l1 = h[h.length - 1], l2 = h[h.length - 2];
       if (l1 && w[l1.id]) w[l1.id] *= l2 && l2.id === l1.id ? 0.12 : 0.45;
@@ -185,14 +191,22 @@ const Sim = (() => {
       if (R.n >= 2 && Math.random() < SC.gamble) { G.readK[team] = wpick(R.P); return 'read'; }
     }
     const w = togo > 8 ? { man: 2, zone: 3, blitz: 1.5, stuff: 0.6, prevent: 1.5 } : togo <= 3 ? { man: 2, zone: 1, blitz: 2.5, stuff: 3.5, prevent: 0.2 } : { man: 3, zone: 2.5, blitz: 2, stuff: 1.8, prevent: 0.6 };
+    // the fundamentals: COVER 2 vs the pass, COVER 1 + LB blitz to bring a fourth rusher, GOAL LINE in the shadow of the posts
+    const nd = [0.7, 1, 1.15][G.opts.diff] || 1;
+    Object.assign(w, togo > 8 ? { cover2: 1.9, cover1: 1.4, goalline: 0 } : togo <= 3 ? { cover2: 0.4, cover1: 2, goalline: 1.2 } : { cover2: 1.3, cover1: 1.8, goalline: 0.15 });
+    if (toGoal <= 5 && G.opts.diff > 0) { w.goalline += 5; w.prevent = 0; w.cover2 *= 0.5; }
+    for (const k of ['cover2', 'cover1', 'goalline']) w[k] *= nd;
+    if (G.opts.diff === 0) w.cover2 *= 0.35; // a rookie MLB can't get deep enough to play a half
     if (G.half === 2 && G.clock < 30 && G.score[team] > G.score[1 - team]) w.prevent += 3;
     // keyed on the run: crash it if it goes inside, keep everything in front (zone, no blitz) if it bounces outside,
     // and send pressure with a spy at a scrambling QB
     const K = keyOf(team); w.stuff += 3 * K.run * (1 - K.out); w.zone += 2.5 * K.out; w.man += K.run + 1.5 * K.scr;
+    w.goalline += (toGoal <= 8 ? 1.5 : 0.3) * K.run * (1 - K.out); w.cover2 += 1.2 * K.out; w.cover2 *= 1 - 0.5 * K.run * (1 - K.out); w.cover1 += 0.8 * K.scr;
     w.blitz = Math.max(0.2, w.blitz + 1.5 * K.scr - 1.6 * K.out); w.prevent *= 1 - 0.6 * K.run;
     // their run/pass mix (not the play): a pass-happy offense sees more zone and fewer run blitzes, a deep thrower sees
     // the safeties stay back, a run-first one sees the box loaded
     const T = mix(G.off, SC.decay);
+    if (T.n >= 3) { w.cover2 += (1.4 * T.pass + 1.2 * T.deep) * SC.sharp; w.cover1 *= 1 - 0.4 * T.deep * SC.sharp; w.goalline *= 1 - 0.8 * T.pass * SC.sharp; w.cover2 *= 1 - 0.6 * (1 - T.pass) * SC.sharp; }
     if (T.n >= 3) { w.zone += 2.4 * T.pass * SC.sharp; w.prevent += 1.6 * T.deep * SC.sharp; w.stuff *= 1 - 0.75 * T.pass * SC.sharp; w.blitz *= 1 - 0.6 * T.deep * SC.sharp; w.stuff += 2.5 * (1 - T.pass) * SC.sharp; }
     return wpick(w);
   }
@@ -200,7 +214,7 @@ const Sim = (() => {
   /** team t's recent run/pass mix (recency-weighted): { n, pass, deep } */
   function mix(t, decay) {
     const h = G.sc[t].h; let w = 0, ps = 0, dp = 0;
-    for (let i = 0; i < h.length; i++) { const k = Math.pow(decay, h.length - 1 - i), f = famOf(h[i].k); w += k; if (f !== 'dive' && f !== 'sweep') ps += k; if (f === 'post' || f === 'bomb') dp += k; }
+    for (let i = 0; i < h.length; i++) { const k = Math.pow(decay, h.length - 1 - i), f = famOf(h[i].k), pl = PLAY_BY_ID[f]; w += k; if (pl ? pl.kind === 'pass' : f !== 'dive' && f !== 'sweep') ps += k; if (pl && pl.deep) dp += k; }
     return { n: h.length, pass: w ? ps / w : 0.5, deep: w ? dp / w : 0.3 };
   }
   const famOf = k => String(k).replace(/[<>]$/, '');
@@ -281,6 +295,8 @@ const Sim = (() => {
         let a = dp.a[p.slot]; const K = keyOf(def);
         if (p.slot === 3 && (K.scr > 0.3 || (G.ctr && G.ctr.scr)) && (a[0] === 'zone' || a[0] === 'man' || (G.ctr && a[0] === 'jump')) && !(G.human[def] && !G.ctr)) a = ['spy']; // he keeps scrambling: the MLB spies the QB
         p.as = a[0]; p.asArg = a; p.jumped = false; p.ctrT = 0;
+        // play-action: the second level reads the run fake and may take a step up (less often once it has seen your runs)
+        p.paBite = !!op.pa && (p.role === 'LB' || p.role === 'S') && (a[0] === 'zone' || a[0] === 'man' || a[0] === 'fill') && Math.random() < 0.6 * G.keyBite;
         if (a[0] === 'zone') p.zone = W(a[1] - (p.role === 'S' && !G.ctr ? 6 * K.run : 0), a[2], fl); // a safety who has seen the run cheats down
         // man coverage is by side: when only one team flipped, the corners take the receiver now on their side
         if (a[0] === 'man' || a[0] === 'jump' || a[0] === 'bracket') p.manT = off * 7 + (cross && a[1] >= 5 ? 11 - a[1] : a[1]);
@@ -467,6 +483,7 @@ const Sim = (() => {
     if (G.run && c && G.t - G.runT > react && !(p.as === 'crash' && G.t < p.ctrT)) return pursueRun(p, c, s);
     if (G.scram && c && c.role === 'QB' && p.as !== 'man' && G.t - G.scram > react) return pursueRun(p, c, s);
     const qb = P(off * 7 + 3);
+    if (p.paBite && G.t < 0.7 && !G.thrown && G.kind === 'pass' && !G.scram) return moveTo(p, G.los + d * 1.5, p.y + (G.ballY - p.y) * 0.25, p.maxv * 0.85);
     switch (p.as) {
       case 'rush': {
         const tgt = c || qb, pk = passK(off), late = pk.h && G.kind === 'pass' ? PASS.rushLate[pk.k] : 0; // a human QB gets a beat longer to set up
