@@ -229,7 +229,7 @@ Hypothesis (owner): intelligence evolves when reflexive pathways are limited; to
 - **The reflex** = units on the blank position alone (Word: S,R,A,E,E = 25.3%) / the Pong gain field + units on
   ball−paddle alone (tracking). Limited: row cap 20% of wMax and decay (choice ×0.99 per trial, Pong ×0.998 per
   100 ms); None: no output. `preNorm` skips capped rows so the cost is real. Lab select Reflex Full/Limited/None
-  and Wiring Evolved/Designed (both restart the contest's evolution). Default Limited + Evolved.
+  and Wiring Evolved/Designed (both restart the contest's evolution). Default Limited + Evolved (Pong: Full + Evolved since Nov 4 2026, see "Pong learns again").
 - **Measures.** Frozen Understanding probe (Word: 60 items where the frequency guess is wrong and the neighbours
   imply the answer, e.g. Q_ICK→U, N_WLY→E, reflex 0%). Beyond-reflex = full-task accuracy − 25.3%. Ablations
   (none / all units / self / enemy / self+enemy / reflex / neighbour detectors) every 100 generations or on
@@ -343,6 +343,51 @@ What this shows:
 - The association tiles still come from the 643 curated words.
 - The held-out curated words are more common than the held-out extras.
 
+## Pong learns again; paddles along the bottom/top; bigger court (Nov 4 2026)
+Owner: "use left and right to move paddle not up and down … the play area needs to be bigger … It needs to learn."
+**Root causes of "the AI doesn't learn" (measured with the new `tests/pong-learn.mjs`):**
+1. The default **Limited reflex** (Oct 27) caps every gain-field row (ball−paddle × paddle position, the only
+   pathway that can carry a tracking map) at 20% of wMax and decays it ×0.998 per 100 ms. Dopamine STDP writes the
+   map and the cap/decay erase it. Old default (Limited, kDec 1.5), 5 seeds × 180 s vs the perfect tracker:
+   learning 23% benchmark vs its own frozen copy 25% vs random weights 24%, i.e. no learning at all (FAIL).
+   The Oct 27 runs already showed it (Pong Limited 40-76% returns vs Full 90-98%).
+2. **Decoder gain 1.5** gave weak, slow paddle commands, so even a correct map moved the paddle too late.
+   Limited + kDec 3 still fails (~36% vs 18% live), so cause 1 is the main one. Raising eta (0.016) destabilised learning.
+3. The 88 evolved understanding units alone are too few to carry the map; they stay as extra context.
+**Fix (js/evo.js, commit 0f80d71):** Pong generation 0 = Reflex Full + decoder gain `kDec` 3 (`REFLEX0`, `gen0`);
+other contests unchanged (still Limited, kDec as before). Save key Pong `save: 4`, so the stuck v3 Pong progress is
+ignored (left in localStorage) and evolution restarts. Lab Reflex/Wiring selectors still work; Pong's default is Full.
+**Reward is shaped, honestly:** besides +1 for a hit and −1 for a miss, the innate critic pays a small dopamine
+signal every 5 ms for the paddle moving toward the ball's *current* lateral position (not a predicted landing point;
+no tracker is hardcoded into the motor output — the Assoc→Motor synapses must learn it). The in-game Learning text says so.
+**Benchmark** `node tests/pong-learn.mjs [seeds=5] [sec=180] [chk=30] [gene=value…]` (env REFLEX, WIRING, CONDS, S0):
+a fresh gen-0 brain plays the perfect tracker; conditions learn / frozen (same brain, plasticity off) / random
+weights; benchmark = 50 frozen serves after the lifetime. PASS if learn beats frozen by ≥ 20 points (benchmark and
+last 30-s window) in every seed. New defaults, 5 × 180 s (09:06 EST):
+| seed | learn: live hit % per 30 s | learn bench | frozen bench | random bench |
+|---|---|---|---|---|
+| 1 | 39 50 56 63 76 79 | 90% | 34% | 24% |
+| 2 | 37 67 72 86 96 96 | 88% | 30% | 24% |
+| 3 | 56 53 79 91 96 86 | 78% | 34% | 24% |
+| 4 | 65 67 90 85 95 96 | 76% | 38% | 24% |
+| 5 | 44 68 90 80 81 74 | 66% | 34% | 24% |
+Mean: learn 48% → 87% live, benchmark 80% (min 66%); frozen 30% → 27%, 34%; random 24%. **PASS.**
+Designed wiring (`WIRING=designed`): learn 56% → 90%, benchmark 54/88/90/96/80% (mean 82%) vs frozen 26%: PASS.
+Old default (`REFLEX=1 … kDec=1.5`): learn 21% → 30%, benchmark 16/30/30/18/20% vs frozen 25%: FAIL.
+Evolution on top (evochoice, Full + kDec 3, 30-s duels): held-out benchmark 0.21 → 0.98 within 36 generations.
+**Orientation and controls (commit 6cf7277; physics unchanged, x = depth, y = lateral):** the court is drawn
+portrait, paddles along the bottom (A / you in Play) and top, sliding left/right; in Play the view flips so the human
+is at the bottom. `stageLayout()` in render3d.js (shared by render2d.js) places the brains beside the court (wide)
+or stacked beside their own paddle (tall/phone); other contests keep the old layout (orient 0). Motor groups are
+named RIGHT (+y, old "UP") / LEFT; sensory names say "left of/right of my paddle", "ball drifting left/right".
+Keys in Pong Play: ←/→ or A/D move, Space serves, Enter = new game (first to 11); `[`/`]` change contest
+(←/→ still change contest elsewhere). Mouse over the court and horizontal touch drag steer; gamepad left stick /
+D-pad left-right, A serves, Start = new game.
+**Court size (css px, approx):** desktop ~415×260 → ~302×478 (+33% area), iPhone portrait ~250×156 → ~186×285 (+36%),
+iPad portrait ~543×350 → ~470×690, iPhone landscape ~176×110 → ~138×221. Known: on iPhone portrait the score row is
+still a little wider than the screen (pre-existing; now clamped so it is not clipped on the left).
+Tests: `node tests/page.test.cjs` (4 viewports, now checks ArrowRight/KeyA move the paddle and the paddle is
+horizontal at the bottom), serve, lexicon, render-sizes; `node tests/pong-learn.mjs`.
 ## Lab (LAB button or L)
 Benchmark curve vs chance, live rolling accuracy, dopamine (RPE) trace with reward pulses, champion synapse
 histogram + per-generation drift, spike raster (24 sampled cells × 9 areas) + firing rates (Hz), lineage and
