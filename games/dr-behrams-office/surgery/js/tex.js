@@ -169,10 +169,17 @@
       // crop of the existing Congressional OB GYN headshot
       g.drawImage(img, 120, 0, 360, 360, 0, 6 * s, size, size);
       g.fillStyle = '#3f7fb8'; g.fillRect(0, 108 * s, size, 20 * s); // scrub top
-      // bouffant scrub cap with a fun print
-      g.fillStyle = '#2f6fb0'; g.beginPath(); g.moveTo(14 * s, 42 * s); g.bezierCurveTo(10 * s, -6 * s, 118 * s, -6 * s, 112 * s, 42 * s); g.quadraticCurveTo(64 * s, 30 * s, 14 * s, 42 * s); g.fill();
-      g.fillStyle = 'rgba(255,255,255,.85)'; for (var k = 0; k < 9; k++) { var px = (24 + (k % 5) * 20) * s, py = (14 + Math.floor(k / 5) * 13 + (k % 2) * 4) * s; g.beginPath(); g.arc(px, py, 2.6 * s, 0, 7); g.fill(); g.beginPath(); g.arc(px + 3 * s, py - 3 * s, 1.4 * s, 0, 7); g.fill(); }
-      g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 2 * s; g.beginPath(); g.moveTo(16 * s, 42 * s); g.quadraticCurveTo(64 * s, 30 * s, 110 * s, 42 * s); g.stroke();
+      // fitted bouffant scrub cap with a fun print: a soft puff that follows his skull, gathered by an elastic band that sits at
+      // the hairline and runs down over the temples to just above the ears (covers his hair, no flat slab across the frame)
+      var cap = new Path2D(); cap.moveTo(19 * s, 72 * s);
+      cap.bezierCurveTo(10 * s, 44 * s, 18 * s, 4 * s, 62 * s, 3 * s); cap.bezierCurveTo(106 * s, 4 * s, 114 * s, 42 * s, 105 * s, 67 * s);
+      cap.bezierCurveTo(100 * s, 52 * s, 86 * s, 45 * s, 62 * s, 45 * s); cap.bezierCurveTo(40 * s, 45 * s, 24 * s, 54 * s, 19 * s, 72 * s); cap.closePath();
+      var cg = g.createRadialGradient(52 * s, 12 * s, 4 * s, 62 * s, 36 * s, 64 * s); cg.addColorStop(0, '#4a8ad0'); cg.addColorStop(0.6, '#2f6fb0'); cg.addColorStop(1, '#1f5490');
+      g.fillStyle = cg; g.fill(cap);
+      g.save(); g.clip(cap);
+      g.fillStyle = 'rgba(255,255,255,.85)'; for (var k = 0; k < 11; k++) { var px = (28 + (k % 6) * 13 + (Math.floor(k / 6) ? 6 : 0)) * s, py = (14 + Math.floor(k / 6) * 14 + (k % 2) * 4) * s; g.beginPath(); g.arc(px, py, 2 * s, 0, 7); g.fill(); g.beginPath(); g.arc(px + 2.4 * s, py - 2.4 * s, 1.1 * s, 0, 7); g.fill(); }
+      g.restore();
+      g.strokeStyle = '#1d4c82'; g.lineWidth = 3.4 * s; g.lineCap = 'round'; g.beginPath(); /* elastic band */ g.moveTo(20 * s, 71 * s); g.bezierCurveTo(25 * s, 54 * s, 40 * s, 46 * s, 62 * s, 46 * s); g.bezierCurveTo(86 * s, 46 * s, 100 * s, 52 * s, 104 * s, 65 * s); g.stroke(); g.lineCap = 'butt';
       // mask pulled down around the neck
       g.fillStyle = '#7fb6d9'; g.beginPath(); g.moveTo(30 * s, 104 * s); g.quadraticCurveTo(64 * s, 120 * s, 98 * s, 104 * s); g.lineTo(96 * s, 114 * s); g.quadraticCurveTo(64 * s, 128 * s, 32 * s, 114 * s); g.fill();
     } else if (P) {

@@ -17,11 +17,44 @@
   function rng(s) { return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
 
   /* ------------------------------------------------------------------ Dr. Behram (cartoon body, his headshot as the face) */
+  // The headshot is cut out once (flood-fill the flat studio background from the edges, trim below the chin), so he is drawn
+  // as a head with natural hair and no circular frame or ring around it. Falls back to a plain oval crop if pixels are unreadable.
+  var cut = null;
+  function cutout() {
+    if (cut !== null) return cut;
+    var W = face.naturalWidth, H = face.naturalHeight, c = document.createElement('canvas'); c.width = W; c.height = H;
+    var b = c.getContext('2d'); b.drawImage(face, 0, 0);
+    try {
+      var im = b.getImageData(0, 0, W, H), d = im.data, k = W / 256, bg = [d[0], d[1], d[2]], seen = new Uint8Array(W * H), st = [], i, x, y;
+      for (x = 0; x < W; x++) st.push(x);
+      for (y = 0; y < Math.round(170 * k); y++) { st.push(y * W); st.push(y * W + W - 1); }
+      while (st.length) {
+        i = st.pop(); if (seen[i]) continue; seen[i] = 1;
+        var dr = d[i * 4] - bg[0], dg = d[i * 4 + 1] - bg[1], db = d[i * 4 + 2] - bg[2];
+        if (dr * dr + dg * dg + db * db > 484) continue;
+        d[i * 4 + 3] = 0; x = i % W; y = (i - x) / W;
+        if (x > 0) st.push(i - 1); if (x < W - 1) st.push(i + 1); if (y > 0) st.push(i - W); if (y < H - 1) st.push(i + W);
+      }
+      for (y = Math.round(130 * k); y < H; y++) for (x = 0; x < W; x++) { var ex = (x / k - 118) / 70, ey = (y / k - 120) / 80; if (ex * ex + ey * ey > 1) d[(y * W + x) * 4 + 3] = 0; }
+      b.putImageData(im, 0, 0); cut = c;
+    } catch (e) { cut = false; }
+    return cut;
+  }
   function head(g, x, y, r) {
-    g.save(); g.beginPath(); g.arc(x, y, r, 0, 2 * PI); g.closePath();
-    if (faceOk) { g.save(); g.clip(); g.fillStyle = '#dfe7f5'; g.fillRect(x - r, y - r, 2 * r, 2 * r); g.drawImage(face, 46, 20, 150, 150, x - r * 1.02, y - r * 1.0, r * 2.04, r * 2.04); g.restore(); }
-    else { g.fillStyle = '#e9c4a4'; g.fill(); g.fillStyle = '#6f6a66'; g.beginPath(); g.arc(x, y - r * 0.25, r * 0.98, PI * 1.05, PI * 1.95); g.fill(); g.fillStyle = '#3a2a22'; g.fillRect(x - r * 0.4, y - r * 0.05, r * 0.16, r * 0.12); g.fillRect(x + r * 0.24, y - r * 0.05, r * 0.16, r * 0.12); g.strokeStyle = '#8a4b3a'; g.lineWidth = r * 0.08; g.beginPath(); g.arc(x, y + r * 0.25, r * 0.3, 0.2, PI - 0.2); g.stroke(); }
-    g.lineWidth = Math.max(1.5, r * 0.09); g.strokeStyle = '#ffffff'; g.beginPath(); g.arc(x, y, r, 0, 2 * PI); g.stroke(); g.restore();
+    g.save();
+    if (faceOk) {
+      var c = cutout(), k = 2.25 * r / 180; // source head (hair top to chin) ~180px of the 256px headshot
+      if (c) g.drawImage(c, 0, 0, c.width, c.height, x - 118 * k, y - 110 * k, 256 * k, 256 * k);
+      else { g.beginPath(); g.ellipse(x, y, r * 0.86, r * 1.08, 0, 0, 2 * PI); g.clip(); g.drawImage(face, 46, 20, 150, 150, x - r * 1.02, y - r * 1.0, r * 2.04, r * 2.04); }
+    } else {
+      // plain cartoon fallback: face, then short salt-and-pepper hair that follows the skull (no cap shape)
+      g.fillStyle = '#e9c4a4'; g.beginPath(); g.ellipse(x, y, r * 0.86, r * 1.02, 0, 0, 2 * PI); g.fill();
+      g.beginPath(); g.ellipse(x - r * 0.86, y + r * 0.05, r * 0.14, r * 0.22, 0, 0, 2 * PI); g.ellipse(x + r * 0.86, y + r * 0.05, r * 0.14, r * 0.22, 0, 0, 2 * PI); g.fill();
+      g.fillStyle = '#6f6a66'; g.beginPath(); g.moveTo(x - r * 0.88, y + r * 0.02); g.quadraticCurveTo(x - r * 0.98, y - r * 1.12, x, y - r * 1.1); g.quadraticCurveTo(x + r * 0.98, y - r * 1.12, x + r * 0.88, y + r * 0.02);
+      g.lineTo(x + r * 0.76, y - r * 0.38); g.quadraticCurveTo(x + r * 0.2, y - r * 0.62, x - r * 0.3, y - r * 0.5); g.quadraticCurveTo(x - r * 0.7, y - r * 0.42, x - r * 0.76, y - r * 0.38); g.closePath(); g.fill();
+      g.fillStyle = '#3a2a22'; g.fillRect(x - r * 0.4, y - r * 0.05, r * 0.16, r * 0.12); g.fillRect(x + r * 0.24, y - r * 0.05, r * 0.16, r * 0.12); g.strokeStyle = '#8a4b3a'; g.lineWidth = r * 0.08; g.beginPath(); g.arc(x, y + r * 0.25, r * 0.3, 0.2, PI - 0.2); g.stroke();
+    }
+    g.restore();
   }
   // x,y = feet centre on the ground. ph = walk phase (radians), dir = +1 facing right, -1 left. s = scale (1 = 170 units tall)
   function doc(g, x, y, s, ph, dir, opt) {
@@ -64,7 +97,12 @@
     if (open > 0.02) { g.fillStyle = '#16181b'; g.beginPath(); g.moveTo(-172, -56); g.lineTo(-172, -138); g.quadraticCurveTo(-150, -164, -94, -168); g.lineTo(-6, -169); g.lineTo(-6, -56); g.closePath(); g.fill(); g.fillStyle = '#2b2f36'; g.fillRect(-150, -104, 120, 26); g.fillRect(-150, -134, 18, 34); }
     // glass (front), driver
     g.fillStyle = '#1b2430'; g.fill(glassF);
-    if (o.who) head(g, 56, -144, 20);
+    if (o.who) { // driver seen through the side glass: headrest behind him, shoulders in the white coat, clipped to the window
+      g.save(); g.clip(glassF);
+      g.fillStyle = '#2b2f36'; rr(g, 28, -162, 18, 30, 7); g.fill(); g.fillRect(34, -134, 6, 10);
+      g.fillStyle = '#f4f6fa'; rr(g, 38, -132, 44, 20, 10); g.fill();
+      head(g, 60, -147, 17); g.restore();
+    }
     var sh = g.createLinearGradient(0, -170, 0, -126); sh.addColorStop(0, 'rgba(140,170,200,.55)'); sh.addColorStop(1, 'rgba(30,40,55,.55)'); g.fillStyle = sh; g.fill(glassF);
     if (open <= 0.02) { g.fillStyle = '#1b2430'; g.fill(glass); g.fillStyle = sh; g.fill(glass); }
     // panoramic windshield line + pillars
