@@ -125,7 +125,7 @@ export const CONTESTS = [
     n: [10, 10], labels: ['E', 'O'], rf: [0.35, 0.35], marg: 0.4, levels: [9, 99, 999], inLevel: (it, L) => it[4] <= L, levelName: L => `0–${L}`,
     all: () => Array.from({ length: 1000 }, (_, v) => [v % 10, Math.floor(v / 10) % 10, v % 2, String(v), v]) },
   { id: 'text', name: 'Word completion', icon: '🔤', kind: 'choice', save: 7, blurb: `Fill in the missing letter of a five-letter word (L_GHT → I). The gap can be any of the 5 letters; any letter that makes a real word counts (_IGHT → N or L). The lexicon grows: it starts with 25 words and the last letter missing; every generation at least 3 never-seen words join (out of 2,357), words learned or seen too often retire to review, and 300 held-out words test spelling rules on words never trained.`,
-    n: [5, 130], split: 0.2, currThr: [0.8, 0.6, 0.42, 0.38, 0.33], mixOld: 0.25, trial: { thinkMs: 700 }, aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5, lex: true,
+    n: [5, 130], split: 0.2, currThr: [0.8, 0.6, 0.42, 0.38, 0.33], mixOld: 0.25, trial: { thinkMs: 900 }, aBias: -4, wSA: 0.35, tiles: W5TILES, labels: AZ, rf: [0.35, 0.35], valid: 5, lex: true,
     levels: [0, 1, 2, 3, 4, 5], inLevel: (it, L) => it[6] < TXL[L].n && (!TXL[L].pos || TXL[L].pos.includes(it[0])), levelName: txName,
     chanceOf: items => items.reduce((a, it) => a + it[5].length, 0) / items.length / 26, ...TX_UX,
     all: () => W5ITEMS },

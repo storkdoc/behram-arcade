@@ -164,8 +164,8 @@ beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Tu
   level-up: "Harder test: a score drop is expected (the brain did not forget)".
 
 ## Think time (Oct 27 2026)
-- THINKING is now per contest (`contest.trial.thinkMs`, `trialOf(C)`): Word completion 700 ms (was 300), Smallest
-  divisor 500, Simon 400; shown in the stage phase bar ("THINKING 700ms") and the Lab caption.
+- THINKING is now per contest (`contest.trial.thinkMs`, `trialOf(C)`): Word completion 900 ms (was 700; raised 2026-11-05 for more integration time; was 300 at the first lengthening), Smallest
+  divisor 500, Simon 400; shown in the stage phase bar ("THINKING 900ms") and the Lab caption.
 - Measured, full 643-word level trained directly, 300-item seeded probe (`T_thinkMs=… PROBE=5 PROBEN=300 node
   tests/learn.mjs text 5000 1 2800 1000`), seeds 1/2/3:
   | think | 1k | 2k | 3k | 4k | 5k trials | mean at 4k–5k |
@@ -402,7 +402,7 @@ copy-error effects by gene, every Reaper verdict, Lamarck vs Darwin per contest,
 - Big brains are slower than real time.
 - Word completion at the full 643-word level plateaus around the position-frequency baseline (≈20–25% vs 25%):
   the brain clearly learns words in the small levels (25 words: 2–8% → 50–88%) but at full size its 2 cells per
-  conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much (700 ms think: ≈25%).
+  conjunction tile are too noisy to beat "guess the commonest letter for that slot" by much (900 ms think: ≈25%).
 
 ## Plateau rule (2026-10-30, finished from the Oct 29 draft)
 Lamarckian champions keep their best-benchmarked synapses, so the champion's bar is the max of many noisy lifetimes
