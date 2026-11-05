@@ -211,3 +211,18 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
   and speeds up, tip, standing still = spike death, steering away clears it and the warp reaches the next level with no life
   lost, clear lane silent, bonus warp unaffected, no console errors). tests/vortex-modebtn.test.js (iPhone 14 / SE / Pixel 7
   landscape + iPhone 14 portrait: MODE clear of sticker, knob, arrows; still toggles).
+
+## Day 9 (2026-11-05): FUSEBALL RIM WARNING + PULSAR ZAP CUE
+- Why: today's bot eval (8 games, fuseball-dodging, sharp + average) died to: enemy shots 12, pulsar zaps 12, rim grabs 10,
+  fuseballs 9, spikes 4 of 47 (death level sharp 7/11/15/13, average 12/15/12/11). Fuseballs were still ~1 in 5 deaths and
+  the only major kill with no on-rim telegraph (grabs/shots/spikes already warn). Zaps tied shots for #1; the lane already
+  flashes white but nothing beeped the way a shot or grab does.
+- FUSEBALL WARNING: a rim fuseball (invulnerable; dodge only) within 2 rail-steps of the claw draws pulsing white/cyan
+  sparks on its rail (denser when adjacent); on a lethal rail the rim edge burns white-hot with radial sparks. A bright
+  chirp (`fusewarn`, + pad rumble) plays once when it first comes within 1 rail. Jumping fuseballs that would cross the
+  claw's lane are flagged the same way. Mid-tube fuseballs and grabbers are not. Tip: "WHITE RIM SPARKS = FUSEBALL…".
+- PULSAR ZAP CUE: when a pulsar in the claw's own lane enters the lethal pulse window a rising buzz (`zapwarn`) plays
+  once per pulse (0.55 s throttle). Tip: "WHITE LANE + RISING BUZZ = ZAP COMING…". Visual telegraph unchanged.
+- Hooks: `VORTEX.fuseWarn()` -> {threats:[{id,type,d,jump}], frames, cues}, `VORTEX.zapWarn()` -> {cues, pulsing, pulseAmt, armed}.
+- Test: tests/vortex-fusewarn.test.js (desktop, iPhone 14, iPhone 14 landscape: far/near/adjacent/lethal rail, tip, flipper
+  and mid-tube ignored, one chirp, zapwarn once per pulse with auto-fire off; no console errors). grabwarn regression OK.

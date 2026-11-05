@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], spikewarn: [45, 0.1, 0.35]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -405,6 +405,8 @@ const Sound = {
       case 'bump': this.tone('triangle', 140, 60, 0.09, 0.14); break;
       case 'shotwarn': this.tone('square', 980, 620, 0.07, 0.06); this.tone('square', 980, 620, 0.07, 0.05, 0.085); break;   // incoming shot in your lane
       case 'grabwarn': this.tone('sawtooth', 190, 300, 0.09, 0.055); this.tone('sawtooth', 240, 380, 0.09, 0.05, 0.1); this.tone('sine', 95, 95, 0.2, 0.05); break;   // a rim grabber next to the claw (low 'wup-wup', unlike the high shot beep)
+      case 'fusewarn': this.tone('triangle', 1680, 2400, 0.07, 0.055); this.tone('sine', 2400, 3200, 0.06, 0.04, 0.05); this.tone('square', 880, 1320, 0.05, 0.03, 0.09); break;   // rim fuseball nearby (bright chirp, not the low grab wup or high shot beep)
+      case 'zapwarn': this.tone('sawtooth', 520, 1800, 0.11, 0.07); this.tone('square', 1600, 400, 0.09, 0.05, 0.04); this.noise(0.12, 0.1, 5000, 1200, 2); break;   // your lane is about to take a pulsar zap
       case 'mineboom': this.noise(0.6, 0.5, 2600, 90, 0.7); this.tone('sawtooth', 300, 40, 0.4, 0.12); break;
       case 'sparkspawn': this.noise(0.28, 0.08, 9000, 3000, 4); this.tone('sawtooth', 2200, 3300, 0.1, 0.02); break;
       case 'sparkwarn': this.tone('square', 1400, 2300, 0.1, 0.05); this.tone('square', 1400, 2300, 0.1, 0.05, 0.13); break;
@@ -805,7 +807,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 /* ============================== flow ============================== */
 function startGame() {
   fireLock = true;
-  deathTipCount = {}; spikeGuide.tipShown = false;
+  deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
@@ -865,10 +867,10 @@ const DEATH_TIPS = {
   shot: ['HIT BY AN ENEMY SHOT', 'RED RIM = SHOT INCOMING. SHOOT IT OR STEP ASIDE'],
   capture: ['GRABBED AT THE RIM', 'ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
-  zap: ['PULSAR ZAP', 'LEAVE A LANE THAT FLASHES WHITE'],
+  zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
   mine: ['MINE', 'SHOOT MINES ON THE WAY UP, BEFORE THEY ARM'],
-  fuse: ['FUSEBALL', 'DODGE THEM ON THE RIM. SHOOT THEM MID-JUMP'],
+  fuse: ['FUSEBALL', 'WHITE RIM SPARKS = FUSEBALL. DODGE OR JUMP; SHOOT THEM MID-JUMP'],
 };
 let deathTipCount = {};
 function deathTip(kind) {
@@ -1476,6 +1478,8 @@ function updPulse(dt) {
 }
 function updEnemies(dt) {
   grabWarnUpdate(dt);
+  fuseWarnUpdate(dt);
+  zapWarnUpdate(dt);
   for (const e of enemies) {
     if (e.dead) continue;
     if (e.spawnT < 1) { e.spawnT = Math.min(1, e.spawnT + dt / 0.4); continue; }
@@ -1813,6 +1817,111 @@ function drawGrabWarn() {
   }
   ctx.restore();
 }
+/* FUSEBALL RIM WARNING (2026-11-05). Bot eval day 8/9: fuseballs were ~1 in 5 deaths (9 of 47 today; 10 of 45
+   yesterday), second only to shots/zaps, and unlike grabs/shots/spikes they had no on-rim telegraph. A rim fuseball
+   (invulnerable; dodge only) within 2 rail-steps of the claw draws pulsing white/cyan sparks on its rail, denser when
+   adjacent; on a lethal rail the rim edge burns white-hot. A bright chirp (+ pad rumble) plays once when it first comes
+   within 1 rail. Jumping fuseballs that would cross the claw's lane are flagged the same way. Mid-tube fuseballs and
+   grabbers are not. It only telegraphs: dodging / JUMP / a mid-jump shot is still the skill. */
+const FUSE_WARN_RAILS = 2;
+let fuseWarnFrames = 0, fuseWarnCues = 0, fuseWarnCd = 0;
+function fuseRailDist(e) {
+  // fuseball kills when its rail equals the claw's left or right rim rail
+  const pl = player.lane, r0 = pl, r1 = wrapRail(pl + 1);
+  return Math.min(Math.abs(laneDiff(e.rail, r0)), Math.abs(laneDiff(e.rail, r1)));
+}
+function fuseJumpLane(e) {
+  if (!e.jumping || !e.atRim) return -1;
+  return e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
+}
+function isRimFuse(e) {
+  return !e.dead && e.type === 'fuseball' && e.spawnT >= 1 && (e.atRim || (e.jumping && e.z <= 0.12));
+}
+function fuseThreats() {
+  if (state !== 'play' || !player.alive) return [];
+  const out = [];
+  for (const e of enemies) {
+    if (!isRimFuse(e)) continue;
+    if (e.jumping) {
+      const jl = fuseJumpLane(e);
+      if (jl === player.lane) out.push({ e, d: 0, jump: true });
+      continue;
+    }
+    const d = fuseRailDist(e);
+    if (d <= FUSE_WARN_RAILS) out.push({ e, d, jump: false });
+  }
+  return out;
+}
+function fuseWarnUpdate(dt) {
+  fuseWarnCd = Math.max(0, fuseWarnCd - dt);
+  if (state !== 'play' || !player.alive) return;
+  for (const e of enemies) {
+    if (!isRimFuse(e)) { e.fwarned = false; continue; }
+    const d = e.jumping ? (fuseJumpLane(e) === player.lane ? 0 : 99) : fuseRailDist(e);
+    if (d > 1) e.fwarned = false;
+    else if (!e.fwarned) { e.fwarned = true; if (fuseWarnCd <= 0) { fuseWarnCd = 0.4; fuseWarnCues++; Sound.play('fusewarn'); } }
+  }
+}
+function drawFuseWarn() {
+  const th = fuseThreats(); if (!th.length) return;
+  fuseWarnFrames++;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const { e, d, jump } of th) {
+    const near = d <= 1, pulse = 0.65 + 0.35 * Math.sin(T * (near ? 40 : 22));
+    const a = rail(e.rail), b = rail(e.rail + 1);
+    if (d === 0) {
+      ctx.globalAlpha = (0.6 + 0.4 * pulse); ctx.strokeStyle = '#ffffff'; ctx.shadowColor = '#7fdfff'; ctx.shadowBlur = 18 * DPR;
+      ctx.lineWidth = LW(2.4 + (jump ? 1.2 : 0));
+      ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); ctx.stroke();
+      // short radial sparks into both lanes
+      let tx = b[0] - a[0], ty = b[1] - a[1]; const lw = Math.hypot(tx, ty) || 1; tx /= lw; ty /= lw; const nx = -ty, ny = tx;
+      ctx.lineWidth = LW(1.4); ctx.strokeStyle = '#9fefff'; ctx.beginPath();
+      for (let k = 0; k < 3; k++) {
+        const u = 0.2 + 0.3 * k, px = a[0] + tx * lw * u, py = a[1] + ty * lw * u, s = lw * 0.12 * pulse;
+        seg3(px, py, 0, px + nx * s, py + ny * s, LL * 0.04); seg3(px, py, 0, px - nx * s, py - ny * s, LL * 0.04);
+      }
+      ctx.stroke();
+      continue;
+    }
+    // chevron-like sparks pointing along the rim toward the claw
+    const toward = laneDiff(e.rail, player.lane); // sign toward claw (approx)
+    const sdir = toward === 0 ? 1 : (toward > 0 ? 1 : -1);
+    let tx = b[0] - a[0], ty = b[1] - a[1]; const lw = Math.hypot(tx, ty) || 1; tx /= lw; ty /= lw;
+    if (sdir < 0) { tx = -tx; ty = -ty; }
+    const nx = -ty, ny = tx, n = near ? 2 : 1, cz = LL * 0.05;
+    ctx.globalAlpha = (near ? 0.95 : 0.55) * pulse; ctx.strokeStyle = '#dffffa'; ctx.shadowColor = '#5adfff';
+    ctx.shadowBlur = (near ? 14 : 8) * DPR; ctx.lineWidth = LW(near ? 2.0 : 1.4);
+    ctx.beginPath();
+    for (let k = 0; k < n; k++) {
+      const off = lw * (0.15 + 0.28 * k), px = (a[0] + b[0]) / 2 - tx * (off - lw * 0.2), py = (a[1] + b[1]) / 2 - ty * (off - lw * 0.2);
+      const a2 = lw * 0.18;
+      seg3(px - tx * a2 + nx * a2, py - ty * a2 + ny * a2, cz, px, py, cz);
+      seg3(px, py, cz, px - tx * a2 - nx * a2, py - ty * a2 - ny * a2, cz);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+/* PULSAR ZAP CUE (2026-11-05). Bot eval: pulsar zaps tied enemy shots for #1 death cause (12 of 47). The lane already
+   flashes white, but nothing beeped the way a shot or grab does, so a player staring at the claw could miss it. When
+   a pulsar in the claw's own lane enters the lethal pulse window a rising buzz plays once per pulse (throttled), and
+   the tip names it. Visual telegraph unchanged; stepping aside / JUMP is still the skill. */
+let zapWarnCues = 0, zapWarnCd = 0, zapWarnArmed = false;
+function zapWarnUpdate(dt) {
+  zapWarnCd = Math.max(0, zapWarnCd - dt);
+  if (state !== 'play' || !player.alive) { zapWarnArmed = false; return; }
+  let threat = false;
+  for (const e of enemies) {
+    if (e.dead || e.type !== 'pulsar' || e.flipping || e.spawnT < 1) continue;
+    if (e.lane === player.lane && e.z < 0.8 && pulseAmt > 0.55) { threat = true; break; }
+  }
+  if (!threat) { zapWarnArmed = false; return; }
+  if (pulsing && !zapWarnArmed && zapWarnCd <= 0) {
+    zapWarnArmed = true; zapWarnCd = 0.55; zapWarnCues++; Sound.play('zapwarn');
+  }
+  if (!pulsing) zapWarnArmed = false;
+}
+
 function drawPulseLanes() {
   if (pulseAmt <= 0) return;
   for (const e of enemies) {
@@ -2307,6 +2416,7 @@ function drawGameScene() {
   drawPulseLanes();
   drawShotWarn();
   drawGrabWarn();
+  drawFuseWarn();
   drawBonusGates();
   drawSpikes();
   drawSpikeGuide();
@@ -2885,6 +2995,8 @@ window.VORTEX = {
   shotWarnFrames: () => shotWarnFrames,
   spikeGuide: () => ({ ahead: spikeGuide.ahead, dz: spikeGuide.dz, lane: spikeGuide.lane, safe: spikeGuide.safe.slice(), frames: spikeGuide.frames, beeps: spikeGuide.beeps, steered: spikeGuide.steered }),
   grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d })), frames: grabWarnFrames, cues: grabWarnCues }),
+  fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump })), frames: fuseWarnFrames, cues: fuseWarnCues }),
+  zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),
   // touch-test helpers (CSS px)
