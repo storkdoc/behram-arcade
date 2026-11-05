@@ -483,3 +483,60 @@ to cluster or act on.
 - Divisor/text below baseline on the full task: look at whether the duel set is too small (memorisation).
 - VORTEX: re-run the bot to see if warp spike deaths drop; enemy shots are still #1.
 - PIN still in git history from before the hash (only the salted hash in the tree).
+
+## 2026-11-05 (day 9): gameplay evaluation + fixes
+
+Fresh worktree `/workspace/arcade-daily-2026-11-05` from `9b4313e`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14
+(+ landscape for VORTEX tests). Active worktrees (cap-wt, tbf-gfx, cob-wt, …) were far behind or already on main; none locked
+tube-shooter or neuro-arena. Box load was high (≈14–21) during the Neuro Arena batch.
+
+### Player feedback (Nov 4–5 and lookback)
+`node tools/read-feedback.mjs --hours 48` and `--date 2026-11-04` / `--today`: **0 submissions** (store still readable;
+Oct 31 document returns). Last real player notes remain Oct 30–31:
+- FEUD & DELIVERY: Fun ×1 (Oct 30)
+- CONGRESSIONAL OB GYN / Clinic Day: Fun ×1 + note “correct answers are overexplained / almost invariably the longest”
+  (Oct 31) — already addressed in prior days; today's answer-length test: correct is longest in **19.8%** (≈ chance),
+  no option >2.5× longest distractor. No new suggestions to cluster.
+
+### Findings
+- **Smoke, all 21 games + home, desktop and iPhone 14**: no console or page errors. Screenshot timeouts only on
+  jax-adventures, planet-guardian (desktop) and apex-gp (iPhone) — software GL, same as prior days.
+- **Dr. Behram's Office / Congressional**: hub.test ALL PASSED (desktop + iPhone + iPad): student codes, instructor PIN
+  (salted hash only; tests use throwaway testpin.js), four rooms, redirects from `congressional-obgyn` and
+  `feud-and-delivery`, drive to Holy Cross. access / core / bank-cues / answer-length all pass. Copy stays generic.
+- **Star Raider**: sim.test OK (Novice/Pilot/Warrior/Commander bands). war.test "better commander usually wins" failed
+  once (3/6) then passed 3/3 re-runs — small-N flake, not a balance change.
+- **MELTDOWN**: sim 47/47.
+- **VORTEX (Tempest)**, 8 bot games (FD=1 fuseball-dodging, sharp + average): death levels sharp 7/11/15/13, average
+  12/15/12/11. Deaths of 47: **shot 12, zap 12, capture 10, fuse 9, spike 4**. Spike deaths still rare; fuseballs still
+  ~1 in 5 with no on-rim telegraph (grabs/shots/spikes already warn). Zaps tied shots for #1 — lane already flashed
+  white but nothing beeped.
+
+### Changes
+1. `e79a6f7` **VORTEX fuseball rim warning + pulsar zap cue** (games/tube-shooter): rim fuseball within 2 rails → white/cyan
+   sparks (lethal rail burns white-hot); bright `fusewarn` chirp once when within 1 rail; jumping fuseballs that would
+   cross the claw's lane flagged. Pulsar in your lane entering the lethal pulse → rising `zapwarn` buzz once per pulse.
+   Tips updated. tests/vortex-fusewarn.test.js (desktop, iPhone 14, iPhone 14 landscape) ALL PASSED; grabwarn regression OK.
+2. `9b24650` **Neuro Arena Word Completion THINKING 700 → 900 ms** (games/neuro-arena/js/contests.js): more integration
+   time per user preference; stage/Lab pick it up via `trialOf(C)`. Disclosure in NOTES updated.
+- Live-verified: https://storkdoc.github.io/behram-arcade/games/tube-shooter/game.js and
+  …/neuro-arena/js/contests.js matched local SHA-256 (~1 min after push, Pages build `built` at ~7:14 AM EST).
+
+### Neuro Arena (seed 1105; 10 rounds × K=4, Lamarck, 30 s, size 2800, ABL=5) — Nov 4 (seed 1104) for comparison
+| contest | chance | champ by round (today) | full task vs reflex prior | beyond reflex | Nov 4 champ / full |
+|---|---|---|---|---|---|
+| divisor | 8% | 33→62→69→77→81→86→81→74→72→72% (lv 3) | 72% vs 66% | **+0.06** | 30→78%, full 46% |
+| simon | 25% | 49→58→…→83→61→70% (lv 1) | 44% vs 26% | **+0.18** | 53→78%, full 45% |
+| text | 8% | 26→36→…→34→40% | 10% vs 25% | −0.15 | 26→54%, full 16% |
+| add | 5% | 33→56→…→89→83% | 4% | −0.06 | 33→81% |
+| sub | 10% | 83→…→81% (lv 3) | 29% vs 18% | +0.11 | 67→74% |
+| big | 50% | 63→…→96% | – | +0.18 | 60→93% |
+| pattern | 13% | 60→…→100% | – | +0.50 | 65→100% |
+| pong | – | **76→98→…→100%** (2 reaps) | – | +0.03 (ablate units: full still ~96–100%) | 38–40% flat, 0 reaps |
+| echo, dots, rps, tug | | ~100% | – | – | saturated |
+- Honest read: **Pong finally moved** after four flat runs (champion displaced twice; hit 76→100%). Ablation shows the
+  high score is still mostly the Full reflex + decoder (silencing understanding units barely drops full hit %), so
+  beyond-reflex stays thin (+0.03) — progress on selection, not yet on a self/opponent model. Divisor reached level 3 and
+  full-task 72% (above the frequency prior for the first time in these logs). Simon still the clearest beyond-reflex
+  learner (+0.18). **Text remains below the position-frequency baseline** on the full task (10% vs 25%); plateau fired
+  5 times — the 900 ms THINKING bump is for the next run to measure.
