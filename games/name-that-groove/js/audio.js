@@ -1,4 +1,5 @@
-/* NAME THAT GROOVE: Web Audio synthesizer. Every sound is synthesized here (no samples, no network).
+/* NAME THAT GROOVE: UI sound effects only (answer stings, menu blips), synthesized with Web Audio.
+   The songs themselves come from YouTube's embedded player (see yt.js); nothing here plays music clips.
    Starts only after a user gesture (unlock()), master level kept modest and run through a limiter. */
 (function (root) {
   'use strict';
@@ -201,15 +202,6 @@
     }
   };
 
-  P.fx = function (e, t, dest) {
-    const c = this.ctx;
-    if (e.inst === 'orch') { const g = this._out(dest, 1, 0.9); const lp = this._filt('lowpass', 3500); lp.connect(g); [0, 7, 12, 16, 24].forEach(i => [-10, 10].forEach(d => this._osc('sawtooth', mtof(e.midi - 12 + i), t, t + 0.7, d).connect(lp))); const n = this._noise(t, t + 0.2), ng = c.createGain(); ng.gain.value = 0.5; n.connect(ng); ng.connect(lp); this._env(g, t, 0.004, 0.14 * e.vel, 0.12, 0.2, 0.05, 0.35); }
-    else if (e.inst === 'riser') { const n = this._noise(t, t + e.dur), f = this._filt('bandpass', 400, 4), g = this._out(dest, 1, 0.4); f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(7000, t + e.dur); n.connect(f); f.connect(g); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25 * e.vel, t + e.dur); g.gain.linearRampToValueAtTime(0.0001, t + e.dur + 0.05); }
-    else if (e.inst === 'scratch') { const s = c.createBufferSource(); s.buffer = this.noise; const f = this._filt('bandpass', 900, 5), g = this._out(dest, 1, 0); s.start(t); s.stop(t + e.dur + 0.05); f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + e.dur * 0.45); f.frequency.exponentialRampToValueAtTime(400, t + e.dur * 0.9); s.connect(f); f.connect(g); this._env(g, t, 0.01, 0.9 * e.vel, 0.08, 0.6, e.dur * 0.8, 0.03); }
-    else if (e.inst === 'feedback') { const o = this._osc('sine', mtof(e.midi), t, t + e.dur), sh = this._shaper('hard'), g = this._out(dest, 1, 0.3); o.connect(sh); sh.connect(g); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06 * e.vel * 2, t + e.dur * 0.9); g.gain.linearRampToValueAtTime(0.0001, t + e.dur); }
-    else if (e.inst === 'crackle') { const g = this._out(dest, 1, 0); g.gain.value = 0.22 * e.vel; const hp = this._filt('highpass', 1800); hp.connect(g); for (let x = 0; x < e.dur; x += 0.03 + Math.random() * 0.12) { const s = c.createBufferSource(); s.buffer = this.noise; s.connect(hp); s.start(t + x, Math.random()); s.stop(t + x + 0.002 + Math.random() * 0.003); } const hiss = this._noise(t, t + e.dur), hg = c.createGain(); hg.gain.value = 0.04; hiss.connect(hg); hg.connect(hp); }
-  };
-
   // ---------- clips ----------
   P._clipBus = function () { const c = this.ctx, out = c.createGain(); out.connect(this.bus); const wet = c.createGain(); wet.connect(this.verb); const echo = c.createGain(); echo.connect(this.echo); const dry = c.createGain(); dry.connect(out); wet.gain.value = 1; echo.gain.value = 1; out.gain.value = 1; return { out, dry, wet, echo }; };
   P.stopClip = function (fade) {
@@ -219,27 +211,6 @@
     setTimeout(() => { try { k.bus.out.disconnect(); k.bus.wet.disconnect(); k.bus.echo.disconnect(); } catch (e) { } }, (f + 0.3) * 1000);
     this.clip = null;
   };
-  // schedule a whole arrangement; returns { start, length } in context time
-  P.playArrangement = function (arr, opts) {
-    if (!this.ok) return null;
-    opts = opts || {};
-    this.stopClip(0.05);
-    const t0 = this.ctx.currentTime + 0.08, bus = this._clipBus(), kit = arr.params.kit;
-    for (const e of arr.events) {
-      const t = t0 + e.t;
-      try {
-        if (e.kind === 'drum') this.drum(e.inst, t, Math.min(1.3, e.vel * 1.4), kit, bus);
-        else if (e.kind === 'bass') this.bass(e.inst, e.midi, t, e.dur, e.vel, bus);
-        else if (e.kind === 'chord') this.chord(e.inst, e.midis, t, e.dur, e.vel, bus);
-        else if (e.kind === 'lead') this.tone(e.inst, e.midi, t, e.dur, e.vel, bus);
-        else if (e.kind === 'fx') this.fx(e, t, bus);
-      } catch (err) { /* one bad voice must not kill the clip */ }
-    }
-    if (opts.fadeOut) { bus.out.gain.setValueAtTime(1, t0 + arr.length - 0.6); bus.out.gain.linearRampToValueAtTime(0, t0 + arr.length + 0.4); }
-    this.clip = { bus, start: t0, length: arr.length };
-    return this.clip;
-  };
-
   // short UI jingles
   P.sting = function (kind, decade) {
     if (!this.ok) return;

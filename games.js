@@ -7,14 +7,14 @@ window.ARCADE_GAMES = [
   {
     slug: 'name-that-groove',
     title: 'NAME THAT GROOVE',
-    tagline: "A name-that-tune homage: a record drops, the groove builds, and you name it before the hook lands. 72 original tracks in '70s, '80s and '90s styles.",
-    description: "Listen to a short clip and pick the track title from four choices. Each clip builds bar by bar (drums, then bass, then chords, then the hook), so the sooner you name it the bigger your speed bonus, and answers in a row multiply your points up to x2. Play a '70s, '80s or '90s crate or mix all three, ten records a round, on Easy (style tags shown), Normal or Crate Digger (a decoy in the same style). Use the 50:50 when you're stuck, learn the hooks in the Record Crate, and chase a local high score for every decade and difficulty. All 72 tracks are original compositions synthesized live in the browser with Web Audio: disco strings, funk clavinet, soul horns, glam stomp, soft rock, space synths, synth-pop, new wave, arena rock, electro, gated-snare power ballads, italo, eurodance, boom bap with vinyl crackle, grunge fuzz, R&B slow jams, house piano and britpop jangle. None of them is a real hit, band or recording. The spinning-record visualizer has a radial equalizer, and the backdrop changes with the decade: a '70s sunburst, an '80s neon grid and '90s confetti shapes.",
+    tagline: "Name that tune with real hits: 99 songs from the '70s, '80s and '90s, played as short clips from YouTube. Name it fast, build a streak.",
+    description: "A short clip of a real hit plays in YouTube's own embedded player, hidden under a spinning-record cover so the video and its title don't give it away, and you pick the song from four choices. The sooner you name it the bigger your speed bonus (the clock only runs while the song is actually playing), and answers in a row multiply your points up to x2. Play a '70s, '80s or '90s crate or mix all three, ten songs a round: Easy (20-second clips, artist shown), Normal (15 seconds) or Crate Digger (10 seconds, titles only, one decoy from the same genre). Use the 50:50 when you're stuck. On the reveal the cover lifts to show the music video and the song keeps playing, with a link to watch it on YouTube. 99 songs, 33 per decade, from ABBA, the Bee Gees and Queen to Michael Jackson, a-ha and Whitney Houston to Nirvana, the Spice Girls and TLC, all official artist or label uploads. If a video won't play where you are, the game says so and swaps in another song. Music plays from YouTube; availability and any ads are controlled by YouTube, and it needs an internet connection.",
     thumb: 'games/name-that-groove/thumb.png',
     added: '2026-11-06',
     genre: 'MUSIC QUIZ',
     year: "'70s-'90s",
-    controls: '1-4 answer · arrows move · SPACE choose / next (main action) · ENTER 50:50 (special) · R replay after the clip · M sound · Esc/P pause · gamepad: d-pad/stick move, A choose, X 50:50, Y replay, B back, Start pause',
-    touch: 'tap an answer, then NEXT · 50:50 and REPLAY buttons under the answers · works on iPhone and iPad in portrait and landscape',
+    controls: '1-4 answer · arrows move · SPACE choose / next (main action) · ENTER 50:50 (special) · R replay after the clip · S skip a song that won\'t load · M sound · Esc/P pause · gamepad: d-pad/stick move, A choose, X 50:50, Y replay, B back, Start pause',
+    touch: 'tap an answer, then NEXT · 50:50 and REPLAY buttons under the answers · if a phone blocks autoplay, tap the player once · works on iPhone and iPad in portrait and landscape',
     accent: '#ff3cac'
   },
   {

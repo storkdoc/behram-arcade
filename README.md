@@ -9,7 +9,7 @@ arcade/
 ├── assets/arcade.css     landing page styles (neon / CRT)
 ├── assets/arcade.js      renders cards from games.js, keyboard navigation
 ├── games/
-│   ├── name-that-groove/ NAME THAT GROOVE (name-that-tune homage: 72 original synthesized '70s/'80s/'90s tracks)
+│   ├── name-that-groove/ NAME THAT GROOVE (name that tune: 99 real '70s/'80s/'90s hits as short clips in YouTube's embedded player)
 │   ├── heliopause/       HELIOPAUSE (solar-system tower defense: research, 12 chapters + endless)
 │   ├── age-of-embers/    AGE OF EMBERS (isometric RTS: 4 ages, campaign, skirmish vs CPU)
 │   └── tube-shooter/     VORTEX (game #1)
