@@ -540,3 +540,55 @@ Oct 31 document returns). Last real player notes remain Oct 30–31:
   full-task 72% (above the frequency prior for the first time in these logs). Simon still the clearest beyond-reflex
   learner (+0.18). **Text remains below the position-frequency baseline** on the full task (10% vs 25%); plateau fired
   5 times — the 900 ms THINKING bump is for the next run to measure.
+
+## 2026-11-06 (day 10): gameplay evaluation + fixes
+
+Fresh worktree `/workspace/arcade-daily-2026-11-06` from `bb25d5f`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14
+(+ landscape for VORTEX). No other worktree was on tube-shooter or neuro-arena.
+
+### Player feedback (Nov 5–6)
+`node tools/read-feedback.mjs --hours 30`: **0 submissions** (3rd day in a row). Nothing to cluster or act on. Last real notes
+are still Oct 30–31 (answer-length complaint; today's bank-cues check: correct option longest in 19.8%, about chance).
+
+### Findings
+- **Smoke, all games + home, desktop and iPhone 14 (44 pages)**: no console or page errors. Screenshot timeouts only on
+  jax-adventures (both) and planet-guardian (desktop), software GL, same as prior days.
+- **Dr. Behram's Office / Congressional**: hub.test ALL PASSED (desktop/iPhone/iPad: codes, PIN as salted hash only, 4 rooms,
+  redirects, games.js). core / access / bank-cues / answer-length all pass. Copy still generic.
+- **Star Raider**: sim.test OK, war.test passed first try. **MELTDOWN**: sim 47/47.
+- **VORTEX**: 8 bot games on unchanged main: levels sharp 15/10/13/7, average 10/10/12/12 (mean 11.1). Deaths of 44: fuse 12,
+  **shot 11**, capture 10, spike 8, zap 3. Enemy shots still appeared with no warning until they reached the rim.
+  The old tests/vortex-modebtn.test.js crashes (`null.y`) on main too. That predates today and is not fixed yet.
+
+### Changes
+1. `8c1b9d9` + `a313352` **VORTEX shot charge-up** (games/tube-shooter): flippers and tankers now charge for 0.3 s before
+   firing. A growing white and magenta muzzle ring shows on the enemy, red-tinted when it is in your lane, then the shot
+   releases. A flip during the charge cancels it. Fire rate and shot speed are unchanged. Shot death tip: "ENEMY GLOWS, THEN FIRES".
+   New tests/vortex-charge.test.js (desktop, iPhone 14, landscape) passed 3 of 3 runs. fusewarn / grabwarn / haptics / jump /
+   powerups / spikewarn / tips / v4 / waves / bonus / touch / rim regressions pass.
+   Same bot, 8 games after the change: mean level **12.75** (sharp 14/18/13/15, average 11/9/13/13). **Shot deaths 11 → 7**.
+   Captures (16) and fuseballs (17) are now the top killers. With N=8, treat this as directional only.
+
+### Neuro Arena (seed 1106; 10 rounds × K=4, Lamarck, 30 s, size 2800, ABL=5), compared with Nov 5 (seed 1105)
+| contest | chance | champ by round | full task vs prior | beyond reflex | Nov 5 |
+|---|---|---|---|---|---|
+| divisor | 8% | 44→79% (lv 0) | 52% vs 66% | −0.14 | 72% vs 66%, +0.06 |
+| simon | 25% | 48→77% | 39% vs 26% | +0.13 | 44%, +0.18 |
+| text | 8% | 24→36→28% | 11% vs 25% | −0.14 | 10%, −0.15 |
+| add | 5% | 28→89% | 9% | −0.01 | 4% |
+| sub | 10% | 67→86% (lv 3) | 33% | +0.15 | 29%, +0.11 |
+| big | 50% | 64→91% | – | +0.13 | 96%, +0.18 |
+| pattern | 13% | 60→100→90% | – | +0.40 | +0.50 |
+| pong | – | **36→44% flat, 0 reaps** | hit 44% | +0.17 (ablating all units: 44→12%) | 76→100%, 2 reaps |
+| echo, dots, rps, tug | | 100% | – | – | saturated |
+- My read: yesterday's Pong breakout did **not** reproduce with seed 1106. The champion was never displaced and stayed at 44%,
+  so Pong's progress depends on the seed and is not robust yet. Divisor fell back below the frequency prior (52% vs 66%),
+  so yesterday's 72% also looks seed-dependent. **Text stays below the position baseline even with the 900 ms THINKING
+  window** (11% vs 25%), so that bump did not help. Simon, sub and pattern remain the honest beyond-reflex learners.
+  Duel scores well above full-task scores for divisor and text still point to memorising the duel set.
+  No Neuro Arena code was changed.
+
+### For tomorrow
+- Fix the vortex-modebtn test crash (likely a selector/geometry change).
+- VORTEX: captures and fuseballs are now the top killers. Re-run the bot with more games before tuning.
+- Neuro Arena: run multiple seeds for Pong/divisor before claiming progress. Text needs a larger duel set or a different lever.
