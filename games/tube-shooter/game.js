@@ -864,7 +864,7 @@ function explodePlayer() {
 }
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
-  shot: ['HIT BY AN ENEMY SHOT', 'RED RIM = SHOT INCOMING. SHOOT IT OR STEP ASIDE'],
+  shot: ['HIT BY AN ENEMY SHOT', 'GLOWING ENEMY = ABOUT TO FIRE. RED RIM = SHOT INCOMING'],
   capture: ['GRABBED AT THE RIM', 'ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
@@ -1183,10 +1183,37 @@ function splitTanker(e) {
     for (const d of [-1, 1]) { const ch = makeEnemy(c, e.lane, z); ch.spawnT = 1; ch.pause = LP.rimPause; startFlip(ch, d, LP.flipDur * 0.85); enemies.push(ch); }
   }
 }
+// Day 10 eval: enemy shots were still the #1 killer, and they appeared with no warning. Now a shooter "charges" for
+// ESHOT_CHARGE s first (a growing white/magenta muzzle glow on the enemy) and only then releases the shot. A flip
+// during the charge cancels it. Same fire rate and shot speed, so the challenge stays; the shot is just readable.
+const ESHOT_CHARGE = 0.3;
+let eshotCharges = 0;   // test hook: number of charge-ups started
 function maybeFire(e, dt) {
-  if (e.z > 0.12 && e.z < 0.92 && !e.flipping && eshots.length < LP.maxEShots && Math.random() < LP.fireRate * dt) {
-    eshots.push({ lane: e.lane, z: e.z, pz: e.z, spin: Math.random() * 6 }); Sound.play('eshot');
+  if (e.charge > 0) {
+    if (e.flipping || e.dead) { e.charge = 0; return; }
+    e.charge -= dt;
+    if (e.charge <= 0) { e.charge = 0; if (eshots.length < LP.maxEShots + 1) { eshots.push({ lane: e.lane, z: e.z, pz: e.z, spin: Math.random() * 6 }); Sound.play('eshot'); } }
+    return;
   }
+  if (e.z > 0.12 && e.z < 0.92 && !e.flipping && eshots.length < LP.maxEShots && Math.random() < LP.fireRate * dt) {
+    e.charge = ESHOT_CHARGE; eshotCharges++;
+  }
+}
+function drawShotCharge() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const e of enemies) {
+    if (!(e.charge > 0) || e.dead) continue;
+    if (e.z <= 0.02) { e.charge = 0; continue; }
+    const m = laneMid(e.lane), p = proj(m[0], m[1], e.z * LL); if (!p) continue;
+    const k = 1 - e.charge / ESHOT_CHARGE, R = Math.max(3, laneWidthPx(e.lane, e.z * LL) * (0.12 + 0.22 * k));
+    const mine = e.lane === player.lane;
+    ctx.globalAlpha = 0.35 + 0.6 * k;
+    ctx.shadowColor = mine ? '#ff3030' : '#ff6af0'; ctx.shadowBlur = 12 * DPR * k;
+    ctx.strokeStyle = mine ? '#ffd0d0' : '#ffffff'; ctx.lineWidth = LW(1 + 1.5 * k);
+    ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ff6af0'; ctx.beginPath(); ctx.arc(p[0], p[1], R * 0.35 * k + 1, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
 }
 function rimGrab(e) { if (e.type === 'pulsar') killPlayer('zap'); else killPlayer('capture', e); }
 function updFlipper(e, dt) {
@@ -2247,6 +2274,7 @@ function guideIcon(k, x, y, s) {
   else { poly(LAYER, true); for (const [a, b] of LAYER_LEGS) poly([a, b], false); ctx.strokeStyle = d.mine; const R = s * 0.22, my = y + s * 1.1; ctx.beginPath(); ctx.moveTo(x, my - R); ctx.lineTo(x + R, my); ctx.lineTo(x, my + R); ctx.lineTo(x - R, my); ctx.closePath(); ctx.stroke(); }
 }
 function drawShots() {
+  drawShotCharge();
   // enemy shots
   ctx.lineWidth = LW(1);
   for (const s of eshots) {
@@ -2990,6 +3018,8 @@ window.VORTEX = {
   deathKind: () => death ? death.kind : null,
   shotWarn: () => shotWarnLevel(),
   shotWarnCues: () => shotWarnCues,
+  eshotCharges: () => eshotCharges,
+  chargingList: () => enemies.filter(e => e.charge > 0).map(e => ({ lane: e.lane, z: e.z, charge: e.charge })),
   eshotList: () => eshots.map(s => ({ lane: s.lane, z: s.z, warned: !!s.warned })),
   haptics: () => ({ on: Haptics.on, src: Haptics.src, log: Haptics.log.slice(), padHeld: Object.keys(pad.prev).filter(k => pad.prev[k]) }),
   shotWarnFrames: () => shotWarnFrames,
