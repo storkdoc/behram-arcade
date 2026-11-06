@@ -228,7 +228,7 @@
     for (const e of arr.events) {
       const t = t0 + e.t;
       try {
-        if (e.kind === 'drum') this.drum(e.inst, t, e.vel, kit, bus);
+        if (e.kind === 'drum') this.drum(e.inst, t, Math.min(1.3, e.vel * 1.4), kit, bus);
         else if (e.kind === 'bass') this.bass(e.inst, e.midi, t, e.dur, e.vel, bus);
         else if (e.kind === 'chord') this.chord(e.inst, e.midis, t, e.dur, e.vel, bus);
         else if (e.kind === 'lead') this.tone(e.inst, e.midi, t, e.dur, e.vel, bus);

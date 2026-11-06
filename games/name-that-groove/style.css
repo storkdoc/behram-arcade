@@ -87,13 +87,13 @@ h2 { font-family: var(--disp); color: var(--c2); letter-spacing: 2px; font-size:
 #hQ { color: var(--ink); font-size: 16px; }
 #stage { position: relative; flex: 1 1 auto; min-height: 150px; border-radius: 18px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 10px 40px rgba(0, 0, 0, .4); }
 #viz { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#meter { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; }
+#meter { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; display: flex; gap: 4px; }
 #meter i { font: 800 10px var(--font); font-style: normal; letter-spacing: 1px; padding: 4px 7px; border-radius: 6px; background: rgba(0, 0, 0, .45); color: rgba(255, 255, 255, .4); transition: all .25s; }
 #meter i.on { background: var(--c1); color: #12051f; box-shadow: 0 0 12px var(--c1); }
 #pts { position: absolute; right: 10px; top: 10px; width: 120px; height: 22px; border-radius: 11px; background: rgba(0, 0, 0, .45); overflow: hidden; }
 #ptsBar { position: absolute; inset: 0; width: 100%; background: linear-gradient(90deg, var(--c3), var(--c2)); transition: width .1s linear; }
 #ptsTxt { position: absolute; inset: 0; text-align: center; font: 900 13px/22px var(--font); color: #12051f; text-shadow: 0 0 4px rgba(255, 255, 255, .6); }
-#flash { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 900 clamp(26px, 7vw, 54px) var(--disp); letter-spacing: 2px; pointer-events: none; opacity: 0; text-shadow: 0 4px 22px rgba(0, 0, 0, .7); transition: opacity .2s; white-space: nowrap; }
+#flash { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%); font: 900 clamp(26px, 7vw, 54px) var(--disp); letter-spacing: 2px; pointer-events: none; opacity: 0; text-shadow: 0 4px 22px rgba(0, 0, 0, .7); transition: opacity .2s; white-space: nowrap; }
 #flash.show { opacity: 1; animation: pop .45s ease-out; }
 @keyframes pop { from { transform: translate(-50%, -50%) scale(.6); } }
 #choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 0 0 auto; }
@@ -107,6 +107,7 @@ h2 { font-family: var(--disp); color: var(--c2); letter-spacing: 2px; font-size:
 .ch.wrong { background: #5c0d1d; border-color: #ff4d6d; opacity: 1; }
 .ch:disabled { cursor: default; }
 #actions, #reveal { flex: 0 0 auto; }
+#actions[hidden] { display: none; }
 #actions { display: flex; gap: 8px; justify-content: center; }
 .act { padding: 9px 16px; border-radius: 999px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); font-weight: 800; letter-spacing: 1px; font-size: 14px; }
 .act:disabled { opacity: .35; cursor: default; }
@@ -134,8 +135,11 @@ h2 { font-family: var(--disp); color: var(--c2); letter-spacing: 2px; font-size:
   #reveal { flex-wrap: wrap; }
   #reveal .big { margin: 0 auto; }
   .opt { min-width: 0; flex: 1 1 40%; }
+  .diffs .opt { flex: 1 1 28%; padding: 10px 4px; }
+  .diffs .opt b { font-size: 13px; }
   .keys th, .keys td { display: block; }
 }
+@media (min-width: 641px) { #reveal { margin-left: 54px; } }
 @media (max-height: 560px) and (orientation: landscape) {
   #choices { grid-template-columns: 1fr 1fr; }
   .ch { min-height: 42px; }

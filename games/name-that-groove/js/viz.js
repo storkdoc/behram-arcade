@@ -87,12 +87,15 @@
     g.fillStyle = s.labelColor || T.label; g.beginPath(); g.arc(0, 0, Rr * 0.36, 0, 7); g.fill();
     g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.arc(0, 0, Rr * 0.3, 0, 7); g.fill();
     g.fillStyle = '#111'; g.beginPath(); g.arc(0, 0, Rr * 0.035, 0, 7); g.fill();
-    // label text (rotates with the record)
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(Rr * 0.27, 0, Rr * 0.022, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = Rr * 0.012; g.beginPath(); g.arc(0, 0, Rr * 0.33, -0.5, 0.5); g.stroke();
+    g.restore();
+    // label text stays upright so it is readable while the record spins
+    g.save(); g.translate(cx, cy); g.scale(bump, bump);
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
     const fs = Math.max(9 * d, Rr * 0.075); g.font = `800 ${fs}px "Trebuchet MS", Arial, sans-serif`;
     const lab = s.label || '?';
     if (lab === '?') { g.font = `900 ${Rr * 0.2}px "Arial Black", Arial, sans-serif`; g.fillText('?', 0, -Rr * 0.12); g.font = `700 ${fs * 0.8}px "Trebuchet MS", Arial, sans-serif`; g.fillText(s.sub || '', 0, Rr * 0.16); }
-    else { wrap(g, lab, Rr * 0.5, fs).forEach((ln, i, a) => g.fillText(ln, 0, (i - (a.length - 1) / 2) * fs * 1.1 - Rr * 0.05)); g.font = `600 ${fs * 0.7}px "Trebuchet MS", Arial, sans-serif`; g.fillText(s.sub || '', 0, Rr * 0.2); }
+    else { wrap(g, lab, Rr * 0.31, fs).forEach((ln, i, a) => g.fillText(ln, 0, (i - (a.length - 1) / 2) * fs * 1.1 - Rr * 0.05)); g.font = `600 ${fs * 0.7}px "Trebuchet MS", Arial, sans-serif`; g.fillText(s.sub || '', 0, Rr * 0.2); }
     g.restore();
     // tonearm
     g.save(); g.translate(cx + Rr * 1.25, cy - Rr * 0.95); g.rotate(s.spinning ? 0.42 : 0.12);
