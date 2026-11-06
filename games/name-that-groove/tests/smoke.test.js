@@ -78,7 +78,11 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   // a clip that runs out: player paused at the clip end, REPLAY enabled, then time's up
   await D.evaluate(() => { NTG.yt.t = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).start + NTG.S.clipLen - 0.2; }); await D.waitForTimeout(500);
   s = await st(D); check(s.media === 'ended' && s.yst === 2 && !(await D.isDisabled('#btnReplay')), 'clip stops itself at the clip length; REPLAY unlocks', s);
-  await D.keyboard.press('r'); await D.waitForTimeout(400); s = await st(D); check(s.media === 'playing' && s.yst === 1, 'R replays the clip from its start', s);
+  const win = await D.evaluate(() => { const x = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer); return [x.start, x.end, NTG.yt.time()]; });
+  check(Math.abs(win[2] - win[1]) < 0.3, 'the excerpt stops at its exact end second', win);
+  await D.keyboard.press('r'); await D.waitForTimeout(400); s = await st(D);
+  const pos2 = await D.evaluate(() => NTG.yt.time() - NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).start);
+  check(s.media === 'playing' && s.yst === 1 && pos2 >= 0 && pos2 < 0.8, 'R replays the same excerpt from its exact start', { pos2 });
   for (let i = 0; i < 14; i++) { const x = await st(D); if (x.screen !== 'play') break; if (x.phase === 'listen') await D.keyboard.press('1'); await D.waitForTimeout(60); await D.keyboard.press('Space'); await D.waitForTimeout(120); }
   s = await st(D);
   check(s.screen === 'results', 'round ends on the results screen after 10 songs', s);
@@ -124,6 +128,12 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await P.evaluate(() => NTG.yt.tap()); await P.waitForTimeout(400);
   s = await st(P); check(s.media === 'playing', 'tap on the player starts the music', s);
 
+  P = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock&seed=15&ytpre=4');
+  await P.click('#btnStart'); await P.waitForTimeout(2200);
+  s = await st(P); const op = await P.evaluate(() => getComputedStyle(document.getElementById('viz')).opacity);
+  check(s.media === 'yt' && s.t === 0 && /YouTube is showing something/.test(await P.textContent('#coverMsg')), 'YouTube plays its own content first: game says so and the clock waits', s);
+  await P.waitForTimeout(700); check(+(await P.evaluate(() => getComputedStyle(document.getElementById('viz')).opacity)) < 0.05, 'the cover lifts so nothing YouTube shows is hidden');
+  await P.waitForTimeout(2500); s = await st(P); check(s.media === 'playing' && s.t > 0.3, 'the excerpt and the clock start once the song itself plays', s);
   P = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock&ytapifail');
   await P.waitForTimeout(300);
   check(await P.isVisible('#ytNote') && /YouTube didn't load/.test(await P.textContent('#ytNote')), 'YouTube blocked / offline: honest note on the title screen');

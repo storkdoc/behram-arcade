@@ -62,7 +62,7 @@
     if (this.opts.apiFail) { this.status = 'failed'; if (this.cb.onFail) setTimeout(() => this.cb.onFail('api'), 50); return; }
     this.status = 'ready'; const h = document.getElementById(this.hostId); if (h) { h.classList.add('mock'); h.textContent = 'TEST PLAYER'; }
     let last = performance.now();
-    const tick = () => { const now = performance.now(); if (this.st === 1 && this.want) { this.t += (now - last) / 1000; if (this.want.end && this.t >= this.want.end) { this.t = this.want.end; this._set(0); } } last = now; requestAnimationFrame(tick); };
+    const tick = () => { const now = performance.now(); if (this.st === 1 && this.want) { this.t += (now - last) / 1000; if (this.preEnd && this.t >= this.preEnd) { this.preEnd = 0; this.t = this.want.start; } if (this.want.end && this.t >= this.want.end) { this.t = this.want.end; this._set(0); } } last = now; requestAnimationFrame(tick); };
     requestAnimationFrame(tick); setTimeout(() => this.cb.onReady && this.cb.onReady(), 10);
   };
   Mock.prototype.retry = function () { };
@@ -73,6 +73,7 @@
     if ((this.opts.fail || []).includes(id)) { setTimeout(() => { if (this.want && this.want.id === id) { this._set(-1); this.cb.onError && this.cb.onError(150, ERRORS[150]); } }, 120); return; }
     if ((this.opts.stall || []).includes(id)) return;          // buffers forever
     if (this.opts.needTap) { setTimeout(() => this._set(5), 100); return; }
+    if (this.opts.pre) { this.t = 0; this.preEnd = this.opts.pre; this._set(1); return; }   // YouTube shows its own content first (clock runs from 0)
     setTimeout(() => { if (this.want && this.want.id === id) this._set(1); }, 150);
   };
   Mock.prototype.tap = function () { if (this.want && (this.st === 5 || this.st === -1)) this._set(1); };

@@ -29,7 +29,7 @@
   // ---------------- YouTube player ----------------
   const mock = params.get('yt') === 'mock';
   const cb = { onState, onError: onYtError, onFail: onYtFail, onReady() { syncNote(); } };
-  const yt = mock ? new YTM.Mock('ytHost', cb, { fail: (params.get('ytfail') || '').split(',').filter(Boolean), stall: (params.get('ytstall') || '').split(',').filter(Boolean), needTap: params.has('ytneedtap'), apiFail: params.has('ytapifail') })
+  const yt = mock ? new YTM.Mock('ytHost', cb, { fail: (params.get('ytfail') || '').split(',').filter(Boolean), stall: (params.get('ytstall') || '').split(',').filter(Boolean), needTap: params.has('ytneedtap'), pre: +params.get('ytpre') || 0, apiFail: params.has('ytapifail') })
     : new YTM.Real('ytHost', cb);
   S.muted = audio.muted; yt.mute(S.muted); yt.setVolume(audio.volume * 100);
   yt.load(12000);
@@ -99,7 +99,7 @@
   }
   function renderQuestion() {
     const q = curQ(), song = curSong(), D = Q.DIFFS[S.diff];
-    S.phase = 'listen'; S.hinted = false; S.removed = []; S.t = 0; S.grace = 0; S.wait = 0; S.lastCt = -1; S.clipLen = D.clip;
+    S.phase = 'listen'; S.hinted = false; S.removed = []; S.t = 0; S.grace = 0; S.wait = 0; S.lastCt = -1; S.clipLen = C.clipLen(song);
     document.body.classList.remove('revealed'); document.body.dataset.theme = q.decade; viz.setTheme(q.decade);
     $('hQ').textContent = `${q.n}/${S.round.questions.length}`; $('hDec').textContent = C.DECADE_INFO[q.decade].label;
     $('hScore').textContent = S.score.toLocaleString(); $('hStreak').textContent = S.streak;
@@ -136,9 +136,15 @@
   function tickListen(dt) {
     const song = curSong(); if (!song) return;
     const st = yt.state(), ct = yt.time(), pos = ct - song.start;
-    const progressing = st === 1 && ct > S.lastCt + 0.0005 && pos > -1 && pos < S.clipLen + 1.5;
+    const moving = S.lastCt >= 0 && Math.abs(ct - S.lastCt) > 0.0005;
+    const progressing = st === 1 && moving && pos > -1 && pos < S.clipLen + 1.5;
+    // the player's clock is running but not inside our excerpt: YouTube is showing something of its own first
+    const foreign = moving && !progressing && (pos < -1 || pos > S.clipLen + 1.5) && S.media !== 'ended';
     if (S.media === 'ended') {
       S.grace += dt; if (S.grace >= GRACE) answer(-1, true);
+    } else if (foreign) {
+      S.wait += dt; if (S.media !== 'yt') setMedia('yt');   // lift the cover; never hide what YouTube is showing
+      if (S.wait > SKIP_AFTER) $('btnSkip').hidden = false;
     } else if (S.media === 'down') {
       /* nothing to wait for; QUIT or SKIP */
     } else if (progressing) {
@@ -156,7 +162,7 @@
       if (S.wait > SKIP_AFTER) $('btnSkip').hidden = false;
       if (st === 3 && S.wait > STALL_AFTER) { markBad(song.yt); swapSong("That song is stuck loading. Swapping in another…"); }
     }
-    if (st === 1) S.lastCt = ct;
+    S.lastCt = ct;
   }
   function endClip() { yt.pause(); setMedia('ended'); $('btnReplay').disabled = false; S.grace = 0; }
 
@@ -197,6 +203,7 @@
   }
   function replay() {
     if (S.phase !== 'listen' || S.paused || S.media !== 'ended') return;
+    // replays the same fixed excerpt: seek back to its start; the game pauses again at its end
     const song = curSong(); S.grace = 0; S.lastCt = -1; setMedia('loading');
     yt.seek(song.start); $('btnReplay').disabled = true;
   }

@@ -52,7 +52,8 @@ check(okLen && tight / nq > 0.97, 'choice titles have comparable lengths (97%+ w
 const r1 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 42 }), r2 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 42 }), r3 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 43 });
 check(JSON.stringify(r1) === JSON.stringify(r2), 'same seed => same round (deterministic)');
 check(JSON.stringify(r1.questions) !== JSON.stringify(r3.questions), 'different seed => different round');
-check(Q.DIFFS.easy.clip === 20 && Q.DIFFS.normal.clip === 15 && Q.DIFFS.hard.clip === 10 && C.SONGS.every(s => s.start >= 0), 'clip lengths 20 / 15 / 10 s');
+check(C.SONGS.every(s => Number.isInteger(s.end) && s.end - s.start === C.clipLen(s) && C.clipLen(s) >= 10 && C.clipLen(s) <= 20), 'every song has one fixed excerpt window [start, end] of 10-20 s');
+check(Object.values(Q.DIFFS).every(d => d.clip === undefined), 'difficulty never changes the excerpt (same window on every level)');
 
 console.log('== answer-position and length balance');
 let T = 0, pos = [0, 0, 0, 0], longest = 0, shortest = 0, worstRound = 0;

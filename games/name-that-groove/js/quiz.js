@@ -4,9 +4,9 @@
   const C = (typeof module !== 'undefined' && module.exports) ? require('./catalog.js') : root.NTG_Catalog;
   const ROUND_LEN = 10, CHOICES = 4;
   const DIFFS = {
-    easy: { label: 'EASY', clip: 20, artist: true, sameGenre: 0, blurb: '20-second clips. Every choice shows the song and the artist.' },
-    normal: { label: 'NORMAL', clip: 15, artist: true, sameGenre: 0, blurb: '15-second clips, song and artist on every choice.' },
-    hard: { label: 'CRATE DIGGER', clip: 10, artist: false, sameGenre: 1, blurb: '10-second clips, song titles only, and one decoy from the same genre.' }
+    easy: { label: 'EASY', artist: true, sameGenre: 0, blurb: 'Every choice shows the song and the artist. Decoys are different kinds of songs.' },
+    normal: { label: 'NORMAL', artist: false, sameGenre: 0, blurb: 'Song titles only. Name it from the music.' },
+    hard: { label: 'CRATE DIGGER', artist: false, sameGenre: 1, blurb: 'Song titles only, and one decoy from the same genre.' }
   };
 
   function usable(list, exclude) { return exclude && exclude.size ? list.filter(s => !exclude.has(s.id)) : list; }
