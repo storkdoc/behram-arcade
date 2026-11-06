@@ -24,6 +24,8 @@
   // videos that failed on this device recently are skipped for a day
   const BAD_KEY = 'ntg.badvids';
   const bad = (() => { try { const o = JSON.parse(store.getItem(BAD_KEY) || '{}'), now = Date.now(), s = new Set(); for (const k in o) if (now - o[k] < 864e5) s.add(k); return s; } catch (e) { return new Set(); } })();
+  // songs whose instrumental video failed here (bad holds YouTube video ids)
+  const badSongs = () => new Set(C.SONGS.filter(x => bad.has(x.iyt)).map(x => x.id));
   function markBad(id) { bad.add(id); try { const o = JSON.parse(store.getItem(BAD_KEY) || '{}'); o[id] = Date.now(); store.setItem(BAD_KEY, JSON.stringify(o)); } catch (e) { } }
 
   // ---------------- YouTube player ----------------
@@ -49,12 +51,13 @@
     if (st === 1 && S.paused) yt.pause();
   }
   function onYtError(code, why) {
+    if (S.screen === 'play' && S.phase === 'reveal' && S.mode === 'original') { S.mode = 'stopped'; setModeTag(); syncOrigBtn(); toast("The original recording won't play here (" + why + ")."); return; }
     const song = curSong(); if (!song || S.screen !== 'play' || S.phase !== 'listen') return;
-    markBad(song.yt); swapSong(`That video won't play here (${why}). Swapping in another song…`);
+    markBad(song.iyt); swapSong(`That video won't play here (${why}). Swapping in another song…`);
   }
   function swapSong(msg) {
     const q = curQ(); if (!q) return;
-    if (S.swaps >= 6 || !Q.swapQuestion(S.round, S.qi, new Set([...bad, ...S.round.questions.map(x => x.answer)]))) { setMedia('down', 'No playable songs are left for this round. YouTube may be blocked or the videos unavailable where you are.'); return; }
+    if (S.swaps >= 6 || !Q.swapQuestion(S.round, S.qi, new Set([...badSongs(), ...S.round.questions.map(x => x.answer)]))) { setMedia('down', 'No playable songs are left for this round. YouTube may be blocked or the videos unavailable where you are.'); return; }
     S.swaps++; toast(msg); renderQuestion();
   }
 
@@ -86,7 +89,7 @@
     audio.unlock();
     if (yt.status === 'failed') { syncNote(); toast("YouTube didn't load, so there's no music. Check the connection and tap TRY AGAIN."); return; }
     const seed = params.has('seed') ? (+params.get('seed') >>> 0) : undefined;
-    S.round = Q.makeRound({ mode: S.decade, diff: S.diff, seed, exclude: bad });
+    S.round = Q.makeRound({ mode: S.decade, diff: S.diff, seed, exclude: badSongs() });
     S.qi = -1; S.score = 0; S.streak = 0; S.bestStreak = 0; S.right = 0; S.log = []; S.swaps = 0;
     show('play'); audio.sting('start', S.decade === 'all' ? null : S.decade);
     nextQuestion();   // load the first video inside this tap/keypress so the browser allows sound
@@ -118,7 +121,9 @@
     setHL(null);
     setMedia(yt.status === 'failed' ? 'down' : 'loading');
     yt.captions(false);
-    if (yt.status !== 'failed') yt.play(song.yt, song.start);   // no endSeconds: the game pauses the clip itself so the song can keep playing on the reveal
+    // guessing always uses the INSTRUMENTAL / karaoke excerpt; the original recording only plays on request after the answer
+    S.mode = 'guess'; setModeTag();
+    if (yt.status !== 'failed') yt.play(song.iyt, song.istart);   // no endSeconds: the game pauses the clip itself
   }
   const MEDIA_MSG = {
     loading: 'Loading the song from YouTube…', yt: 'YouTube is showing something before the song. Your clip and the clock start right after.', needtap: '▶ Tap the player to start the music', waiting: 'Waiting for YouTube…',
@@ -129,13 +134,13 @@
     const el = $('coverMsg'); el.textContent = msg || MEDIA_MSG[m] || ''; el.hidden = !el.textContent;
     if (m === 'down') { $('btnSkip').hidden = true; $('btnQuitDown').hidden = false; } else $('btnQuitDown').hidden = true;
   }
-  function clipPos() { const song = curSong(); return song ? yt.time() - song.start : 0; }
+  function clipPos() { const song = curSong(); return song ? yt.time() - song.istart : 0; }
   function potential() { return Q.scoreAnswer({ correct: true, elapsed: S.t, clipLen: S.clipLen, streak: S.streak, hinted: S.hinted }); }
 
   // called every frame while guessing: the clock only runs while the song is actually being heard
   function tickListen(dt) {
     const song = curSong(); if (!song) return;
-    const st = yt.state(), ct = yt.time(), pos = ct - song.start;
+    const st = yt.state(), ct = yt.time(), pos = ct - song.istart;
     const moving = S.lastCt >= 0 && Math.abs(ct - S.lastCt) > 0.0005;
     const progressing = st === 1 && moving && pos > -1 && pos < S.clipLen + 1.5;
     // the player's clock is running but not inside our excerpt: YouTube is showing something of its own first
@@ -160,7 +165,7 @@
       else if (idle && S.wait > TAP_AFTER && S.media !== 'needtap') setMedia('needtap');
       else if (st === 3 && S.wait > 2 && S.media !== 'waiting' && S.media !== 'yt') setMedia('waiting');
       if (S.wait > SKIP_AFTER) $('btnSkip').hidden = false;
-      if (st === 3 && S.wait > STALL_AFTER) { markBad(song.yt); swapSong("That song is stuck loading. Swapping in another…"); }
+      if (st === 3 && S.wait > STALL_AFTER) { markBad(song.iyt); swapSong("That song is stuck loading. Swapping in another…"); }
     }
     S.lastCt = ct;
   }
@@ -180,14 +185,14 @@
     $('rvMark').textContent = correct ? '✓' : '✗'; $('rvMark').style.color = correct ? '#45ff9a' : '#ff4d6d';
     $('rvTitle').textContent = song.title;
     $('rvSub').textContent = `${song.artist} · ${song.year}`;
-    $('rvYt').href = C.watchUrl(song);
+    S.origUsed = false; syncOrigBtn();
     $('rvPts').textContent = correct ? `+${res.total}` : '+0';
     $('rvPts').title = correct ? `100 base + ${res.speed} speed${S.hinted ? ', halved for 50:50' : ''}, ×${res.mult} streak` : '';
     $('actions').hidden = true; $('reveal').hidden = false;
     $('hScore').textContent = S.score.toLocaleString(); $('hStreak').textContent = S.streak;
     // lift the cover: the video, its title and channel are now on show, and the song keeps playing
     document.body.classList.add('revealed'); yt.captions(true); setMedia(S.media === 'down' ? 'down' : 'playing', S.media === 'down' ? MEDIA_MSG.down : '');
-    if (S.media !== 'down' && (S.ytState === 2 || S.ytState === 0)) { const t = yt.time(); yt.seek(Math.max(0, t)); }
+    // the instrumental is left as it is (paused if its excerpt ended); the original plays only via HEAR ORIGINAL
     setHL($('btnNext'), true);
     audio.sting(correct ? 'right' : 'wrong', song.decade);
     if (correct) { MS.event(S.streak >= 3 || res.speed > 100 ? 'big' : 'start'); } else MS.event('hit');
@@ -205,9 +210,9 @@
     if (S.phase !== 'listen' || S.paused || S.media !== 'ended') return;
     // replays the same fixed excerpt: seek back to its start; the game pauses again at its end
     const song = curSong(); S.grace = 0; S.lastCt = -1; setMedia('loading');
-    yt.seek(song.start); $('btnReplay').disabled = true;
+    yt.seek(song.istart); $('btnReplay').disabled = true;
   }
-  function skip() { if (S.phase !== 'listen' || $('btnSkip').hidden) return; const s = curSong(); if (s) markBad(s.yt); swapSong('Skipped. Here comes another song…'); }
+  function skip() { if (S.phase !== 'listen' || $('btnSkip').hidden) return; const s = curSong(); if (s) markBad(s.iyt); swapSong('Skipped. Here comes another song…'); }
 
   function finishRound() {
     S.phase = 'done'; yt.stop();
@@ -231,13 +236,32 @@
   // ---------------- record crate (song list, each opens on YouTube) ----------------
   const LABEL = { '70s': '#ff8a00', '80s': '#ff3cac', '90s': '#00e5c7' };
   function recLink(song, mark, markColor) {
-    const a = document.createElement('a'); a.className = 'rec'; a.dataset.nav = ''; a.style.setProperty('--lc', LABEL[song.decade]);
-    a.href = C.watchUrl(song); a.target = '_blank'; a.rel = 'noopener';
-    a.innerHTML = '<span class="disc"></span><span><b></b><small></small></span>' + (mark ? '<span class="ok"></span>' : '<span class="yt">YouTube ↗</span>');
+    // plain song card: no links out and no audio (the crate is a song list, never a way to hear originals early)
+    const a = document.createElement('div'); a.className = 'rec'; a.style.setProperty('--lc', LABEL[song.decade]);
+    a.innerHTML = '<span class="disc"></span><span><b></b><small></small></span>' + (mark ? '<span class="ok"></span>' : '');
     a.querySelector('b').textContent = song.title; a.querySelector('small').textContent = `${song.artist} · ${song.year}`;
     if (mark) { a.querySelector('.ok').textContent = mark; a.querySelector('.ok').style.color = markColor; }
-    a.setAttribute('aria-label', `${song.title} by ${song.artist}, open on YouTube`);
     return a;
+  }
+  // ---------------- HEAR ORIGINAL (after the answer only) ----------------
+  function setModeTag() {
+    const el = $('modeTag'), song = curSong(); if (!el) return;
+    if (S.mode === 'original') { el.textContent = '● ORIGINAL RECORDING'; el.className = 'orig'; }
+    else { el.textContent = song && song.kind === 'karaoke' ? 'KARAOKE BACKING TRACK' : 'INSTRUMENTAL'; el.className = ''; }
+  }
+  function syncOrigBtn() { const b = $('btnOrig'); b.textContent = S.mode === 'original' ? '■ STOP ORIGINAL' : '▶ HEAR ORIGINAL'; b.setAttribute('aria-pressed', S.mode === 'original'); b.insertAdjacentHTML('beforeend', ' <kbd>ENTER</kbd>'); }
+  function toggleOriginal() {
+    if (S.screen !== 'play' || S.phase !== 'reveal' || S.paused) return;
+    const song = curSong(); if (!song) return;
+    if (S.mode === 'original') { yt.pause(); S.mode = 'stopped'; }
+    else { audio.unlock(); S.mode = 'original'; S.origUsed = true; yt.captions(true); yt.play(song.yt, song.start); }
+    setModeTag(); syncOrigBtn();
+  }
+  function tickReveal() {
+    const song = curSong(); if (!song) return;
+    const t = yt.time();
+    if (S.mode === 'guess' && yt.state() === 1 && t >= song.iend) { yt.pause(); S.mode = 'stopped'; }
+    if (S.mode === 'original' && yt.state() === 1 && t >= song.end) { yt.pause(); S.mode = 'stopped'; setModeTag(); syncOrigBtn(); }
   }
   function buildCrate() {
     const tabs = $('crateTabs'); tabs.innerHTML = '';
@@ -266,7 +290,7 @@
     if (p) { yt.pause(); audio.pause(); $('vol').value = Math.round(audio.volume * 100); setHL($('btnResume'), true); MS.screen('paused'); }
     else {
       audio.resume(); setHL(S.phase === 'reveal' ? $('btnNext') : null); MS.screen('play');
-      if (S.phase === 'reveal' || (S.phase === 'listen' && S.media !== 'ended' && S.media !== 'down')) yt.resume();
+      if ((S.phase === 'reveal' && (S.mode === 'original' || S.mode === 'guess')) || (S.phase === 'listen' && S.media !== 'ended' && S.media !== 'down')) yt.resume();
     }
   }
   MS.bindPause({ pause() { setPaused(true); }, resume() { } });
@@ -323,6 +347,7 @@
   $('btn5050').addEventListener('click', useHint);
   $('btnReplay').addEventListener('click', replay);
   $('btnSkip').addEventListener('click', skip);
+  $('btnOrig').addEventListener('click', toggleOriginal);
   $('btnQuitDown').addEventListener('click', quit);
   $('btnResume').addEventListener('click', () => setPaused(false));
   $('btnRestart').addEventListener('click', () => { setPaused(false); startRound(); });
@@ -342,9 +367,10 @@
     const k = e.key; audio.unlock();
     if (KEYS[k]) { e.preventDefault(); move(...KEYS[k]); return; }
     if (k === ' ' || k === 'Spacebar') { e.preventDefault(); if (!e.repeat) activate(); return; }
-    if (k === 'Enter') { e.preventDefault(); if (e.repeat) return; if (S.screen === 'play' && S.phase === 'listen' && !S.paused) useHint(); else activate(); return; }
+    if (k === 'Enter') { e.preventDefault(); if (e.repeat) return; if (S.screen === 'play' && S.phase === 'listen' && !S.paused) useHint(); else if (S.screen === 'play' && S.phase === 'reveal' && !S.paused) toggleOriginal(); else activate(); return; }
     if (k === 'Escape' || k === 'p' || k === 'P') { if (k !== 'Escape' && S.screen !== 'play') return; e.preventDefault(); back(); return; }
     if (k === 'm' || k === 'M') { setMuted(!S.muted); return; }
+    if ((k === 'o' || k === 'O') && S.screen === 'play' && S.phase === 'reveal' && !S.paused) { toggleOriginal(); return; }
     if (S.screen === 'play' && S.phase === 'listen' && !S.paused) {
       if (k >= '1' && k <= '4') { e.preventDefault(); answer(+k - 1); return; }
       if (k === 'r' || k === 'R') { replay(); return; }
@@ -369,7 +395,8 @@
     if (a) activate();
     if (b) back();
     if (x && S.screen === 'play' && S.phase === 'listen') useHint();
-    if (y && S.screen === 'play') replay();
+    if (y && S.screen === 'play') { if (S.phase === 'reveal') toggleOriginal(); else replay(); }
+    if (x && S.screen === 'play' && S.phase === 'reveal') toggleOriginal();
     if (st && S.screen === 'play') setPaused(!S.paused); else if (st && S.screen !== 'play') activate();
   }
   function doDir(d) { move(d === 'l' ? -1 : d === 'r' ? 1 : 0, d === 'u' ? -1 : d === 'd' ? 1 : 0); }
@@ -386,6 +413,7 @@
         $('ptsBar').style.width = (frac * 100).toFixed(1) + '%'; $('ptsTxt').textContent = '+' + p.total;
         $('clock').textContent = S.media === 'ended' ? `ANSWER IN ${Math.max(0, Math.ceil(GRACE - S.grace))}` : `${Math.floor(S.t)}s / ${S.clipLen}s`;
       }
+      if (!S.paused && S.phase === 'reveal') tickReveal();
       if (S.phase !== 'reveal') viz.draw(S.paused ? 0 : dt, { analyser: null, playing: !S.paused && S.media === 'playing', spinning: !S.paused && S.media === 'playing', label: '?', sub: 'NAME THAT GROOVE', bpm: 116 });
     }
     requestAnimationFrame(frame);
@@ -394,6 +422,6 @@
   window.addEventListener('resize', () => { if (S.hl && S.screen !== 'play') setHL(S.hl, true); });
 
   // test / debug handle (read-only use from automated tests)
-  window.NTG = { S, yt, audio, answer, useHint, startRound, nextQuestion, show, setPaused, move, activate, skip, bad };
+  window.NTG = { S, yt, audio, answer, useHint, startRound, nextQuestion, show, setPaused, move, activate, skip, bad, toggleOriginal };
   show('title');
 })();

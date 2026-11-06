@@ -26,7 +26,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   const st = p => p.evaluate(() => ({ screen: NTG.S.screen, phase: NTG.S.phase, qi: NTG.S.qi, score: NTG.S.score, right: NTG.S.right, paused: NTG.S.paused, media: NTG.S.media, t: +NTG.S.t.toFixed(2), yst: NTG.yt.state() }));
   const overflow = p => p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1 || [...document.querySelectorAll('.screen.show *')].some(e => { const r = e.getBoundingClientRect(); return r.width && (r.right > innerWidth + 1 || r.left < -1); }));
   const playerBox = p => p.evaluate(() => { const r = document.getElementById('ytBox').getBoundingClientRect(), v = document.getElementById('viz').getBoundingClientRect(), cs = getComputedStyle(document.getElementById('ytBox')); return { w: r.width, h: r.height, vis: cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity === 1, coverBottomGap: r.bottom - v.bottom, coverPE: getComputedStyle(document.getElementById('viz')).pointerEvents }; });
-  const firstAnswerYt = (p, mode, diff, seed) => p.evaluate(([mode, diff, seed]) => { const r = NTG_Quiz.makeRound({ mode, diff, seed }); return NTG_Catalog.byId(r.questions[0].answer).yt; }, [mode, diff, seed]);
+  const firstAnswerYt = (p, mode, diff, seed) => p.evaluate(([mode, diff, seed]) => { const r = NTG_Quiz.makeRound({ mode, diff, seed }); return NTG_Catalog.byId(r.questions[0].answer).iyt; }, [mode, diff, seed]);
 
   console.log('== DESKTOP 1280x800, keyboard (test player)');
   const D = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock&seed=7');
@@ -40,7 +40,8 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   let s = await st(D);
   check(s.screen === 'play' && s.phase === 'listen' && s.qi === 0, 'Space starts a round', s);
   check(s.media === 'playing' && s.yst === 1, 'the song is playing in the player', s);
-  check(await D.evaluate(() => NTG.yt.log[0] === NTG_Catalog.byId(NTG.S.round.questions[0].answer).yt), 'the player loads the answer\'s YouTube video');
+  check(await D.evaluate(() => NTG.yt.log[0] === NTG_Catalog.byId(NTG.S.round.questions[0].answer).iyt && NTG.yt.log.every(id => NTG_Catalog.SONGS.some(x => x.iyt === id))), 'guessing loads the INSTRUMENTAL video, never the original');
+  check(/INSTRUMENTAL|KARAOKE/.test(await D.textContent('#modeTag')), 'mode tag says instrumental while guessing', await D.textContent('#modeTag'));
   check(await D.evaluate(() => document.querySelectorAll('.ch').length) === 4, '4 choices');
   check(await D.evaluate(() => document.querySelectorAll('.ch .tag').length) === 4, 'easy shows the artist on each choice');
   const pb = await playerBox(D);
@@ -58,13 +59,22 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await D.keyboard.press(String(correct + 1)); await D.waitForTimeout(800);
   s = await st(D);
   check(s.phase === 'reveal' && s.right === 1 && s.score > 0, 'number key answers; correct scores', s);
-  const rv = await D.evaluate(() => ({ cls: document.body.classList.contains('revealed'), op: getComputedStyle(document.getElementById('viz')).opacity, href: document.getElementById('rvYt').href, title: document.getElementById('rvTitle').textContent, sub: document.getElementById('rvSub').textContent, ans: NTG_Catalog.byId(NTG.S.round.questions[0].answer) }));
+  const rv = await D.evaluate(() => ({ cls: document.body.classList.contains('revealed'), op: getComputedStyle(document.getElementById('viz')).opacity, title: document.getElementById('rvTitle').textContent, sub: document.getElementById('rvSub').textContent, ans: NTG_Catalog.byId(NTG.S.round.questions[0].answer), links: document.querySelectorAll('a[href*="youtube.com"]').length, last: NTG.yt.log[NTG.yt.log.length - 1], btn: document.getElementById('btnOrig').textContent }));
   check(rv.cls && +rv.op < 0.05, 'reveal lifts the cover to show the video', rv.op);
   check(rv.title === rv.ans.title && rv.sub.includes(rv.ans.artist) && rv.sub.includes(String(rv.ans.year)), 'reveal names song, artist and year', rv.sub);
-  check(rv.href.startsWith('https://www.youtube.com/watch?v=' + rv.ans.yt), 'WATCH ON YOUTUBE opens the video on YouTube', rv.href);
-  check((await st(D)).yst === 1, 'the song keeps playing on the reveal');
+  check(rv.links === 0 && !/WATCH ON YOUTUBE/i.test(await D.textContent('body')), 'no Watch-on-YouTube links anywhere');
+  check(rv.last === rv.ans.iyt && /HEAR ORIGINAL/.test(rv.btn), 'original is NOT played until asked; HEAR ORIGINAL button shown', rv);
+  await D.keyboard.press('Enter'); await D.waitForTimeout(400);
+  let o = await D.evaluate(() => ({ last: NTG.yt.log[NTG.yt.log.length - 1], t: NTG.yt.time(), st: NTG.yt.state(), mode: NTG.S.mode, tag: document.getElementById('modeTag').textContent, btn: document.getElementById('btnOrig').textContent, score: NTG.S.score }));
+  check(o.last === rv.ans.yt && o.st === 1 && o.t >= rv.ans.start && o.t < rv.ans.start + 1 && o.mode === 'original' && /ORIGINAL/.test(o.tag) && /STOP/.test(o.btn), 'ENTER / HEAR ORIGINAL plays the original recording\'s excerpt in the same player', o);
+  const sc = o.score;
+  await D.evaluate(() => { NTG.yt.t = NTG_Catalog.byId(NTG.S.round.questions[0].answer).end - 0.2; }); await D.waitForTimeout(500);
+  o = await D.evaluate(() => ({ st: NTG.yt.state(), t: NTG.yt.time(), mode: NTG.S.mode, score: NTG.S.score }));
+  check(o.st === 2 && Math.abs(o.t - rv.ans.end) < 0.3 && o.score === sc, 'original excerpt stops at its end; score untouched', o);
+  await D.click('#btnOrig'); await D.waitForTimeout(300); check(await D.evaluate(() => NTG.S.mode === 'original' && NTG.yt.state() === 1), 'HEAR ORIGINAL again replays it (click)');
   await D.keyboard.press('Space'); await D.waitForTimeout(400);
   s = await st(D); check(s.qi === 1 && s.phase === 'listen' && !(await D.evaluate(() => document.body.classList.contains('revealed'))), 'Space goes to the next song, cover back on', s);
+  check(await D.evaluate(() => NTG.S.mode === 'guess' && NTG.yt.log[NTG.yt.log.length - 1] === NTG_Catalog.byId(NTG.S.round.questions[1].answer).iyt), 'moving on stops the original and loads the next instrumental');
   await D.keyboard.press('ArrowDown'); await D.keyboard.press('Space'); await D.waitForTimeout(150);
   check((await st(D)).phase === 'reveal', 'arrows + Space choose an answer');
   await D.keyboard.press('Space'); await D.waitForTimeout(400);
@@ -76,27 +86,28 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await D.keyboard.press('m'); check(await D.evaluate(() => NTG.yt.muted && NTG.audio.muted && document.getElementById('btnMute').textContent === '🔇'), 'M mutes the video and the game sounds');
   await D.keyboard.press('m'); check(await D.evaluate(() => !NTG.yt.muted), 'M unmutes');
   // a clip that runs out: player paused at the clip end, REPLAY enabled, then time's up
-  await D.evaluate(() => { NTG.yt.t = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).start + NTG.S.clipLen - 0.2; }); await D.waitForTimeout(500);
+  await D.evaluate(() => { NTG.yt.t = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).istart + NTG.S.clipLen - 0.2; }); await D.waitForTimeout(500);
   s = await st(D); check(s.media === 'ended' && s.yst === 2 && !(await D.isDisabled('#btnReplay')), 'clip stops itself at the clip length; REPLAY unlocks', s);
-  const win = await D.evaluate(() => { const x = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer); return [x.start, x.end, NTG.yt.time()]; });
+  const win = await D.evaluate(() => { const x = NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer); return [x.istart, x.iend, NTG.yt.time()]; });
   check(Math.abs(win[2] - win[1]) < 0.3, 'the excerpt stops at its exact end second', win);
   await D.keyboard.press('r'); await D.waitForTimeout(400); s = await st(D);
-  const pos2 = await D.evaluate(() => NTG.yt.time() - NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).start);
-  check(s.media === 'playing' && s.yst === 1 && pos2 >= 0 && pos2 < 0.8, 'R replays the same excerpt from its exact start', { pos2 });
+  const pos2 = await D.evaluate(() => NTG.yt.time() - NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).istart);
+  check(s.media === 'playing' && s.yst === 1 && pos2 >= 0 && pos2 < 0.8 && await D.evaluate(() => NTG.yt.log[NTG.yt.log.length - 1] === NTG_Catalog.byId(NTG.S.round.questions[NTG.S.qi].answer).iyt), 'R replays the same INSTRUMENTAL excerpt from its exact start', { pos2 });
   for (let i = 0; i < 14; i++) { const x = await st(D); if (x.screen !== 'play') break; if (x.phase === 'listen') await D.keyboard.press('1'); await D.waitForTimeout(60); await D.keyboard.press('Space'); await D.waitForTimeout(120); }
   s = await st(D);
   check(s.screen === 'results', 'round ends on the results screen after 10 songs', s);
   check(await D.evaluate(() => NTG.yt.state() === -1), 'video stops after the round');
-  check(await D.evaluate(() => [...document.querySelectorAll('#resList .rec')].filter(a => a.href.startsWith('https://www.youtube.com/watch')).length) === 10, 'results list all 10 songs with YouTube links');
+  check(await D.evaluate(() => document.querySelectorAll('#resList .rec').length === 10 && !document.querySelector('#resList a')), 'results list all 10 songs (no links out)');
   check(await D.evaluate(() => JSON.parse(localStorage.getItem('ntg.best2.80s.easy') || '[]').length) === 1, 'high score saved locally');
   check(!(await overflow(D)), 'results: no horizontal overflow');
   await D.click('#s-results [data-go="title"]'); await D.click('[data-go="crate"]');
-  const crate = await D.evaluate(() => ({ n: document.querySelectorAll('#crateList .rec').length, yt: [...document.querySelectorAll('#crateList .rec')].every(a => /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}/.test(a.href) && a.target === '_blank') }));
-  check(crate.n >= 20 && crate.yt, 'record crate lists the decade with YouTube links', crate);
+  const crate = await D.evaluate(() => ({ n: document.querySelectorAll('#crateList .rec').length, links: document.querySelectorAll('#crateList a').length }));
+  await D.click('#crateList .rec'); await D.waitForTimeout(200);
+  check(crate.n >= 14 && crate.links === 0 && await D.evaluate(() => NTG.yt.state() !== 1), 'record crate lists the decade, no links and no audio (originals never play early)', crate);
   await D.keyboard.press('Escape'); await D.waitForTimeout(100);
   check((await st(D)).screen === 'title', 'Esc backs out');
   await D.click('[data-go="howto"]'); const how = await D.textContent('#s-howto');
-  check(/50:50/.test(how) && /availability and any ads are controlled by YouTube/.test(how), 'how to play explains controls and the YouTube note');
+  check(/50:50/.test(how) && /availability and any ads are controlled by YouTube/.test(how) && /instrumental/i.test(how) && /HEAR ORIGINAL/.test(how), 'how to play explains instrumental guessing, HEAR ORIGINAL and the YouTube note');
   check(D.errs.length === 0, 'desktop: no console errors', D.errs);
 
   console.log('== YouTube failure paths (test player)');
@@ -178,14 +189,19 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
       check(await R.evaluate(() => !!document.querySelector('#ytBox iframe[src^="https://www.youtube.com/embed/"]')), 'official YouTube embed iframe is on the page');
       await R.click('[data-decade="all"]'); await R.click('[data-diff="normal"]'); await R.click('#btnStart');
       let ok = false, x;
-      for (let i = 0; i < 25 && !ok; i++) { await R.waitForTimeout(1000); x = await R.evaluate(() => ({ media: NTG.S.media, st: NTG.yt.state(), ct: NTG.yt.time(), t: NTG.S.t, swaps: NTG.S.swaps, song: NTG.S.round.questions[0].answer })); ok = x.media === 'playing' && x.t > 2; }
-      if (ok) check(true, 'a real song plays from YouTube and the clock follows it', x);
+      for (let i = 0; i < 25 && !ok; i++) { await R.waitForTimeout(1000); x = await R.evaluate(() => ({ media: NTG.S.media, st: NTG.yt.state(), ct: NTG.yt.time(), t: NTG.S.t, swaps: NTG.S.swaps, song: NTG.S.round.questions[0].answer, vid: (NTG.yt.player.getVideoData() || {}).video_id, iyt: NTG_Catalog.byId(NTG.S.round.questions[0].answer).iyt })); ok = x.media === 'playing' && x.t > 2; }
+      if (ok) check(x.vid === x.iyt, 'a real INSTRUMENTAL plays from YouTube and the clock follows it', x);
       else if (x.media === 'yt') warn('YouTube was still showing its own content before the song after 25 s (not a game fault)', x);
       else check(false, 'a real song plays from YouTube', x);
       const box = await playerBox(R); check(box.w >= 480 && box.h >= 270, 'real player is full size', box);
       const ans = await R.evaluate(() => NTG.S.round.questions[0].correct); await R.keyboard.press(String(ans + 1)); await R.waitForTimeout(1500);
       x = await R.evaluate(() => ({ phase: NTG.S.phase, st: NTG.yt.state(), rev: document.body.classList.contains('revealed') }));
       check(x.phase === 'reveal' && x.rev, 'real reveal shows the video', x);
+      await R.click('#btnOrig'); let y;
+      for (let i = 0; i < 25; i++) { await R.waitForTimeout(1000); y = await R.evaluate(() => { const a = NTG_Catalog.byId(NTG.S.round.questions[0].answer); return { st: NTG.yt.state(), t: NTG.yt.time(), start: a.start, vid: (NTG.yt.player.getVideoData() || {}).video_id, yt: a.yt }; }); if (y.st === 1 && y.vid === y.yt && y.t > y.start + 1) break; }
+      if (y.st === 1 && y.vid === y.yt && y.t > y.start + 1) check(true, 'real HEAR ORIGINAL plays the original video at its excerpt', y);
+      else if (y.vid === y.yt && y.t < y.start) warn('YouTube showed its own content before the original (not a game fault)', y);
+      else check(false, 'real HEAR ORIGINAL plays the original', y);
       check(R.errs.length === 0, 'real: no console errors from the game', R.errs);
     }
   }

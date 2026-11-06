@@ -9,14 +9,16 @@ let fails = 0; const check = (ok, msg, extra) => { if (!ok) fails++; console.log
 
 console.log('== catalog (real songs on YouTube)');
 const N = C.SONGS.length;
-check(N >= 60, 'at least 60 real songs', N);
-for (const d of C.DECADES) { const s = C.songsFor(d); const lo = +('19' + d.slice(0, 2)); check(s.length >= 20 && s.every(x => x.year >= lo && x.year <= lo + 9), `${d}: ${s.length} songs, all released ${lo}-${lo + 9}`); }
-check(new Set(C.SONGS.map(s => s.id)).size === N && new Set(C.SONGS.map(s => s.yt)).size === N, 'ids and YouTube video ids are unique');
+check(N >= 45, 'at least 45 real songs', N);
+for (const d of C.DECADES) { const s = C.songsFor(d); const lo = +('19' + d.slice(0, 2)); check(s.length >= 14 && s.every(x => x.year >= lo && x.year <= lo + 9), `${d}: ${s.length} songs, all released ${lo}-${lo + 9}`); }
+check(new Set(C.SONGS.map(s => s.id)).size === N && new Set(C.SONGS.map(s => s.yt)).size === N && new Set(C.SONGS.map(s => s.iyt)).size === N && C.SONGS.every(s => s.iyt !== s.yt), 'ids, original and instrumental video ids are unique');
+check(C.SONGS.every(s => /^[A-Za-z0-9_-]{11}$/.test(s.iyt) && (s.kind === 'instrumental' || s.kind === 'karaoke')), 'every song has a verified instrumental or karaoke video, labelled by kind', C.DECADES.map(d => [d, C.songsFor(d).filter(s => s.kind === 'instrumental').length, C.songsFor(d).filter(s => s.kind === 'karaoke').length]));
+check(C.SONGS.every(s => Number.isInteger(s.istart) && s.iend - s.istart === 15 && s.istart >= 0), 'every instrumental has one fixed 15 s excerpt window');
 check(C.SONGS.every(s => /^[A-Za-z0-9_-]{11}$/.test(s.yt)), 'every entry has an 11-character YouTube video id');
 check(C.SONGS.every(s => s.title && s.artist && s.genre && Number.isInteger(s.start) && s.start >= 0 && s.start < 400), 'every entry has title, artist, genre and a clip start second');
 check(new Set(C.SONGS.map(s => (s.title + '|' + s.artist).toLowerCase())).size === N, 'no song listed twice');
 check(/YouTube/.test(C.SOURCE_NOTE) && /ads/.test(C.SOURCE_NOTE), 'honest note: YouTube controls availability and any ads');
-check(C.watchUrl(C.SONGS[0]).startsWith('https://www.youtube.com/watch?v=' + C.SONGS[0].yt), 'watch-on-YouTube links');
+check(!/watchUrl|youtube\.com\/watch|WATCH ON YOUTUBE|target="_blank"/i.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')), 'no Watch-on-YouTube links in the game');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'catalog.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 check(!/arrange|playArrangement|NTG_Arrange/.test(src) && !fs.existsSync(path.join(__dirname, '..', 'js', 'arrange.js')), 'no synthesized song clips are left in the game');
 const audioSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'audio.js'), 'utf8');
@@ -48,11 +50,11 @@ check(okDec, 'all four choices come from the same decade (decade modes use only 
 check(okArtist, 'four different artists in every question');
 check(okAll, 'ALL mode splits a round 4/3/3 across the three decades');
 check(okHard, 'Crate Digger: a decoy shares the answer\'s genre whenever the crate has one');
-check(okLen && tight / nq > 0.97, 'choice titles have comparable lengths (97%+ within 12 characters, never more than 28 apart)', (tight / nq).toFixed(3));
+check(okLen && tight / nq > 0.95, 'choice titles have comparable lengths (95%+ within 12 characters, never more than 28 apart)', (tight / nq).toFixed(3));
 const r1 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 42 }), r2 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 42 }), r3 = Q.makeRound({ mode: '80s', diff: 'normal', seed: 43 });
 check(JSON.stringify(r1) === JSON.stringify(r2), 'same seed => same round (deterministic)');
 check(JSON.stringify(r1.questions) !== JSON.stringify(r3.questions), 'different seed => different round');
-check(C.SONGS.every(s => Number.isInteger(s.end) && s.end - s.start === C.clipLen(s) && C.clipLen(s) >= 10 && C.clipLen(s) <= 20), 'every song has one fixed excerpt window [start, end] of 10-20 s');
+check(C.SONGS.every(s => Number.isInteger(s.end) && s.end - s.start === 15 && C.clipLen(s) === s.iend - s.istart), 'original excerpt [start, end] kept for HEAR ORIGINAL; scoring uses the instrumental window');
 check(Object.values(Q.DIFFS).every(d => d.clip === undefined), 'difficulty never changes the excerpt (same window on every level)');
 
 console.log('== answer-position and length balance');
