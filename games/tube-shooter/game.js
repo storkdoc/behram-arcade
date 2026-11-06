@@ -864,7 +864,7 @@ function explodePlayer() {
 }
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
-  shot: ['HIT BY AN ENEMY SHOT', 'GLOWING ENEMY = ABOUT TO FIRE. RED RIM = SHOT INCOMING'],
+  shot: ['HIT BY AN ENEMY SHOT', 'ENEMY GLOWS, THEN FIRES. SHOOT IT OR STEP ASIDE'],
   capture: ['GRABBED AT THE RIM', 'ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
