@@ -40,7 +40,7 @@ D-pad/A/B all work.
 complications, grades, with pause bound to the OR pause menu), APEX GP, Astro Shatter,
 Planet Guardian, Sporewood, Star Invaders (screens + end of game), Vector Armor and MELTDOWN
 (screens), CHALICE (screens, gates / slain dragons, bat thefts, being eaten, the win), and AGE OF EMBERS
-(screens, age-ups, buildings lost / razed, the Wonder, victory and defeat, with pause bound to the menu), and HELIOPAUSE (screens, wave launches,
+(screens, age-ups, buildings lost / razed, the Wonder, victory and defeat, with pause bound to the menu), NAME THAT GROOVE (screens, fast/streak answers, misses, round results, with pause bound to its pause card), and HELIOPAUSE (screens, wave launches,
 boss arrivals, Earth hits, chapter victory and defeat, with pause bound to its pause screen). All other games rely on the generic signals.
 
 ## What gets recorded
