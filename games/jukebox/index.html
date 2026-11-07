@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2a120c">
+<meta name="description" content="Jukebox: a diner cabinet of real 1970s, 1980s and 1990s hits, played in full in YouTube's own visible player.">
+<title>Jukebox</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body data-screen="listen" data-mode="idle">
+<a id="home" href="../../index.html">&larr; ARCADE</a>
+
+<header class="top">
+  <div class="brand">
+    <p class="eyebrow">DINER CABINET</p>
+    <h1 class="logo">JUKEBOX</h1>
+  </div>
+  <p class="tag">'70s · '80s · '90s</p>
+  <div class="top-actions">
+    <button type="button" id="btnHelp" class="chrome sm" data-nav data-k="help" aria-label="How to listen">?</button>
+    <button type="button" id="btnMenu" class="chrome sm" data-nav data-k="menu" aria-label="Pause menu">❚❚</button>
+  </div>
+</header>
+
+<main id="cabinet" class="shell">
+  <section class="stage" aria-label="Now playing">
+    <div class="bezel">
+      <div id="ytWell">
+        <div id="ytHost"></div>
+        <p id="ytIdle">Pick a song, then press Play. Nothing starts on its own.</p>
+      </div>
+    </div>
+
+    <div class="np" id="np">
+      <span class="lamp" id="lamp" aria-hidden="true"></span>
+      <div class="np-copy">
+        <div class="kicker" id="npKicker">JUKEBOX</div>
+        <div class="np-title" id="npTitle">Nothing queued</div>
+        <div class="np-meta" id="npMeta">Add a hit from the right</div>
+      </div>
+      <div class="eq" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <p id="status" class="status" role="status"></p>
+
+    <div class="transport" role="group" aria-label="Playback">
+      <button type="button" id="btnPrev" class="round" data-nav data-k="prev" aria-label="Previous">⏮</button>
+      <button type="button" id="btnPlay" class="round play" data-nav data-k="play" aria-label="Play">PLAY</button>
+      <button type="button" id="btnNext" class="round" data-nav data-k="next" aria-label="Next">⏭</button>
+      <button type="button" id="btnShuffle" class="pill" data-nav data-k="shuffle" aria-pressed="false">SHUFFLE</button>
+      <button type="button" id="btnRepeat" class="pill" data-nav data-k="repeat" aria-pressed="false">REPEAT</button>
+      <button type="button" id="btnMute" class="pill" data-nav data-k="mute" aria-pressed="false" aria-label="Mute">MUTE</button>
+      <label class="vol">VOL
+        <input id="vol" data-nav data-k="vol" type="range" min="0" max="100" step="1" value="80" aria-label="Volume">
+      </label>
+    </div>
+
+    <div class="queue-head">
+      <h2>QUEUE</h2>
+      <button type="button" id="btnClear" class="text" data-nav data-k="clear">CLEAR</button>
+    </div>
+    <ol id="queue" aria-label="Play queue"></ol>
+    <p id="premiumNote" class="fine"></p>
+  </section>
+
+  <section class="crate" aria-label="Song catalog">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Decade"></div>
+    <p class="crate-note" id="crateNote"></p>
+    <ul id="songList" class="songs"></ul>
+  </section>
+</main>
+
+<p class="keys-hint">Space play/pause · Enter add · arrows move · N next · P pause · M mute</p>
+
+<div id="pause" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+  <div class="card">
+    <h2 id="pauseTitle">PAUSED</h2>
+    <p class="hint">The YouTube player stays where it is. Resume continues the same video.</p>
+    <button type="button" class="big" id="btnResume" data-nav data-k="resume">RESUME <kbd>SPACE</kbd></button>
+    <button type="button" class="big ghost" id="btnHelp2" data-nav data-k="help2">HOW TO LISTEN</button>
+    <a class="big ghost link" id="btnArcade" href="../../index.html">BACK TO ARCADE</a>
+  </div>
+</div>
+
+<div id="help" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="card wide">
+    <h2 id="helpTitle">HOW TO LISTEN</h2>
+    <ol class="how">
+      <li><b>Pick a decade.</b> Every strip is a real hit from 1970–1999. Enter, or a tap, adds it to the queue. Nothing plays until you press Play.</li>
+      <li><b>Play.</b> Space, the PLAY button, or gamepad A starts the song in YouTube's own player. The picture and YouTube's controls stay visible. Full songs, not a quiz clip.</li>
+      <li><b>Queue.</b> Move songs up or down, or remove one. Shuffle and repeat sit with the transport.</li>
+      <li><b>Favorites</b> are saved only on this device. Hearts do not leave the browser.</li>
+      <li><b>If a video will not embed,</b> the cabinet says so and Next moves on. YouTube decides availability and any ads.</li>
+    </ol>
+    <p class="hint" id="helpPremium"></p>
+    <table class="keys">
+      <tr><th>Keyboard</th><td><kbd>SPACE</kbd> play / pause · <kbd>ENTER</kbd> add the highlighted song, or press the highlighted button · arrows move · <kbd>N</kbd> next · <kbd>P</kbd> or <kbd>Esc</kbd> pause menu · <kbd>M</kbd> mute · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>F</kbd> favorite</td></tr>
+      <tr><th>Touch</th><td>tap a strip to add it · heart for a favorite · PLAY, previous, next · up and down on a queued song</td></tr>
+      <tr><th>Gamepad</th><td>A play / pause · X add or press the highlighted button · Y favorite · d-pad move · LB / RB previous / next · Start pause menu · B close</td></tr>
+    </table>
+    <button type="button" class="big" id="btnCloseHelp" data-nav data-k="closehelp">BACK <kbd>SPACE</kbd></button>
+  </div>
+</div>
+
+<script src="../name-that-groove/js/catalog.js"></script>
+<script src="js/catalog.js"></script>
+<script src="js/queue.js"></script>
+<script src="js/player.js"></script>
+<script src="js/sfx.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
