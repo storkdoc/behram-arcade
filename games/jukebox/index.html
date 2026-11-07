@@ -29,6 +29,29 @@
 
 <main id="cabinet" class="shell">
   <section class="stage" aria-label="Now playing">
+    <section class="viz" id="vizPanel" data-look="cabinet" aria-label="Ambient visualizer">
+      <div class="leds" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="viz-top">
+        <div>
+          <p class="viz-kicker">AMBIENT VISUALIZER</p>
+          <p class="viz-note" id="vizNote"></p>
+        </div>
+        <div class="viz-modes" role="group" aria-label="Visualization">
+          <button type="button" class="pill tiny" data-viz="cabinet" data-nav data-k="viz-cabinet" aria-pressed="true">CABINET</button>
+          <button type="button" class="pill tiny" data-viz="vinyl" data-nav data-k="viz-vinyl" aria-pressed="false">VINYL</button>
+          <button type="button" class="pill tiny" data-viz="spectrum" data-nav data-k="viz-spectrum" aria-pressed="false">BARS</button>
+        </div>
+      </div>
+      <div class="viz-body">
+        <div class="speaker" aria-hidden="true"><b></b><b></b><b></b></div>
+        <div class="platter">
+          <div class="vinyl" id="vinyl"><span class="vlabel" id="vlabel">70</span></div>
+          <i class="tonearm" aria-hidden="true"></i>
+        </div>
+        <canvas id="vizCanvas" width="480" height="120" aria-hidden="true"></canvas>
+        <div class="speaker" aria-hidden="true"><b></b><b></b><b></b></div>
+      </div>
+    </section>
     <div class="bezel">
       <div id="ytWell">
         <div id="ytHost"></div>
@@ -92,13 +115,14 @@
     <ol class="how">
       <li><b>Pick a decade.</b> Every strip is a real hit from 1970–1999. Enter, or a tap, adds it to the queue. Nothing plays until you press Play.</li>
       <li><b>Play.</b> Space, the PLAY button, or gamepad A starts the song in YouTube's own player. The picture and YouTube's controls stay visible. Full songs, not a quiz clip. If sound does not start, press Play again.</li>
+      <li><b>Lights.</b> The cabinet above the player is an ambient visualizer. It spins and pulses while the song is playing and rests when you pause. It does not read the song's sound. <kbd>V</kbd> switches CABINET, VINYL, and BARS. It never covers the YouTube player.</li>
       <li><b>Queue.</b> Move songs up or down, or remove one. Shuffle and repeat sit with the transport.</li>
       <li><b>Favorites</b> are saved only on this device. Hearts do not leave the browser.</li>
       <li><b>If a video will not embed,</b> the cabinet says so and Next moves on. YouTube decides availability and any ads.</li>
     </ol>
     <p class="hint" id="helpPremium"></p>
     <table class="keys">
-      <tr><th>Keyboard</th><td><kbd>SPACE</kbd> play / pause · <kbd>ENTER</kbd> add the highlighted song, or press the highlighted button · arrows move · <kbd>N</kbd> next · <kbd>P</kbd> or <kbd>Esc</kbd> pause menu · <kbd>M</kbd> mute · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>F</kbd> favorite</td></tr>
+      <tr><th>Keyboard</th><td><kbd>SPACE</kbd> play / pause · <kbd>ENTER</kbd> add the highlighted song, or press the highlighted button · arrows move · <kbd>N</kbd> next · <kbd>V</kbd> visualizer · <kbd>P</kbd> or <kbd>Esc</kbd> pause menu · <kbd>M</kbd> mute · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>F</kbd> favorite</td></tr>
       <tr><th>Touch</th><td>tap a strip to add it · heart for a favorite · PLAY, previous, next · up and down on a queued song</td></tr>
       <tr><th>Gamepad</th><td>A play / pause · X add or press the highlighted button · Y favorite · d-pad move · LB / RB previous / next · Start pause menu · B close</td></tr>
     </table>
@@ -111,6 +135,7 @@
 <script src="js/queue.js"></script>
 <script src="js/player.js"></script>
 <script src="js/sfx.js"></script>
+<script src="js/viz.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

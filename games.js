@@ -8,7 +8,7 @@ window.ARCADE_GAMES = [
     slug: 'jukebox',
     title: 'JUKEBOX',
     marquee: 'chrome',
-    tagline: "A chrome-and-neon diner cabinet of real '70s, '80s and '90s hits, played in full through YouTube's own visible player.",
+    tagline: "A chrome-and-neon diner cabinet of real '70s, '80s and '90s hits, with an ambient light show around YouTube's own visible player.",
     description: "A listening jukebox, separate from Name That Groove. Decade tabs, title strips and a queue for real hits from 1970 to 1999 — the same official artist and label videos used by the quiz, played here as full songs rather than instrumental clips. Add, remove and reorder the queue, save favorites on this device, and use play, pause, previous, next, shuffle, repeat and volume. Nothing starts until you press Play. The YouTube player stays on screen with its own controls; this cabinet does not hide it, cover it, or play audio-only. YouTube decides whether a video is available and whether an ad runs. YouTube Premium can apply when you are signed in to YouTube in this same browser. If a video will not embed, the cabinet says so and Next moves on.",
     thumb: 'games/jukebox/thumb.png',
     added: '2026-11-07',

@@ -84,7 +84,16 @@
     S.mode = mode;
     document.body.dataset.mode = mode;
     document.body.dataset.screen = S.overlay || (mode === 'idle' ? 'listen' : 'play');
+    const viz = $('vizPanel');
+    if (viz) viz.dataset.state = mode;
     MS.screen(document.body.dataset.screen);
+  }
+
+  function themeDecade() {
+    const song = currentSong();
+    if (song && song.decade) return song.decade;
+    if (S.tab === '70s' || S.tab === '80s' || S.tab === '90s') return S.tab;
+    return 'all';
   }
 
   function onState(st) {
@@ -335,6 +344,7 @@
     renderTabs();
     renderSongs();
     save();
+    syncChrome();
   }
 
   function visibleSongs() {
@@ -502,6 +512,9 @@
 
   function syncChrome() {
     const song = currentSong();
+    document.body.dataset.decade = themeDecade();
+    const lab = $('vlabel');
+    if (lab) lab.textContent = song ? String(song.year).slice(2) : (document.body.dataset.decade === 'all' ? 'ALL' : document.body.dataset.decade);
     const live = S.mode === 'playing' || S.mode === 'paused' || S.mode === 'loading';
     $('npKicker').textContent = live ? 'NOW PLAYING' : (song ? 'UP NEXT' : 'JUKEBOX');
     $('npTitle').textContent = song ? song.title : 'Nothing queued';
@@ -720,6 +733,7 @@
     if (k === 's' || k === 'S') { $('btnShuffle').click(); return; }
     if (k === 'r' || k === 'R') { $('btnRepeat').click(); return; }
     if (k === 'f' || k === 'F') { favHL(); return; }
+    if (k === 'v' || k === 'V') { cycleLook(); return; }
   });
   document.addEventListener('keyup', e => {
     if ((e.key === ' ' || e.key === 'Enter') && !(e.target && e.target.closest && e.target.closest('textarea, input[type="text"]'))) e.preventDefault();
@@ -757,14 +771,41 @@
     }
   });
 
+  const LOOKS = (window.JukeViz && JukeViz.MODES) || ['cabinet', 'vinyl', 'spectrum'];
+  let look = 'cabinet';
+  try { const savedLook = store.getItem('jukebox.viz'); if (LOOKS.indexOf(savedLook) >= 0) look = savedLook; } catch (e) { /* ignore */ }
+  function setLook(next) {
+    look = LOOKS.indexOf(next) >= 0 ? next : 'cabinet';
+    const panel = $('vizPanel');
+    if (panel) {
+      panel.dataset.look = look;
+      panel.querySelectorAll('[data-viz]').forEach(b => b.setAttribute('aria-pressed', b.dataset.viz === look ? 'true' : 'false'));
+    }
+    try { store.setItem('jukebox.viz', look); } catch (e) { /* ignore */ }
+  }
+  function cycleLook() { setLook(LOOKS[(LOOKS.indexOf(look) + 1) % LOOKS.length]); sfx.click(); }
+  document.querySelectorAll('#vizPanel [data-viz]').forEach(b => b.addEventListener('click', () => setLook(b.dataset.viz)));
+  if ($('vizNote') && window.JukeViz) $('vizNote').textContent = JukeViz.NOTE;
+
+  let vizT = 0;
   let last = performance.now();
+  function drawViz(dt) {
+    const canvas = $('vizCanvas');
+    if (!canvas || !window.JukeViz) return;
+    let reduced = false;
+    try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduced = false; }
+    if (!reduced && (S.mode === 'playing' || S.mode === 'loading')) vizT += dt * 1000;
+    JukeViz.draw(canvas, { t: vizT, mode: S.mode, decade: document.body.dataset.decade || 'all', reduced: reduced, dpr: window.devicePixelRatio || 1 });
+  }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     pollPad(dt);
+    drawViz(dt);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+  setLook(look);
 
   fillPremium();
   renderTabs();
