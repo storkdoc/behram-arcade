@@ -116,24 +116,39 @@ kbd {
     0 18px 40px rgba(0, 0, 0, .35);
   padding: 12px;
 }
-.bezel {
-  padding: 10px;
-  border-radius: 16px;
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 28%),
-    linear-gradient(180deg, var(--chrome-1), var(--chrome-2) 46%, var(--chrome-3));
-  box-shadow: inset 0 1px 0 #fff, 0 8px 16px rgba(0, 0, 0, .35);
+/* Compact official player. YouTube requires the embedded viewport to be at least
+   200px by 200px, with controls fully visible inside that viewport
+   (https://developers.google.com/youtube/iframe_api_reference). The frame is black
+   padding around that square. It does not crop, cover, or collapse the video. */
+.player-dock {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 12px;
 }
-/* The well is only the player. Idle copy sits underneath the iframe (lower z-index)
-   and is hidden once Play is pressed, so it never covers the official player. */
+.player-kicker {
+  margin: 0 0 6px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: .22em;
+  font-weight: 800;
+  color: #f0d7c0;
+}
+.bezel {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px;
+  border-radius: 12px;
+  background: #000;
+  box-shadow: inset 0 0 0 1px #2a2a2a, 0 8px 16px rgba(0, 0, 0, .35);
+}
 #ytWell {
   position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 168px;
-  background: #050302;
-  border-radius: 8px;
-  overflow: hidden;
+  width: 200px;
+  height: 200px;
+  min-width: 200px;
+  min-height: 200px;
+  background: #000;
+  overflow: visible;
 }
 #ytHost, #ytWell iframe {
   position: absolute;
@@ -563,7 +578,6 @@ body[data-decade="all"] { --viz: #ffb000; --viz2: #3de1ff; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .shell { grid-template-columns: minmax(240px, 42%) minmax(0, 1fr); }
-  #ytWell { min-height: 120px; }
   .songs { max-height: calc(100dvh - 120px); }
   .viz-body { min-height: 96px; }
   .platter, .vinyl { width: 88px; height: 88px; }

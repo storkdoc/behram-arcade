@@ -146,7 +146,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
       wellH: Math.round(well.height), panelH: Math.round(panel.height)
     };
   });
-  check(!viz.overlap && !viz.inside && viz.wellH >= 160 && viz.panelH >= 120, 'visualizer sits beside the player and does not cover it', viz);
+  check(!viz.overlap && !viz.inside && viz.wellH >= 200 && viz.wellH <= 204 && viz.panelH >= 120, 'visualizer sits above a 200px player and does not cover it', viz);
   check(/not the song/.test(viz.note) && viz.mode === 'playing' && viz.anim === 'spin-record' && viz.play === 'running' && viz.decade === '70s', 'playing spins the record for the song decade; copy does not claim a waveform', viz);
   await D.click('[data-viz="spectrum"]');
   const bars = await D.evaluate(() => {
@@ -155,13 +155,13 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
     const well = document.getElementById('ytWell').getBoundingClientRect();
     return { look, platter, wellH: Math.round(well.height), mode: JUKE.S.mode };
   });
-  check(bars.look === 'spectrum' && bars.platter === 'none' && bars.wellH >= 160 && bars.mode === 'playing', 'BARS changes only the light show; the player stays up', bars);
+  check(bars.look === 'spectrum' && bars.platter === 'none' && bars.wellH >= 200 && bars.wellH <= 204 && bars.mode === 'playing', 'BARS changes only the light show; the player stays up', bars);
   await D.click('[data-viz="vinyl"]');
-  check(await D.evaluate(() => getComputedStyle(document.getElementById('vizCanvas')).display === 'none' && document.getElementById('ytWell').getBoundingClientRect().height >= 160), 'VINYL hides the bars, not the YouTube well');
+  check(await D.evaluate(() => getComputedStyle(document.getElementById('vizCanvas')).display === 'none' && document.getElementById('ytWell').getBoundingClientRect().height >= 200), 'VINYL hides the bars, not the YouTube well');
   await D.click('[data-viz="cabinet"]');
   const box = await clearOfCover(D);
-  check(box.w >= 280 && box.h >= 160 && box.hits.every(Boolean) && box.idleHidden && !box.hidden && box.frameDisplay !== 'none' && Number(box.frameOpacity) > 0.9,
-    'player is large, visible, and not covered', box);
+  check(box.w >= 200 && box.w <= 204 && box.h >= 200 && box.h <= 204 && box.hits.every(Boolean) && box.idleHidden && !box.hidden && box.frameDisplay !== 'none' && Number(box.frameOpacity) > 0.9,
+    'compact player is YouTube\'s 200px minimum, visible, and not covered', box);
   await D.keyboard.press('Space');
   s = await snap(D);
   check(s.mode === 'paused' && s.constructs === 1, 'Space pauses without building another player', s);
@@ -241,7 +241,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await M.waitForTimeout(80);
   s = await snap(M);
   const mb = await clearOfCover(M);
-  check(s.mode === 'playing' && mb.h >= 140 && mb.w >= 200 && mb.hits.every(Boolean) && mb.idleHidden && !mb.hidden, 'phone: tap plays a visible uncovered player', { s, mb });
+  check(s.mode === 'playing' && mb.w >= 200 && mb.w <= 204 && mb.h >= 200 && mb.h <= 204 && mb.hits.every(Boolean) && mb.idleHidden && !mb.hidden, 'phone: compact 200px player stays visible and uncovered', { s, mb });
   check(await M.evaluate(() => { const a = document.getElementById('vizPanel').getBoundingClientRect(), b = document.getElementById('ytWell').getBoundingClientRect(); return a.bottom <= b.top + 1; }), 'phone: visualizer is above the player, not on top of it');
   check(!(await overflow(M)), 'phone playing: no horizontal overflow');
   await M.tap('#btnHelp');
@@ -260,7 +260,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await L.tap('#btnPlay');
   await L.waitForTimeout(80);
   const lb = await clearOfCover(L);
-  check((await snap(L)).mode === 'playing' && lb.h >= 100 && lb.hits.every(Boolean), 'landscape play stays inside a visible player', lb);
+  check((await snap(L)).mode === 'playing' && lb.w >= 200 && lb.w <= 204 && lb.h >= 200 && lb.h <= 204 && lb.hits.every(Boolean), 'landscape play stays inside a 200px player', lb);
 
   console.log('== gamepad + reduced motion');
   const G = await open({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' }, '?yt=mock');
@@ -320,7 +320,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
       });
       check(first.rep.configuredHost === 'https://www.youtube.com' && /^www\.youtube\.com/.test(first.rep.src || ''), 'first Play embed host is www.youtube.com', first.rep.src);
       check(!/nocookie/.test(first.rep.src || '') && first.rep.sandbox == null && first.rep.credentialless !== true, 'first Play is not nocookie, sandboxed, or credentialless', { sandbox: first.rep.sandbox, credentialless: first.rep.credentialless, query: first.rep.query });
-      check(first.rep.constructs === 1 && first.w >= 280 && first.h >= 160 && !first.covered, 'first Play is one visible uncovered player', { constructs: first.rep.constructs, w: first.w, h: first.h, covered: first.covered });
+      check(first.rep.constructs === 1 && first.w >= 200 && first.w <= 204 && first.h >= 200 && first.h <= 204 && !first.covered, 'first Play is one visible 200px player', { constructs: first.rep.constructs, w: first.w, h: first.h, covered: first.covered });
       let heard = false; let lastPlay = null;
       for (let i = 0; i < 6 && !heard; i++) {
         lastPlay = await R.evaluate(() => ({ state: JUKE.player.state(), time: JUKE.player.time(), mode: JUKE.S.mode, status: document.getElementById('status').textContent, loads: JUKE.player.stats.loads.slice() }));
@@ -361,7 +361,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
         check(third.constructs === 1 && /^www\.youtube\.com/.test(third.src || '') && !/nocookie/.test(third.src || ''), 'reload Play uses the same www.youtube.com host', third.src);
         check(sameConfig, 'reload does not change embed host, sandbox, credentialless, or player query keys', { first: first.rep.query, reload: third.query, sandbox: [first.rep.sandbox, third.sandbox] });
         const box = await clearOfCover(R);
-        check(box.hits.every(Boolean) && box.idleHidden && !box.hidden && box.h >= 160, 'reloaded player is visible and uncovered', box);
+        check(box.hits.every(Boolean) && box.idleHidden && !box.hidden && box.w >= 200 && box.h >= 200 && box.w <= 204 && box.h <= 204, 'reloaded player is a visible 200px square', box);
         console.log('  AD-PROBE first-play requests', [...new Set(adsFirst)]);
         console.log('  AD-PROBE after-reload requests', [...new Set(R.ads.slice(adsBeforeReplay))]);
         console.log('  AD-PROBE query first', JSON.stringify(first.rep.query), 'reload', JSON.stringify(third.query));

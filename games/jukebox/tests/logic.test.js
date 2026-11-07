@@ -212,6 +212,8 @@ FakePlayer.prototype.destroy = function () { this.destroyed = true; };
   check(!/youtube\.com\/watch|WATCH ON YOUTUBE/i.test(src), 'no Watch-on-YouTube links added by the cabinet');
   check(/iframe_api/.test(src) && /https:\/\/www\.youtube\.com/.test(src), 'official IFrame API on www.youtube.com');
   const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
+  check(/#ytWell\s*\{[^}]*width:\s*200px;[^}]*height:\s*200px;[^}]*min-width:\s*200px;[^}]*min-height:\s*200px/.test(css), 'player viewport is YouTube\'s 200px minimum, not smaller');
+  check(!/#ytWell\s*\{[^}]*min-height:\s*(1[0-9]{2}|[1-9]?[0-9])px/.test(css), 'no rule shrinks the player below 200px');
   check(/#ytHost,\s*#ytWell iframe[\s\S]*display:\s*block/.test(css), 'the iframe is displayed, not collapsed');
   check(!/#ytWell iframe[^}]*opacity\s*:\s*0/.test(css) && !/#ytHost[^}]*display\s*:\s*none/.test(css), 'player is not faded out or hidden');
   check(!/<iframe/i.test(fs.readFileSync(path.join(root, 'index.html'), 'utf8')), 'the page HTML does not ship a hidden iframe; the API creates the visible one');
