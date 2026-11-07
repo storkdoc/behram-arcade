@@ -592,3 +592,62 @@ are still Oct 30–31 (answer-length complaint; today's bank-cues check: correct
 - Fix the vortex-modebtn test crash (likely a selector/geometry change).
 - VORTEX: captures and fuseballs are now the top killers. Re-run the bot with more games before tuning.
 - Neuro Arena: run multiple seeds for Pong/divisor before claiming progress. Text needs a larger duel set or a different lever.
+
+## 2026-11-07 (day 11): gameplay evaluation + fixes
+
+Fresh worktree `/workspace/arcade-daily-2026-11-07` from `e1d26a1`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14
+(+ landscape for VORTEX). No other worktree was actively editing tube-shooter / neuro-arena / star-raider / office.
+
+### Player feedback (Nov 6–7)
+`node tools/read-feedback.mjs --hours 36`: **0 submissions** (4th day in a row). Nothing to cluster or act on. Last real note
+in the local archive is still Oct 30 (Feud & Delivery, Fun, empty text). Answer-length bank check today: ALL PASS
+(correct longest ≈ chance; Clinic Day slot uniform ~20%).
+
+### Findings
+- **Smoke-lite, 22 games + home, desktop and iPhone 14 (45 page loads)**: no pageerrors / local 4xx. YouTube telemetry noise
+  ignored on NAME THAT GROOVE / home. Full smoke was CPU-starved by Neuro Arena; lite pass is clean.
+- **Dr. Behram's Office / Congressional**: answer-length ALL PASS. hub.test desktop path ALL key asserts pass after drive
+  fixes (codes, PIN as salted hash only via testpin.js, four rooms, redirects, drive office→stairs). iPhone hub run hit a
+  load-flake tapping `#drive` skip (`<html>` intercepts pointer / canvas detach) after the return drive — not a PIN/access
+  regression. Copy stays generic. No student faces used.
+- **Star Raider**: war.test OK. sim.test: sloppy Pilot was winning only **17%** on unchanged day-10 DCFG (assert ≥30%) while
+  sharp Pilot stayed 100%. Combat easing also dropped sharp below 90%; survivability-only nudge fixed the band
+  (sloppy Pilot **67%**, sharp **100%**).
+- **MELTDOWN**: sim 47/47 (earlier in the pass).
+- **VORTEX**: FD bot 8 games on pre-change main: sharp levels 13/10/11/15, average 10/4/8/13 (mean ~10.5). Day-10 note that
+  captures/fuseballs lead deaths after the shot charge-up still stood; modebtn crashed on null `r.mode` because frozen
+  `step()` never called `touchSync()` so `data-ts` stayed `menu` on some landscape phones.
+
+### Changes
+1. **VORTEX grab-imminent telegraph + harness sync** (`games/tube-shooter`): `grabDelay` floor 0.1→**0.18** (base 0.25→0.28);
+   at 40% of the same-lane countdown a sharper `grabimminent` cue + white/red rim flash; tip text updated; `step`/`gotoLevel`
+   call `render`+`touchSync` (fixes modebtn). Tests: grabimminent ALL PASS (desktop/iPhone/landscape); modebtn ALL PASS;
+   grabwarn ALL PASSED.
+2. **Star Raider Pilot survivability** (`games/star-raider/js/sim.js`): hitE 100→88, bareKill 0.15→0.1, leakE 600→480.
+   Combat knobs untouched. sim.test ALL ok after change.
+3. **Office drive under load** (`games/dr-behrams-office/hub/drive.js`): set first scene synchronously; 50 ms interval backup
+   beside rAF; backfill scene names when a frame jumps the timeline so `stairs` still appears in `DriveFX.log`. hub.test
+   waits hardened. Desktop hub path green; Neuro Arena Word Completion `thinkMs` 900→**1100**.
+
+### Neuro Arena (seed 1107; 10 rounds × K=4, Lamarck, 30 s, size 2800, ABL=5) — Nov 6 (seed 1106) for comparison
+| contest | chance | champ by round (today) | full task vs prior | beyond reflex | Nov 6 |
+|---|---|---|---|---|---|
+| divisor | 8% | 33→72% (lv 3) | **72%** vs 66% | **+0.06** | 52% vs 66%, −0.14 |
+| simon | 25% | 41→75% | 47% vs 26% | **+0.21** | 39%, +0.13 |
+| text | 8% | 20→34% | 11% vs 25% | −0.14 | 11%, −0.14 |
+| add | 5% | 28→67% (5 r) | 8% | −0.02 | 9% |
+| sub | 10% | 58→90% (lv 1, 5 r) | 18% | 0 | 33%, +0.15 |
+| big | 50% | 67→86% (4 r) | – | +0.08 | 91%, +0.13 |
+| pattern | 13% | 65→100% (7 r) | – | +0.50 | +0.40 |
+| pong | – | **32→38% flat, 0 reaps** | hit 38% | −0.03 (ablate all: 38→30%) | 36→44%, 0 reaps |
+| echo, dots, rps, tug | | 5-round snapshots only (CPU) | – | – | saturated prior days |
+- Honest read: **divisor recovered** above the frequency prior (72% vs 66%, level 3) — matches Nov 5 more than Nov 6.
+  Simon remains the clearest beyond-reflex learner (+0.21). **Text still stuck below the position baseline** (11% vs 25%)
+  even after the 1100 ms THINKING bump (curve only 20→34% duel acc). Pong flat again (38%, 0 reaps); ablation barely
+  moves full hit % — still mostly reflex. Short runs of echo/dots/rps look unsaturated here only because they were
+  stopped early under load.
+
+### For tomorrow
+- Text: try `FIX=mix` / larger duel `matchSec` rather than more THINKING — 700→900→1100 did not lift full-task above prior.
+- VORTEX: re-run FD bot with deathKind hooks now exposed; captures vs fuseballs after grab-imminent.
+- Office hub iPhone: `#drive` tap intercepted by `<html>` under load — force-click / bindPause interaction with sticker.
