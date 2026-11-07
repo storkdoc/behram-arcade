@@ -1,7 +1,10 @@
 /* NAME THAT GROOVE: YouTube music source.
    Uses ONLY YouTube's official IFrame Player API (https://www.youtube.com/iframe_api) with a visible,
-   full-size embedded player. Nothing is downloaded, recorded or re-hosted, and nothing about YouTube's
-   own playback (including any ads YouTube chooses to show) is blocked, skipped or modified.
+   full-size embedded player. The player is hosted on https://www.youtube.com, the same site as a
+   viewer's YouTube sign-in. YouTube's privacy-enhanced host (youtube-nocookie.com) is a different site
+   and does not receive those cookies, so it cannot recognize a signed-in session. This page never reads
+   the cookies, collects a login, or changes what YouTube plays, including any ads YouTube chooses to show.
+   If the browser does not send youtube.com cookies with the embed, YouTube treats the viewer as signed out.
    Clips start at the player's own startSeconds and the game calls pauseVideo() when the clip time is up.
    ?yt=mock swaps in a fake player for automated tests only (no network); never used otherwise. */
 (function (root) {
@@ -20,7 +23,9 @@
     const make = () => {
       try {
         self.player = new root.YT.Player(self.hostId, {
-          width: '100%', height: '100%', host: 'https://www.youtube.com',
+          width: '100%', height: '100%',
+          // Official embed host. Do not switch this to youtube-nocookie.com: that host cannot see a youtube.com session.
+          host: 'https://www.youtube.com',
           playerVars: { controls: 1, playsinline: 1, rel: 0, iv_load_policy: 3, fs: 0, disablekb: 1, cc_load_policy: 0, origin: location.origin },
           events: {
             onReady() { done(true); if (self.muted) self.player.mute(); self.player.setVolume(self.vol); if (self.want) self._start(); if (self.cb.onReady) self.cb.onReady(); },
