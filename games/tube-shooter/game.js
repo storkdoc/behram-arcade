@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -405,6 +405,7 @@ const Sound = {
       case 'bump': this.tone('triangle', 140, 60, 0.09, 0.14); break;
       case 'shotwarn': this.tone('square', 980, 620, 0.07, 0.06); this.tone('square', 980, 620, 0.07, 0.05, 0.085); break;   // incoming shot in your lane
       case 'grabwarn': this.tone('sawtooth', 190, 300, 0.09, 0.055); this.tone('sawtooth', 240, 380, 0.09, 0.05, 0.1); this.tone('sine', 95, 95, 0.2, 0.05); break;   // a rim grabber next to the claw (low 'wup-wup', unlike the high shot beep)
+      case 'grabimminent': this.tone('square', 220, 90, 0.22, 0.12); this.tone('sawtooth', 340, 160, 0.18, 0.08, 0.04); this.tone('sine', 70, 55, 0.28, 0.07); break;   // same-lane grab countdown past 40%: sharper 'bwaah' than grabwarn
       case 'fusewarn': this.tone('triangle', 1680, 2400, 0.07, 0.055); this.tone('sine', 2400, 3200, 0.06, 0.04, 0.05); this.tone('square', 880, 1320, 0.05, 0.03, 0.09); break;   // rim fuseball nearby (bright chirp, not the low grab wup or high shot beep)
       case 'zapwarn': this.tone('sawtooth', 520, 1800, 0.11, 0.07); this.tone('square', 1600, 400, 0.09, 0.05, 0.04); this.noise(0.12, 0.1, 5000, 1200, 2); break;   // your lane is about to take a pulsar zap
       case 'mineboom': this.noise(0.6, 0.5, 2600, 90, 0.7); this.tone('sawtooth', 300, 40, 0.4, 0.12); break;
@@ -752,7 +753,7 @@ function levelParams(L) {
     maxEShots: Math.min(2 + Math.floor(s / 3), 6),
     maxActive: Math.min(4 + Math.floor(L / 2), 12),
     spawnGap: Math.max(0.25, 1.05 - 0.04 * s),
-    grabDelay: Math.max(0.1, 0.25 - 0.0075 * s),      // rim enemy settled in your lane: time before it grabs (the kill window)
+    grabDelay: Math.max(0.18, 0.28 - 0.0075 * s),     // rim enemy settled in your lane: time before it grabs (day 11: was max(0.1,0.25-…); floor raised so high-level grabs stay readable)
     phaseGone: Math.max(0.24, 0.44 - 0.006 * s),       // phaser: time between vanishing and re-appearing (ghost telegraph)
     sparkSpeed: Math.min(0.24 + 0.009 * s, 0.55),      // spark climb speed
     sparkLat: Math.min(1.9 + 0.045 * s, 3.6),          // spark max lateral speed (lanes / s) ...
@@ -807,7 +808,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 /* ============================== flow ============================== */
 function startGame() {
   fireLock = true;
-  deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
+  deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx);
@@ -865,7 +866,7 @@ function explodePlayer() {
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
   shot: ['HIT BY AN ENEMY SHOT', 'ENEMY GLOWS, THEN FIRES. SHOOT IT OR STEP ASIDE'],
-  capture: ['GRABBED AT THE RIM', 'ORANGE RIM ARROWS = GRABBER COMING. SHOOT FIRST'],
+  capture: ['GRABBED AT THE RIM', 'ORANGE RIM FLASH + BWAH = ABOUT TO GRAB. SHOOT OR JUMP'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
@@ -1805,14 +1806,22 @@ function rimThreats() {
   for (const e of enemies) { if (!isRimGrabber(e)) continue; const d = laneDiff(player.lane, e.lane); if (Math.abs(d) <= GRAB_WARN_LANES) out.push({ e, d }); }
   return out;
 }
+let grabImminentCues = 0;
 function grabWarnUpdate(dt) {
   grabWarnCd = Math.max(0, grabWarnCd - dt);
   if (state !== 'play' || !player.alive) return;
   for (const e of enemies) {
-    if (!isRimGrabber(e)) { e.gwarned = false; continue; }
+    if (!isRimGrabber(e)) { e.gwarned = false; e.gimminent = false; continue; }
     const d = Math.abs(laneDiff(player.lane, e.lane));
-    if (d >= 2) e.gwarned = false;
-    else if (!e.gwarned) { e.gwarned = true; if (grabWarnCd <= 0) { grabWarnCd = 0.35; grabWarnCues++; Sound.play('grabwarn'); } }
+    if (d >= 2) { e.gwarned = false; e.gimminent = false; continue; }
+    if (!e.gwarned) { e.gwarned = true; if (grabWarnCd <= 0) { grabWarnCd = 0.35; grabWarnCues++; Sound.play('grabwarn'); } }
+    // Day 11: same-lane grabbers past 40% of grabDelay get a sharper cue + haptic. Captures were the #1/#2 killer
+    // after the shot charge-up (16 of ~51 deaths in the day-10 bot). The soft wup-wup alone was easy to miss.
+    if (d === 0 && e.landT > 0) {
+      const k = e.landT / Math.max(0.01, LP.grabDelay);
+      if (k >= 0.4 && !e.gimminent) { e.gimminent = true; grabImminentCues++; Sound.play('grabimminent'); }
+      if (k < 0.25) e.gimminent = false;   // reset if they leave and return
+    } else e.gimminent = false;
   }
 }
 function drawGrabWarn() {
@@ -1824,9 +1833,16 @@ function drawGrabWarn() {
     const near = Math.abs(d) <= 1, pulse = 0.7 + 0.3 * Math.sin(T * (near ? 34 : 18));
     if (d === 0) {                                  // in the claw's lane: the grab countdown burns along the rim edge
       const k = clamp((e.landT || 0) / Math.max(0.01, LP.grabDelay), 0, 1), a = rail(e.lane), b = rail(e.lane + 1);
-      ctx.globalAlpha = (0.55 + 0.45 * k) * pulse; ctx.strokeStyle = k > 0.6 ? '#fff2c0' : '#ff8a1a';
-      ctx.shadowColor = '#ff7a00'; ctx.shadowBlur = 16 * DPR; ctx.lineWidth = LW(2 + 2.5 * k);
+      const hot = k >= 0.4;                          // day 11: past 40% the whole lane flashes hard
+      ctx.globalAlpha = (0.55 + 0.45 * k) * (hot ? 0.85 + 0.15 * Math.sin(T * 48) : pulse);
+      ctx.strokeStyle = hot ? '#ffffff' : (k > 0.6 ? '#fff2c0' : '#ff8a1a');
+      ctx.shadowColor = hot ? '#ff2200' : '#ff7a00'; ctx.shadowBlur = (hot ? 26 : 16) * DPR; ctx.lineWidth = LW(2 + 2.5 * k + (hot ? 1.5 : 0));
       ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); ctx.stroke();
+      if (hot) {                                    // second inset rim so the claw seat itself reads as "LEAVE / SHOOT"
+        const inn = 0.08 * LL;
+        ctx.strokeStyle = '#ff6622'; ctx.lineWidth = LW(4); ctx.globalAlpha = 0.35 + 0.25 * Math.sin(T * 48);
+        ctx.beginPath(); seg3(a[0], a[1], inn, b[0], b[1], inn); ctx.stroke();
+      }
       continue;
     }
     const r = s < 0 ? e.lane : e.lane + 1;          // the shared rail it will flip over
@@ -2989,7 +3005,7 @@ window.VORTEX = {
   attractMode(m) { attract.mode = m; attract.modeT = 0; },
   // test harness: deterministic fast-forward (call freeze(true) first so the rAF loop doesn't also advance)
   key(code, down) { keys[code] = !!down; },
-  step(sec, until) { const n = Math.round(sec * 120); for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) return i / 120; } return sec; },
+  step(sec, until) { const n = Math.round(sec * 120); let done = sec; for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) { done = i / 120; break; } } render(); touchSync(); return done; },
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
@@ -3024,7 +3040,8 @@ window.VORTEX = {
   haptics: () => ({ on: Haptics.on, src: Haptics.src, log: Haptics.log.slice(), padHeld: Object.keys(pad.prev).filter(k => pad.prev[k]) }),
   shotWarnFrames: () => shotWarnFrames,
   spikeGuide: () => ({ ahead: spikeGuide.ahead, dz: spikeGuide.dz, lane: spikeGuide.lane, safe: spikeGuide.safe.slice(), frames: spikeGuide.frames, beeps: spikeGuide.beeps, steered: spikeGuide.steered }),
-  grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d })), frames: grabWarnFrames, cues: grabWarnCues }),
+  grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, landT: t.e.landT, imminent: !!t.e.gimminent })), frames: grabWarnFrames, cues: grabWarnCues, imminent: grabImminentCues }),
+  deathTips: () => Object.assign({}, deathTipCount),
   fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump })), frames: fuseWarnFrames, cues: fuseWarnCues }),
   zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
@@ -3043,6 +3060,6 @@ window.VORTEX = {
   score: () => score,
   playerLane: () => player.lane,
   webInfo: () => ({ n: web.n, closed: web.closed }),
-  gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); },
+  gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); touchSync(); },
 };
 })();

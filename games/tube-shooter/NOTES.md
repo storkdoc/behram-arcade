@@ -226,3 +226,13 @@ Other workers share this checkout. Stage only `games/tube-shooter` (plus `games.
 - Hooks: `VORTEX.fuseWarn()` -> {threats:[{id,type,d,jump}], frames, cues}, `VORTEX.zapWarn()` -> {cues, pulsing, pulseAmt, armed}.
 - Test: tests/vortex-fusewarn.test.js (desktop, iPhone 14, iPhone 14 landscape: far/near/adjacent/lethal rail, tip, flipper
   and mid-tube ignored, one chirp, zapwarn once per pulse with auto-fire off; no console errors). grabwarn regression OK.
+
+## Day 11 (2026-11-07): grab-imminent telegraph
+After the day-10 shot charge-up, bot deaths flipped to **captures** and fuseballs. Same-lane grabbers already drew a
+rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level `grabDelay` bottomed out at 0.1 s.
+- `grabDelay` floor raised 0.1 → **0.18** (and the base 0.25 → 0.28), so the shot/JUMP window stays readable.
+- At 40% of the countdown a sharper `grabimminent` "bwaah" (+ stronger pad rumble) fires once, and the claw lane flashes
+  white/red with an inset rim. Tip text updated.
+- `VORTEX.step` / `gotoLevel` now call `touchSync()` so frozen harnesses keep `data-ts=game` (fixes modebtn null crash).
+- Hooks: `grabWarn().imminent`, per-threat `imminent`, `deathTips()`.
+- Tests: `tests/vortex-grabimminent.test.js`, `tests/vortex-modebtn.test.js`.

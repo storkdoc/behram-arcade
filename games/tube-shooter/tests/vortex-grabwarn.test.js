@@ -43,12 +43,12 @@ async function suite(browser, label, ctxOpts) {
   r = await page.evaluate(() => { const L = VORTEX.playerLane(); const a = VORTEX.spawn('fuseball', L + 1, 0); VORTEX.setEnemy(a, { pause: 99, rimTimer: 99 }); const b = VORTEX.spawn('flipper', L + 1, 0.5); VORTEX.setEnemy(b, { spMul: 0 }); VORTEX.step(1 / 120); return VORTEX.grabWarn(); });
   check(r.threats.length === 0, `no warning for a rim fuseball or a flipper still down the tube (${JSON.stringify(r.threats)})`);
   await clear();
-  // 6. in the claw's lane it is flagged (d = 0) until it grabs; the capture tip points at the arrows
+  // 6. in the claw's lane it is flagged (d = 0) until it grabs; the capture tip points at the orange rim cue
   r = await page.evaluate(() => { VORTEX.setInvincible(false); const id = VORTEX.spawn('flipper', VORTEX.playerLane() + 1, 0); VORTEX.setEnemy(id, { pause: 0 });
     let seen0 = false; VORTEX.step(4, () => { const g = VORTEX.grabWarn(); if (g.threats.some(t => t.d === 0)) seen0 = true; return VORTEX.deathKind() != null; });
     const kind = VORTEX.deathKind(); VORTEX.step(6, () => VORTEX.state.state !== 'dying'); return { seen0, kind, m: VORTEX.messages() }; });
   check(r.seen0 && r.kind === 'capture', `in-lane grab countdown is flagged before the grab (${r.seen0}, death ${r.kind})`);
-  check(r.m.includes('GRABBED AT THE RIM') && r.m.some(t => /ORANGE RIM ARROWS/.test(t)), `capture tip points at the arrows (${r.m.join(' / ')})`);
+  check(r.m.includes('GRABBED AT THE RIM') && r.m.some(t => /ORANGE RIM/.test(t)), `capture tip points at the orange rim cue (${r.m.join(' / ')})`);
   check(errs.length === 0, 'no console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   await ctx.close();
 }
