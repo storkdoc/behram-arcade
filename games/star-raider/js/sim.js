@@ -33,7 +33,7 @@
   // per difficulty
   const DCFG = [
     { fleets: [3, 4, 1], bases: 4, move: 1.6, need: 4, siege: 95, plasmaV: 70, aimErr: 0.16, fireMul: 1.6, home: 0, drift: 0, hitE: 90, bareE: 600, bareSys: 2, bareKill: 0, hunters: 0, rescue: 2 },
-    { fleets: [3, 4, 1], bases: 4, move: 1.4, need: 3, siege: 85, plasmaV: 82, aimErr: 0.13, fireMul: 1.4, home: 0.1, drift: 0.12, hitE: 100, bareE: 900, bareSys: 3, bareKill: 0.15, leakE: 600, leakSys: 1, hunters: 1, rescue: 1 },
+    { fleets: [3, 4, 1], bases: 4, move: 1.4, need: 3, siege: 85, plasmaV: 82, aimErr: 0.13, fireMul: 1.4, home: 0.1, drift: 0.12, hitE: 88, bareE: 900, bareSys: 3, bareKill: 0.1, leakE: 480, leakSys: 1, hunters: 1, rescue: 1 },
     { fleets: [3, 4, 2], bases: 3, move: 1.0, need: 3, siege: 70, plasmaV: 95, aimErr: 0.06, fireMul: 1.0, home: 0.25, drift: 0.24, hitE: 150, bareE: 1200, bareSys: 3, bareKill: 0.35, hunters: 2 },
     { fleets: [3, 4, 3], bases: 3, move: 0.85, need: 3, siege: 62, plasmaV: 104, aimErr: 0.045, fireMul: 0.9, home: 0.38, drift: 0.38, hitE: 180, bareE: 1500, bareSys: 3, bareKill: 0.5, leakE: 1000, leakSys: 1, sysHit: 0.08, hunters: 3 },
   ];

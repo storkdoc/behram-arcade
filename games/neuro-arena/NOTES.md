@@ -164,8 +164,8 @@ beyond one lifetime; Even or odd reached a 100% benchmark by generation ~3 in Tu
   level-up: "Harder test: a score drop is expected (the brain did not forget)".
 
 ## Think time (Oct 27 2026)
-- THINKING is now per contest (`contest.trial.thinkMs`, `trialOf(C)`): Word completion 900 ms (was 700; raised 2026-11-05 for more integration time; was 300 at the first lengthening), Smallest
-  divisor 500, Simon 400; shown in the stage phase bar ("THINKING 900ms") and the Lab caption.
+- THINKING is now per contest (`contest.trial.thinkMs`, `trialOf(C)`): Word completion 1100 ms (was 700; raised 2026-11-05 for more integration time; was 300 at the first lengthening), Smallest
+  divisor 500, Simon 400; shown in the stage phase bar ("THINKING 1100ms") and the Lab caption.
 - Measured, full 643-word level trained directly, 300-item seeded probe (`T_thinkMs=… PROBE=5 PROBEN=300 node
   tests/learn.mjs text 5000 1 2800 1000`), seeds 1/2/3:
   | think | 1k | 2k | 3k | 4k | 5k trials | mean at 4k–5k |
@@ -417,3 +417,8 @@ evochoice (`PLAT=0|8 ABL=0 node tests/evochoice.mjs <contest> 10 4`, seed 12345,
 | text    | champ 40%, full 12%, 0 reaps | champ 38%, full 14%, 1 reap |
 | pong    | champ 48%, 0 reaps           | champ 44% -> 28% after a plateau crown (best kept 44%) -> excluded |
 Next: repeat on 3+ seeds before trusting the effect; add the like-for-like Limited-reflex baseline (brain silenced).
+
+## 2026-11-07: Word Completion THINKING 900 → 1100 ms
+Day-10 (seed 1106) full-task text stayed below the position-frequency prior (11% vs 25%) even at 900 ms. Bumped
+integration to **1100 ms** so the next evolution pass has more time for the association → answer readout before ACCEPT.
+Lab / stage pick it up via `trialOf(C)`.

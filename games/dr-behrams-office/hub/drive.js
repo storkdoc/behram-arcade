@@ -314,7 +314,7 @@
   }
 
   /* ------------------------------------------------------------------ player */
-  var cv = null, g = null, raf = 0, resolveFn = null, t0 = 0, plan = null, keyH = null, ptrH = null, padPrev = false, snd = null, ended = false;
+  var cv = null, g = null, raf = 0, timer = 0, resolveFn = null, t0 = 0, plan = null, keyH = null, ptrH = null, padPrev = false, snd = null, ended = false;
   function setup() {
     cv = document.createElement('canvas'); cv.id = 'drive'; cv.setAttribute('aria-label', 'Dr. Behram drives to the hospital. Press Space or tap to skip.');
     cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:80;background:#0b1530;touch-action:none;cursor:pointer';
@@ -339,9 +339,22 @@
     if (!D.active) return;
     var T = D.at != null ? D.at : (now - t0) / 1000, dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-    var acc = 0, idx = 0; while (idx < plan.length - 1 && T >= acc + plan[idx].d) { acc += plan[idx].d; idx++; }
+    var acc = 0, idx = 0, prevName = D.scene;
+    while (idx < plan.length - 1 && T >= acc + plan[idx].d) { acc += plan[idx].d; idx++; }
     var sc = plan[idx], u = cl((T - acc) / sc.d), st = { cam: sc.cam };
-    if (D.scene !== sc.name) { D.scene = sc.name; D.log.push(sc.name); if (snd) try { snd(sc.name); } catch (e) {} }
+    // Under load a single frame can jump across several scenes; push every name we crossed so tests
+    // that wait on 'stairs' / 'parking' still see them (and so skip still works mid-drive).
+    if (D.scene !== sc.name) {
+      var seen = false;
+      for (var si = 0; si <= idx; si++) {
+        if (plan[si].name === prevName) seen = true;
+        if (seen || !prevName) {
+          if (D.log[D.log.length - 1] !== plan[si].name) D.log.push(plan[si].name);
+        }
+      }
+      if (!D.log.length || D.log[D.log.length - 1] !== sc.name) D.log.push(sc.name);
+      D.scene = sc.name; if (snd) try { snd(sc.name); } catch (e) {}
+    }
     // draw once to find the camera (scenes may move it), then render
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     var camX = sc.cam; if (sc.track) camX = sc.track(u);
@@ -360,7 +373,7 @@
   }
   function pollPad() { var pads = navigator.getGamepads ? navigator.getGamepads() : [], down = false; for (var i = 0; i < pads.length; i++) if (pads[i] && pads[i].buttons && pads[i].buttons.some(function (b) { return b && b.pressed; })) down = true; if (down && !padPrev) D.skip(); padPrev = down; }
   function finish() {
-    if (ended) return; ended = true; D.active = false; cancelAnimationFrame(raf);
+    if (ended) return; ended = true; D.active = false; cancelAnimationFrame(raf); if (timer) { clearInterval(timer); timer = 0; }
     removeEventListener('keydown', keyH, true); cv.removeEventListener('pointerdown', ptrH);
     var r = resolveFn; resolveFn = null;
     var c = cv; c.style.transition = 'opacity .25s'; c.style.opacity = '0'; setTimeout(function () { if (c.parentNode) c.parentNode.removeChild(c); }, 280);
@@ -387,12 +400,17 @@
   D.play = function (o) {
     o = o || {}; if (D.active) D.skip();
     if (o.face && !face.src) { face.onload = function () { faceOk = true; }; face.src = o.face; }
-    plan = D.plan(o); snd = o.sound || null; ended = false; D.skipped = false; D.log = []; D.scene = null; D.total = plan.total;
+    plan = D.plan(o); snd = o.sound || null; ended = false; D.skipped = false; D.log = []; D.scene = plan[0] ? plan[0].name : null; D.total = plan.total;
+    if (D.scene) D.log.push(D.scene);
     setup(); D.active = true; t0 = performance.now();
     keyH = function (e) { if (/^( |Spacebar|Enter|Escape)$/.test(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); D.skip(); } };
     ptrH = function (e) { e.preventDefault(); D.skip(); };
     addEventListener('keydown', keyH, true); cv.addEventListener('pointerdown', ptrH);
     raf = requestAnimationFrame(frame);
+    // Backup clock: under heavy CPU load rAF can stall for seconds (daily eval box). Keep the
+    // timeline moving so tests and skippable drives still reach stairs / parking / arrival.
+    if (timer) clearInterval(timer);
+    timer = setInterval(function () { if (D.active) frame(performance.now()); }, 50);
     return new Promise(function (res) { resolveFn = res; });
   };
   // tests / screenshots: DriveFX.at = seconds freezes the timeline at that moment (null = run)

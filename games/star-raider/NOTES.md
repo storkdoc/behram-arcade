@@ -116,3 +116,8 @@
 - page.test.mjs chromium touch devices (iphone, iphone-land, ipad) 69/69, webkit all devices 95/95.
 - mp.test.mjs chromium 60/60, webkit 60/60 (war: lobby, code join, orders, build, jam/ECCM, wire privacy, duel, wins, rematch, forfeit; co-op).
 
+## 2026-11-07: Pilot survivability (not combat) nudge
+Daily sim: sloppy bot (sk 0.35) was winning Pilot only ~17% (assert ≥30%) while sharp stayed at 100%. Combat knobs
+(aimErr / fireMul / plasmaV / move / siege) left alone — those also dropped sharp below 90% when eased earlier today.
+Instead: hitE 100→88, bareKill 0.15→0.1, leakE 600→480 so a messy pilot survives the hits they take. Warrior /
+Commander / WAR-pinned Pilot combat values unchanged.

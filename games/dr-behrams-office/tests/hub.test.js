@@ -50,10 +50,11 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
     }
     // keyboard: arrows + Space walk into the selected room (desktop); tap on touch
     if (dev === 'desktop') {
-      await pg.evaluate(() => { HUB.noNavigate = true; }); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press(' '); await pg.waitForTimeout(300);
+      await pg.evaluate(() => { HUB.noNavigate = true; }); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press('ArrowRight'); await pg.keyboard.press(' ');
       ok(await pg.evaluate(() => HUB.went) === 'surgery', 'desktop: arrows + SPACE pick the operating room');
-      ok(await pg.evaluate(() => DriveFX.active && DriveFX.scene === 'office'), 'desktop: the OR is at the hospital: the drive starts in Dr. Behram\'s office');
-      await pg.waitForFunction(() => DriveFX.log.indexOf('stairs') >= 0, null, { timeout: 4000 }); ok(true, 'desktop: drive goes down the stairs');
+      await pg.waitForFunction(() => window.DriveFX && DriveFX.active && DriveFX.scene === 'office', null, { timeout: 8000 });
+      ok(true, 'desktop: the OR is at the hospital: the drive starts in Dr. Behram\'s office');
+      await pg.waitForFunction(() => DriveFX.log.indexOf('stairs') >= 0, null, { timeout: 8000 }); ok(true, 'desktop: drive goes down the stairs');
       await pg.keyboard.press(' '); await pg.waitForTimeout(100);
       ok(await pg.evaluate(() => !DriveFX.active && DriveFX.skipped && sessionStorage.getItem('drbo.away') === 'surgery'), 'desktop: SPACE skips the drive');
       ok(await pg.evaluate(() => { var P = DriveFX.plan({ dir: 'to', dest: 'triage' }), E = DriveFX.plan({ dir: 'to', dest: 'triage', express: true }), B = DriveFX.plan({ dir: 'back' });
