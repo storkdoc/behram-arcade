@@ -174,6 +174,18 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
     'reload restores queue and favorites and does not recreate the player until Play', s);
   check(await D.evaluate(() => JUKE.player.report().configuredHost) === 'https://www.youtube.com', 'reloaded page is still configured for www.youtube.com');
 
+  console.log('== second Play retries when YouTube has not started');
+  const N = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock&ytnoauto=1');
+  await N.click('.song');
+  await N.click('#btnPlay');
+  await N.waitForTimeout(60);
+  let stuck = await N.evaluate(() => ({ mode: JUKE.S.mode, state: JUKE.player.state(), hold: JUKE.player.hold, loads: JUKE.player.stats.loads.length }));
+  check(stuck.mode === 'loading' && stuck.state === -1 && stuck.hold === false && stuck.loads === 1, 'first Play loads the video and leaves it unstarted', stuck);
+  await N.click('#btnPlay');
+  await N.waitForTimeout(40);
+  stuck = await N.evaluate(() => ({ mode: JUKE.S.mode, state: JUKE.player.state(), hold: JUKE.player.hold, constructs: JUKE.player.stats.constructs }));
+  check(stuck.mode === 'playing' && stuck.state === 1 && stuck.hold === false && stuck.constructs === 1, 'second Play starts the song instead of pausing', stuck);
+
   console.log('== unavailable video (test player)');
   const U = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock');
   const ids = await U.evaluate(() => [0, 1].map(i => document.querySelectorAll('.song')[i].dataset.id));
@@ -253,9 +265,18 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   if (!process.env.NO_REAL_YT) {
     console.log('== REAL YouTube player, first load vs reload');
     const R = await open({ viewport: { width: 1280, height: 800 }, userAgent: UA });
-    const before = await R.evaluate(() => document.querySelectorAll('iframe').length);
-    check(before === 0, 'real page has no iframe until Play');
-    await R.click('.song');
+    const playability = [];
+    R.on('response', r => {
+      if (!r.url().includes('/youtubei/v1/player')) return;
+      r.text().then(t => {
+        playability.push({
+          status: (t.match(/"playabilityStatus":\{"status":"([A-Z_]+)"/) || [])[1] || '',
+          reason: (t.match(/"reason":"((?:\\.|[^"\\]){0,160})"/) || [])[1] || ''
+        });
+      }).catch(() => {});
+    });
+    const before = await R.evaluate(() => ({ iframes: document.querySelectorAll('iframe').length, loads: JUKE.player.stats.loads.slice(), mode: JUKE.S.mode }));
+    check(before.mode === 'idle' && before.loads.length === 0, 'no video plays on load', before);
     await R.click('#btnPlay');
     let frame = false;
     try { await R.waitForSelector('#ytWell iframe', { timeout: 20000 }); frame = true; } catch (e) { frame = false; }
@@ -273,6 +294,15 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
       check(first.rep.configuredHost === 'https://www.youtube.com' && /^www\.youtube\.com/.test(first.rep.src || ''), 'first Play embed host is www.youtube.com', first.rep.src);
       check(!/nocookie/.test(first.rep.src || '') && first.rep.sandbox == null && first.rep.credentialless !== true, 'first Play is not nocookie, sandboxed, or credentialless', { sandbox: first.rep.sandbox, credentialless: first.rep.credentialless, query: first.rep.query });
       check(first.rep.constructs === 1 && first.w >= 280 && first.h >= 160 && !first.covered, 'first Play is one visible uncovered player', { constructs: first.rep.constructs, w: first.w, h: first.h, covered: first.covered });
+      let heard = false; let lastPlay = null;
+      for (let i = 0; i < 6 && !heard; i++) {
+        lastPlay = await R.evaluate(() => ({ state: JUKE.player.state(), time: JUKE.player.time(), mode: JUKE.S.mode, status: document.getElementById('status').textContent, loads: JUKE.player.stats.loads.slice() }));
+        if (lastPlay.state === 1 && lastPlay.time > 0.4) heard = true;
+        else if (lastPlay.mode === 'error') break;
+        else await R.waitForTimeout(1000);
+      }
+      if (heard) check(true, 'real player reached playing with the clock moving', lastPlay);
+      else warn('YouTube did not start playback in this environment', { lastPlay, playability });
       const adsFirst = R.ads.slice();
       await R.click('.song >> nth=1');
       await R.evaluate(() => { window.__frame = document.querySelector('#ytWell iframe'); });
@@ -287,8 +317,8 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
 
       await R.reload({ waitUntil: 'load' });
       await R.waitForTimeout(400);
-      const idle = await R.evaluate(() => ({ iframes: document.querySelectorAll('iframe').length, mode: JUKE.S.mode, constructs: JUKE.player.stats.constructs }));
-      check(idle.iframes === 0 && idle.mode === 'idle' && idle.constructs === 0, 'reload does not autoplay or build a player', idle);
+      const idle = await R.evaluate(() => ({ loads: JUKE.player.stats.loads.slice(), mode: JUKE.S.mode, constructs: JUKE.player.stats.constructs }));
+      check(idle.mode === 'idle' && idle.loads.length === 0, 'reload does not start a video', idle);
       const adsBeforeReplay = R.ads.length;
       await R.click('#btnPlay');
       let again = false;
@@ -309,6 +339,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
         console.log('  AD-PROBE after-reload requests', [...new Set(R.ads.slice(adsBeforeReplay))]);
         console.log('  AD-PROBE query first', JSON.stringify(first.rep.query), 'reload', JSON.stringify(third.query));
         console.log('  AD-PROBE referrer', first.rep.referrerPolicy, third.referrerPolicy, 'allow', first.rep.allow);
+        console.log('  PLAYABILITY', JSON.stringify(playability));
       }
     }
     check(R.errs.length === 0, 'real player: no console errors from the cabinet', R.errs);

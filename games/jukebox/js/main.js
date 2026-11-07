@@ -46,13 +46,19 @@
   const player = mock
     ? new YT.Mock('ytHost', { onReady, onState, onError, onFail }, {
       fail: (params.get('ytfail') || '').split(',').filter(Boolean),
-      apiFail: params.has('ytapifail')
+      apiFail: params.has('ytapifail'),
+      noauto: params.has('ytnoauto')
     })
     : new YT.Real('ytHost', { onReady, onState, onError, onFail });
   player.setVolume(S.vol);
   player.mute(S.muted);
 
-  function onReady() { syncNote(); }
+  function onReady() {
+    const idle = $('ytIdle');
+    if (idle) idle.hidden = true;
+    if (S.mode === 'idle' && !player.currentId) setStatus('Press Play to start. Nothing plays until you do.');
+    syncNote();
+  }
   function onFail() { syncNote(); setStatus("YouTube didn't load. Check the connection, then press Play to try again."); }
   function syncNote() {
     if (player.status === 'failed') setStatus("YouTube didn't load, so there's no music yet. It needs a connection that allows youtube.com.");
@@ -163,12 +169,12 @@
   }
 
   function pausePlayback() {
-    if (S.mode === 'playing' || S.mode === 'loading') {
-      player.pause();
-      setMode('paused');
-      setStatus('Paused');
-      syncChrome();
-    }
+    const active = S.mode === 'playing' || S.mode === 'loading' || player.state() === 1;
+    if (!active) return;
+    setStatus('Paused');
+    player.pause();
+    setMode('paused');
+    syncChrome();
   }
 
   function resumePlayback() {
@@ -181,9 +187,8 @@
 
   function highlightedSongId() {
     const el = S.hl;
-    if (!el) return null;
-    if (el.dataset.act === 'add' || el.dataset.act === 'fav') return el.dataset.id || null;
-    return null;
+    if (el && (el.dataset.act === 'add' || el.dataset.act === 'fav') && el.dataset.id) return el.dataset.id;
+    return S.songPick || null;
   }
 
   function userPlayPause() {
@@ -191,8 +196,20 @@
     S.stickyStatus = false;
     sfx.unlock();
     if (S.overlay) { closeOverlay(true); return; }
-    if (S.mode === 'playing' || S.mode === 'loading') { pausePlayback(); return; }
-    if (S.mode === 'paused') { resumePlayback(); return; }
+    const st = player.state();
+    /* Only an actually playing video should pause. A second Play while YouTube
+       is still unstarted or buffering is another user gesture, so retry there. */
+    if (st === 1) { pausePlayback(); return; }
+    if (S.mode === 'paused' && st === 2) { resumePlayback(); return; }
+    if ((S.mode === 'loading' || S.mode === 'paused') && currentSong()) {
+      $('ytIdle').hidden = true;
+      setMode('loading');
+      setStatus(st === -1 || st === 5 ? 'Press Play again if the song has not started.' : 'Loading from YouTube…');
+      if (player.ready() && player.currentId === currentSong().yt) player.resume();
+      else player.play(currentSong().yt);
+      syncChrome();
+      return;
+    }
     if (S.mode === 'error') {
       const song = currentSong();
       if (song) S.bad.delete(song.yt);
@@ -559,6 +576,7 @@
     S.hl = el || null;
     if (!S.hl) return;
     S.hlKey = S.hl.dataset.k || '';
+    if ((S.hl.dataset.act === 'add' || S.hl.dataset.act === 'fav') && S.hl.dataset.id) S.songPick = S.hl.dataset.id;
     if (opts.show !== false) S.hl.classList.add('hl');
     if (opts.focus !== false && document.activeElement !== S.hl) {
       focusing = true;
@@ -755,9 +773,12 @@
   syncChrome();
   setMode('idle');
   const firstSong = document.querySelector('.song');
-  if (firstSong) S.hl = firstSong;
+  if (firstSong) { S.hl = firstSong; S.songPick = firstSong.dataset.id; }
   else S.hl = $('btnPlay');
   S.hlKey = S.hl ? (S.hl.dataset.k || '') : '';
+  /* Real player only. The shell loads with the page so Play can start the song
+     inside the click. Mock tests stay lazy so they still begin with no player. */
+  if (!mock) player.ensure();
 
   window.JUKE = {
     S, Q, player, favorites: () => favorites.slice(),

@@ -13,9 +13,11 @@
    still starts a new document; the configuration here is the same every time,
    and nothing in this cabinet clears site data to chase a different ad decision.
 
-   The player is not created at page load, and nothing is passed as autoplay.
-   Ads, if any, stay YouTube's decision. Controls stay on. The iframe is not
-   hidden, covered, or replaced with an audio-only element. */
+   The player shell is created when the IFrame API is ready so that Play can call
+   loadVideoById or playVideo inside the click. No video id is loaded, and nothing
+   is passed as autoplay, until that explicit Play. Ads, if any, stay YouTube's
+   decision. Controls stay on. The iframe is not hidden, covered, or replaced
+   with an audio-only element. */
 (function (root) {
   'use strict';
   const API = 'https://www.youtube.com/iframe_api';
@@ -300,6 +302,9 @@
       }, 40);
       return;
     }
+    /* noauto: the video is loaded but left unstarted, the way a browser blocks
+       play that happens outside a user gesture. resume()/playVideo starts it. */
+    if (this.opts.noauto) { this._set(-1); return; }
     this._timer = setTimeout(() => {
       if (self.currentId === id && !self.hold) self._set(1);
     }, 20);
