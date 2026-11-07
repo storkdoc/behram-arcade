@@ -133,6 +133,32 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   await D.waitForTimeout(80);
   s = await snap(D);
   check(s.mode === 'playing' && s.constructs === 1 && s.loads.length === 1 && s.idleHidden, 'Space plays on the one player and hides the idle caption', s);
+  const viz = await D.evaluate(() => {
+    const panel = document.getElementById('vizPanel').getBoundingClientRect();
+    const well = document.getElementById('ytWell').getBoundingClientRect();
+    const overlap = !(panel.bottom <= well.top + 1 || panel.top >= well.bottom - 1 || panel.right <= well.left + 1 || panel.left >= well.right - 1);
+    const spin = getComputedStyle(document.getElementById('vinyl'));
+    const inside = document.getElementById('vizPanel').querySelector('#ytWell, iframe');
+    return {
+      overlap, inside: !!inside, note: document.getElementById('vizNote').textContent,
+      mode: document.body.dataset.mode, decade: document.body.dataset.decade,
+      anim: spin.animationName, play: spin.animationPlayState,
+      wellH: Math.round(well.height), panelH: Math.round(panel.height)
+    };
+  });
+  check(!viz.overlap && !viz.inside && viz.wellH >= 160 && viz.panelH >= 120, 'visualizer sits beside the player and does not cover it', viz);
+  check(/not the song/.test(viz.note) && viz.mode === 'playing' && viz.anim === 'spin-record' && viz.play === 'running' && viz.decade === '70s', 'playing spins the record for the song decade; copy does not claim a waveform', viz);
+  await D.click('[data-viz="spectrum"]');
+  const bars = await D.evaluate(() => {
+    const look = document.getElementById('vizPanel').dataset.look;
+    const platter = getComputedStyle(document.querySelector('.platter')).display;
+    const well = document.getElementById('ytWell').getBoundingClientRect();
+    return { look, platter, wellH: Math.round(well.height), mode: JUKE.S.mode };
+  });
+  check(bars.look === 'spectrum' && bars.platter === 'none' && bars.wellH >= 160 && bars.mode === 'playing', 'BARS changes only the light show; the player stays up', bars);
+  await D.click('[data-viz="vinyl"]');
+  check(await D.evaluate(() => getComputedStyle(document.getElementById('vizCanvas')).display === 'none' && document.getElementById('ytWell').getBoundingClientRect().height >= 160), 'VINYL hides the bars, not the YouTube well');
+  await D.click('[data-viz="cabinet"]');
   const box = await clearOfCover(D);
   check(box.w >= 280 && box.h >= 160 && box.hits.every(Boolean) && box.idleHidden && !box.hidden && box.frameDisplay !== 'none' && Number(box.frameOpacity) > 0.9,
     'player is large, visible, and not covered', box);
@@ -216,6 +242,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   s = await snap(M);
   const mb = await clearOfCover(M);
   check(s.mode === 'playing' && mb.h >= 140 && mb.w >= 200 && mb.hits.every(Boolean) && mb.idleHidden && !mb.hidden, 'phone: tap plays a visible uncovered player', { s, mb });
+  check(await M.evaluate(() => { const a = document.getElementById('vizPanel').getBoundingClientRect(), b = document.getElementById('ytWell').getBoundingClientRect(); return a.bottom <= b.top + 1; }), 'phone: visualizer is above the player, not on top of it');
   check(!(await overflow(M)), 'phone playing: no horizontal overflow');
   await M.tap('#btnHelp');
   check(await M.locator('#help').isVisible() && /SPACE/.test(await M.textContent('#help')), 'help opens');
@@ -237,7 +264,7 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
 
   console.log('== gamepad + reduced motion');
   const G = await open({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' }, '?yt=mock');
-  check(await G.evaluate(() => getComputedStyle(document.querySelector('.logo')).animationName) === 'none', 'reduced motion turns the neon flicker off');
+  check(await G.evaluate(() => getComputedStyle(document.querySelector('.logo')).animationName === 'none' && getComputedStyle(document.getElementById('vinyl')).animationName === 'none'), 'reduced motion turns the neon flicker and the record spin off');
   await G.evaluate(() => {
     const btns = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
     window.__pad = { id: 'test', connected: true, buttons: btns, axes: [0, 0, 0, 0], mapping: 'standard' };

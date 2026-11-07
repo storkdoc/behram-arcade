@@ -6,6 +6,7 @@ const NTG = require(path.join(__dirname, '..', '..', 'name-that-groove', 'js', '
 const C = require(path.join(__dirname, '..', 'js', 'catalog.js'));
 const Queue = require(path.join(__dirname, '..', 'js', 'queue.js'));
 const Player = require(path.join(__dirname, '..', 'js', 'player.js'));
+const Viz = require(path.join(__dirname, '..', 'js', 'viz.js'));
 
 let fails = 0;
 const check = (ok, msg, extra) => { if (!ok) fails++; console.log(ok ? '  PASS' : '  FAIL', msg, extra === undefined ? '' : JSON.stringify(extra)); };
@@ -43,6 +44,23 @@ check(C.SONGS.every(s => s.title && s.artist && s.genre), 'every song has a titl
 check(/YouTube/.test(C.SOURCE_NOTE) && /ads/.test(C.SOURCE_NOTE), 'source note says YouTube controls ads');
 check(/Premium/.test(C.PREMIUM_NOTE) && /Music Premium/.test(C.PREMIUM_NOTE) && !/ad-free|ad free/i.test(C.PREMIUM_NOTE), 'premium note is honest and does not promise ad-free');
 check(C.PREMIUM_URL === 'https://support.google.com/youtube/answer/7437519', 'premium note points at YouTube\'s own help page');
+
+console.log('== ambient visualizer (not audio-reactive)');
+{
+  const spread = a => Math.max.apply(null, a) - Math.min.apply(null, a);
+  const play = Viz.levels(1200, 'playing', 24);
+  const pause = Viz.levels(1200, 'paused', 24);
+  const idle = Viz.levels(1200, 'idle', 24);
+  check(play.length === 24 && spread(play) > 0.25, 'playing lights vary', spread(play));
+  check(spread(pause) < 0.02 && pause.every(x => x < 0.25), 'paused lights rest low and even', pause[0]);
+  check(idle.every(x => x < pause[0]), 'idle is quieter than pause', idle[0]);
+  check(JSON.stringify(Viz.levels(40, 'playing')) === JSON.stringify(Viz.levels(40, 'playing')), 'the same moment draws the same lights');
+  check(JSON.stringify(Viz.levels(40, 'playing')) !== JSON.stringify(Viz.levels(900, 'playing')), 'playing lights move over time');
+  check(Viz.levels(900, 'paused').every((x, i) => x === Viz.levels(10, 'paused')[i]), 'paused lights do not keep dancing');
+  check(/not the song/.test(Viz.NOTE) && Viz.MODES.join() === 'cabinet,vinyl,spectrum', 'the visualizer says it follows play state, and has three looks');
+  const vizSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'viz.js'), 'utf8');
+  check(!/AnalyserNode|createMediaElementSource|captureStream|getUserMedia|AudioContext/.test(vizSrc), 'the visualizer does not tap microphone, YouTube, or an audio graph');
+}
 
 console.log('== queue');
 {
@@ -187,7 +205,7 @@ FakePlayer.prototype.destroy = function () { this.destroyed = true; };
   check(p.time() === 12, 'time comes from the official player');
 
   const root = path.join(__dirname, '..');
-  const src = ['js/player.js', 'js/main.js', 'js/queue.js', 'js/catalog.js', 'index.html', 'style.css'].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+  const src = ['js/player.js', 'js/main.js', 'js/queue.js', 'js/catalog.js', 'js/viz.js', 'index.html', 'style.css'].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
   check(!/youtube-nocookie/.test(src), 'source never names the privacy-enhanced host');
   check(!/document\.cookie|skipAd|cancelAd|\badblock\b|googlevideo|\.mp3|\.m4a/i.test(src), 'no cookie access, ad tampering, or rehosted audio');
   check(!/\.destroy\s*\(/.test(src), 'cabinet code never destroys the player');
