@@ -25,6 +25,10 @@ const audioSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'audio.js'), '
 check(!/playArrangement/.test(audioSrc), 'audio.js only does UI sound effects');
 const ytSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'yt.js'), 'utf8');
 check(/https:\/\/www\.youtube\.com\/iframe_api/.test(ytSrc) && !/googlevideo|\.mp3|\.m4a|adblock|skipAd|cancelAd/i.test(ytSrc), 'music only through the official IFrame API; no media URLs and no ad tampering');
+check(/host:\s*'https:\/\/www\.youtube\.com'/.test(ytSrc) && !/host:\s*['"]https:\/\/www\.youtube-nocookie\.com['"]|youtube-nocookie\.com\/embed|credentialless|sandbox\s*=/i.test(ytSrc), 'player host is www.youtube.com so a same-browser YouTube session can be sent; nocookie embed, credentialless and sandbox are not used');
+const page = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+check(/support\.google\.com\/youtube\/answer\/7437519/.test(page) && /YouTube Premium/.test(page) && /YouTube Music Premium/.test(page) && /same browser/.test(page) && /cookies for youtube\.com/.test(page), 'troubleshooting copy: same-browser YouTube Premium, not Music Premium alone, and youtube.com cookies');
+check(!/ad-free|without ads|no ads|skip(?:ping)? ads|block ads/i.test(page + ytSrc), 'copy does not promise ad-free playback or any ad tampering');
 
 console.log('== decade modes + question generation');
 const MODES = ['70s', '80s', '90s', 'all'], DIFFS = ['easy', 'normal', 'hard'];
