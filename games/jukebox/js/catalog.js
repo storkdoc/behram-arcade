@@ -1,44 +1,66 @@
-/* JUKEBOX catalog — real 1970s, 1980s and 1990s hits.
-   Every video id is the original official / artist / label upload already stored on
-   Name That Groove (field `yt` in games/name-that-groove/js/catalog.js). That file
-   records the 2026-11-06 check: public, not age-restricted, YouTube reported
-   "playable in embed", oEmbed returned 200, and the IFrame API played it.
-   Instrumental and karaoke ids (`iyt`) belong to the quiz and are not used here.
-   This file invents no ids, titles, artists or years. */
+/* JUKEBOX catalog helpers. Song rows come from data/catalog.json, built from the
+   Apple iTunes Search API. This file does not invent recordings. */
 (function (root) {
   'use strict';
-  function source() {
-    if (root.NTG_Catalog && root.NTG_Catalog.SONGS) return root.NTG_Catalog;
-    if (typeof require === 'function') {
-      try { return require('../../name-that-groove/js/catalog.js'); } catch (e) { /* opened as a page, or the quiz catalog moved */ }
-    }
-    return null;
+  const COURTESY = '30-second previews provided courtesy of iTunes.';
+  const SOURCE = 'Apple iTunes Search API';
+
+  function decadeOf(year) {
+    if (year >= 1970 && year <= 1979) return '70s';
+    if (year >= 1980 && year <= 1989) return '80s';
+    if (year >= 1990 && year <= 1999) return '90s';
+    return '';
   }
-  const N = source();
-  if (!N) throw new Error('Jukebox catalog needs the Name That Groove catalog');
 
-  const SONGS = N.SONGS.map(s => ({
-    id: s.id, decade: s.decade, year: s.year, title: s.title, artist: s.artist, genre: s.genre, yt: s.yt
-  }));
-  const BY = {};
-  SONGS.forEach(s => { BY[s.id] = s; });
+  function accept(s) {
+    if (!s || typeof s !== 'object') return false;
+    const year = s.year;
+    const decade = decadeOf(year);
+    if (!decade || s.decade !== decade) return false;
+    if (!/^\d{5,12}$/.test(String(s.id))) return false;
+    if (!s.title || !s.artist) return false;
+    if (!/^https:\/\/audio(?:-ssl)?\.itunes\.apple\.com\//.test(s.preview || '')) return false;
+    if (!/^https:\/\/(?:music|itunes)\.apple\.com\//.test(s.store || '')) return false;
+    return true;
+  }
 
-  const DECADES = ['70s', '80s', '90s'];
-  const DECADE_INFO = {
-    '70s': { label: "'70s", long: 'The Seventies' },
-    '80s': { label: "'80s", long: 'The Eighties' },
-    '90s': { label: "'90s", long: 'The Nineties' },
-    all: { label: 'ALL', long: 'All decades' },
-    fav: { label: 'FAVES', long: 'Your favorites' }
-  };
-  const TABS = ['70s', '80s', '90s', 'all', 'fav'];
-  const SOURCE_NOTE = "Songs play in full in YouTube's own player. YouTube controls availability and any ads.";
-  const PREMIUM_NOTE = 'YouTube chooses whether an ad plays. YouTube Premium can apply to embedded videos when you are signed in to YouTube in this same browser and cookies for [*.]youtube.com are allowed. YouTube Music Premium alone does not cover videos. Info cards can still appear. This jukebox does not hide the player and cannot turn ads off.';
-  const PREMIUM_URL = 'https://support.google.com/youtube/answer/7437519';
+  function prepare(songs) {
+    const out = [];
+    const ids = new Set();
+    (songs || []).forEach(s => {
+      if (!accept(s) || ids.has(String(s.id))) return;
+      ids.add(String(s.id));
+      s._q = norm(s.title + ' ' + s.artist + ' ' + (s.album || ''));
+      out.push(s);
+    });
+    return out;
+  }
 
-  const byId = id => BY[id] || null;
-  const songsFor = mode => (mode === 'all' || mode === 'fav') ? SONGS.slice() : SONGS.filter(s => s.decade === mode);
-  const api = { SONGS, DECADES, DECADE_INFO, TABS, byId, songsFor, SOURCE_NOTE, PREMIUM_NOTE, PREMIUM_URL };
+  function norm(s) {
+    return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function query(songs, opts) {
+    opts = opts || {};
+    const decade = opts.decade || 'all';
+    const favs = opts.favs;
+    const q = norm(opts.q);
+    const out = [];
+    for (let i = 0; i < songs.length; i++) {
+      const s = songs[i];
+      if (decade === 'fav') {
+        if (!favs || !favs.has(String(s.id))) continue;
+      } else if (decade !== 'all' && s.decade !== decade) continue;
+      if (q) {
+        if (!s._q) s._q = norm(s.title + ' ' + s.artist + ' ' + (s.album || ''));
+        if (s._q.indexOf(q) < 0) continue;
+      }
+      out.push(s);
+    }
+    return out;
+  }
+
+  const api = { COURTESY, SOURCE, decadeOf, accept, prepare, query, norm };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.JukeCatalog = api;
 })(typeof window !== 'undefined' ? window : globalThis);

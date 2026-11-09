@@ -1,4 +1,4 @@
-/* JUKEBOX cabinet clicks only. The songs come from YouTube's player, not from here. */
+/* JUKEBOX cabinet clicks only. Previews play through audio.js. */
 (function (root) {
   'use strict';
   function Sfx() { this.ctx = null; this.muted = false; }

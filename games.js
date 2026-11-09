@@ -8,14 +8,14 @@ window.ARCADE_GAMES = [
     slug: 'jukebox',
     title: 'JUKEBOX',
     marquee: 'chrome',
-    tagline: "A chrome-and-neon diner cabinet of real '70s, '80s and '90s hits, with an ambient light show around YouTube's own visible player.",
-    description: "A listening jukebox, separate from Name That Groove. Decade tabs, title strips and a queue for real hits from 1970 to 1999 — the same official artist and label videos used by the quiz, played here as full songs rather than instrumental clips. Add, remove and reorder the queue, save favorites on this device, and use play, pause, previous, next, shuffle, repeat and volume. Nothing starts until you press Play. The YouTube player stays on screen with its own controls; this cabinet does not hide it, cover it, or play audio-only. YouTube decides whether a video is available and whether an ad runs. YouTube Premium can apply when you are signed in to YouTube in this same browser. If a video will not embed, the cabinet says so and Next moves on.",
+    tagline: "A chrome-and-neon diner cabinet of '70s, '80s and '90s hits. 30-second previews courtesy of iTunes, with a visualizer drawn from the audio.",
+    description: "A listening jukebox, separate from Name That Groove. Search or pick a decade, queue real 1970-1999 recordings, and play a 30-second preview streamed from Apple. Each preview is labeled and links to its iTunes listing. Provided courtesy of iTunes. The light show reads that preview with the Web Audio analyser: bars, waveform, a radial ring, or sparks. Nothing starts until you press Play. Favorites and the queue stay on this device. If a preview will not load, Next tries another song.",
     thumb: 'games/jukebox/thumb.png',
     added: '2026-11-07',
     genre: 'MUSIC',
     year: "'70s-'90s",
     controls: 'SPACE play/pause · ENTER adds the highlighted song (or presses the highlighted button) · arrows move · N next · P or Esc pause menu · M mute · S shuffle · R cycle repeat · F favorite · gamepad: A play/pause, X add or press, Y favorite, d-pad move, LB/RB previous/next, Start pause menu, B close',
-    touch: 'tap a title strip to add it, tap the heart for a favorite, tap PLAY · up and down reorder the queue · the YouTube player stays on screen, and a phone may need one tap on that player before sound starts · works on iPhone and iPad in portrait and landscape',
+    touch: 'tap a title strip to add it, tap the heart for a favorite, tap PLAY · up and down reorder the queue · the visualizer fills the cabinet · works on iPhone and iPad in portrait and landscape',
     accent: '#ffb020'
   },
   {
