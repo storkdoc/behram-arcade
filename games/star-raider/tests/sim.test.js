@@ -3,7 +3,7 @@
 const S = require('../js/sim.js'); global.SRSim = S; const A = require('../js/auto.js');
 const N = +process.argv[2] || 6, DT = 1 / 30;
 function play(diff, mission, seed, skill, maxT = 1500) {
-  const G = S.newGame({ diff, seed, mission }); const p = S.addPlayer(G, 0); const bot = A.make(skill);
+  const G = S.newGame({ diff, seed, mission }); const p = S.addPlayer(G, 0); const bot = A.make(skill, seed * 31 + 7);
   let fires = 0;
   while (!G.over && G.t < maxT) { const inp = bot(G, p, DT); fires += inp.fire | 0; S.stepWorld(G, [inp], DT); }
   if (!G.over) S.end(G, false, 'TIMEOUT');

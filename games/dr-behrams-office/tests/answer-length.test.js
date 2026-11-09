@@ -47,6 +47,9 @@ for (const q of tri) {
   ok(W[0] < Math.max(...W.slice(1)) || (W[0] === Math.max(...W.slice(1)) && Ch[0] < Math.max(...Ch.slice(1))), q.id + ': correct is not the longest option (words ' + W.join(',') + '; chars ' + Ch.join(',') + ')');
   ok(Ch[0] <= 1.1 * Math.max(...Ch.slice(1)), q.id + ': correct is within 110% of the longest distractor in characters');
 }
+// ...and not a 'pick the shortest' tell either: the correct option is the strict shortest by characters in at most ~2× chance.
+const triShort = tri.filter(q => q.opts[0].length < Math.min(...q.opts.slice(1).map(o => o.length))).length;
+ok(triShort <= 3, 'OB Triage: correct is the strict shortest (chars) in ' + triShort + '/' + tri.length + ' cases (≤3)');
 const triMain = fs.readFileSync(path.join(__dirname, '..', 'triage', 'js', 'main.js'), 'utf8');
 ok(tri.length === 14 && tri.every(q => q.nBest === 1 && q.opts.length >= 4 && q.opts.length <= 6), 'OB Triage: every case has exactly one best call among 4–6 options');
 ok(/G\.order = shuffleOpts\(c\.choice\.opts\.length, G\.seed\)/.test(triMain) && /G\.order\.forEach\(/.test(triMain), 'OB Triage: options render in a shuffled (case-seeded) order');

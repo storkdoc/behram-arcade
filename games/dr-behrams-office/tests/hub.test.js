@@ -4,6 +4,12 @@
 // SHOTS=<dir> saves screenshots.
 const { chromium } = require('playwright-core');
 const TP = require('../office/tests/testpin.js');
+// The return drive is short: if it ends while the tap is in flight the canvas detaches (or fades with <html> on top) and
+// Playwright retries forever. Tap only while the drive is still playing; either way wait for it to be over.
+async function skipDrive(pg) {
+  if (await pg.evaluate(() => window.DriveFX && DriveFX.active)) await pg.tap('#drive', { timeout: 2500 }).catch(() => {});
+  await pg.waitForFunction(() => !DriveFX.active, null, { timeout: 10000 });
+}
 const ROOT = process.argv[2] || 'http://localhost:8090', BASE = ROOT + '/games/dr-behrams-office/';
 const SHOTS = process.env.SHOTS || '';
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
@@ -72,12 +78,12 @@ const shown = (pg, s) => pg.evaluate(s => { const e = document.querySelector(s);
       await pg.tap('#drive'); await pg.waitForURL(/\/surgery\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the OR door drives to the hospital (tap skips) and opens Suture Self!');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
       await pg.waitForFunction(() => window.DriveFX && DriveFX.active && DriveFX.log[0] === 'leave-hospital', null, { timeout: 4000 }); ok(true, dev + ': coming back plays the drive back to the office');
-      await pg.tap('#drive'); await pg.waitForFunction(() => !DriveFX.active);
+      await skipDrive(pg);
       await pg.tap('.room[data-g="triage"]'); await pg.waitForFunction(() => window.DriveFX && DriveFX.active);
       ok(await pg.evaluate(() => DriveFX.total < 3), dev + ': second trip this session is the express drive');
       await pg.waitForURL(/\/triage\/$/, { timeout: 8000 }); ok(true, dev + ': tapping the L&D door drives to the hospital and opens OB Triage');
       await pg.goBack(); await pg.waitForFunction(() => window.HUB && HUB.booted);
-      await pg.waitForFunction(() => window.DriveFX && DriveFX.active, null, { timeout: 4000 }); await pg.tap('#drive'); await pg.waitForFunction(() => !DriveFX.active);
+      await pg.waitForFunction(() => window.DriveFX && DriveFX.active, null, { timeout: 4000 }); await skipDrive(pg);
     }
     ok(!pg.errs.length, dev + ': hub has no console errors ' + pg.errs.slice(0, 3).join(' | '));
     await ctx.close();

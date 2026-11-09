@@ -46,7 +46,7 @@
       choice: { q: "What’s your call for Hana?", hint: "Line up each dip with its contraction. Gradual or abrupt? Nadir with the peak or after it? And she’s 8 cm.", opts: [
         { t: "Admit to L&D for active labor", g: "best", why: "8 cm with ruptured membranes is active labor. The dips are early decelerations (gradual, nadir with the contraction peak): head compression, Category I. Admit, epidural if she wants it, routine care." },
         { t: "Discharge home: she is in latent labor", g: "harm", why: "8 cm and ruptured is active labor, possibly close to delivery. Never send this patient home." },
-        { t: "Amnioinfusion for cord compression", g: "wrong", why: "These are early decels (head compression), not variables. Amnioinfusion treats recurrent variables." },
+        { t: "Amnioinfusion via IUPC", g: "wrong", why: "These are early decels (head compression), not variables. Amnioinfusion treats recurrent variables." },
         { t: "Intrauterine resuscitation, then recheck", g: "meh", why: "Early decelerations are benign and need no resuscitation. Admit her." },
         { t: "Urgent cesarean for recurrent decels", g: "harm", why: "Early decels are Category I. No fetal indication for cesarean." },
         { t: "Terbutaline to space the contractions", g: "wrong", why: "Contractions every 3 minutes is normal labor, and the tracing is Category I." } ] },
@@ -66,7 +66,7 @@
         { t: "Cesarean delivery for recurrent lates", g: "wrong", why: "Moderate variability, and a reversible cause: resuscitate first. Most tachysystole-related lates resolve once oxytocin is off." },
         { t: "Amnioinfusion through an IUPC", g: "wrong", why: "Amnioinfusion treats variable decels (cord compression), not lates." },
         { t: "Continue current oxytocin and observe", g: "wrong", why: "Tachysystole with recurrent lates is not something to watch on the same dose." },
-        { t: "Scalp stimulation and observe", g: "meh", why: "Moderate variability already tells you she is not acidemic now. Fix the cause: the oxytocin." } ] },
+        { t: "Scalp stimulation only", g: "meh", why: "Moderate variability already tells you she is not acidemic now. Fix the cause: the oxytocin." } ] },
       debrief: { summary: 'Oxytocin-induced tachysystole (>5 contractions in 10 minutes averaged over 30) with recurrent late decelerations and moderate variability: Category II. Stopping oxytocin, lateral positioning and a fluid bolus let the uterus rest and the lates resolve over 10–20 minutes.',
         pearls: ['Tachysystole = >5 contractions per 10 min averaged over 30 min. Always say “with” or “without” FHR changes.', 'Late decels mean uteroplacental insufficiency: the nadir comes after the contraction peak.', 'Moderate variability is reassuring for now, but recurrent lates that persist will eventually take it away.', 'Restart oxytocin after resolution: if it was off <20–30 min, restart at no more than the prior rate (many protocols use half); if off longer, at the initial dose.'] } },
 
@@ -99,7 +99,7 @@
         { t: "Start oxytocin to speed delivery", g: "harm", why: "More contractions means more cord compression." },
         { t: "Terbutaline to stop contractions", g: "wrong", why: "There is no tachysystole; contractions are every 3 minutes." },
         { t: "Continue routine monitoring only", g: "wrong", why: "Recurrent variables need action, not routine checks." },
-        { t: "Operative vaginal delivery now", g: "harm", why: "She is 6 cm. Operative vaginal delivery requires full dilation." } ] },
+        { t: "Forceps delivery now", g: "harm", why: "She is 6 cm. Operative vaginal delivery requires full dilation." } ] },
       debrief: { summary: 'Recurrent variable decelerations (abrupt, deep, V- and U-shaped, some with shoulders) after AROM with scant fluid: cord compression. Moderate variability: Category II. Position change, rule out prolapse, then amnioinfusion.',
         pearls: ['Variable = abrupt: <30 s from onset to nadir, ≥15 bpm, ≥15 s, <2 min.', 'Recurrent = with ≥50% of contractions over 20 minutes.', 'Worrisome features: slow return, loss of variability, rising baseline, overshoots.', 'Amnioinfusion is for the first stage, through an IUPC, for recurrent variables.'] } },
 
@@ -169,7 +169,7 @@
         { t: "Terbutaline for the contractions", g: "harm", why: "Tocolysis in a bleeding abruption with fetal compromise worsens maternal hemodynamics and delays delivery." },
         { t: "Amnioinfusion through an IUPC", g: "harm", why: "Not indicated in abruption." },
         { t: "Admit, observe, recheck in an hour", g: "harm", why: "An abruption with recurrent lates will not get better by watching." },
-        { t: "Oxytocin to augment labor", g: "harm", why: "More uterine activity into an abruption with lates." },
+        { t: "Oxytocin augmentation", g: "harm", why: "More uterine activity into an abruption with lates." },
         { t: "Biophysical profile first", g: "wrong", why: "The tracing and the story already tell you what to do. Don’t delay." } ] },
       debrief: { summary: 'Placental abruption: frequent low-amplitude contractions on an elevated resting tone, recurrent late decels and minimal variability, which can worsen to absent variability (Category III). Stabilize, labs and blood, and deliver by cesarean.',
         pearls: ['Classic abruption: high-frequency, low-amplitude contractions with high resting tone, plus lates or a prolonged decel.', 'Recurrent lates + absent variability = Category III: deliver if resuscitation does not fix it fast.', 'Watch the mother: DIC, hemorrhage, Kleihauer-Betke and RhIG if Rh-negative.'] } },
@@ -186,7 +186,7 @@
         { t: "Stat cesarean (laparotomy)", g: "best", why: "TOLAC with sudden pain, prolonged bradycardia, loss of contractions and loss of station: uterine rupture. Emergency laparotomy and delivery." },
         { t: "Increase oxytocin for the lost contractions", g: "harm", why: "Loss of contractions after a pop is a rupture sign, not a reason for more oxytocin." },
         { t: "Intrauterine resuscitation and observe", g: "wrong", why: "Resuscitation won’t fix a ruptured uterus. Go to the OR." },
-        { t: "Operative vaginal delivery now", g: "harm", why: "She is 7 cm and the head has gone up. Not possible." },
+        { t: "Vacuum delivery now", g: "harm", why: "She is 7 cm and the head has gone up. Not possible." },
         { t: "Scalp stimulation during the brady", g: "wrong", why: "Scalp stimulation only reassures when the baseline is normal. During a bradycardia it wastes minutes." },
         { t: "Terbutaline for the deceleration", g: "wrong", why: "This is rupture, not tachysystole." } ] },
       debrief: { summary: 'TOLAC with sudden pain, then a prolonged deceleration/bradycardia, loss of contractions and loss of station: uterine rupture. The FHR abnormality is the most common first sign. Emergency laparotomy.',
@@ -205,7 +205,7 @@
         { t: "Intrauterine resuscitation, then recheck", g: "wrong", why: "No resuscitation fixes fetal anemia." },
         { t: "Discharge after a reactive recheck", g: "harm", why: "There are no accels and the pattern is sinusoidal. Sending her home could be fatal." },
         { t: "Kleihauer-Betke and observe overnight", g: "harm", why: "Send the Kleihauer-Betke, but watching a sinusoidal pattern lets the fetus get worse." },
-        { t: "Terbutaline for the contractions", g: "wrong", why: "Nothing to relax: the problem is fetal anemia." } ] },
+        { t: "Terbutaline tocolysis", g: "wrong", why: "Nothing to relax: the problem is fetal anemia." } ] },
       debrief: { summary: 'A true sinusoidal pattern: smooth sine-wave undulation at 3–5 cycles/min, no variability, no accelerations, persisting ≥20 minutes. Category III, here from fetomaternal hemorrhage after trauma. Kleihauer-Betke, RhIG for an Rh-negative mother, NICU with blood, and deliver.',
         pearls: ['Sinusoidal: smooth, regular sine wave, 3–5 cycles/min, ≥20 min. It is Category III on its own.', 'Causes: severe fetal anemia (alloimmunization, fetomaternal hemorrhage, vasa previa, twin-twin transfusion), severe hypoxia.', 'Pseudosinusoidal after IV opioids is short-lived and has normal variability around it.'] } },
 
