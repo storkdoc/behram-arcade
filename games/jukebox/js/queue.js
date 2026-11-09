@@ -1,6 +1,5 @@
 /* JUKEBOX queue, shuffle, repeat and favorites.
-   Pure data. Nothing here talks to YouTube or starts playback.
-   Favorites and the queue are ordinary local preferences (song ids only). */
+   Pure data. Playback is separate. Favorites and the queue are song ids only. */
 (function (root) {
   'use strict';
 

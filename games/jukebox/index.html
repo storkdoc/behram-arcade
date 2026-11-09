@@ -6,13 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2a120c">
-<meta name="description" content="Jukebox: a diner cabinet of real 1970s, 1980s and 1990s hits, played in full in YouTube's own visible player.">
+<meta name="description" content="Jukebox: 30-second previews of 1970s, 1980s and 1990s hits, courtesy of iTunes, with a live audio visualizer.">
 <title>Jukebox</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 <script src="../../assets/js/mood-sticker.js"></script>
 </head>
-<body data-screen="listen" data-mode="idle">
+<body data-screen="listen" data-mode="idle" data-decade="all">
 <a id="home" href="../../index.html">&larr; ARCADE</a>
 
 <header class="top">
@@ -28,49 +28,39 @@
 </header>
 
 <main id="cabinet" class="shell">
-  <section class="stage" aria-label="Now playing">
-    <section class="viz" id="vizPanel" data-look="cabinet" aria-label="Ambient visualizer">
+  <section class="hero" id="vizPanel" data-look="spectrum" aria-label="Audio visualizer">
       <div class="leds" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div class="viz-top">
         <div>
-          <p class="viz-kicker">AMBIENT VISUALIZER</p>
+          <p class="viz-kicker">LIVE VISUALIZER</p>
           <p class="viz-note" id="vizNote"></p>
         </div>
-        <div class="viz-modes" role="group" aria-label="Visualization">
-          <button type="button" class="pill tiny" data-viz="cabinet" data-nav data-k="viz-cabinet" aria-pressed="true">CABINET</button>
-          <button type="button" class="pill tiny" data-viz="vinyl" data-nav data-k="viz-vinyl" aria-pressed="false">VINYL</button>
-          <button type="button" class="pill tiny" data-viz="spectrum" data-nav data-k="viz-spectrum" aria-pressed="false">BARS</button>
+        <div class="viz-modes" role="group" aria-label="Visualizer mode">
+          <button type="button" class="pill tiny" data-viz="spectrum" data-nav data-k="viz-spectrum" aria-pressed="true">BARS</button>
+          <button type="button" class="pill tiny" data-viz="wave" data-nav data-k="viz-wave" aria-pressed="false">WAVE</button>
+          <button type="button" class="pill tiny" data-viz="radial" data-nav data-k="viz-radial" aria-pressed="false">RING</button>
+          <button type="button" class="pill tiny" data-viz="particles" data-nav data-k="viz-particles" aria-pressed="false">SPARKS</button>
         </div>
       </div>
-      <div class="viz-body">
-        <div class="speaker" aria-hidden="true"><b></b><b></b><b></b></div>
-        <div class="platter">
-          <div class="vinyl" id="vinyl"><span class="vlabel" id="vlabel">70</span></div>
-          <i class="tonearm" aria-hidden="true"></i>
-        </div>
-        <canvas id="vizCanvas" width="480" height="120" aria-hidden="true"></canvas>
-        <div class="speaker" aria-hidden="true"><b></b><b></b><b></b></div>
-      </div>
-    </section>
-    <div class="player-dock">
-      <p class="player-kicker">COMPACT PLAYER</p>
-      <div class="bezel">
-        <div id="ytWell">
-          <div id="ytHost"></div>
-          <p id="ytIdle">Press Play. Nothing starts on its own.</p>
-        </div>
-      </div>
-    </div>
+      <canvas id="vizCanvas" width="960" height="360" aria-hidden="true"></canvas>
+  </section>
 
+  <section class="stage" aria-label="Now playing">
     <div class="np" id="np">
+      <img id="art" alt="" width="64" height="64" hidden>
       <span class="lamp" id="lamp" aria-hidden="true"></span>
       <div class="np-copy">
         <div class="kicker" id="npKicker">JUKEBOX</div>
         <div class="np-title" id="npTitle">Nothing queued</div>
-        <div class="np-meta" id="npMeta">Add a hit from the right</div>
+        <div class="np-meta" id="npMeta">Search a decade and add a hit</div>
+        <div class="preview-tag" id="previewTag" hidden>30-second preview</div>
       </div>
-      <div class="eq" id="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <a id="storeLink" class="store" href="https://music.apple.com/" target="_blank" rel="noopener noreferrer" aria-label="Download on iTunes">
+        <img alt="" width="120" height="40" src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/white/en-us?size=250x83">
+        <span>Download on iTunes</span>
+      </a>
     </div>
+    <p class="courtesy" id="courtesy"></p>
     <p id="status" class="status" role="status"></p>
 
     <div class="transport" role="group" aria-label="Playback">
@@ -81,7 +71,7 @@
       <button type="button" id="btnRepeat" class="pill" data-nav data-k="repeat" aria-pressed="false">REPEAT</button>
       <button type="button" id="btnMute" class="pill" data-nav data-k="mute" aria-pressed="false" aria-label="Mute">MUTE</button>
       <label class="vol">VOL
-        <input id="vol" data-nav data-k="vol" type="range" min="0" max="100" step="1" value="80" aria-label="Volume">
+        <input id="vol" data-nav data-k="vol" type="range" min="0" max="100" step="1" value="85" aria-label="Volume">
       </label>
     </div>
 
@@ -90,22 +80,25 @@
       <button type="button" id="btnClear" class="text" data-nav data-k="clear">CLEAR</button>
     </div>
     <ol id="queue" aria-label="Play queue"></ol>
-    <p id="premiumNote" class="fine"></p>
   </section>
 
   <section class="crate" aria-label="Song catalog">
     <div class="tabs" id="tabs" role="tablist" aria-label="Decade"></div>
+    <label class="search">SEARCH
+      <input id="q" type="search" placeholder="Title or artist" autocomplete="off" aria-label="Search songs">
+    </label>
     <p class="crate-note" id="crateNote"></p>
     <ul id="songList" class="songs"></ul>
+    <button type="button" id="btnMore" class="text" data-nav data-k="more" hidden>SHOW MORE</button>
   </section>
 </main>
 
-<p class="keys-hint">Space play/pause · Enter add · arrows move · N next · P pause · M mute</p>
+<p class="keys-hint">Space play/pause · Enter add · arrows move · N next · V visualizer</p>
 
 <div id="pause" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
   <div class="card">
     <h2 id="pauseTitle">PAUSED</h2>
-    <p class="hint">The YouTube player stays where it is. Resume continues the same video.</p>
+    <p class="hint">The preview stays cued. Resume continues the same 30-second clip.</p>
     <button type="button" class="big" id="btnResume" data-nav data-k="resume">RESUME <kbd>SPACE</kbd></button>
     <button type="button" class="big ghost" id="btnHelp2" data-nav data-k="help2">HOW TO LISTEN</button>
     <a class="big ghost link" id="btnArcade" href="../../index.html">BACK TO ARCADE</a>
@@ -116,29 +109,27 @@
   <div class="card wide">
     <h2 id="helpTitle">HOW TO LISTEN</h2>
     <ol class="how">
-      <li><b>Pick a decade.</b> Every strip is a real hit from 1970–1999. Enter, or a tap, adds it to the queue. Nothing plays until you press Play.</li>
-      <li><b>Play.</b> Space, the PLAY button, or gamepad A starts the song in YouTube's compact player. The picture and YouTube's controls stay visible in that black frame. Full songs, not a quiz clip. If sound does not start, press Play again.</li>
-      <li><b>Lights.</b> The cabinet above the player is an ambient visualizer. It spins and pulses while the song is playing and rests when you pause. It does not read the song's sound. <kbd>V</kbd> switches CABINET, VINYL, and BARS. It never covers the YouTube player.</li>
-      <li><b>Queue.</b> Move songs up or down, or remove one. Shuffle and repeat sit with the transport.</li>
-      <li><b>Favorites</b> are saved only on this device. Hearts do not leave the browser.</li>
-      <li><b>If a video will not embed,</b> the cabinet says so and Next moves on. YouTube decides availability and any ads.</li>
+      <li><b>Pick a decade or search.</b> Every strip is a real recording from 1970 to 1999, matched to an iTunes listing.</li>
+      <li><b>Play.</b> Space, PLAY, or gamepad A streams a <b>30-second preview</b>. Nothing starts until you do. On an iPhone, the silent switch can mute it.</li>
+      <li><b>Watch the lights.</b> Bars, wave, ring, and sparks are drawn from the preview that is actually playing. <kbd>V</kbd> changes the picture. They rest when the preview pauses.</li>
+      <li><b>Queue and favorites</b> stay on this device. If a preview will not load, Next tries another song.</li>
+      <li><b>iTunes.</b> Previews are provided courtesy of iTunes and stream from Apple. Download on iTunes opens that song's store page.</li>
     </ol>
-    <p class="hint" id="helpPremium"></p>
+    <p class="hint" id="helpCourtesy"></p>
     <table class="keys">
-      <tr><th>Keyboard</th><td><kbd>SPACE</kbd> play / pause · <kbd>ENTER</kbd> add the highlighted song, or press the highlighted button · arrows move · <kbd>N</kbd> next · <kbd>V</kbd> visualizer · <kbd>P</kbd> or <kbd>Esc</kbd> pause menu · <kbd>M</kbd> mute · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>F</kbd> favorite</td></tr>
-      <tr><th>Touch</th><td>tap a strip to add it · heart for a favorite · PLAY, previous, next · up and down on a queued song</td></tr>
-      <tr><th>Gamepad</th><td>A play / pause · X add or press the highlighted button · Y favorite · d-pad move · LB / RB previous / next · Start pause menu · B close</td></tr>
+      <tr><th>Keyboard</th><td><kbd>SPACE</kbd> play / pause · <kbd>ENTER</kbd> add the highlighted song · arrows move · <kbd>N</kbd> next · <kbd>V</kbd> visualizer · <kbd>P</kbd> or <kbd>Esc</kbd> pause menu · <kbd>M</kbd> mute · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>F</kbd> favorite</td></tr>
+      <tr><th>Touch</th><td>tap a strip to add it · heart for a favorite · PLAY, previous, next</td></tr>
+      <tr><th>Gamepad</th><td>A play / pause · X add or press · Y favorite · d-pad move · LB / RB previous / next · Start pause menu · B close</td></tr>
     </table>
     <button type="button" class="big" id="btnCloseHelp" data-nav data-k="closehelp">BACK <kbd>SPACE</kbd></button>
   </div>
 </div>
 
-<script src="../name-that-groove/js/catalog.js"></script>
 <script src="js/catalog.js"></script>
 <script src="js/queue.js"></script>
-<script src="js/player.js"></script>
-<script src="js/sfx.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/viz.js"></script>
+<script src="js/sfx.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

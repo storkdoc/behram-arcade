@@ -1,5 +1,5 @@
 /* JUKEBOX — wood, chrome and neon diner cabinet.
-   The YouTube player sits in the bezel. Nothing is drawn on top of #ytWell's iframe. */
+   Previews stream from iTunes. The canvas is the visualizer. */
 :root {
   --wood-1: #6a3d24;
   --wood-2: #3a2114;
@@ -97,12 +97,13 @@ kbd {
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(300px, 460px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   gap: 14px;
   padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
   align-items: start;
 }
-.stage, .crate {
+.hero { grid-column: 1 / -1; }
+.hero, .stage, .crate {
   min-width: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 18%),
@@ -116,76 +117,6 @@ kbd {
     0 18px 40px rgba(0, 0, 0, .35);
   padding: 12px;
 }
-/* Compact official player. YouTube requires the embedded viewport to be at least
-   200px by 200px, with controls fully visible inside that viewport
-   (https://developers.google.com/youtube/iframe_api_reference). The frame is black
-   padding around that square. It does not crop, cover, or collapse the video. */
-.player-dock {
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 auto 12px;
-}
-.player-kicker {
-  margin: 0 0 6px;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: .22em;
-  font-weight: 800;
-  color: #f0d7c0;
-}
-.bezel {
-  width: fit-content;
-  max-width: 100%;
-  padding: 8px;
-  border-radius: 12px;
-  background: #000;
-  box-shadow: inset 0 0 0 1px #2a2a2a, 0 8px 16px rgba(0, 0, 0, .35);
-}
-#ytWell {
-  position: relative;
-  width: 200px;
-  height: 200px;
-  min-width: 200px;
-  min-height: 200px;
-  background: #000;
-  overflow: visible;
-}
-#ytHost, #ytWell iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  border: 0;
-  display: block;
-  background: #000;
-}
-#ytHost .mock-player {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #120c09;
-  color: #8d7b6e;
-  letter-spacing: .14em;
-  font-size: 12px;
-}
-#ytIdle {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 16px;
-  color: #f0d7b4;
-  pointer-events: none;
-}
-#ytIdle[hidden] { display: none !important; }
-
 .np {
   display: flex;
   align-items: center;
@@ -388,7 +319,8 @@ body[data-mode="playing"] .eq i { animation: eq .7s ease-in-out infinite alterna
   overflow: auto;
   padding-right: 2px;
 }
-.strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.strip { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.mini-store { font-size: 11px; font-weight: 800; letter-spacing: .04em; min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; color: #ffe08a; }
 .song {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -466,7 +398,7 @@ body[data-mode="playing"] .eq i { animation: eq .7s ease-in-out infinite alterna
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3);
 }
 
-/* Ambient visualizer. A sibling above the bezel, never inside #ytWell. */
+/* Visualizer frame around the live canvas. */
 .viz {
   margin: 0 0 12px;
   padding: 10px;
@@ -549,16 +481,29 @@ body[data-mode="loading"] .vinyl { animation-play-state: running; }
 body[data-mode="playing"] .tonearm,
 body[data-mode="loading"] .tonearm { transform: rotate(-6deg); }
 #vizCanvas {
-  width: 100%; height: 112px; display: block;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .04), transparent 40%), #070403;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  width: 100%;
+  height: min(46vh, 460px);
+  min-height: 280px;
+  display: block;
+  border-radius: 12px;
+  background: #070403;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 0 28px rgba(255, 176, 0, .18);
 }
-.viz[data-look="vinyl"] #vizCanvas { display: none; }
-.viz[data-look="vinyl"] .viz-body { grid-template-columns: 34px minmax(0, 1fr) 34px; }
-.viz[data-look="vinyl"] .platter, .viz[data-look="vinyl"] .vinyl { width: 132px; height: 132px; }
-.viz[data-look="spectrum"] .platter { display: none; }
-.viz[data-look="spectrum"] .viz-body { grid-template-columns: 34px minmax(0, 1fr) 34px; }
+.hero { margin: 0 0 12px; }
+.search { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; font-weight: 800; color: #f0d2b4; }
+.search input {
+  flex: 1; min-width: 0; min-height: 44px; border-radius: 999px; border: 1px solid rgba(255,255,255,.2);
+  background: #140905; color: var(--cream); padding: 0 12px; font-size: 16px; letter-spacing: 0;
+}
+.store {
+  flex: none; min-height: 44px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 0; color: #ffe08a; font-weight: 800; font-size: 10px; letter-spacing: .04em; text-decoration: none;
+  text-align: center;
+}
+.store img { height: 40px; width: auto; display: block; }
+.courtesy { margin: 6px 2px 0; font-size: 12px; color: #f0d7c0; }
+.preview-tag { display: inline-block; margin-top: 4px; font-size: 11px; letter-spacing: .12em; font-weight: 800; color: #2a120c; background: var(--viz, #ffb000); border-radius: 999px; padding: 2px 8px; }
+#art { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; flex: none; background: #000; }
 body[data-decade="70s"] { --viz: #ffb000; --viz2: #ff6a1a; }
 body[data-decade="80s"] { --viz: #ff2f78; --viz2: #3de1ff; }
 body[data-decade="90s"] { --viz: #c9a2ff; --viz2: #39ff8a; }
@@ -570,6 +515,7 @@ body[data-decade="all"] { --viz: #ffb000; --viz2: #3de1ff; }
   .songs { max-height: none; }
   #queue { max-height: 200px; }
   .tag { display: none; }
+  #vizCanvas { min-height: 220px; height: 34vh; }
 }
 @media (max-width: 420px) {
   .top { padding-left: max(100px, calc(env(safe-area-inset-left) + 96px)); gap: 6px; }
@@ -577,11 +523,9 @@ body[data-decade="all"] { --viz: #ffb000; --viz2: #3de1ff; }
   .keys-hint { display: none; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  .shell { grid-template-columns: minmax(240px, 42%) minmax(0, 1fr); }
+  .shell { grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr); }
   .songs { max-height: calc(100dvh - 120px); }
-  .viz-body { min-height: 96px; }
-  .platter, .vinyl { width: 88px; height: 88px; }
-  #vizCanvas { height: 88px; }
+  #vizCanvas { min-height: 140px; height: 160px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
