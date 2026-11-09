@@ -585,7 +585,7 @@ addEventListener('pointerdown', e => {
   if (inGame() && !paused) { if (e.button === 0) mouse.fire = true; else if (e.button === 2) onPress('Enter'); else if (e.button === 1) doJump(); e.preventDefault(); }
   else if (e.button === 0 && e.target === canvas) {
     Sound.unlock();
-    if (state === 'attract' || state === 'gameover') onPress('Space');
+    if (state === 'attract' || state === 'gameover' || state === 'continue') onPress('Space');
     else if (state === 'select') {
       const px = e.clientX * DPR, py = e.clientY * DPR, r = selRects.find(r => px >= r[0] && px <= r[0] + r[2] && py >= r[1] && py <= r[1] + r[3]);
       if (r) { if (r[4] === select.idx) startGame(); else { select.idx = r[4]; Sound.play('tick'); } }
@@ -618,6 +618,12 @@ let score = 0, lives = 3, level = 1, nextLife = 20000, bonusPending = 0, startLe
 let hiscores = store.get('hiscores', null);
 if (!Array.isArray(hiscores)) hiscores = [['VTX', 50000, 20], ['ACE', 40000, 17], ['NEO', 30000, 13], ['ZAP', 25000, 11], ['ARC', 20000, 9], ['CRT', 15000, 7], ['PIX', 10000, 5], ['BIT', 8000, 4], ['SYN', 6000, 3], ['RAD', 5000, 2]];
 let bestLevel = store.get('bestLevel', 1);
+/* CONTINUE (day 12, Tempest 2000 style): after GAME OVER on level >= CONT_MIN (and after any high-score initials), a 9-second
+   countdown offers to carry on from the level you died on with 3 fresh lives. The score resets to 0 (so the high-score table
+   stays honest) and no ladder bonus is granted. Fire / Space / Enter / tap / pad A continues; Esc, ← ARCADE or the countdown
+   running out goes to the attract screen. */
+const CONT_MIN = 3, CONT_SEC = 9;
+let cont = { level: 0, t: 0, used: 0, tick: 0, offers: 0, taken: 0 };
 const player = { lane: 0, vis: 0, z: 0, alive: true, fireCd: 0, sub: 0, lean: 0, heat: 0, overheat: false, pos: 0.5, aim: 0.5 };
 let enemies = [], pool = [], eshots = [], pshots = [], fx = [], msgs = [], spikes = [], mines = [], shards = [], bolts = [];
 let zfx = null, seenTypes = new Set(), bumpT = 0, packClears = 0;
@@ -811,7 +817,7 @@ function startGame() {
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
-  store.set('lastStart', select.idx);
+  store.set('lastStart', select.idx); cont.used = 0;
   Sound.play('start');
   beginLevel(startLevel);
 }
@@ -882,7 +888,7 @@ function deathTip(kind) {
 }
 function finishDeath() {
   lives--;
-  if (lives <= 0) { state = 'gameover'; gameOverT = 0; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
+  if (lives <= 0) { state = 'gameover'; gameOverT = 0; cont.level = level; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
   if (death) deathTip(death.kind);
   if (death.inWarp) { beginLevel(level + 1); return; }
   // remaining enemies return to the far end
@@ -926,6 +932,10 @@ function onPress(k) {
     case 'gameover':
       if (gameOverT > 1.2 && (confirm || k === 'Space')) endGameOver();
       break;
+    case 'continue':
+      if (cont.t > 0.35 && (confirm || k === 'Space' || k === 'KeyZ' || k === 'ControlLeft' || k === 'ControlRight')) doContinue();
+      else if (k === 'Escape' || k === 'Backspace') { Sound.play('tick'); toAttract(); }
+      break;
     case 'initials': {
       const I = initials; let ci = INITIAL_SET.indexOf(I.chars[I.pos]);
       if (k === 'ArrowUp' || k === 'ArrowRight') { I.chars[I.pos] = INITIAL_SET[(ci + 1) % INITIAL_SET.length]; Sound.play('tick'); }
@@ -935,7 +945,7 @@ function onPress(k) {
       else if (confirm || k === 'Space' || k === 'ControlLeft') {
         Sound.play('select');
         if (I.pos < 2) I.pos++;
-        else { hiscores.splice(I.rank, 0, [I.chars.join(''), score, level]); hiscores = hiscores.slice(0, 10); store.set('hiscores', hiscores); state = 'attract'; attract.mode = 1; attract.modeT = 0; }
+        else { hiscores.splice(I.rank, 0, [I.chars.join(''), score, level]); hiscores = hiscores.slice(0, 10); store.set('hiscores', hiscores); offerContinue(); }
       }
       break;
     }
@@ -943,7 +953,21 @@ function onPress(k) {
 }
 function endGameOver() {
   if (qualifies(score)) { state = 'initials'; initials = { chars: ['A', 'A', 'A'], pos: 0, rank: hiscores.findIndex(h => score > h[1]) }; if (initials.rank < 0) initials.rank = hiscores.length; }
-  else { state = 'attract'; attract.mode = 1; attract.modeT = 0; }
+  else offerContinue();
+}
+function toAttract() { state = 'attract'; attract.mode = 1; attract.modeT = 0; }
+function offerContinue() {
+  if (cont.level >= CONT_MIN) { state = 'continue'; cont.t = 0; cont.tick = CONT_SEC; cont.offers++; fireLock = true; window.MoodSticker && window.MoodSticker.screen('continue'); }
+  else toAttract();
+}
+function doContinue() {
+  const L = cont.level; cont.used++; cont.taken++;
+  fireLock = true;
+  score = 0; lives = 3; nextLife = 20000; tokens = 0; startLevel = L; bonusPending = 0;
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 };
+  Sound.play('start'); window.MoodSticker && window.MoodSticker.screen('play');
+  beginLevel(L);
+  msg('CONTINUE ' + cont.used + ': LEVEL ' + L, 2.4, 0.6, '#2bff4c', 3);
 }
 
 /* ============================== player ============================== */
@@ -1710,6 +1734,12 @@ function update(dt) {
     case 'gameover':
       gameOverT += dt; if (gameOverT > 4) endGameOver();
       break;
+    case 'continue': {
+      cont.t += dt; const left = Math.ceil(CONT_SEC - cont.t);
+      if (left < cont.tick && left >= 0) { cont.tick = left; if (left > 0) Sound.play(left <= 3 ? 'select' : 'tick'); }
+      if (cont.t >= CONT_SEC) toAttract();
+      break;
+    }
   }
   // effects
   for (const f of fx) f.t += dt;
@@ -2570,6 +2600,17 @@ function drawSelect() {
   text('TIME ' + Math.max(0, Math.ceil(select.t)), W / 2, Math.min(H * 0.86, yb - U * 9), U * 2.6, '#ffffff', 'center');
   text('HIGHER STARTS EARN THE BONUS WHEN THAT LEVEL IS CLEARED', W / 2, Math.min(H * 0.93, yb - U * 4), U * 1.3, '#6a78c0', 'center');
 }
+function drawContinue() {
+  drawStars();
+  const left = Math.max(0, Math.ceil(CONT_SEC - cont.t)), frac = 1 - (cont.t % 1), pulse = 0.75 + 0.25 * Math.sin(T * 8);
+  text('CONTINUE?', W / 2, H * 0.2, U * 6, '#ff2a2a', 'center', pulse);
+  text(String(left), W / 2, H * 0.44, U * (9 + 4 * frac), left <= 3 ? '#ff47e6' : '#ffe81a', 'center', 0.55 + 0.45 * frac);
+  const r = U * 11, a0 = -Math.PI / 2, a1 = a0 + Math.PI * 2 * Math.max(0, 1 - cont.t / CONT_SEC);   // ring drains with the countdown
+  ctx.strokeStyle = left <= 3 ? '#ff47e6' : '#36e6ff'; ctx.lineWidth = LW(1.6); ctx.beginPath(); ctx.arc(W / 2, H * 0.44, r, a0, a1); ctx.stroke();
+  text('LEVEL ' + cont.level + '   3 LIVES   SCORE STARTS AT 0', W / 2, H * 0.66, U * 2.1, '#2bff4c', 'center');
+  text(touch.on ? 'TAP TO CONTINUE' : 'FIRE / SPACE / ENTER TO CONTINUE   ESC TO QUIT', W / 2, H * 0.74, U * 1.7, '#ffffff', 'center');
+  if (cont.used) text('CONTINUES USED ' + cont.used, W / 2, H * 0.81, U * 1.4, '#888', 'center');
+}
 function drawInitials() {
   drawStars();
   const H = touch.on && touch.kbTop ? Math.min(canvas.height, touch.kbTop * DPR) : canvas.height;   // touch: fit above the letter pad
@@ -2638,6 +2679,7 @@ function render() {
   if (state === 'attract') drawAttract();
   else if (state === 'select') drawSelect();
   else if (state === 'initials') drawInitials();
+  else if (state === 'continue') drawContinue();
   else {
     drawStars();
     drawGameScene();
@@ -2832,7 +2874,7 @@ canvas.addEventListener('pointerup', e => {
   if (e.pointerId !== ct.id) return; ct.id = null;
   if (ct.swiped || Math.hypot(e.clientX - ct.x0, e.clientY - ct.y0) > 16) return;
   Sound.unlock();
-  if (state === 'attract' || state === 'gameover') onPress('Space');
+  if (state === 'attract' || state === 'gameover' || state === 'continue') onPress('Space');
   else if (state === 'select') {
     const px = e.clientX * DPR, py = e.clientY * DPR;
     const r = selRects.find(r => px >= r[0] && px <= r[0] + r[2] && py >= r[1] && py <= r[1] + r[3]);
@@ -2917,7 +2959,7 @@ function touchLayout() {
   touch.kbTop = ky - 6; touch.ctrlTop = ctrlTop;
 }
 function touchSync() {
-  const ts = !touch.on ? '' : inGame() ? (paused ? 'paused' : 'game') : (state === 'attract' || state === 'gameover') ? 'menu' : state;
+  const ts = !touch.on ? '' : inGame() ? (paused ? 'paused' : 'game') : (state === 'attract' || state === 'gameover' || state === 'continue') ? 'menu' : state;
   if (ts !== TC.ts) {
     TC.ts = ts; document.body.dataset.ts = ts;
     if (ts !== 'game') { touch.fireBtn = touch.fireZone = false; fireSync(); rt.id = null; if (TC.E.ring) TC.E.ring.classList.remove('on'); }
@@ -3005,7 +3047,7 @@ window.VORTEX = {
   attractMode(m) { attract.mode = m; attract.modeT = 0; },
   // test harness: deterministic fast-forward (call freeze(true) first so the rAF loop doesn't also advance)
   key(code, down) { keys[code] = !!down; },
-  step(sec, until) { const n = Math.round(sec * 120); let done = sec; for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) { done = i / 120; break; } } render(); touchSync(); return done; },
+  step(sec, until, noRender) { const n = Math.round(sec * 120); let done = sec; for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) { done = i / 120; break; } } if (!noRender) { render(); touchSync(); } return done; }, // noRender: fast headless bots
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
@@ -3032,6 +3074,7 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
   deathKind: () => death ? death.kind : null,
+  cont: () => Object.assign({ state, min: CONT_MIN, sec: CONT_SEC }, cont),
   shotWarn: () => shotWarnLevel(),
   shotWarnCues: () => shotWarnCues,
   eshotCharges: () => eshotCharges,
