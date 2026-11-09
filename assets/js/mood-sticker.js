@@ -628,6 +628,37 @@
     };
     stk.addEventListener('pointerup', endDrag); stk.addEventListener('pointercancel', endDrag);
 
+    // Auto-dodge (2026-11-09): if the default corner sits on one of the page's own links/buttons (VORTEX's
+    // "BACK TO ARCADE" on desktop, Neuro Arena's / Meta Arena's "‹" and Jax's "← Arcade" on phones), the sticker
+    // swallowed those clicks/taps. Move to the first corner that is clear. A corner the player dragged it to (or a
+    // page's CONFIG.corner) is never overridden, and the dodge is not saved, so it re-checks on every load/resize.
+    var pinned = function () { return !!(LS.get(cornerKey, null) || CONFIG.corner); };
+    var blocked = function (r) {
+      var els = document.querySelectorAll('a[href],button,[role=button],input,select,textarea,summary');
+      for (var i = 0; i < els.length; i++) {
+        var b = els[i].getBoundingClientRect();
+        if (!b.width || !b.height || b.right < r.left - 4 || b.left > r.right + 4 || b.bottom < r.top - 4 || b.top > r.bottom + 4) continue;
+        var st = getComputedStyle(els[i]);
+        if (st.visibility === 'hidden' || +st.opacity === 0 || st.pointerEvents === 'none') continue;
+        return true;
+      }
+      return false;
+    };
+    var dodge = function () {
+      if (pinned() || open || drag) return;
+      var coarse = false; try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* ignore */ }
+      var first = defaultCorner(), order = [first].concat((coarse && !TOUCH_BOTTOM_OK[gameName] ? ['tl', 'tr', 'bl', 'br'] : ['bl', 'br', 'tl', 'tr']).filter(function (c) { return c !== first; }));
+      var was = wrap.className;
+      for (var i = 0; i < order.length; i++) {
+        wrap.className = 'wrap ' + order[i];
+        if (!blocked(stk.getBoundingClientRect())) { wrap.setAttribute('data-dodged', order[i] === first ? '' : order[i]); return; }
+      }
+      wrap.className = 'wrap ' + first; wrap.setAttribute('data-dodged', '');
+      if (was !== wrap.className && /open/.test(was)) wrap.className = was;
+    };
+    var dodgeT = 0;
+    addEventListener('resize', function () { clearTimeout(dodgeT); dodgeT = setTimeout(dodge, 250); });
+
     var panelKey = function (e) {
       var inTa = e.target === host && root.activeElement === ta;
       if (e.key === 'Escape') { e.preventDefault(); doClose(); return; }
@@ -659,6 +690,7 @@
       corner: function (c) { if (/^(t|b)(l|r)$/.test(c)) { wrap.className = 'wrap ' + c + (open ? ' open' : ''); LS.set(cornerKey, c); } return wrap.className.split(' ')[1]; }
     };
     render(mood);
+    dodge(); setTimeout(dodge, 700); setTimeout(dodge, 2500);   // pages often lay out their buttons a moment after load
     startObserver();
     setTimeout(flush, 4000);
   };
