@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -384,6 +384,8 @@ const Sound = {
     if (!this.ac || this.muted) return;
     switch (n) {
       case 'shoot': this.tone('square', 1500, 300, 0.075, 0.045); break;
+      case 'overheat': this.noise(0.32, 0.09, 7000, 2200, 2, 'highpass'); this.tone('sawtooth', 620, 180, 0.22, 0.05); break;   // steam hiss + droop: barrel just overheated
+      case 'sputter': this.tone('square', 700, 160, 0.06, 0.04); this.noise(0.05, 0.05, 3000, 1200, 2); break;   // weak 'pfft' shot from a hot barrel
       case 'hit': this.noise(0.42, 0.38, 3200, 160, 0.8); this.tone('triangle', 340, 50, 0.3, 0.16); break;
       case 'tanker': this.noise(0.5, 0.42, 1800, 90, 0.7); this.tone('sawtooth', 220, 40, 0.4, 0.12); break;
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
@@ -817,7 +819,7 @@ function startGame() {
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
-  store.set('lastStart', select.idx); cont.used = 0;
+  store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
   beginLevel(startLevel);
 }
@@ -1102,16 +1104,28 @@ function handleFire(dt) {
   // (or about to flip into it), so it never burns barrel heat on an empty tube. It deliberately ignores enemies already
   // on the rim: the timed rim shot stays a manual skill and the anti-camping rule still bites.
   const auto = (touch.on ? touch.auto : autofire) && player.fireCd <= 0 && laneHasTarget(player.lane);
-  if ((auto || manual) && player.fireCd <= 0 && ownShots() < FIRE.maxShots && !player.overheat) {
-    pshots.push(power.laser ? { lane: player.lane, z: player.z, pz: player.z, born: T, laser: true, pierce: 1 } : { lane: player.lane, z: player.z, pz: player.z, born: T }); shotsFired++;
-    player.fireCd = manual ? FIRE.cd : 0.11;
-    player.heat += power.laser ? PUP.laserHeat : 1; if (player.heat >= FIRE.max) player.overheat = true;
-    Sound.play(power.laser ? 'lshoot' : 'shoot');
+  // 2026-11-09 SPUTTER: an overheated barrel no longer goes silent. Bot deaths to enemy shots were 9 of 13 while
+  // overheated (held fire = ~0.7 s burst, then 0.5 s with no way to answer a shot already at the rim). While hot it
+  // still spits one weak orange shot every FIRE.sputter s (no extra heat, no laser), so you can always answer one
+  // bullet, but a held button still can't build a wall of shots.
+  // A sputter shot also passes through enemies already on the rim, so it never rescues a rim camper.
+  if ((auto || manual) && player.fireCd <= 0 && ownShots() < FIRE.maxShots) {
+    const hot = player.overheat;
+    pshots.push(power.laser && !hot ? { lane: player.lane, z: player.z, pz: player.z, born: T, laser: true, pierce: 1 } : { lane: player.lane, z: player.z, pz: player.z, born: T, hot }); shotsFired++;
+    if (hot) { player.fireCd = FIRE.sputter; heatStats.sputter++; Sound.play('sputter'); }
+    else {
+      player.fireCd = manual ? FIRE.cd : 0.11;
+      player.heat += power.laser ? PUP.laserHeat : 1;
+      if (player.heat >= FIRE.max) { player.overheat = true; heatStats.overheats++; Sound.play('overheat');
+        if (!heatStats.tip && state === 'play') { heatStats.tip = true; msg('BARREL HOT: FIRE IN BURSTS', 2.2, 0.8, '#ff8a3d', 2.4); } }
+      Sound.play(power.laser ? 'lshoot' : 'shoot');
+    }
     checkShotHits();
   }
 }
 const ownShots = () => { let n = 0; for (const s of pshots) if (!s.droid) n++; return n; };
-const FIRE = { maxShots: 8, cd: 0.07, cool: 6, max: 6, resume: 3, speed: 2.3 };
+const FIRE = { maxShots: 8, cd: 0.07, cool: 6, max: 6, resume: 3, speed: 2.3, sputter: 0.3 };
+let heatStats = { overheats: 0, sputter: 0, tip: false };
 function laneHasTarget(l) {
   if (spikes[l] > 0.02) return true;
   for (const s of eshots) if (s.lane === l) return true;
@@ -1480,6 +1494,7 @@ function checkShotHits() {
       if (e.dead || e.spawnT < 0.5) continue;
       if (hittableLane(e) !== s.lane) continue;
       if (e.z <= 0 && e.type !== 'fuseball' && !s.droid && (e.lane !== player.lane || !player.alive)) continue; // rim: only while settled in the claw's lane (the droid guards its own lane)
+      if (s.hot && e.z <= 0.02) continue;   // sputter shots answer bullets, not rim enemies: holding fire while camping on the rim must still lose (anti-camping)
       if (shieldUp(e) && e.z - 0.035 >= z0 - 0.01 && e.z - 0.035 <= z1) {   // shield (sits just in front of the warden)
         s.dead = true; e.shield = Math.max(0, e.shield - (s.laser ? 2 : 1)); e.hitT = 0.15; addScore(10);
         const c = centerOf(e);
@@ -2348,7 +2363,7 @@ function drawShots() {
     ctx.moveTo(p[0], p[1] - R); ctx.lineTo(p[0] + R, p[1]); ctx.lineTo(p[0], p[1] + R); ctx.lineTo(p[0] - R, p[1]); ctx.closePath();
   }
   ctx.stroke();
-  for (const s of pshots) { const m = laneMid(s.lane), p = proj(m[0], m[1], s.z * LL); if (p) ctx.fillRect(p[0] - 1.2 * DPR, p[1] - 1.2 * DPR, 2.4 * DPR, 2.4 * DPR); }
+  for (const s of pshots) { const m = laneMid(s.lane), p = proj(m[0], m[1], s.z * LL); if (p) { ctx.fillStyle = s.hot ? '#ff9a3d' : '#ffffff'; ctx.fillRect(p[0] - 1.2 * DPR, p[1] - 1.2 * DPR, 2.4 * DPR, 2.4 * DPR); } }
 }
 function clawPoints(f, zw, lean = 0, lift = 0) {
   const E0 = railF(f), E1 = railF(f + 1), n = inwardF(f + 0.5 - 0.5);
@@ -2434,6 +2449,16 @@ function drawClaw() {
   ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
   ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[7][0], pts[7][1]); ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[6][0], pts[6][1]);
   ctx.stroke();
+  // barrel heat (2026-11-09): the claw glows orange as heat builds; overheated = pulsing red-orange with heat shimmer
+  const hk = state === 'play' ? clamp(((player.heat || 0) - 2.5) / (FIRE.max - 2.5), 0, 1) : 0;
+  if (hk > 0 || player.overheat) {
+    const a = player.overheat ? 0.65 + 0.25 * Math.sin(T * 26) : hk * 0.7;
+    ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.strokeStyle = player.overheat ? '#ff5a2a' : '#ff9a3d'; ctx.lineWidth = LW(2.6);
+    ctx.shadowColor = '#ff6a1a'; ctx.shadowBlur = 10 * DPR * (player.overheat ? 1.4 : hk);
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.stroke();
+    if (player.overheat) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#ffb36a'; for (let i = 0; i < 3; i++) { const q = pts[(i * 3 + Math.floor(T * 12)) % pts.length], up = ((T * 2.3 + i * 0.33) % 1); ctx.fillRect(q[0] - DPR, q[1] - up * 14 * DPR, 2 * DPR, 2 * DPR); } }
+    ctx.restore();
+  }
 }
 function drawFx() {
   for (const f of fx) {
@@ -3072,7 +3097,7 @@ window.VORTEX = {
   params: L => L ? levelParams(L) : Object.assign({}, LP),
   poolCounts: L => poolCounts(L),
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
-  fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length }),
+  fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length, cd: player.fireCd, sputter: heatStats.sputter, overheats: heatStats.overheats, tip: heatStats.tip }),
   deathKind: () => death ? death.kind : null,
   cont: () => Object.assign({ state, min: CONT_MIN, sec: CONT_SEC }, cont),
   shotWarn: () => shotWarnLevel(),
