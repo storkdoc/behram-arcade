@@ -651,3 +651,35 @@ in the local archive is still Oct 30 (Feud & Delivery, Fun, empty text). Answer-
 - Text: try `FIX=mix` / larger duel `matchSec` rather than more THINKING — 700→900→1100 did not lift full-task above prior.
 - VORTEX: re-run FD bot with deathKind hooks now exposed; captures vs fuseballs after grab-imminent.
 - Office hub iPhone: `#drive` tap intercepted by `<html>` under load — force-click / bindPause interaction with sticker.
+
+## 2026-11-10 (day 14): recover stranded Nov 8–9 work + VORTEX sputter fire
+
+Fresh worktree `/workspace/arcade-daily-2026-11-10` from `76b4220`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone.
+**Why yesterday failed:** the Nov 9 run committed 3 tested commits in `/workspace/arcade-daily-2026-11-09` but never pushed them
+and never wrote a log entry (also no Nov 8 entry). Today they were cherry-picked first, re-tested, and pushed before any new work:
+`c38eeb0` VORTEX CONTINUE (level 3+), `bea047f` OB Triage distractor trim + hub/Star Raider test hardening, `e17042b` MoodSticker
+auto-dodge. The uncommitted Nov 9 sputter WIP was finished and shipped as today's VORTEX change. No other worker had recent
+commits on tube-shooter / office / neuro-arena (only the jukebox PRs Nov 7–9).
+
+### Player feedback (Nov 6–10)
+`node tools/read-feedback.mjs --hours 96`: **0 real submissions** (store reachable; Nov 9 doc only has `test:true` records).
+Day 6 in a row with nothing to cluster or act on.
+
+### Findings
+- **Smoke, 23 cabinets + home, desktop + iPhone (48 loads):** no page errors, no local 4xx.
+- **Dr. Behram's Office (Congressional OB GYN redirects to `#office`):** answer-length ALL PASS (no correct answer >14 words,
+  Clinic Day slot uniform ~20%); hub.test ALL PASSED (67 checks: desktop/iPhone, 4 rooms, redirects, codes); access.test ALL
+  PASSED (PIN only as salted SHA-256, 20/20 random codes, NY-date rollover). Copy generic, no faces.
+- **Star Raider:** sim.test all ok, war.test ok. LAST STAND shows 0% "wins" for every bot; it is an endless survival mode by design.
+- **MELTDOWN:** sim 47/47.
+- **VORTEX:** 15 cabinet tests + touch (130) pass. `tests/vortex-rim.test.js` was flaky on main (1 camping case alive).
+  The Nov 9 sputter WIP as written broke anti-camping (3–5 rim-camper cases survived), so it was not shippable as-is.
+
+### Changes
+1. Carry-over (above), re-tested today: vortex-continue 15/15, mood-sticker-dodge 16/16, hub/answer-length pass.
+2. **VORTEX sputter fire** (`bc43e9b`): an overheated barrel no longer goes silent. Held fire spits one weak orange shot every
+   0.3 s (no heat, no laser) that can shoot down an enemy bullet. Sputter shots **pass through enemies already on the rim**,
+   so a rim camper still loses. The claw glows orange as heat builds, pulses with sparks when overheated, plays a hiss, and
+   shows a one-time BARREL HOT: FIRE IN BURSTS tip. Tests: vortex-sputter ALL PASS (desktop + iPhone, also against the live
+   site); vortex-rim ALL PASSED; all other VORTEX tests green.
+- Live check: game.js, mood-sticker.js and triage cases.js served by Pages match the pushed commits.
