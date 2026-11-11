@@ -5,6 +5,20 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'relax',
+    title: 'RELAX',
+    marquee: 'sunset',
+    tagline: 'A Martian sand table. A hidden magnet draws a steel ball through rust-red sand while a rover and an astronaut wander the bowl.',
+    description: 'A top-down kinetic sand table. Under the round bowl a magnet rides through spirals, roses, spirograph curves, rings, waves and other figures, and the steel ball follows with a little lag, plowing a groove and leaving soft ridges. The sand slowly settles. A small rover and a small astronaut drift, bump the ball and each other, leave faint tracks, and sometimes tip over and get back up. Every minute the sand is gently raked smooth and a new pattern begins, in time with a change of music. The music is real public-domain and openly licensed classical recordings streamed from Wikimedia Commons, with the composer, piece, performer and license on screen. Nothing plays until you tap or press a key. It is a relaxation toy: no score.',
+    thumb: 'games/relax/thumb.png',
+    added: '2026-11-11',
+    genre: 'RELAXATION',
+    year: 'SAND TABLE',
+    controls: 'SPACE or Next skips to the next pattern (main action) · ENTER or Effects toggles the glow and palette (special) · drag with the mouse to pull the ball with a temporary magnet · arrows or WASD nudge · M mute · H hint · gamepad: A next pattern, X effects, Start mute, stick nudges',
+    touch: 'tap Next, Effects, Mute and Hint · drag a finger in the bowl to pull the ball · the volume slider sits with the buttons · works full screen on iPhone, iPad and Mac',
+    accent: '#e06a3a'
+  },
+  {
     slug: 'jukebox',
     title: 'JUKEBOX',
     marquee: 'chrome',
