@@ -18,7 +18,7 @@ const check = (ok, msg, extra) => { if (!ok) fails++; console.log(ok ? '  PASS' 
     p.errs = [];
     p.on('pageerror', e => p.errs.push(e.message));
     await p.goto(BASE);
-    await p.waitForFunction(() => window.JUKE && JUKE.songs().length > 100, null, { timeout: 20000 });
+    await p.waitForFunction(() => window.JUKE && JUKE.songs().length >= 300, null, { timeout: 20000 });
     return p;
   };
   const overflow = p => p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -32,7 +32,7 @@ const check = (ok, msg, extra) => { if (!ok) fails++; console.log(ok ? '  PASS' 
     canvas: document.getElementById('vizCanvas').getBoundingClientRect().height,
     body: document.body.innerText
   }));
-  check(info.n >= 1000, 'catalog loaded', info.n);
+  check(info.n >= 300 && info.n <= 500, 'catalog is the hits shelf', info.n);
   check(info.iframes === 0, 'no embedded frame');
   check(/courtesy of iTunes/.test(info.courtesy), 'courtesy line is visible');
   check(!/youtube/i.test(info.body), 'page text does not mention a video site');
