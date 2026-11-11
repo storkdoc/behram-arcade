@@ -61,18 +61,25 @@
     return s === 'probably' || s === 'maybe';
   }
 
+  function absUrl(url) {
+    try { return new URL(url, root.location.href).href; } catch (e) { return url; }
+  }
+
   function Music(rand) {
     this.rand = rand;
     this.all = TRACKS;
     this.tracks = TRACKS.filter(function (t) { return canPlay(t.url); });
-    this.volume = 0.8;
+    this.volume = 0.85;
     this.muted = false;
     this.unlocked = false;
     this.ctx = null;
     this.analyser = null;
     this.freq = null;
     this.master = null;
-    this.slots = null;
+    this.graph = false;
+    this.corsOk = null;
+    this.els = [];
+    this.gains = [];
     this.hot = 0;
     this.bag = [];
     this.bagAt = 0;
@@ -80,11 +87,62 @@
     this.track = this.tracks[0] || null;
     this.failures = 0;
     this.lastError = '';
-    this.fadeOld = null;
+    this.fadeOld = -1;
     this.fadeAt = 0;
-    this._built = false;
-    if (this.track) this._orderPick(true);
+    this._switching = false;
+    const self = this;
+    this.holder = document.createElement('div');
+    this.holder.hidden = true;
+    this.holder.setAttribute('aria-hidden', 'true');
+    if (document.body) document.body.appendChild(this.holder);
+    else document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(self.holder); });
+    for (let i = 0; i < 2; i++) this.els.push(this._makeEl());
+    if (this.track) {
+      this._orderPick(true);
+      this._assign(this.els[0], this.track.url);
+      this.els[0].load();
+      this._probe(this.track.url);
+    }
   }
+
+  Music.prototype._makeEl = function () {
+    const el = new Audio();
+    el.crossOrigin = 'anonymous';
+    el.loop = true;
+    el.preload = 'auto';
+    el.muted = false;
+    el.volume = 1;
+    el.setAttribute('playsinline', '');
+    el.setAttribute('webkit-playsinline', '');
+    const self = this;
+    el.addEventListener('error', function () {
+      if (self.els[self.hot] !== el) return;
+      if (!el.error || el.error.code === 1) return;
+      self._failed(el);
+    });
+    el.addEventListener('ended', function () {
+      if (self.els[self.hot] !== el || !self.unlocked) return;
+      try { el.currentTime = 0; } catch (e) { /* ignore */ }
+      const p = el.play();
+      if (p && p.catch) p.catch(function () { self._failed(el); });
+    });
+    this.holder.appendChild(el);
+    return el;
+  };
+
+  Music.prototype._assign = function (el, url) {
+    if (!el || !url) return;
+    if (el.src && absUrl(el.src) === absUrl(url)) return;
+    el.src = url;
+  };
+
+  Music.prototype._probe = function (url) {
+    const self = this;
+    if (!root.fetch) { this.corsOk = false; return; }
+    fetch(url, { mode: 'cors', method: 'GET', headers: { Range: 'bytes=0-1023' } })
+      .then(function (r) { self.corsOk = !!r.ok; })
+      .catch(function () { self.corsOk = false; });
+  };
 
   Music.prototype._orderPick = function (first) {
     if (this.bagAt >= this.bag.length) {
@@ -102,65 +160,66 @@
     this.track = this.tracks[this.index];
   };
 
-  Music.prototype._build = function () {
-    if (this._built) return;
-    const AC = root.AudioContext || root.webkitAudioContext;
-    if (!AC) throw new Error('no audio');
-    const ctx = this.ctx = new AC();
-    const analyser = this.analyser = ctx.createAnalyser();
+  /* Route through Web Audio only after a CORS read of the file succeeded.
+     createMediaElementSource permanently detaches the element, and a tainted
+     element then plays silence. If the probe fails, the element plays on its
+     own and stays audible. */
+  Music.prototype._attach = function () {
+    if (this.graph || !this.ctx || this.corsOk !== true) return;
+    const analyser = this.analyser = this.ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.82;
     this.freq = new Uint8Array(analyser.frequencyBinCount);
-    this.master = ctx.createGain();
+    this.master = this.ctx.createGain();
     this.master.gain.value = this.muted ? 0 : this.volume;
     analyser.connect(this.master);
-    this.master.connect(ctx.destination);
-    const self = this;
-    this.slots = [0, 1].map(function () {
-      const el = new Audio();
-      el.crossOrigin = 'anonymous';
-      el.loop = true;
-      el.preload = 'auto';
-      el.setAttribute('playsinline', '');
-      el.setAttribute('webkit-playsinline', '');
-      const gain = ctx.createGain();
+    this.master.connect(this.ctx.destination);
+    this.gains = this.els.map(function (el) {
+      const gain = this.ctx.createGain();
       gain.gain.value = 0;
-      const src = ctx.createMediaElementSource(el);
-      src.connect(gain);
+      this.ctx.createMediaElementSource(el).connect(gain);
       gain.connect(analyser);
-      el.addEventListener('error', function () { self._failed(el); });
-      return { el: el, gain: gain };
-    });
-    this._built = true;
+      return gain;
+    }, this);
+    this.graph = true;
+  };
+
+  Music.prototype._output = function () {
+    if (this.graph && this.master) {
+      const v = this.muted ? 0 : this.volume;
+      const now = this.ctx.currentTime;
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.setValueAtTime(v, now);
+      return;
+    }
+    const v = this.muted ? 0 : this.volume;
+    for (let i = 0; i < this.els.length; i++) {
+      this.els[i].muted = false;
+      this.els[i].volume = v;
+    }
   };
 
   Music.prototype._failed = function (el) {
-    const slot = this.slots && this.slots[this.hot];
-    if (!slot || slot.el !== el) return;
+    if (this._switching) return;
+    if (this.els[this.hot] !== el) return;
     this.failures++;
     this.lastError = 'load';
     if (this.failures > this.tracks.length) return;
+    this._switching = true;
     this._orderPick(false);
-    this._playInto(this.hot, 0.4);
-  };
-
-  Music.prototype._applyMute = function () {
-    if (!this.master) return;
-    const v = this.muted ? 0 : this.volume;
-    const now = this.ctx.currentTime;
-    this.master.gain.cancelScheduledValues(now);
-    this.master.gain.setValueAtTime(this.master.gain.value, now);
-    this.master.gain.linearRampToValueAtTime(v, now + 0.12);
+    this._probe(this.track.url);
+    this._playHot(false);
+    this._switching = false;
   };
 
   Music.prototype.setVolume = function (v) {
     this.volume = Math.max(0, Math.min(1, v));
-    this._applyMute();
+    this._output();
   };
 
   Music.prototype.setMuted = function (m) {
     this.muted = !!m;
-    this._applyMute();
+    this._output();
   };
 
   Music.prototype.toggleMuted = function () {
@@ -168,57 +227,97 @@
     return this.muted;
   };
 
-  Music.prototype._playInto = function (slotIndex, fade) {
-    const slot = this.slots[slotIndex];
-    const track = this.track;
-    if (!slot || !track) return;
-    slot.el.src = track.url;
-    const playP = slot.el.play();
-    if (playP && playP.catch) playP.catch(function () { /* gesture or decode; error event handles decode */ });
+  Music.prototype._setGain = function (index, value, fade) {
+    const gain = this.gains[index];
+    if (!gain || !this.ctx) return;
     const now = this.ctx.currentTime;
-    const dur = fade;
-    slot.gain.gain.cancelScheduledValues(now);
-    slot.gain.gain.setValueAtTime(slot.gain.gain.value, now);
-    slot.gain.gain.linearRampToValueAtTime(1, now + dur);
+    gain.gain.cancelScheduledValues(now);
+    if (fade && fade > 0) {
+      const from = Math.max(0.001, gain.gain.value || 0);
+      gain.gain.setValueAtTime(from, now);
+      gain.gain.linearRampToValueAtTime(value, now + fade);
+    } else {
+      gain.gain.setValueAtTime(value, now);
+    }
   };
 
-  /* Call from the user-gesture turn. play() is invoked synchronously. */
+  /* play() is called in the same turn as the gesture. The first note starts
+     at full gain; only later pieces crossfade. */
+  Music.prototype._playHot = function (fadeIn) {
+    const el = this.els[this.hot];
+    const track = this.track;
+    if (!el || !track) return;
+    el.muted = false;
+    el.volume = this.graph ? 1 : (this.muted ? 0 : this.volume);
+    el.loop = true;
+    this._assign(el, track.url);
+    const self = this;
+    const playP = el.play();
+    if (playP && playP.catch) {
+      playP.catch(function (err) {
+        if (err && err.name === 'NotAllowedError') return;
+        self._failed(el);
+      });
+    }
+    if (this.graph) this._setGain(this.hot, 1, fadeIn ? 1.6 : 0);
+  };
+
   Music.prototype.start = function () {
     if (!this.tracks.length) return;
-    try { this._build(); } catch (e) { this.lastError = String(e && e.message || e); return; }
-    if (this.ctx.state === 'suspended') {
+    const AC = root.AudioContext || root.webkitAudioContext;
+    if (!this.ctx && AC) {
+      try { this.ctx = new AC(); } catch (e) { this.lastError = String(e && e.message || e); }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
       const p = this.ctx.resume();
       if (p && p.catch) p.catch(function () {});
     }
-    if (!this.unlocked) {
-      this.unlocked = true;
-      this.hot = 0;
-      this._playInto(0, 1.1);
-      this.slots[1].gain.gain.value = 0;
-    }
+    if (this.unlocked) return;
+    this.unlocked = true;
+    if (this.corsOk === true) this._attach();
+    this._output();
+    this._playHot(false);
   };
 
   Music.prototype.next = function () {
     if (!this.tracks.length) return;
+    const prev = this.hot;
     this._orderPick(false);
-    if (!this.unlocked) return;
-    const incoming = this.hot === 0 ? 1 : 0;
-    const outgoing = this.hot;
+    this._probe(this.track.url);
+    if (!this.unlocked) {
+      this._assign(this.els[0], this.track.url);
+      return;
+    }
+    const incoming = prev === 0 ? 1 : 0;
     this.hot = incoming;
-    this._playInto(incoming, 2.2);
-    const old = this.slots[outgoing];
-    const now = this.ctx.currentTime;
-    old.gain.gain.cancelScheduledValues(now);
-    old.gain.gain.setValueAtTime(old.gain.gain.value, now);
-    old.gain.gain.linearRampToValueAtTime(0, now + 2.2);
-    this.fadeOld = old;
-    this.fadeAt = now + 2.25;
+    this._playHot(this.graph);
+    if (this.graph) {
+      this._setGain(prev, 0, 1.6);
+      this.fadeOld = prev;
+      this.fadeAt = this.ctx.currentTime + 1.7;
+    } else {
+      try { this.els[prev].pause(); } catch (e) { /* ignore */ }
+    }
   };
 
   Music.prototype.tick = function () {
-    if (this.fadeOld && this.ctx && this.ctx.currentTime >= this.fadeAt) {
-      try { this.fadeOld.el.pause(); } catch (e) { /* ignore */ }
-      this.fadeOld = null;
+    if (this.unlocked && this.corsOk === true && !this.graph && this.ctx) {
+      this._attach();
+      this._output();
+      this._setGain(this.hot, 1, 0);
+      const el = this.els[this.hot];
+      if (el) { el.muted = false; el.volume = 1; }
+    }
+    if (this.graph && this.fadeOld >= 0 && this.ctx && this.ctx.currentTime >= this.fadeAt) {
+      try { this.els[this.fadeOld].pause(); } catch (e) { /* ignore */ }
+      this.fadeOld = -1;
+    }
+    if (this.graph && this.gains[this.hot]) {
+      const g = this.gains[this.hot].gain;
+      if (this.unlocked && g.value < 0.5 && (!this.ctx || this.ctx.currentTime > 0.4)) {
+        g.cancelScheduledValues(this.ctx.currentTime);
+        g.setValueAtTime(1, this.ctx.currentTime);
+      }
     }
   };
 
@@ -237,13 +336,19 @@
   };
 
   Music.prototype.element = function () {
-    return this.slots && this.slots[this.hot] ? this.slots[this.hot].el : null;
+    return this.els[this.hot] || null;
+  };
+
+  Music.prototype.outputGain = function () {
+    if (this.muted) return 0;
+    if (this.graph && this.master) return this.master.gain.value;
+    const el = this.element();
+    return el ? el.volume : this.volume;
   };
 
   Music.prototype.line = function () {
     const t = this.track;
-    if (!t) return 'Music unavailable in this browser';
-    if (!this.unlocked) return '';
+    if (!t) return '';
     return t.composer + ' · ' + t.piece + ' · ' + t.performer + ' · ' + t.license;
   };
 

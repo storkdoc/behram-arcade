@@ -8,7 +8,7 @@
 
   function Actors(rand) {
     this.rand = rand;
-    this.ball = { x: 0, y: 0, vx: 0, vy: 0, r: 0.046, m: 3.6, kind: 'ball' };
+    this.ball = { x: 0, y: 0, vx: 0, vy: 0, r: 0.028, m: 3.6, kind: 'ball' };
     this.rover = {
       kind: 'rover', x: -0.22, y: 0.16, vx: 0.02, vy: -0.01, ang: 0.4, av: 0,
       r: 0.078, m: 1.05, pose: 'up', poseT: 0, downFor: 2.2
@@ -104,8 +104,8 @@
     if (!b.pose || b.kind === 'ball') return;
     /* The astronaut is lighter, so a smaller shove tumbles them. A hard
        spin from a glancing hit counts too. */
-    const need = b.kind === 'astro' ? 0.09 : 0.16;
-    if (b.pose === 'up' && (j > need || Math.abs(b.av) > 1.3)) {
+    const need = b.kind === 'astro' ? 0.045 : 0.08;
+    if (b.pose === 'up' && (j > need || Math.abs(b.av) > 0.9)) {
       b.pose = 'tip';
       b.poseT = 0;
       b.av += (this.rand() - 0.5) * 1.4;
@@ -161,7 +161,7 @@
       }
       if (j3 > 0.08) this._puff((this.rover.x + this.astro.x) / 2, (this.rover.y + this.astro.y) / 2, 2);
       if (cut) {
-        sand.carveSegment(px, py, b.x, b.y, 0.042, 1.25);
+        sand.carveSegment(px, py, b.x, b.y, 0.025, 1.05);
         this._track(this.rover, sand);
         this._track(this.astro, sand);
       }

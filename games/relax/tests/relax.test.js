@@ -77,10 +77,10 @@ const check = (ok, msg, extra) => {
   await boot.page.click('#view');
   const audio = await boot.page.waitForFunction(() => {
     const el = RELAX.audioElement();
-    return el && !el.paused && el.currentTime > 0.15 && RELAX.analyserSum() > 0;
-  }, null, { timeout: 25000 }).then(() => boot.page.evaluate(() => {
+    return el && !el.paused && !el.muted && el.volume > 0 && RELAX.gain() > 0 && el.currentTime > 0.05 && RELAX.analyserSum() > 0;
+  }, null, { timeout: 3000 }).then(() => boot.page.evaluate(() => {
     const el = RELAX.audioElement();
-    return { t: el.currentTime, sum: RELAX.analyserSum(), line: RELAX.musicLine(), paused: el.paused, src: (el.currentSrc || '').slice(0, 80) };
+    return { t: el.currentTime, sum: RELAX.analyserSum(), gain: RELAX.gain(), vol: el.volume, muted: el.muted, paused: el.paused, line: RELAX.musicLine(), src: (el.currentSrc || '').slice(0, 80) };
   })).catch((e) => ({ error: String(e), state: null }));
   if (audio.error) {
     audio.state = await boot.page.evaluate(() => {
@@ -88,7 +88,7 @@ const check = (ok, msg, extra) => {
       return { paused: el && el.paused, t: el && el.currentTime, sum: RELAX.analyserSum(), line: RELAX.musicLine(), err: el && el.error && el.error.code };
     });
   }
-  check(!audio.error && audio.sum > 0 && audio.t > 0, 'audio element is playing and the analyser returns energy', audio);
+  check(!audio.error && audio.sum > 0 && audio.t > 0 && audio.vol > 0 && audio.gain > 0 && audio.muted === false && audio.paused === false, 'audio is audible within 3 seconds of the first gesture', audio);
 
   console.log('== inputs and chrome');
   const ui = await boot.page.evaluate(() => ({
@@ -99,13 +99,20 @@ const check = (ok, msg, extra) => {
     pattern: !!document.getElementById('pattern'),
     mute: !!document.getElementById('btn-mute'),
     vol: !!document.getElementById('vol'),
-    now: !!document.getElementById('now'),
-    begin: (document.getElementById('begin') || {}).textContent || '',
+    title: !!document.getElementById('title'),
+    creditHidden: document.getElementById('credit').hidden,
     text: document.body.innerText
   }));
   check(!ui.next && !ui.fx && !ui.hint && !ui.hintBtn && !ui.pattern, 'no extra buttons, hint, or pattern label', ui);
-  check(ui.mute && ui.vol && ui.now, 'mute, volume, and now playing remain', ui);
-  check(!/Space or Next|drag, arrows|show hint/i.test(ui.text), 'no instruction text', ui.text.slice(0, 180));
+  check(ui.mute && ui.vol && ui.title && ui.creditHidden, 'mute, volume, and a closed credit panel', ui);
+  check(!/Public domain|CC BY|Wikimedia Commons|Space or Next/.test(ui.text), 'license text is hidden until the title is opened', ui.text.slice(0, 200));
+  await boot.page.click('#title');
+  const opened = await boot.page.evaluate(() => ({
+    hidden: document.getElementById('credit').hidden,
+    text: document.getElementById('credit').innerText,
+    link: !!document.querySelector('#credit a')
+  }));
+  check(!opened.hidden && opened.link && /license|Public domain|CC/i.test(opened.text), 'the RELAX title opens composer, performer, and license', opened);
   const actorsSrc = await boot.page.evaluate(() => fetch('js/actors.js').then(r => r.text()));
   const mainSrc = await boot.page.evaluate(() => fetch('js/main.js').then(r => r.text()));
   check(!/quadraticCurveTo|fillText\(/.test(actorsSrc), 'figures are not drawn with arms, arrows, or debug text');
@@ -126,9 +133,9 @@ const check = (ok, msg, extra) => {
   console.log('== fast pattern change');
   const fast = await open(BASE + '?fast=1&seed=1');
   await fast.page.click('#view');
-  await fast.page.waitForFunction(() => RELAX.changes >= 1, null, { timeout: 12000 });
+  await fast.page.waitForFunction(() => RELAX.changes >= 1, null, { timeout: 16000 });
   const fastState = await fast.page.evaluate(() => ({ changes: RELAX.changes, cycle: RELAX.cycle, pattern: RELAX.pattern }));
-  check(fastState.changes >= 1 && fastState.cycle === 8, 'fast=1 advances to a new pattern inside a short cycle', fastState);
+  check(fastState.changes >= 1 && fastState.cycle === 10, 'fast=1 advances to a new pattern inside a short cycle', fastState);
 
   console.log('== ' + SOAK + 's bowl (speed, coverage, collisions, minute change)');
   const soak = await open(BASE + '?seed=1');
@@ -164,13 +171,15 @@ const check = (ok, msg, extra) => {
     line: RELAX.musicLine()
   }));
   console.log('    watched', ((Date.now() - t0) / 1000).toFixed(1) + 's', JSON.stringify({ s8, s20, s40, late }));
-  check(s8.speed > 0.04 && s8.speed < 0.4, 'the ball is moving, and much slower than before', s8.speed);
-  check(s20.coverage > s8.coverage + 25 && s40.coverage > s20.coverage + 25, 'groove coverage keeps growing across the minute', { s8: s8.coverage, s20: s20.coverage, s40: s40.coverage });
-  check(s40.progress > 0.55 && s40.progress < 0.85, 'the pattern is still unfolding partway through the minute', s40.progress);
+  check(s8.speed > 0.02 && s8.speed < 0.12, 'the ball is about half the previous pace', s8.speed);
+  check(await soak.page.evaluate(() => RELAX.ballRadius) < 0.034 && await soak.page.evaluate(() => RELAX.ballRadius) > 0.02, 'the steel ball is the smaller size', await soak.page.evaluate(() => RELAX.ballRadius));
+  check(s20.coverage > s8.coverage + 12 && s40.coverage > s20.coverage + 12, 'groove coverage keeps growing through the cycle', { s8: s8.coverage, s20: s20.coverage, s40: s40.coverage });
+  check(s40.progress > 0.18 && s40.progress < 0.42, 'a 150-second pattern is still unfolding at 40 seconds', s40.progress);
   check(s40.retrace < 0.08, 'the magnet is not retracing an earlier stretch', s40.retrace);
+  check(await soak.page.evaluate(() => RELAX.cycle) === 150, 'each cycle is 150 seconds');
   check(late.hits >= 1, 'the ball collides with the rover or the astronaut', late.hits);
   check(late.flips >= 1, 'someone tips or tumbles and the counter moves', late.flips);
-  check(late.changes >= 1, 'the pattern changes on the one-minute clock', { changes: late.changes, cycleT: late.cycleT, phase: late.phase });
+  check(late.changes === 0 && late.cycleT < 150, 'the 150-second pattern has not wrapped early', { changes: late.changes, cycleT: late.cycleT });
   check(late.groove > 30, 'a drawing is still in the sand (or was, before the rake)', late.groove);
   check(soak.errs.length === 0 && boot.errs.length === 0 && fast.errs.length === 0, 'no console errors', { boot: boot.errs, fast: fast.errs, soak: soak.errs });
 

@@ -9,8 +9,8 @@
 
   const q = new URLSearchParams(location.search);
   const FAST = q.get('fast') === '1';
-  const CYCLE = FAST ? 8 : 60;
-  const RAKE = FAST ? 1.6 : 3.6;
+  const CYCLE = FAST ? 10 : 150;
+  const RAKE = FAST ? 2 : 5;
   const DRAW = CYCLE - RAKE;
   const seedArg = q.get('seed');
   let seed = seedArg != null ? (Number(seedArg) >>> 0) || 1 : (Date.now() >>> 0);
@@ -34,8 +34,10 @@
 
   const canvas = document.getElementById('view');
   const ctx = canvas.getContext('2d', { alpha: false });
-  const nowEl = document.getElementById('now');
   const beginEl = document.getElementById('begin');
+  const titleBtn = document.getElementById('title');
+  const creditEl = document.getElementById('credit');
+  const creditBody = document.getElementById('credit-body');
   const btnMute = document.getElementById('btn-mute');
   const volEl = document.getElementById('vol');
 
@@ -104,7 +106,7 @@
   if (saved.fx === '0') effects = false;
   if (saved.vol != null && saved.vol !== '') {
     const v = Number(saved.vol);
-    if (!Number.isNaN(v)) { music.setVolume(v); volEl.value = String(v); }
+    if (!Number.isNaN(v) && v >= 0.25) { music.setVolume(v); volEl.value = String(v); }
   } else volEl.value = String(music.volume);
   if (saved.muted) music.setMuted(true);
   syncMute();
@@ -242,6 +244,14 @@
   canvas.addEventListener('pointercancel', endPointer);
 
   btnMute.addEventListener('click', function () { ensureMusic(); music.toggleMuted(); syncMute(); persist(); });
+  titleBtn.addEventListener('click', function () {
+    ensureMusic();
+    const open = creditEl.hasAttribute('hidden');
+    if (open) creditEl.removeAttribute('hidden');
+    else creditEl.setAttribute('hidden', '');
+    titleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    fillCredit();
+  });
   volEl.addEventListener('input', function () {
     ensureMusic();
     music.setVolume(Number(volEl.value));
@@ -536,20 +546,30 @@
     ctx.fillRect(0, 0, w, h);
   }
 
-  function hud() {
-    const line = music.line();
-    const shown = nowEl.getAttribute('data-line');
-    if (shown === line) return;
-    nowEl.setAttribute('data-line', line);
-    nowEl.textContent = '';
-    if (music.track && music.unlocked && line) {
-      const a = document.createElement('a');
-      a.href = music.track.page;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = line;
-      nowEl.appendChild(a);
+  function fillCredit() {
+    if (creditEl.hasAttribute('hidden')) return;
+    const t = music.track;
+    const key = t ? t.url : '';
+    if (creditBody.getAttribute('data-url') === key) return;
+    creditBody.setAttribute('data-url', key);
+    creditBody.textContent = '';
+    if (!t) return;
+    const lines = [t.piece, t.composer, t.performer, t.license];
+    for (let i = 0; i < lines.length; i++) {
+      const p = document.createElement('div');
+      p.textContent = lines[i];
+      creditBody.appendChild(p);
     }
+    const a = document.createElement('a');
+    a.href = t.page;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Source on Wikimedia Commons';
+    creditBody.appendChild(a);
+  }
+
+  function hud() {
+    fillCredit();
   }
 
   let last = performance.now();
@@ -617,6 +637,8 @@
     get effects() { return effects; },
     audioElement: function () { return music.element(); },
     analyserSum: function () { return music.sum(); },
+    gain: function () { return music.outputGain(); },
+    ballRadius: actors.ball.r,
     musicLine: function () { return music.line(); },
     unlocked: function () { return music.unlocked; },
     skip: skip

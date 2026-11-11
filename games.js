@@ -9,13 +9,13 @@ window.ARCADE_GAMES = [
     title: 'RELAX',
     marquee: 'sunset',
     tagline: 'A Martian sand table. A hidden magnet draws a steel ball through rust-red sand while a rover and an astronaut wander the bowl.',
-    description: 'A top-down kinetic sand table. Under the round bowl a magnet rides through spirals, roses, spirograph curves, rings, waves and other figures, and the steel ball follows with a little lag, plowing a groove and leaving soft ridges. The sand slowly settles. A small rover and a small astronaut drift, bump the ball and each other, leave faint tracks, and sometimes tip over and get back up. Every minute the sand is gently raked smooth and a new pattern begins, in time with a change of music. The music is real public-domain and openly licensed classical recordings streamed from Wikimedia Commons, with the composer, piece, performer and license on screen. Nothing plays until you tap or press a key. It is a relaxation toy: no score.',
+    description: 'A top-down kinetic sand table. Under the round bowl a magnet rides through spirals, rings, rosettes, a spirograph mandala, spokes, stars, nested squares and diamonds, and other figures, and a small steel ball follows with a little lag, plowing a fine groove. The sand slowly settles. A small rover and a small astronaut drift, bump the ball, and sometimes tip over and get back up. Every two and a half minutes the sand is gently raked smooth and a new pattern begins, in time with a change of music. The music is real public-domain and openly licensed classical recordings streamed from Wikimedia Commons. Tap the RELAX title to read the composer, performer, and license. Nothing plays until you tap or press a key. It is a relaxation toy: no score.',
     thumb: 'games/relax/thumb.png',
     added: '2026-11-11',
     genre: 'RELAXATION',
     year: 'SAND TABLE',
     controls: 'SPACE skips to the next pattern · ENTER toggles the glow · drag to nudge the ball · arrows or WASD nudge · M mute · gamepad: A next pattern, X effects, Start mute, stick nudges',
-    touch: 'tap anywhere to begin · drag in the bowl to nudge the ball · mute and volume sit in the corner · works full screen on iPhone, iPad and Mac',
+    touch: 'tap anywhere to begin · drag in the bowl to nudge the ball · mute and volume sit in the corner · tap RELAX for the music credit · works full screen on iPhone, iPad and Mac',
     accent: '#e06a3a'
   },
   {

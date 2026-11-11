@@ -30,16 +30,37 @@ body { position: fixed; inset: 0; }
   color: #f3ecdf;
 }
 #ui a, #ui button, #ui input { pointer-events: auto; }
-#home {
+#corner {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 8px);
   left: calc(env(safe-area-inset-left) + 10px);
-  color: rgba(243, 236, 223, 0.72);
-  text-decoration: none;
-  font: 600 11px/1 -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
-  letter-spacing: 0.14em;
-  padding: 7px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+#home, #title {
+  color: rgba(243, 236, 223, 0.78);
+  font: 600 12px/1 -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  letter-spacing: 0.16em;
+  background: transparent;
+  border: 0;
+  padding: 6px 2px;
+  text-decoration: none;
+}
+#credit {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 36px);
+  left: calc(env(safe-area-inset-left) + 10px);
+  width: min(320px, calc(100% - 24px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(6, 10, 18, 0.78);
+  color: rgba(255, 246, 232, 0.9);
+  font: 500 12px/1.45 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+#credit[hidden] { display: none; }
+#credit a { color: inherit; }
+#foot { display: none; }
 #sound {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 8px);

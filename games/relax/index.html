@@ -16,15 +16,18 @@
 <body>
 <canvas id="view" aria-label="RELAX sand table"></canvas>
 <div id="ui">
-  <a id="home" href="../../index.html">&larr; ARCADE</a>
+  <div id="corner">
+    <a id="home" href="../../index.html" aria-label="Arcade">&larr;</a>
+    <button type="button" id="title" aria-expanded="false" aria-controls="credit">RELAX</button>
+  </div>
+  <div id="credit" hidden>
+    <p id="credit-body"></p>
+  </div>
   <div id="sound">
     <button type="button" id="btn-mute" aria-pressed="false" aria-label="Mute">Mute</button>
-    <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+    <input id="vol" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Volume">
   </div>
   <p id="begin">tap to begin</p>
-  <div id="foot">
-    <div id="now"></div>
-  </div>
 </div>
 <script src="js/patterns.js"></script>
 <script src="js/sand.js"></script>
