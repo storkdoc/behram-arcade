@@ -11,7 +11,9 @@ const check = (ok, msg, extra) => { if (!ok) fails++; console.log(ok ? '  PASS' 
 console.log('== catalog from iTunes metadata');
 const doc = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'catalog.json'), 'utf8'));
 const songs = Cat.prepare(doc.songs);
-check(songs.length >= 1000, 'more than 1000 previews', songs.length);
+check(songs.length >= 300 && songs.length <= 500, 'the shelf is a few hundred hits', songs.length);
+const catalogBytes = fs.statSync(path.join(__dirname, '..', 'data', 'catalog.json')).size;
+check(catalogBytes < 800000, 'catalog file stays small enough to load quickly', catalogBytes);
 check(songs.length === doc.songs.length, 'every built row passes validation', [songs.length, doc.songs.length]);
 const counts = { '70s': 0, '80s': 0, '90s': 0 };
 const ids = new Set();
@@ -24,7 +26,15 @@ songs.forEach(s => {
   if (!Cat.accept(s)) hosts = false;
 });
 check(years && hosts && dupes === 0, 'years match decades, hosts are Apple, ids are unique', { dupes, counts });
-check(counts['70s'] >= 200 && counts['80s'] >= 200 && counts['90s'] >= 200, 'each decade has a deep shelf', counts);
+check(counts['70s'] >= 100 && counts['70s'] <= 170 && counts['80s'] >= 100 && counts['80s'] <= 170 && counts['90s'] >= 100 && counts['90s'] <= 170, 'each decade stays near a hundred-plus hits', counts);
+const byChart = {};
+songs.forEach(s => { byChart[s.chartYear] = (byChart[s.chartYear] || 0) + 1; });
+let thin = [];
+for (let y = 1970; y <= 1999; y++) if ((byChart[y] || 0) < 8) thin.push(y + ':' + (byChart[y] || 0));
+check(thin.length === 0, 'every chart year has several hits', thin);
+const byYear = {};
+songs.forEach(s => { byYear[s.year] = (byYear[s.year] || 0) + 1; });
+check(Math.max(...Object.values(byYear)) <= 25, 'no single release year crowds the shelf', byYear);
 check(/courtesy of iTunes/.test(doc.courtesy), 'attribution is the iTunes courtesy line');
 const q = Cat.query(songs, { decade: '80s', q: 'billie jean' });
 check(q.length >= 1 && q.every(s => s.decade === '80s'), 'search stays inside the decade', q.map(s => s.title + ' ' + s.year).slice(0, 3));

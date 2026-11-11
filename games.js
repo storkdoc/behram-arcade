@@ -9,7 +9,7 @@ window.ARCADE_GAMES = [
     title: 'JUKEBOX',
     marquee: 'chrome',
     tagline: "A chrome-and-neon diner cabinet of '70s, '80s and '90s hits. 30-second previews courtesy of iTunes, with a visualizer drawn from the audio.",
-    description: "A listening jukebox, separate from Name That Groove. Search or pick a decade, queue real 1970-1999 recordings, and play a 30-second preview streamed from Apple. Each preview is labeled and links to its iTunes listing. Provided courtesy of iTunes. The light show reads that preview with the Web Audio analyser: bars, waveform, a radial ring, or sparks. Nothing starts until you press Play. Favorites and the queue stay on this device. If a preview will not load, Next tries another song.",
+    description: "A listening jukebox, separate from Name That Groove. Search or pick a decade and queue the biggest Hot 100 hits of each year from 1970 to 1999. Play streams a 30-second preview from Apple. Each preview is labeled and links to its iTunes listing. Provided courtesy of iTunes. The light show reads that preview with the Web Audio analyser: bars, waveform, a radial ring, or sparks. Nothing starts until you press Play. Favorites and the queue stay on this device. If a preview will not load, Next tries another song.",
     thumb: 'games/jukebox/thumb.png',
     added: '2026-11-07',
     genre: 'MUSIC',

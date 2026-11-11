@@ -1,192 +1,185 @@
 #!/usr/bin/env python3
-"""Build the jukebox catalog from the Apple iTunes Search API.
+"""Build the jukebox catalog from Billboard's year-end Hot 100 and Apple previews.
 
-Stores metadata and preview URLs returned by Apple. Does not download audio.
-A song is kept only when the API names the artist, returns a preview, and the
-release year falls in 1970-1999.
+The shelf is the biggest hits of 1970-1999, not every recording from those years.
+Ranks come from the Billboard Year-End Hot 100 (via the Wikipedia pages that cite
+the year-end issue). A few songs that finished lower are added when they also
+appear on a published VH1 greatest-of-decade or greatest-rock list.
+
+Each kept row is an Apple iTunes Search result: original studio recording, with
+the preview left on Apple's host. This script does not download audio.
 """
-import json, os, re, time, unicodedata, urllib.parse, urllib.request
+import html as html_lib
+import json
+import re
+import time
+import unicodedata
+import urllib.parse
+import urllib.request
+from collections import Counter, defaultdict
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parents[1] / 'data' / 'catalog.json'
-CACHE = Path('/tmp/itunes-catalog-cache')
+CACHE = Path('/tmp/jukebox-hits-cache')
 CACHE.mkdir(parents=True, exist_ok=True)
-UA = 'BehramArcadeCatalog/1.0'
+UA = 'BehramArcadeCatalog/1.0 (jukebox hits catalog)'
 
-ARTISTS = [
-    # 70s and earlier stars still charting then
-    'The Jackson 5', 'The Jacksons', 'Michael Jackson', 'Stevie Wonder', 'Marvin Gaye',
-    'Al Green', 'Bill Withers', 'Aretha Franklin', 'Roberta Flack', 'Diana Ross',
-    'The Temptations', 'The Four Tops', 'Gladys Knight & The Pips', 'The O\'Jays',
-    'The Spinners', 'Curtis Mayfield', 'Sly & The Family Stone', 'Earth, Wind & Fire',
-    'Commodores', 'Kool & The Gang', 'Chic', 'Donna Summer', 'Gloria Gaynor',
-    'Sister Sledge', 'Village People', 'Barry White', 'The Isley Brothers', 'War',
-    'Average White Band', 'Heatwave', 'The Trammps', 'Rose Royce', 'Harold Melvin & The Blue Notes',
-    'The Stylistics', 'Elton John', 'Queen', 'ABBA', 'Bee Gees', 'Eagles', 'Fleetwood Mac',
-    'David Bowie', 'Led Zeppelin', 'Pink Floyd', 'The Rolling Stones', 'The Who',
-    'Paul McCartney & Wings', 'Paul McCartney', 'John Lennon', 'George Harrison',
-    'Carole King', 'James Taylor', 'Joni Mitchell', 'Carly Simon', 'Simon & Garfunkel',
-    'Paul Simon', 'Billy Joel', 'Bruce Springsteen', 'Bob Seger', 'Bob Dylan', 'Neil Young',
-    'Crosby, Stills & Nash', 'The Doobie Brothers', 'Steve Miller Band', 'Boston', 'Foreigner',
-    'Kiss', 'Aerosmith', 'Electric Light Orchestra', 'Supertramp', 'Rod Stewart', 'Cat Stevens',
-    'Jim Croce', 'John Denver', 'Olivia Newton-John', 'Linda Ronstadt', 'Dolly Parton',
-    'Willie Nelson', 'Kenny Rogers', 'The Carpenters', 'Bread', 'America', 'Chicago',
-    'Steely Dan', 'Creedence Clearwater Revival', 'Santana', 'The Doors', 'Three Dog Night',
-    'Lynyrd Skynyrd', 'The Allman Brothers Band', 'ZZ Top', 'Heart', 'Cheap Trick', 'The Cars',
-    'Blondie', 'Tom Petty and the Heartbreakers', 'Tom Petty', 'Elvis Costello', 'The Clash',
-    'Ramones', 'Talking Heads', 'The Police', 'Eric Clapton', 'Peter Frampton', 'Genesis',
-    'Phil Collins', 'Yes', 'Rush', 'Van Halen', 'AC/DC', 'Black Sabbath', 'Deep Purple',
-    'Alice Cooper', 'Ted Nugent', 'Grand Funk Railroad', 'Bachman-Turner Overdrive',
-    'Neil Diamond', 'Barbra Streisand', 'Barry Manilow', 'Captain & Tennille', 'Hall & Oates',
-    'Player', 'Little River Band', '10cc', 'Sweet', 'T. Rex', 'Roxy Music', 'Brian Ferry',
-    'The Beach Boys', 'Elvis Presley', 'Johnny Cash', 'Charlie Rich', 'Loretta Lynn',
-    'Tammy Wynette', 'George Jones', 'Conway Twitty', 'Anne Murray', 'Helen Reddy',
-    'Roberta Flack & Donny Hathaway', 'Donny Hathaway', 'Isaac Hayes', 'The Pointer Sisters',
-    'Labelle', 'Patti LaBelle', 'Thelma Houston', 'Yvonne Elliman', 'Andy Gibb',
-    'KC & The Sunshine Band', 'Wild Cherry', 'Brick', 'The Brothers Johnson', 'Parliament',
-    'Bootsy Collins', 'Ohio Players', 'The Gap Band', 'Rick James', 'Prince',
-    'Stevie Nicks', 'Lindsey Buckingham', 'Boz Scaggs', 'Doobie Brothers',
-    # 80s
-    'Madonna', 'Prince', 'Michael Jackson', 'Whitney Houston', 'Cyndi Lauper', 'Tina Turner',
-    'Bruce Springsteen', 'Journey', 'Bon Jovi', 'Def Leppard', 'Guns N\' Roses', 'U2',
-    'The Police', 'Sting', 'Duran Duran', 'Wham!', 'George Michael', 'Culture Club',
-    'Boy George', 'Eurythmics', 'Depeche Mode', 'New Order', 'The Cure', 'Tears For Fears',
-    'a-ha', 'Simple Minds', 'INXS', 'Men at Work', 'The Bangles', 'The Go-Go\'s',
-    'Pat Benatar', 'Joan Jett & The Blackhearts', 'Bonnie Tyler', 'Survivor', 'REO Speedwagon',
-    'Styx', 'Toto', 'Asia', 'Huey Lewis & The News', 'Billy Joel', 'Lionel Richie',
-    'Commodores', 'Kool & The Gang', 'Rick James', 'Cameo', 'Zapp', 'Roger',
-    'Luther Vandross', 'Anita Baker', 'Sade', 'Janet Jackson', 'Paula Abdul', 'Jody Watley',
-    'Bobby Brown', 'New Edition', 'Guy', 'Keith Sweat', 'Freddie Jackson', 'Maze',
-    'Stevie Wonder', 'Prince and the Revolution', 'The Time', 'Sheila E.',
-    'Run-D.M.C.', 'Beastie Boys', 'LL Cool J', 'Public Enemy', 'Eric B. & Rakim',
-    'Salt-N-Pepa', 'DJ Jazzy Jeff & The Fresh Prince', 'Tone Loc', 'Young MC', 'Rob Base & DJ E-Z Rock',
-    'Grandmaster Flash', 'Kurtis Blow', 'Whodini', 'The Fat Boys',
-    'Phil Collins', 'Peter Gabriel', 'Dire Straits', 'Mark Knopfler', 'The Pretenders',
-    'Blondie', 'Talking Heads', 'R.E.M.', 'The Smiths', 'Echo & The Bunnymen',
-    'Billy Idol', 'Adam Ant', 'Human League', 'Soft Cell', 'Yaz', 'Erasure', 'Pet Shop Boys',
-    'Frankie Goes to Hollywood', 'Dead or Alive', 'Bronski Beat', 'Communards',
-    'Bryan Adams', 'John Mellencamp', 'Don Henley', 'Glenn Frey', 'Steve Winwood',
-    'Robert Palmer', 'Simply Red', 'Fine Young Cannibals', 'Tears for Fears',
-    'Kenny Loggins', 'Christopher Cross', 'Air Supply', 'Chicago', 'Richard Marx',
-    'Rick Springfield', 'Tommy Tutone', 'The J. Geils Band', 'John Cougar Mellencamp',
-    'Bruce Hornsby', 'Tracy Chapman', 'Suzanne Vega', 'Edie Brickell & New Bohemians',
-    '10,000 Maniacs', 'Roxette', 'Belinda Carlisle', 'Expose', 'Taylor Dayne',
-    'Gloria Estefan', 'Miami Sound Machine', 'Julio Iglesias', 'Laura Branigan',
-    'Kim Carnes', 'Sheena Easton', 'Olivia Newton-John', 'Irene Cara', 'Deniece Williams',
-    'Patti Austin', 'James Ingram', 'Jeffrey Osborne', 'Ray Parker Jr.', 'The Pointer Sisters',
-    'Klymaxx', 'Midnight Star', 'Mtume', 'SOS Band', 'Loose Ends', 'Five Star',
-    'DeBarge', 'Ready for the World', 'Club Nouveau', 'Timex Social Club',
-    'Queen', 'David Bowie', 'Elton John', 'George Michael', 'Wham!',
-    'Van Halen', 'Motley Crue', 'Poison', 'Whitesnake', 'Europe', 'Scorpions',
-    'Ozzy Osbourne', 'Iron Maiden', 'Judas Priest', 'Metallica', 'Quiet Riot',
-    'Twisted Sister', 'Ratt', 'Cinderella', 'Warrant', 'Skid Row',
-    'The Rolling Stones', 'ZZ Top', 'Aerosmith', 'Heart', 'Cheap Trick', 'The Cars',
-    'Talking Heads', 'U2', 'Simple Minds', 'Big Country', 'The Alarm',
-    'Howard Jones', 'Thompson Twins', 'Naked Eyes', 'ABC', 'Spandau Ballet',
-    'Kajagoogoo', 'A Flock of Seagulls', 'Thomas Dolby', 'Gary Numan',
-    'Men Without Hats', 'Nena', 'Falco', 'Peter Schilling', 'After the Fire',
-    'Toto', 'Mr. Mister', 'Glass Tiger', 'Cutting Crew', 'Johnny Hates Jazz',
-    'Level 42', 'Scritti Politti', 'Swing Out Sister', 'Basia',
-    'George Benson', 'Al Jarreau', 'Grover Washington Jr.', 'David Sanborn',
-    'Kenny G', 'Sade', 'Everything but the Girl',
-    'Dolly Parton', 'Kenny Rogers', 'Alabama', 'The Judds', 'Randy Travis',
-    'George Strait', 'Reba McEntire', 'Hank Williams Jr.', 'Willie Nelson',
-    'Waylon Jennings', 'Rosanne Cash', 'Juice Newton', 'Eddie Rabbitt',
-    'Crystal Gayle', 'Barbara Mandrell', 'Ronnie Milsap', 'Lee Greenwood',
-    'The Oak Ridge Boys', 'Exile', 'Restless Heart', 'Highway 101',
-    # 90s
-    'Nirvana', 'Pearl Jam', 'Soundgarden', 'Alice in Chains', 'Stone Temple Pilots',
-    'Smashing Pumpkins', 'Red Hot Chili Peppers', 'Foo Fighters', 'Oasis', 'Blur',
-    'Radiohead', 'R.E.M.', 'U2', 'Alanis Morissette', 'No Doubt', 'Garbage',
-    'Hole', 'Courtney Love', 'Liz Phair', 'PJ Harvey', 'Bjork', 'Tori Amos',
-    'Sarah McLachlan', 'Jewel', 'Sheryl Crow', 'Melissa Etheridge', 'Natalie Merchant',
-    'The Cranberries', 'Sixpence None the Richer', 'Savage Garden', 'Matchbox Twenty',
-    'Goo Goo Dolls', 'Third Eye Blind', 'Semisonic', 'Fastball', 'Eagle-Eye Cherry',
-    'Sugar Ray', 'Smash Mouth', 'Barenaked Ladies', 'Counting Crows', 'Hootie & The Blowfish',
-    'Blues Traveler', 'Dave Matthews Band', 'Spin Doctors', 'Gin Blossoms',
-    'Toad the Wet Sprocket', 'Soul Asylum', 'Blind Melon', 'Temple of the Dog',
-    'Green Day', 'The Offspring', 'Blink-182', 'Rancid', 'NOFX', 'Bad Religion',
-    'Sublime', '311', 'Rage Against the Machine', 'Tool', 'Nine Inch Nails',
-    'Marilyn Manson', 'Beck', 'Weezer', 'Pavement', 'Pixies', 'Jane\'s Addiction',
-    'Metallica', 'Guns N\' Roses', 'Aerosmith', 'Bon Jovi', 'Def Leppard',
-    'Mariah Carey', 'Whitney Houston', 'Celine Dion', 'Toni Braxton', 'Boyz II Men',
-    'TLC', 'En Vogue', 'SWV', 'Xscape', 'Brandy', 'Monica', 'Aaliyah', 'Mary J. Blige',
-    'Lauryn Hill', 'Erykah Badu', 'D\'Angelo', 'Maxwell', 'Janet Jackson',
-    'Michael Jackson', 'Madonna', 'Spice Girls', 'Britney Spears', 'Backstreet Boys',
-    'NSYNC', '98 Degrees', 'Hanson', 'Ace of Base', 'Aqua', 'Robyn', 'All Saints',
-    'Destiny\'s Child', 'Blaque', '702', 'Total', 'Changing Faces',
-    'Dr. Dre', 'Snoop Dogg', 'Tupac', 'The Notorious B.I.G.', 'Nas', 'Wu-Tang Clan',
-    'A Tribe Called Quest', 'De La Soul', 'The Fugees', 'Lauryn Hill', 'Wyclef Jean',
-    'Busta Rhymes', 'Missy Elliott', 'Timbaland', 'Jay-Z', 'Outkast', 'Goodie Mob',
-    'Juvenile', 'Mystikal', 'Master P', 'Warren G', 'Nate Dogg', 'Ice Cube',
-    'Cypress Hill', 'House of Pain', 'Beastie Boys', 'LL Cool J', 'Salt-N-Pepa',
-    'Coolio', 'Warren G', 'Montell Jordan', 'Blackstreet', 'Next', 'Dru Hill',
-    'Jodeci', 'H-Town', 'Shai', 'Silk', '112', 'Ginuwine', 'Usher',
-    'R. Kelly', 'Keith Sweat', 'Babyface', 'Boyz II Men', 'All-4-One', 'Color Me Badd',
-    'PM Dawn', 'Arrested Development', 'Digable Planets', 'Us3', 'Guru',
-    'Shania Twain', 'Garth Brooks', 'Tim McGraw', 'Faith Hill', 'Dixie Chicks',
-    'LeAnn Rimes', 'Martina McBride', 'Alan Jackson', 'Brooks & Dunn', 'Clint Black',
-    'Vince Gill', 'Wynonna', 'Trisha Yearwood', 'Reba McEntire', 'George Strait',
-    'John Michael Montgomery', 'Clay Walker', 'Toby Keith', 'Kenny Chesney',
-    'Celine Dion', 'Whitney Houston', 'Mariah Carey', 'Bryan Adams', 'Rod Stewart',
-    'Elton John', 'Phil Collins', 'Sting', 'Seal', 'Simply Red', 'Lisa Stansfield',
-    'Des\'ree', 'Joan Osborne', 'Paula Cole', 'Fiona Apple', 'Meredith Brooks',
-    'Chumbawamba', 'The Verve', 'Oasis', 'Blur', 'Pulp', 'Suede', 'Manic Street Preachers',
-    'Radiohead', 'Portishead', 'Massive Attack', 'The Chemical Brothers', 'Fatboy Slim',
-    'The Prodigy', 'Moby', 'Daft Punk', 'Air', 'Jamiroquai', 'Brand New Heavies',
-    'Incognito', 'Groove Theory', 'Soul II Soul', 'Lisa Stansfield',
-    'Ace of Base', 'Real McCoy', 'La Bouche', 'Snap!', 'Culture Beat', 'Haddaway',
-    'Corona', 'Ice MC', '2 Unlimited', 'Technotronic', 'C+C Music Factory',
-    'Black Box', 'CeCe Peniston', 'Robin S', 'Crystal Waters', 'Deee-Lite',
-    'Madonna', 'Janet Jackson', 'Amber', 'Everything but the Girl',
-    'Ricky Martin', 'Jennifer Lopez', 'Marc Anthony', 'Enrique Iglesias', 'Shakira',
-    'Santana', 'Lou Bega', 'Los Del Rio', 'Los Lobos', 'Selena',
-    'Britney Spears', 'Christina Aguilera', 'Mandy Moore', 'Jessica Simpson',
-    'Backstreet Boys', '*NSYNC', 'Five', 'Westlife', 'Boyzone',
-    'Spice Girls', 'All Saints', 'B*Witched', 'Steps',
-    'Will Smith', 'Puff Daddy', 'Ma$e', 'Notorious B.I.G.', 'Sean Combs',
-    'Bone Thugs-N-Harmony', 'Kris Kross', 'Sir Mix-a-Lot', 'Tag Team', '69 Boyz',
-    'Quad City DJ\'s', 'Cartoons', 'Aqua', 'Eiffel 65', 'Vengaboys', 'Lou Bega',
-    'Cher', 'Cher', 'Whitney Houston', 'Eric Clapton', 'Bonnie Raitt',
-    'Tom Petty', 'Bruce Springsteen', 'R.E.M.', 'U2', 'Red Hot Chili Peppers',
-    'Lenny Kravitz', 'John Mellencamp', 'Melissa Etheridge', 'Bonnie Raitt',
-    'k.d. lang', 'Sarah McLachlan', 'Dido', 'Macy Gray', 'Lauryn Hill',
-    'TLC', 'No Doubt', 'Gwen Stefani', 'Sublime', 'Sugar Ray', 'Smash Mouth',
-    'Third Eye Blind', 'Matchbox Twenty', 'Train', 'Vertical Horizon', 'Lifehouse',
-    'Creed', 'Nickelback', 'Collective Soul', 'Live', 'Bush', 'Candlebox',
-    'Everclear', 'Harvey Danger', 'Lit', 'Stroke 9', 'New Radicals',
-    'Eagle-Eye Cherry', 'Natalie Imbruglia', 'Chumbawamba', 'The Cardigans',
-    'Robyn',     'Ace of Base', 'Roxette', 'Ace of Base',
-    # Names the store uses when the common billing does not match artistTerm
-    'Daryl Hall & John Oates', 'Bryan Ferry', 'Run-DMC', '2Pac', 'Vanilla Ice',
-    'MC Hammer', 'Dexys Midnight Runners', 'The S.O.S. Band', 'Rob Base',
-]
-
-# Unique, preserve order
-_seen = set()
-ARTISTS_U = []
-for a in ARTISTS:
-    k = a.lower()
-    if k not in _seen:
-        _seen.add(k)
-        ARTISTS_U.append(a)
+CORE_RANKS = 12          # top of each Billboard year-end chart
+ICONIC_MAX_RANK = 40     # lower year-end songs eligible as iconic extras
+MIN_PER_YEAR = 8
+MAX_PER_DECADE = 165
+BACKFILL_RANK = 20
 
 JUNK = re.compile(
-    r'\b(karaoke|tribute|lullaby|music box|ringtone|instrumental|in the style|originally performed|made famous|8-bit|8 bit|cover version|megamix|medley|interview|commentary|spoken word|parody)\b',
+    r'\b(karaoke|tribute|lullaby|music box|ringtone|instrumental|in the style|originally performed|made famous|8-bit|8 bit|cover version|megamix|medley|interview|commentary|spoken word|parody|re-?recorded|bhangra|banghra|a ?capp?ella)\b',
     re.I)
-# Live, remix, karaoke and similar alternates are skipped. A remaster or
-# single/album version of the same recording collapses to one title below.
 PAREN_JUNK = re.compile(
     r'\((?:[^)]*\b(?:live|remix|demo|acoustic|session|karaoke|dub|extended|re-?record(?:ed)?)\b[^)]*)\)',
     re.I)
 PAREN_META = re.compile(
-    r'(?:\((?:[^)]*\b(?:remaster(?:ed)?|mono|stereo|single version|album version|radio version|version|edit)\b[^)]*)\)|\[[^\]]*\b(?:remaster(?:ed)?|mono|stereo)\b[^\]]*\])',
+    r'(?:\((?:[^)]*\b(?:remaster(?:ed)?|mono|stereo|single version|album version|radio version|version|edit|titles|theme|main theme)\b[^)]*)\)|\[[^\]]*\b(?:remaster(?:ed)?|mono|stereo)\b[^\]]*\])',
     re.I)
+SOUNDTRACK = re.compile(r'\b(soundtrack|motion picture|music from|from the (?:motion picture|film))\b', re.I)
 DASH_JUNK = re.compile(r'\s+-\s+(?:live|remix|demo|acoustic)\b', re.I)
+HITS_ALBUM = re.compile(r'\b(greatest|best of|best hits|anthology|number ones|collection|essentials|classics|now that|the hits|remastered)\b', re.I)
+
+
+def get(url, pause=0.0):
+    key = re.sub(r'[^a-zA-Z0-9]+', '_', url)[:180]
+    path = CACHE / (key + '.json')
+    if path.exists() and path.stat().st_size > 20:
+        return json.loads(path.read_text())
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    last = None
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req, timeout=40) as res:
+                raw = res.read()
+            data = json.loads(raw)
+            path.write_text(json.dumps(data))
+            if pause:
+                time.sleep(pause)
+            return data
+        except Exception as e:
+            last = e
+            time.sleep(1.4 * (attempt + 1))
+    raise RuntimeError('failed %s (%s)' % (url, last))
+
+
+def get_text(url):
+    key = re.sub(r'[^a-zA-Z0-9]+', '_', url)[:180]
+    path = CACHE / (key + '.txt')
+    if path.exists() and path.stat().st_size > 50:
+        return path.read_text(errors='replace')
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    with urllib.request.urlopen(req, timeout=40) as res:
+        text = res.read().decode('latin1', 'replace')
+    path.write_text(text)
+    time.sleep(0.2)
+    return text
+
+
+def wiki_link(s, prefer_full_page):
+    def repl(m):
+        inner = m.group(1)
+        if '|' in inner:
+            page, label = inner.split('|', 1)
+        else:
+            page, label = inner, inner
+        page = re.sub(r'\s*\([^)]*\)', '', page).strip()
+        label = label.strip()
+        if prefer_full_page and page.startswith(label) and len(page) > len(label):
+            return page
+        return label or page
+    return re.sub(r'\[\[([^\]]+)\]\]', repl, s)
+
+
+def wiki_plain(s, prefer_full_page=False):
+    s = re.sub(r'<!--.*?-->', '', s)
+    s = re.sub(r'data-sort-value="[^"]*"\|', '', s)
+    s = re.sub(r'\browspan="[^"]*"\|', '', s)
+    s = re.sub(r'<ref[^>]*>.*?</ref>', '', s, flags=re.S)
+    s = re.sub(r'<ref[^>]*/>', '', s)
+    s = wiki_link(s, prefer_full_page)
+    s = s.replace("'''", '').replace("''", '')
+    s = s.strip()
+    # Double A-sides list the hit side first.
+    s = re.split(r'"\s*/\s*"', s)[0]
+    s = s.strip().strip('"').strip()
+    s = re.sub(r'\s*\([^)]*\bmix\b[^)]*\)', '', s, flags=re.I)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def fetch_yearend():
+    charts = {}
+    for year in range(1970, 2000):
+        title = 'Billboard Year-End Hot 100 singles of %d' % year
+        url = 'https://en.wikipedia.org/w/api.php?' + urllib.parse.urlencode({
+            'action': 'parse', 'page': title, 'prop': 'wikitext', 'format': 'json'
+        })
+        text = get(url, pause=0.15)['parse']['wikitext']['*']
+        rows = []
+        for line in text.splitlines():
+            m = re.match(r'\|(\d+)\s*\|\|\s*(.*?)\s*\|\|\s*(.*?)\s*$', line.strip())
+            if not m:
+                continue
+            rank = int(m.group(1))
+            song = wiki_plain(m.group(2))
+            artist = wiki_plain(m.group(3), prefer_full_page=True)
+            if song and artist and 1 <= rank <= 100:
+                rows.append({'year': year, 'rank': rank, 'title': song, 'artist': artist})
+        rows.sort(key=lambda r: r['rank'])
+        charts[year] = rows
+        print('chart', year, len(rows), rows[0]['title'] if rows else 'EMPTY')
+        if len(rows) < 40:
+            raise RuntimeError('short year-end chart for %s' % year)
+    return charts
+
+
+def clean_html_title(s):
+    s = re.sub(r'<[^>]+>', '', s)
+    s = html_lib.unescape(s)
+    s = s.replace('\xa0', ' ')
+    return re.sub(r'\s+', ' ', s).strip(' "')
+
+
+def fetch_iconic_titles():
+    """Titles from published VH1 rankings, used only as a cross-check."""
+    pages = {
+        '80s': [
+            'http://www.rockonthenet.com/archive/2006/vh180s.htm',
+            'http://www.rockonthenet.com/archive/2006/vh180s2.htm',
+        ],
+        '90s': [
+            'http://www.rockonthenet.com/archive/2007/vh190s.htm',
+            'http://www.rockonthenet.com/archive/2007/vh190s2.htm',
+        ],
+        'rock': [
+            'http://www.rockonthenet.com/archive/2000/vh1rocksongs.htm',
+        ],
+    }
+    found = {'80s': [], '90s': [], 'rock': []}
+    pat = re.compile(
+        r'&quot;(?:</?\w+[^>]*>|\s){0,12}<strong>(.*?)</strong>|<strong>&quot;(.*?)&quot;</strong>',
+        re.S)
+    for bucket, urls in pages.items():
+        seen = set()
+        for url in urls:
+            html = get_text(url)
+            for a, b in pat.findall(html):
+                title = clean_html_title(a or b)
+                key = norm(title)
+                if key and key not in seen and 2 <= len(title) <= 80 and not title.isdigit():
+                    seen.add(key)
+                    found[bucket].append(title)
+        # The top of each list is the iconic end. Keep the published order.
+        found[bucket] = found[bucket][:40]
+        print('iconic', bucket, len(found[bucket]), found[bucket][:3])
+    return found
 
 
 def norm(s):
-    s = unicodedata.normalize('NFKD', s)
+    s = unicodedata.normalize('NFKD', s or '')
     s = ''.join(c for c in s if not unicodedata.combining(c))
     s = s.lower().replace('&', ' and ')
     s = re.sub(r'\bthe\b', ' ', s)
@@ -194,18 +187,60 @@ def norm(s):
     return re.sub(r'\s+', ' ', s).strip()
 
 
-def artist_ok(query, name):
-    name = re.split(r'\s+(?:feat\.?|featuring|ft\.)\s+', name, maxsplit=1, flags=re.I)[0]
-    return norm(query) == norm(name)
-
-
 def title_key(title):
-    t = PAREN_JUNK.sub('', title)
+    t = re.sub(r'\((?:feat\.?|featuring|ft\.)[^)]*\)', '', title, flags=re.I)
+    t = re.sub(r'\((\d{4})\s+version\)', r' \1 ', t, flags=re.I)
+    t = PAREN_JUNK.sub('', t)
     t = PAREN_META.sub('', t)
     t = re.sub(r'\([^)]*\b(?:from|soundtrack)\b[^)]*\)', '', t, flags=re.I)
     t = re.sub(r'\s*\[[^\]]*\]', '', t)
+    t = re.sub(r'\s+-\s+(?:(?:\d{4}\s+)?(?:remaster(?:ed)?|single version|radio edit|album version).*)$', '', t, flags=re.I)
+    t = re.sub(r'\([^)]*hidden track[^)]*\)', '', t, flags=re.I)
     t = DASH_JUNK.sub('', t)
-    return norm(t)
+    t = norm(t)
+    t = re.sub(r'\bpt\b', 'part', t)
+    t = re.sub(r'\bii\b', '2', t)
+    t = re.sub(r'\biii\b', '3', t)
+    t = re.sub(r'\bnite\b', 'night', t)
+    return re.sub(r'\s+', ' ', t).strip()
+
+
+def titles_match(track, query):
+    if title_key(track) == title_key(query) or loose_key(track) == loose_key(query):
+        return True
+    # "Love Machine (Pt. 1)" is the charted single of "Love Machine".
+    def strip_part(key):
+        return re.sub(r'\s+part\s+[0-9]+$', '', key).strip()
+    if strip_part(title_key(track)) == title_key(query):
+        return True
+    base = re.sub(r'\s*\([^)]*\)\s*$', '', track).strip()
+    paren = re.search(r'\(([^)]*)\)\s*$', track)
+    arrangement = paren and re.search(r'\b(remix|mix|live|acoustic|edit|demo|version|instrumental|extended|intro|capella|cappella)\b', paren.group(1), re.I)
+    if base and base != track and not arrangement and title_key(base) == title_key(query):
+        return True
+    # "(I Can't Help) Falling in Love With You" is the chart title with a few extra words.
+    qw = title_key(query).split()
+    tw = title_key(track).split()
+    if len(qw) >= 4 and len(tw) <= len(qw) + 4:
+        i = 0
+        for word in tw:
+            if i < len(qw) and word == qw[i]:
+                i += 1
+        extras = [w for w in tw if w not in qw]
+        allowed = {'i', 'with', 'you', 'me', 'and', 'to', 'for', 'it', 'do', 'a', 'the'}
+        if i == len(qw) and all(w in allowed for w in extras):
+            return True
+    return False
+
+
+def loose_key(title):
+    """Fallin' and Falling are the same title. Used only as a fallback."""
+    parts = []
+    for token in title_key(title).split():
+        if token.endswith('g') and len(token) > 4:
+            token = token[:-1]
+        parts.append(token)
+    return ' '.join(parts)
 
 
 def junk_title(title):
@@ -216,110 +251,266 @@ def junk_title(title):
     return False
 
 
-def fetch(url):
-    key = re.sub(r'[^a-zA-Z0-9]+', '_', url)[:180]
-    path = CACHE / (key + '.json')
-    if path.exists() and path.stat().st_size > 20:
-        return json.loads(path.read_text())
-    req = urllib.request.Request(url, headers={'User-Agent': UA})
-    for attempt in range(6):
-        try:
-            with urllib.request.urlopen(req, timeout=40) as res:
-                data = json.load(res)
-            path.write_text(json.dumps(data))
-            time.sleep(0.12)
-            return data
-        except Exception as e:
-            wait = 1.5 * (attempt + 1)
-            print(' retry', attempt, type(e).__name__, url[:80])
-            time.sleep(wait)
-    raise RuntimeError('failed ' + url)
+# Chart credits that Apple now lists under a later name.
+ALIASES = {
+    norm("Terence Trent D'Arby"): ['Sananda Maitreya'],
+}
 
 
-def search_artist(name):
+def lead_artist(artist):
+    return re.split(r'\s+(?:&|and|with)\s+', artist, maxsplit=1, flags=re.I)[0].strip()
+
+
+def artist_ok(query, name):
+    name = re.split(r'\s+(?:feat\.?|featuring|ft\.)\s+', name or '', maxsplit=1, flags=re.I)[0]
+    if JUNK.search(name):
+        return False
+    nq, nn = norm(query), norm(name)
+    if nq and nq == nn:
+        return True
+    for alias in ALIASES.get(nq, []):
+        if norm(alias) == nn:
+            return True
+    if nn.startswith(nq + ' and '):
+        return True
+    lead = norm(lead_artist(query))
+    if lead and lead == nn and lead != nq:
+        return True
+    # "Dawn" is the credit Apple uses for "Tony Orlando and Dawn".
+    if nn and re.search(r'(?:^| )%s(?: |$)' % re.escape(nn), nq):
+        return True
+    return False
+
+
+def decade_of(year):
+    if 1970 <= year <= 1979:
+        return '70s'
+    if 1980 <= year <= 1989:
+        return '80s'
+    if 1990 <= year <= 1999:
+        return '90s'
+    return ''
+
+
+def search_song(title, artist):
     q = urllib.parse.urlencode({
-        'term': name,
+        'term': '%s %s' % (title, artist),
         'entity': 'song',
-        'attribute': 'artistTerm',
-        'limit': '200',
+        'limit': '50',
         'country': 'US',
     })
-    return fetch('https://itunes.apple.com/search?' + q)
+    return get('https://itunes.apple.com/search?' + q, pause=0.12)
 
 
-def consider(r, query_artist):
-    if r.get('kind') != 'song':
-        return None
-    if not r.get('previewUrl') or not str(r.get('previewUrl')).startswith('https://'):
-        return None
-    if not artist_ok(query_artist, r.get('artistName') or ''):
-        return None
-    title = r.get('trackName') or ''
-    if junk_title(title):
-        return None
-    rd = r.get('releaseDate') or ''
-    if len(rd) < 4 or not rd[:4].isdigit():
-        return None
-    year = int(rd[:4])
-    if year < 1970 or year > 1999:
-        return None
-    ms = r.get('trackTimeMillis') or 0
-    if ms < 75000 or ms > 12 * 60 * 1000:
-        return None
-    decade = '70s' if year < 1980 else '80s' if year < 1990 else '90s'
-    store = r.get('trackViewUrl') or ''
-    if not store.startswith('https://'):
-        return None
-    return {
-        'id': str(r['trackId']),
-        'title': title,
-        'artist': r['artistName'],
-        'year': year,
-        'decade': decade,
-        'album': r.get('collectionName') or '',
-        'artwork': r.get('artworkUrl100') or '',
-        'store': store,
-        'preview': r['previewUrl'],
-    }
+def candidates(results, title, artist, chart_year):
+    found = []
+    for r in results.get('results') or []:
+        if r.get('kind') != 'song':
+            continue
+        preview = r.get('previewUrl') or ''
+        store = r.get('trackViewUrl') or ''
+        if not preview.startswith('https://') or not store.startswith('https://'):
+            continue
+        track = r.get('trackName') or ''
+        if junk_title(track):
+            continue
+        if not titles_match(track, title):
+            continue
+        if not artist_ok(artist, r.get('artistName') or ''):
+            continue
+        rd = r.get('releaseDate') or ''
+        if len(rd) < 4 or not rd[:4].isdigit():
+            continue
+        year = int(rd[:4])
+        if year < 1955 or year > 2026:
+            continue
+        ms = r.get('trackTimeMillis') or 0
+        if ms < 75000 or ms > 12 * 60 * 1000:
+            continue
+        album = r.get('collectionName') or ''
+        if JUNK.search(album):
+            continue
+        # Keep Apple's year when it already falls in the chart decade. A
+        # release dated the year before, or a later compilation, is filed
+        # under the Billboard year so the hit stays in its decade.
+        shown = year if decade_of(year) == decade_of(chart_year) else chart_year
+        display = re.sub(r'\s*\([^)]*hidden track[^)]*\)', '', track, flags=re.I).strip()
+        comp = 2 if SOUNDTRACK.search(album) else 1 if HITS_ALBUM.search(album) or re.search(r'remix', album, re.I) else 0
+        alt = 1 if re.search(r'\b(edit|radio|no rap|single version|remaster)', track, re.I) else 0
+        found.append({
+            'id': str(r['trackId']),
+            'title': display,
+            'artist': r['artistName'],
+            'year': shown,
+            'decade': decade_of(shown),
+            'album': album,
+            'artwork': r.get('artworkUrl100') or '',
+            'store': store,
+            'preview': preview,
+            '_same': 0 if decade_of(year) == decade_of(chart_year) else 1,
+            '_dist': abs(year - chart_year),
+            '_comp': comp,
+            '_alt': alt,
+        })
+    found.sort(key=lambda s: (s['_same'], s['_alt'], s['_comp'], s['_dist'], len(s['title'])))
+    return found
+
+
+def resolve(entry):
+    queries = [entry['artist'], lead_artist(entry['artist'])]
+    queries.extend(ALIASES.get(norm(entry['artist']), []))
+    tried = set()
+    best = None
+    for artist in queries:
+        if not artist or artist in tried:
+            continue
+        tried.add(artist)
+        data = search_song(entry['title'], artist)
+        found = candidates(data, entry['title'], entry['artist'], entry['year'])
+        if found:
+            best = found[0]
+            break
+    return best
+
+
+def choose(charts, iconic):
+    """Core year-end ranks, then iconic songs that finished lower."""
+    picked = []
+    seen = set()
+
+    def add(entry, why):
+        key = (entry['year'], norm(entry['title']), norm(lead_artist(entry['artist'])))
+        if key in seen:
+            return False
+        seen.add(key)
+        row = dict(entry)
+        row['why'] = why
+        picked.append(row)
+        return True
+
+    for year, rows in charts.items():
+        for row in rows:
+            if row['rank'] <= CORE_RANKS:
+                add(row, 'year-end')
+
+    iconic_keys = {norm(t) for bucket in iconic.values() for t in bucket}
+    # A short title such as "One" is only safe when a single year-end row uses it.
+    by_title = defaultdict(list)
+    for rows in charts.values():
+        for row in rows:
+            by_title[norm(row['title'])].append(row)
+    for key, rows in by_title.items():
+        if key not in iconic_keys:
+            continue
+        pool = [r for r in rows if CORE_RANKS < r['rank'] <= ICONIC_MAX_RANK]
+        if not pool:
+            continue
+        artists = {norm(lead_artist(r['artist'])) for r in pool}
+        if len(pool) != 1 and len(artists) != 1:
+            continue
+        # Same recording charting again: keep the first year it was a hit.
+        row = min(pool, key=lambda r: (r['year'], r['rank']))
+        # Rock-list songs from other eras stay out unless this chart year is theirs.
+        decade = decade_of(row['year'])
+        on_decade_list = key in {norm(t) for t in iconic.get(decade, [])}
+        on_rock = key in {norm(t) for t in iconic.get('rock', [])}
+        if decade == '70s':
+            if not (on_rock or on_decade_list):
+                continue
+        elif not on_decade_list:
+            continue
+        year_count = sum(1 for p in picked if p['year'] == row['year'] and p['why'] == 'iconic')
+        if year_count >= 3:
+            continue
+        add(row, 'iconic')
+    return picked
 
 
 def main():
+    charts = fetch_yearend()
+    iconic = fetch_iconic_titles()
+    seeds = choose(charts, iconic)
+    print('seeds', len(seeds), Counter(s['why'] for s in seeds), Counter(decade_of(s['year']) for s in seeds))
+
     songs = []
+    misses = []
     seen_id = set()
     seen_key = set()
-    for i, artist in enumerate(ARTISTS_U):
+    for i, seed in enumerate(seeds, 1):
         try:
-            data = search_artist(artist)
+            hit = resolve(seed)
         except Exception as e:
-            print('FAIL', artist, e)
+            print('FAIL', seed['year'], seed['title'], e)
+            misses.append({**seed, 'reason': str(e)})
             continue
-        kept = 0
-        for r in data.get('results') or []:
-            song = consider(r, artist)
-            if not song:
+        if not hit:
+            misses.append({**seed, 'reason': 'no original preview'})
+            print('miss', seed['year'], '#%d' % seed['rank'], seed['title'], '-', seed['artist'])
+            continue
+        key = title_key(hit['title']) + '|' + norm(hit['artist'])
+        if hit['id'] in seen_id or key in seen_key:
+            misses.append({**seed, 'reason': 'duplicate of another hit'})
+            continue
+        seen_id.add(hit['id'])
+        seen_key.add(key)
+        hit['chartYear'] = seed['year']
+        hit['chartRank'] = seed['rank']
+        for extra in ('_dist', '_comp', '_same', '_alt'):
+            hit.pop(extra, None)
+        songs.append(hit)
+        if i % 25 == 0:
+            print('resolved', i, '/', len(seeds), 'kept', len(songs))
+
+    # Backfill a thin year from the next year-end ranks, still from the same chart.
+    by_chart_year = Counter(s['chartYear'] for s in songs)
+    for year in range(1970, 2000):
+        if by_chart_year[year] >= MIN_PER_YEAR:
+            continue
+        if Counter(s['decade'] for s in songs)[decade_of(year)] >= MAX_PER_DECADE:
+            continue
+        for row in charts[year]:
+            if row['rank'] <= CORE_RANKS or row['rank'] > BACKFILL_RANK:
                 continue
-            key = title_key(song['title']) + '|' + norm(song['artist'])
-            if song['id'] in seen_id or key in seen_key:
-                continue
-            seen_id.add(song['id'])
-            seen_key.add(key)
-            songs.append(song)
-            kept += 1
-            if kept >= 36:
+            if by_chart_year[year] >= MIN_PER_YEAR:
                 break
-        print(f'{i+1}/{len(ARTISTS_U)} {artist}: +{kept} total {len(songs)}')
+            try:
+                hit = resolve(row)
+            except Exception as e:
+                misses.append({**row, 'reason': str(e)})
+                continue
+            if not hit:
+                misses.append({**row, 'reason': 'no original preview'})
+                continue
+            key = title_key(hit['title']) + '|' + norm(hit['artist'])
+            if hit['id'] in seen_id or key in seen_key:
+                continue
+            seen_id.add(hit['id'])
+            seen_key.add(key)
+            hit['chartYear'] = year
+            hit['chartRank'] = row['rank']
+            for extra in ('_dist', '_comp', '_same', '_alt'):
+                hit.pop(extra, None)
+            songs.append(hit)
+            by_chart_year[year] += 1
+            print('backfill', year, '#%d' % row['rank'], hit['title'])
+
     songs.sort(key=lambda s: (s['decade'], s['year'], s['artist'].lower(), s['title'].lower()))
     doc = {
         'source': 'Apple iTunes Search API',
         'courtesy': '30-second previews provided courtesy of iTunes.',
         'storeNote': 'Previews stream from Apple to promote the matching iTunes listing. They are not downloaded or stored here.',
+        'selection': 'Billboard Year-End Hot 100, top 12 each year from 1970 through 1999, plus lower year-end songs that also appear on VH1\'s 100 Greatest Songs of the \'80s (2006), 100 Greatest Songs of the \'90s (2007), or 100 Greatest Rock Songs (2000).',
         'songs': songs,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(doc, ensure_ascii=False, separators=(',', ':')))
-    from collections import Counter
-    c = Counter(s['decade'] for s in songs)
-    print('WROTE', OUT, 'count', len(songs), dict(c))
+    OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + '\n')
+    counts = Counter(s['decade'] for s in songs)
+    years = Counter(s['chartYear'] for s in songs)
+    print('WROTE', OUT, 'count', len(songs), dict(counts))
+    print('per chart year', dict(sorted(years.items())))
+    print('UNRESOLVED', len(misses))
+    for m in misses:
+        print(' - %s #%s %s — %s (%s)' % (m['year'], m['rank'], m['title'], m['artist'], m['reason']))
 
 
 if __name__ == '__main__':
