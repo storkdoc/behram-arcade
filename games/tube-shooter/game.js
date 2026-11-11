@@ -879,7 +879,7 @@ const DEATH_TIPS = {
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
   mine: ['MINE', 'SHOOT MINES ON THE WAY UP, BEFORE THEY ARM'],
-  fuse: ['FUSEBALL', 'WHITE RIM SPARKS = FUSEBALL. DODGE OR JUMP; SHOOT THEM MID-JUMP'],
+  fuse: ['FUSEBALL', 'WHITE RIM SPARKS OR RING = FUSEBALL. DODGE OR JUMP; SHOOT THEM MID-JUMP'],
 };
 let deathTipCount = {};
 function deathTip(kind) {
@@ -1446,7 +1446,7 @@ function updFuse(e, dt) {
     e.jt += dt / e.jumpDur;
     if (e.atRim && player.alive && e.jt > 0.42 && e.jt < 0.58) {
       const lane = e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
-      if (lane === pl) { killPlayer('fuse'); return; }
+      if (lane === pl) { fuseDeaths.rimjump++; killPlayer('fuse'); return; }
     }
     if (e.jt >= 1) { e.jumping = false; e.rail = wrapRail(e.rail + e.jdir); e.jt = 0; }
     return;
@@ -1454,13 +1454,15 @@ function updFuse(e, dt) {
   if (!e.atRim) {
     e.z += e.mdir * LP.fuseSpeed * dt;
     if (e.z >= 1) { e.z = 1; e.mdir = -1; }
-    if (e.z <= 0) { e.z = 0; e.atRim = true; e.rimTimer = rand(3, 5); e.pause = LP.fuseRimPause; Sound.play('fuse'); return; }
+    if (e.z <= 0) { e.z = 0; e.atRim = true; e.rimAge = 0; e.rimTimer = rand(3, 5); e.pause = LP.fuseRimPause; Sound.play('fuse'); return; }
     if (Math.random() < 0.9 * dt) startJump(e, Math.random() < 0.5 ? -1 : 1);
     else if (Math.random() < 0.3 * dt && e.z < 0.85) e.mdir = -e.mdir;
     return;
   }
   // on the rim
-  if (player.alive && (e.rail === pl || e.rail === wrapRail(pl + 1))) { killPlayer('fuse'); return; }
+  // landing flare: a fuseball that has just reached the rim needs FUSE_LAND_GRACE s to settle before it is lethal
+  e.rimAge = (e.rimAge || 0) + dt;
+  if (player.alive && e.rimAge >= FUSE_LAND_GRACE && (e.rail === pl || e.rail === wrapRail(pl + 1))) { fuseDeaths[e.rimAge < FUSE_LAND_GRACE + 0.05 ? 'arrive' : 'chase']++; killPlayer('fuse'); return; }
   e.rimTimer -= dt;
   if (e.rimTimer <= 0) { e.atRim = false; e.mdir = 1; e.z = 0.01; return; }
   e.pause -= dt;
@@ -1912,7 +1914,19 @@ function drawGrabWarn() {
    within 1 rail. Jumping fuseballs that would cross the claw's lane are flagged the same way. Mid-tube fuseballs and
    grabbers are not. It only telegraphs: dodging / JUMP / a mid-jump shot is still the skill. */
 const FUSE_WARN_RAILS = 2;
+/* FUSEBALL LANDING WARNING (2026-11-11). Bot eval: fuseballs were the #1 killer (11 of 36 deaths; 10 of 18 for the
+   average bot) and about half of those were ARRIVALS: a fuseball climbing a rail that is the claw's own lane edge
+   reached the rim and killed in the same frame, with no tell at all (mid-tube fuseballs were never flagged).
+   Now a fuseball climbing the last FUSE_LAND_Z of the tube on a lethal rail draws a white-hot streak up its rail to a
+   pulsing landing ring on the rim and fires the fusewarn chirp, and on landing it flares for FUSE_LAND_GRACE s before
+   it is lethal. Fuseballs elsewhere, and rim chases (already warned above), are unchanged. */
+const FUSE_LAND_Z = 0.3, FUSE_LAND_GRACE = 0.2;
+let fuseLandFrames = 0, fuseLandCues = 0;
+function isLandingFuse(e) {
+  return !e.dead && e.type === 'fuseball' && e.spawnT >= 1 && !e.atRim && !e.jumping && e.mdir < 0 && e.z <= FUSE_LAND_Z && fuseRailDist(e) === 0;
+}
 let fuseWarnFrames = 0, fuseWarnCues = 0, fuseWarnCd = 0;
+const fuseDeaths = { arrive: 0, chase: 0, rimjump: 0 };
 function fuseRailDist(e) {
   // fuseball kills when its rail equals the claw's left or right rim rail
   const pl = player.lane, r0 = pl, r1 = wrapRail(pl + 1);
@@ -1936,14 +1950,16 @@ function fuseThreats() {
       continue;
     }
     const d = fuseRailDist(e);
-    if (d <= FUSE_WARN_RAILS) out.push({ e, d, jump: false });
+    if (d <= FUSE_WARN_RAILS) out.push({ e, d, jump: false, landing: e.rimAge < FUSE_LAND_GRACE });
   }
+  for (const e of enemies) if (isLandingFuse(e)) out.push({ e, d: 0, jump: false, landing: true, climbing: true });
   return out;
 }
 function fuseWarnUpdate(dt) {
   fuseWarnCd = Math.max(0, fuseWarnCd - dt);
   if (state !== 'play' || !player.alive) return;
   for (const e of enemies) {
+    if (isLandingFuse(e)) { if (!e.fwarned) { e.fwarned = true; fuseLandCues++; if (fuseWarnCd <= 0) { fuseWarnCd = 0.4; fuseWarnCues++; Sound.play('fusewarn'); } } continue; }
     if (!isRimFuse(e)) { e.fwarned = false; continue; }
     const d = e.jumping ? (fuseJumpLane(e) === player.lane ? 0 : 99) : fuseRailDist(e);
     if (d > 1) e.fwarned = false;
@@ -1954,7 +1970,25 @@ function drawFuseWarn() {
   const th = fuseThreats(); if (!th.length) return;
   fuseWarnFrames++;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for (const { e, d, jump } of th) {
+  for (const { e, d, jump, landing, climbing } of th) {
+    if (landing) {
+      // white-hot streak from the climbing fuseball up its rail to a pulsing landing ring on the rim
+      fuseLandFrames++;
+      const rp = railF(e.rail), zf = climbing ? e.z * LL : 0, urg = climbing ? 1 - e.z / FUSE_LAND_Z : 1;
+      const pl2 = 0.6 + 0.4 * Math.sin(T * (24 + 30 * urg));
+      ctx.globalAlpha = 0.45 + 0.5 * pl2; ctx.strokeStyle = '#ffffff'; ctx.shadowColor = '#7fdfff'; ctx.shadowBlur = 16 * DPR;
+      ctx.lineWidth = LW(1.6 + 1.6 * urg);
+      if (climbing) { ctx.beginPath(); seg3(rp[0], rp[1], zf, rp[0], rp[1], 0); ctx.stroke(); }
+      const c = proj(rp[0], rp[1], 0), sc = scaleAt(0);
+      if (c && sc) {
+        const r = Math.max(4 * DPR, sc * 0.05 * (1.4 - 0.6 * urg));
+        ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = LW(1.2); ctx.strokeStyle = '#9fefff'; ctx.beginPath();
+        for (let k = 0; k < 6; k++) { const an = k * Math.PI / 3 + T * 3; ctx.moveTo(c[0] + Math.cos(an) * r * 1.2, c[1] + Math.sin(an) * r * 1.2); ctx.lineTo(c[0] + Math.cos(an) * r * (1.5 + 0.4 * pl2), c[1] + Math.sin(an) * r * (1.5 + 0.4 * pl2)); }
+        ctx.stroke();
+      }
+      if (climbing) continue;
+    }
     const near = d <= 1, pulse = 0.65 + 0.35 * Math.sin(T * (near ? 40 : 22));
     const a = rail(e.rail), b = rail(e.rail + 1);
     if (d === 0) {
@@ -3110,7 +3144,8 @@ window.VORTEX = {
   spikeGuide: () => ({ ahead: spikeGuide.ahead, dz: spikeGuide.dz, lane: spikeGuide.lane, safe: spikeGuide.safe.slice(), frames: spikeGuide.frames, beeps: spikeGuide.beeps, steered: spikeGuide.steered }),
   grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, landT: t.e.landT, imminent: !!t.e.gimminent })), frames: grabWarnFrames, cues: grabWarnCues, imminent: grabImminentCues }),
   deathTips: () => Object.assign({}, deathTipCount),
-  fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump })), frames: fuseWarnFrames, cues: fuseWarnCues }),
+  fuseDeaths: () => Object.assign({}, fuseDeaths),
+  fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump, landing: !!t.landing, climbing: !!t.climbing })), frames: fuseWarnFrames, cues: fuseWarnCues, landFrames: fuseLandFrames, landCues: fuseLandCues, grace: FUSE_LAND_GRACE, landZ: FUSE_LAND_Z }),
   zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),

@@ -236,3 +236,18 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - `VORTEX.step` / `gotoLevel` now call `touchSync()` so frozen harnesses keep `data-ts=game` (fixes modebtn null crash).
 - Hooks: `grabWarn().imminent`, per-threat `imminent`, `deathTips()`.
 - Tests: `tests/vortex-grabimminent.test.js`, `tests/vortex-modebtn.test.js`.
+
+## Day 15 (2026-11-11): FUSEBALL LANDING WARNING
+- Why: bot eval (8 games, sharp + average, render-free stepping) died to fuseballs 11 of 32 (#1; the average bot 10 of 18).
+  New `VORTEX.fuseDeaths()` split them: **6 arrivals** (a fuseball climbing a rail that is the claw's own lane edge reached
+  the rim and killed in the same frame, with no tell at all; mid-tube fuseballs were never flagged) and 8 rim chases.
+- What: a fuseball climbing the last 30% of the tube (`FUSE_LAND_Z`) on one of the claw's two rails draws a white-hot streak
+  up its rail to a pulsing landing ring on the rim and plays the `fusewarn` chirp once (+ pad rumble). On landing it
+  flares for `FUSE_LAND_GRACE` = 0.2 s before it is lethal. Standing still still dies; stepping off the rail survives.
+  Rim chases / jumps / other enemies unchanged. Death tip: "WHITE RIM SPARKS OR RING = FUSEBALL...".
+- Bot after (same harness, game RNG not seeded so noisy): death level sharp 13/15/17/15, average 15/11/11/13 (before
+  13/13/11/4, 10/12/7/11); fuse deaths 9 of 43 (arrive 4, chase 4, rim-jump 1). The bot ignores the new tell, so the
+  remaining arrivals are the 0.2 s grace being shorter than its reaction.
+- Hooks: `fuseWarn()` -> + `landFrames`, `landCues`, `grace`, `landZ`, per-threat `landing` / `climbing`; `fuseDeaths()`.
+- Test: tests/vortex-fuseland.test.js (desktop, iPhone 14, iPhone 14 landscape). Regression: fusewarn, grabwarn,
+  grabimminent, spikewarn, jump, tips, v4, waves, sputter, powerups, continue, modebtn, tests/vortex-rim all pass.
