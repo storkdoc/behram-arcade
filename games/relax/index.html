@@ -17,20 +17,13 @@
 <canvas id="view" aria-label="RELAX sand table"></canvas>
 <div id="ui">
   <a id="home" href="../../index.html">&larr; ARCADE</a>
-  <div id="controls">
-    <button type="button" id="btn-next">Next</button>
-    <button type="button" id="btn-fx" aria-pressed="true">Effects</button>
+  <div id="sound">
     <button type="button" id="btn-mute" aria-pressed="false" aria-label="Mute">Mute</button>
-    <button type="button" id="btn-hint" aria-label="Show hint">Hint</button>
     <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
   </div>
-  <div id="hint">
-    <p>A hidden magnet draws the steel ball through the sand.</p>
-    <p>Space or Next changes the pattern. Enter or Effects shifts the glow. Drag, arrows, or a stick to nudge. M mutes.</p>
-  </div>
+  <p id="begin">tap to begin</p>
   <div id="foot">
-    <div id="pattern">Spiral</div>
-    <div id="now">Tap or press a key for music</div>
+    <div id="now"></div>
   </div>
 </div>
 <script src="js/patterns.js"></script>

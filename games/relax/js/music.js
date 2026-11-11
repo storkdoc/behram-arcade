@@ -243,7 +243,7 @@
   Music.prototype.line = function () {
     const t = this.track;
     if (!t) return 'Music unavailable in this browser';
-    if (!this.unlocked) return 'Tap or press a key for music';
+    if (!this.unlocked) return '';
     return t.composer + ' · ' + t.piece + ' · ' + t.performer + ' · ' + t.license;
   };
 

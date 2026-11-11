@@ -90,20 +90,38 @@ const check = (ok, msg, extra) => {
   }
   check(!audio.error && audio.sum > 0 && audio.t > 0, 'audio element is playing and the analyser returns energy', audio);
 
-  console.log('== inputs');
+  console.log('== inputs and chrome');
+  const ui = await boot.page.evaluate(() => ({
+    next: !!document.getElementById('btn-next'),
+    fx: !!document.getElementById('btn-fx'),
+    hint: !!document.getElementById('hint'),
+    hintBtn: !!document.getElementById('btn-hint'),
+    pattern: !!document.getElementById('pattern'),
+    mute: !!document.getElementById('btn-mute'),
+    vol: !!document.getElementById('vol'),
+    now: !!document.getElementById('now'),
+    begin: (document.getElementById('begin') || {}).textContent || '',
+    text: document.body.innerText
+  }));
+  check(!ui.next && !ui.fx && !ui.hint && !ui.hintBtn && !ui.pattern, 'no extra buttons, hint, or pattern label', ui);
+  check(ui.mute && ui.vol && ui.now, 'mute, volume, and now playing remain', ui);
+  check(!/Space or Next|drag, arrows|show hint/i.test(ui.text), 'no instruction text', ui.text.slice(0, 180));
+  const actorsSrc = await boot.page.evaluate(() => fetch('js/actors.js').then(r => r.text()));
+  const mainSrc = await boot.page.evaluate(() => fetch('js/main.js').then(r => r.text()));
+  check(!/quadraticCurveTo|fillText\(/.test(actorsSrc), 'figures are not drawn with arms, arrows, or debug text');
+  check(!/moveTo\(-L/.test(mainSrc), 'sparkles are dots, not crosshair marks');
   const beforeSkip = await boot.page.evaluate(() => RELAX.pattern);
   await boot.page.keyboard.press('Space');
   await boot.page.waitForTimeout(400);
   const afterSpace = await boot.page.evaluate(() => ({ phase: RELAX.phase, pattern: RELAX.pattern }));
   check(afterSpace.phase === 'rake' || afterSpace.pattern !== beforeSkip, 'Space starts the next pattern', afterSpace);
   await boot.page.keyboard.press('Enter');
-  const fx = await boot.page.evaluate(() => RELAX.effects);
-  check(fx === false, 'Enter toggles effects off');
+  check(await boot.page.evaluate(() => RELAX.effects) === false, 'Enter toggles effects off');
   await boot.page.keyboard.press('KeyM');
   const muted = await boot.page.evaluate(() => document.getElementById('btn-mute').getAttribute('aria-pressed'));
   check(muted === 'true', 'M mutes');
-  await boot.page.click('#btn-fx');
-  check(await boot.page.evaluate(() => RELAX.effects) === true, 'Effects button toggles the glow back on');
+  await boot.page.keyboard.press('Enter');
+  check(await boot.page.evaluate(() => RELAX.effects) === true, 'Enter toggles the glow back on');
 
   console.log('== fast pattern change');
   const fast = await open(BASE + '?fast=1&seed=1');
@@ -112,11 +130,21 @@ const check = (ok, msg, extra) => {
   const fastState = await fast.page.evaluate(() => ({ changes: RELAX.changes, cycle: RELAX.cycle, pattern: RELAX.pattern }));
   check(fastState.changes >= 1 && fastState.cycle === 8, 'fast=1 advances to a new pattern inside a short cycle', fastState);
 
-  console.log('== ' + SOAK + 's bowl (collisions, flips, minute change)');
+  console.log('== ' + SOAK + 's bowl (speed, coverage, collisions, minute change)');
   const soak = await open(BASE + '?seed=1');
   await soak.page.click('#view');
   const t0 = Date.now();
-  await soak.page.waitForTimeout(SOAK * 1000);
+  const sample = () => soak.page.evaluate(() => ({
+    t: RELAX.cycleT, coverage: RELAX.coverage, speed: RELAX.ballSpeed, progress: RELAX.progress, retrace: RELAX.retrace(), phase: RELAX.phase
+  }));
+  await soak.page.waitForTimeout(8000);
+  const s8 = await sample();
+  await soak.page.waitForTimeout(12000);
+  const s20 = await sample();
+  await soak.page.waitForTimeout(20000);
+  const s40 = await sample();
+  const remain = Math.max(0, SOAK * 1000 - 40000);
+  await soak.page.waitForTimeout(remain);
   const late = await soak.page.evaluate(() => ({
     hits: RELAX.stats.hits,
     flips: RELAX.stats.flips,
@@ -135,7 +163,11 @@ const check = (ok, msg, extra) => {
     sum: RELAX.analyserSum(),
     line: RELAX.musicLine()
   }));
-  console.log('    watched', ((Date.now() - t0) / 1000).toFixed(1) + 's', JSON.stringify(late));
+  console.log('    watched', ((Date.now() - t0) / 1000).toFixed(1) + 's', JSON.stringify({ s8, s20, s40, late }));
+  check(s8.speed > 0.04 && s8.speed < 0.4, 'the ball is moving, and much slower than before', s8.speed);
+  check(s20.coverage > s8.coverage + 25 && s40.coverage > s20.coverage + 25, 'groove coverage keeps growing across the minute', { s8: s8.coverage, s20: s20.coverage, s40: s40.coverage });
+  check(s40.progress > 0.55 && s40.progress < 0.85, 'the pattern is still unfolding partway through the minute', s40.progress);
+  check(s40.retrace < 0.08, 'the magnet is not retracing an earlier stretch', s40.retrace);
   check(late.hits >= 1, 'the ball collides with the rover or the astronaut', late.hits);
   check(late.flips >= 1, 'someone tips or tumbles and the counter moves', late.flips);
   check(late.changes >= 1, 'the pattern changes on the one-minute clock', { changes: late.changes, cycleT: late.cycleT, phase: late.phase });

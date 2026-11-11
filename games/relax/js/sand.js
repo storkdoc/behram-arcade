@@ -171,6 +171,13 @@
     this.h.fill(0);
   };
 
+  Sand.prototype.coverage = function () {
+    let n = 0;
+    const h = this.h;
+    for (let i = 0; i < h.length; i++) if (h[i] < -0.22) n++;
+    return n;
+  };
+
   Sand.prototype.groove = function () {
     let g = 0;
     const h = this.h;

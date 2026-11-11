@@ -33,11 +33,11 @@
     b.y = ny * maxR;
     const vn = b.vx * nx + b.vy * ny;
     if (vn > 0) {
-      b.vx -= 1.55 * vn * nx;
-      b.vy -= 1.55 * vn * ny;
-      b.vx *= 0.78;
-      b.vy *= 0.78;
-      b.av += (-b.vx * ny + b.vy * nx) * 4.0;
+      b.vx -= 1.25 * vn * nx;
+      b.vy -= 1.25 * vn * ny;
+      b.vx *= 0.86;
+      b.vy *= 0.86;
+      b.av += (-b.vx * ny + b.vy * nx) * 1.6;
     }
   };
 
@@ -82,7 +82,7 @@
     const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
     const velN = rvx * nx + rvy * ny;
     if (velN >= 0) return 0;
-    const e = 0.4;
+    const e = 0.2;
     const j = -(1 + e) * velN / im;
     a.vx -= j * nx * ima;
     a.vy -= j * ny * ima;
@@ -95,8 +95,8 @@
     a.vy -= jt * ty * ima;
     b.vx += jt * tx * imb;
     b.vy += jt * ty * imb;
-    a.av -= jt * 5.5 * ima;
-    b.av += jt * 5.5 * imb;
+    a.av -= jt * 2.2 * ima;
+    b.av += jt * 2.2 * imb;
     return j;
   }
 
@@ -104,11 +104,11 @@
     if (!b.pose || b.kind === 'ball') return;
     /* The astronaut is lighter, so a smaller shove tumbles them. A hard
        spin from a glancing hit counts too. */
-    const need = b.kind === 'astro' ? 0.16 : 0.38;
-    if (b.pose === 'up' && (j > need || Math.abs(b.av) > 2.2)) {
+    const need = b.kind === 'astro' ? 0.09 : 0.16;
+    if (b.pose === 'up' && (j > need || Math.abs(b.av) > 1.3)) {
       b.pose = 'tip';
       b.poseT = 0;
-      b.av += (this.rand() - 0.5) * 8;
+      b.av += (this.rand() - 0.5) * 1.4;
       this.stats.flips++;
       if (b.kind === 'rover') this.stats.roverFlips++;
       else this.stats.astroFlips++;
@@ -119,7 +119,7 @@
   Actors.prototype._puff = function (x, y, n) {
     for (let i = 0; i < n; i++) {
       const a = this.rand() * Math.PI * 2;
-      const s = 0.05 + this.rand() * 0.12;
+      const s = 0.02 + this.rand() * 0.04;
       this.puffs.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.45 + this.rand() * 0.35, max: 0.8 });
     }
     if (this.puffs.length > 48) this.puffs.splice(0, this.puffs.length - 48);
@@ -134,8 +134,8 @@
       const px = b.x, py = b.y;
       this._pull(b, magnet.x, magnet.y, h, 1);
       if (user) this._pull(b, user.x, user.y, h, 1.25);
-      b.vx = expDamp(b.vx, 2.35, h);
-      b.vy = expDamp(b.vy, 2.35, h);
+      b.vx = expDamp(b.vx, 1.55, h);
+      b.vy = expDamp(b.vy, 1.55, h);
       b.x += b.vx * h;
       b.y += b.vy * h;
       this._rim(b);
@@ -181,14 +181,14 @@
     const dx = mx - b.x, dy = my - b.y;
     const dist = Math.hypot(dx, dy);
     if (dist < 1e-5) return;
-    const accel = Math.min(3.6, 18 * dist) * strength;
+    const accel = Math.min(2.0, 9 * dist) * strength;
     b.vx += (dx / dist) * accel * dt;
     b.vy += (dy / dist) * accel * dt;
   };
 
   Actors.prototype._track = function (b, sand) {
     const sp = Math.hypot(b.vx, b.vy);
-    if (sp < 0.025) return;
+    if (sp < 0.012) return;
     sand.carve(b.x, b.y, b.kind === 'rover' ? 0.022 : 0.016, b.pose === 'down' ? 0.22 : 0.16);
   };
 
@@ -254,29 +254,17 @@
     ctx.fillStyle = body;
     roundRect(ctx, -s * 0.58, -s * 0.95, s * 1.16, s * 1.9, s * 0.22);
     ctx.fill();
-    /* gold trim */
-    ctx.strokeStyle = 'rgba(232, 186, 96, 0.8)';
-    ctx.lineWidth = Math.max(1, s * 0.06);
-    ctx.stroke();
     /* solar deck */
     ctx.fillStyle = '#1c3a66';
     roundRect(ctx, -s * 0.38, -s * 0.35, s * 0.76, s * 0.95, s * 0.06);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(130, 190, 230, 0.55)';
-    ctx.lineWidth = Math.max(0.6, s * 0.03);
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.38, -s * 0.2 + i * s * 0.22);
-      ctx.lineTo(s * 0.38, -s * 0.2 + i * s * 0.22);
-      ctx.stroke();
-    }
-    /* mast and a curious camera */
-    ctx.strokeStyle = '#d7d0c4';
-    ctx.lineWidth = Math.max(1.2, s * 0.08);
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 0.7);
-    ctx.lineTo(0, -s * 1.25);
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(150, 200, 235, 0.35)';
+    roundRect(ctx, -s * 0.28, -s * 0.22, s * 0.56, s * 0.28, s * 0.04);
+    ctx.fill();
+    /* mast and camera, drawn as a solid post rather than a stroke */
+    ctx.fillStyle = '#d7d0c4';
+    roundRect(ctx, -s * 0.07, -s * 1.28, s * 0.14, s * 0.62, s * 0.07);
+    ctx.fill();
     ctx.fillStyle = '#f2efe6';
     ctx.beginPath();
     ctx.arc(0, -s * 1.32, s * 0.16, 0, 7);
@@ -289,13 +277,6 @@
     ctx.beginPath();
     ctx.arc(s * 0.02, -s * 1.37, s * 0.025, 0, 7);
     ctx.fill();
-    /* little arm */
-    ctx.strokeStyle = '#e6d2a8';
-    ctx.lineWidth = Math.max(1, s * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(s * 0.4, s * 0.15);
-    ctx.quadraticCurveTo(s * 0.85, s * 0.35 + Math.sin(time * 1.5) * s * 0.05, s * 0.7, s * 0.55);
-    ctx.stroke();
     ctx.restore();
 
     if (down > 0.35) {
@@ -316,20 +297,14 @@
         ctx.arc(-s * 0.55 + i * s * 0.5, s * 0.42, s * 0.2, 0, 7);
         ctx.fill();
       }
-      ctx.strokeStyle = '#d9d3c6';
-      ctx.lineWidth = Math.max(1, s * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(s * 0.55, -s * 0.05);
-      ctx.lineTo(s * 0.95, -s * 0.45);
-      ctx.stroke();
       ctx.fillStyle = '#f4f0e6';
       ctx.beginPath();
-      ctx.arc(s * 1.02, -s * 0.5, s * 0.12, 0, 7);
+      ctx.arc(s * 0.72, -s * 0.22, s * 0.14, 0, 7);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255, 214, 120, 0.9)';
-      ctx.font = '700 ' + Math.max(8, s * 0.28) + 'px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('z', -s * 0.1, s * 0.12);
+      ctx.fillStyle = '#1a2740';
+      ctx.beginPath();
+      ctx.arc(s * 0.76, -s * 0.24, s * 0.06, 0, 7);
+      ctx.fill();
       ctx.restore();
     }
   };
@@ -339,29 +314,24 @@
     const s = b.r * scale;
     const x = cx + b.x * scale, y = cy + b.y * scale;
     const down = poseBlend(b);
-    const walk = Math.sin(time * 6 + b.ang) * Math.min(1, Math.hypot(b.vx, b.vy) * 8);
+    const walk = Math.sin(time * 3.2 + b.ang) * Math.min(1, Math.hypot(b.vx, b.vy) * 16);
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(b.ang + (b.pose === 'tip' ? b.poseT * 9 : 0));
+    ctx.rotate(b.ang + (b.pose === 'tip' ? b.poseT * 4 : 0));
     ctx.globalAlpha = 1 - down * 0.85;
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath();
     ctx.ellipse(0, s * 0.2, s * 0.7, s * 0.95, 0, 0, 7);
     ctx.fill();
-    /* legs */
-    ctx.strokeStyle = '#f4f1ea';
-    ctx.lineWidth = Math.max(1.4, s * 0.22);
-    ctx.lineCap = 'round';
+    ctx.fillStyle = '#f4f1ea';
     ctx.beginPath();
-    ctx.moveTo(-s * 0.18, s * 0.15);
-    ctx.lineTo(-s * 0.28, s * 0.72 + walk * s * 0.12);
-    ctx.moveTo(s * 0.18, s * 0.15);
-    ctx.lineTo(s * 0.3, s * 0.72 - walk * s * 0.12);
-    ctx.stroke();
+    ctx.ellipse(-s * 0.2, s * 0.42 + walk * s * 0.06, s * 0.14, s * 0.30, 0.2, 0, 7);
+    ctx.ellipse(s * 0.2, s * 0.42 - walk * s * 0.06, s * 0.14, s * 0.30, -0.2, 0, 7);
+    ctx.fill();
     ctx.fillStyle = '#c4552a';
     ctx.beginPath();
-    ctx.ellipse(-s * 0.28, s * 0.78 + walk * s * 0.12, s * 0.16, s * 0.1, 0, 0, 7);
-    ctx.ellipse(s * 0.3, s * 0.78 - walk * s * 0.12, s * 0.16, s * 0.1, 0, 0, 7);
+    ctx.ellipse(-s * 0.24, s * 0.72 + walk * s * 0.08, s * 0.16, s * 0.1, 0, 0, 7);
+    ctx.ellipse(s * 0.26, s * 0.72 - walk * s * 0.08, s * 0.16, s * 0.1, 0, 0, 7);
     ctx.fill();
     /* torso and backpack */
     ctx.fillStyle = '#f7f4ee';
@@ -374,15 +344,11 @@
     ctx.beginPath();
     ctx.arc(0, -s * 0.02, s * 0.08, 0, 7);
     ctx.fill();
-    /* arms */
-    ctx.strokeStyle = '#f7f4ee';
-    ctx.lineWidth = Math.max(1.3, s * 0.16);
+    ctx.fillStyle = '#f7f4ee';
     ctx.beginPath();
-    ctx.moveTo(-s * 0.4, -s * 0.1);
-    ctx.lineTo(-s * 0.72, s * 0.25 + walk * s * 0.1);
-    ctx.moveTo(s * 0.4, -s * 0.1);
-    ctx.lineTo(s * 0.7, s * 0.05 - walk * s * 0.1);
-    ctx.stroke();
+    ctx.ellipse(-s * 0.52, s * 0.05 + walk * s * 0.04, s * 0.12, s * 0.22, 0.5, 0, 7);
+    ctx.ellipse(s * 0.52, -s * 0.02 - walk * s * 0.04, s * 0.12, s * 0.22, -0.4, 0, 7);
+    ctx.fill();
     /* helmet */
     const helm = ctx.createRadialGradient(-s * 0.08, -s * 0.62, s * 0.05, 0, -s * 0.5, s * 0.42);
     helm.addColorStop(0, '#ffffff');
@@ -414,15 +380,11 @@
       ctx.beginPath();
       ctx.ellipse(0, s * 0.15, s * 1.15, s * 0.38, 0, 0, 7);
       ctx.fill();
-      ctx.strokeStyle = '#f7f4ee';
-      ctx.lineWidth = Math.max(1.5, s * 0.2);
-      ctx.lineCap = 'round';
+      ctx.fillStyle = '#f7f4ee';
       ctx.beginPath();
-      ctx.moveTo(-s * 0.2, 0);
-      ctx.lineTo(-s * 0.95, s * 0.18);
-      ctx.moveTo(-s * 0.15, s * 0.08);
-      ctx.lineTo(-s * 0.85, -s * 0.22);
-      ctx.stroke();
+      ctx.ellipse(-s * 0.55, s * 0.1, s * 0.34, s * 0.12, 0.25, 0, 7);
+      ctx.ellipse(-s * 0.48, -s * 0.08, s * 0.30, s * 0.11, -0.3, 0, 7);
+      ctx.fill();
       ctx.fillStyle = '#f7f4ee';
       roundRect(ctx, -s * 0.25, -s * 0.28, s * 0.85, s * 0.5, s * 0.16);
       ctx.fill();

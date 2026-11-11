@@ -14,8 +14,8 @@ window.ARCADE_GAMES = [
     added: '2026-11-11',
     genre: 'RELAXATION',
     year: 'SAND TABLE',
-    controls: 'SPACE or Next skips to the next pattern (main action) · ENTER or Effects toggles the glow and palette (special) · drag with the mouse to pull the ball with a temporary magnet · arrows or WASD nudge · M mute · H hint · gamepad: A next pattern, X effects, Start mute, stick nudges',
-    touch: 'tap Next, Effects, Mute and Hint · drag a finger in the bowl to pull the ball · the volume slider sits with the buttons · works full screen on iPhone, iPad and Mac',
+    controls: 'SPACE skips to the next pattern · ENTER toggles the glow · drag to nudge the ball · arrows or WASD nudge · M mute · gamepad: A next pattern, X effects, Start mute, stick nudges',
+    touch: 'tap anywhere to begin · drag in the bowl to nudge the ball · mute and volume sit in the corner · works full screen on iPhone, iPad and Mac',
     accent: '#e06a3a'
   },
   {

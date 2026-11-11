@@ -11,6 +11,7 @@
   const FAST = q.get('fast') === '1';
   const CYCLE = FAST ? 8 : 60;
   const RAKE = FAST ? 1.6 : 3.6;
+  const DRAW = CYCLE - RAKE;
   const seedArg = q.get('seed');
   let seed = seedArg != null ? (Number(seedArg) >>> 0) || 1 : (Date.now() >>> 0);
 
@@ -33,13 +34,9 @@
 
   const canvas = document.getElementById('view');
   const ctx = canvas.getContext('2d', { alpha: false });
-  const hintEl = document.getElementById('hint');
   const nowEl = document.getElementById('now');
-  const patternEl = document.getElementById('pattern');
-  const btnNext = document.getElementById('btn-next');
-  const btnFx = document.getElementById('btn-fx');
+  const beginEl = document.getElementById('begin');
   const btnMute = document.getElementById('btn-mute');
-  const btnHint = document.getElementById('btn-hint');
   const volEl = document.getElementById('vol');
 
   const patterns = window.RelaxPatterns;
@@ -71,6 +68,10 @@
   let patternTime = 0;
   let rakeT = 0;
   let changes = 0;
+  let drawTravel = 0;
+  let drawTime = 0;
+  const magSamples = [];
+  let magAcc = 0;
   const magnet = { x: 0, y: 0 };
   const magnetFrom = { x: 0, y: 0 };
   (function placeBall() {
@@ -106,7 +107,6 @@
     if (!Number.isNaN(v)) { music.setVolume(v); volEl.value = String(v); }
   } else volEl.value = String(music.volume);
   if (saved.muted) music.setMuted(true);
-  btnFx.setAttribute('aria-pressed', effects ? 'true' : 'false');
   syncMute();
 
   function persist() {
@@ -131,7 +131,7 @@
     canvas.height = Math.max(2, Math.round(h * dpr));
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
-    const top = 54, bot = 78;
+    const top = 40, bot = 52;
     const side = Math.max(80, Math.min(w - 16, h - top - bot));
     view = { w: w, h: h, dpr: dpr, cx: w / 2, cy: top + (h - top - bot) / 2, R: side * 0.46 };
     buildField();
@@ -158,6 +158,10 @@
         s: 0.6 + rand() * 1.6, p: rand() * 6
       });
     }
+  }
+
+  function progressU() {
+    return Math.max(0, Math.min(1, patternTime / DRAW));
   }
 
   function screenToWorld(sx, sy) {
@@ -190,11 +194,11 @@
   }
   function toggleFx() {
     effects = !effects;
-    btnFx.setAttribute('aria-pressed', effects ? 'true' : 'false');
     persist();
   }
 
   function ensureMusic() {
+    if (!music.unlocked && beginEl) beginEl.classList.add('hide');
     music.start();
     persist();
   }
@@ -209,7 +213,6 @@
     if (e.code === 'Space') skip();
     else if (e.code === 'Enter') toggleFx();
     else if (e.code === 'KeyM') { music.toggleMuted(); syncMute(); persist(); }
-    else if (e.code === 'KeyH' || e.code === 'Slash') hintEl.classList.toggle('hide');
   }
   function onKeyUp(e) { held.delete(e.code); }
   window.addEventListener('keydown', onKey);
@@ -238,10 +241,7 @@
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
 
-  btnNext.addEventListener('click', function () { ensureMusic(); skip(); });
-  btnFx.addEventListener('click', function () { ensureMusic(); toggleFx(); });
   btnMute.addEventListener('click', function () { ensureMusic(); music.toggleMuted(); syncMute(); persist(); });
-  btnHint.addEventListener('click', function () { hintEl.classList.toggle('hide'); });
   volEl.addEventListener('input', function () {
     ensureMusic();
     music.setVolume(Number(volEl.value));
@@ -299,9 +299,15 @@
     cycleT += dt;
     if (phase === 'draw') {
       patternTime += dt;
-      const p = patterns[patternId].pos(patternTime);
+      const p = patterns[patternId].pos(progressU());
       magnet.x = p.x;
       magnet.y = p.y;
+      magAcc += dt;
+      if (magAcc >= 0.35) {
+        magAcc = 0;
+        magSamples.push(magnet.x, magnet.y);
+        if (magSamples.length > 480) magSamples.splice(0, magSamples.length - 480);
+      }
       if (cycleT >= CYCLE - RAKE) beginRake();
     } else {
       rakeT += dt;
@@ -327,6 +333,7 @@
       }
     }
 
+    const bx0 = actors.ball.x, by0 = actors.ball.y;
     const b0 = actors.ball;
     const sp = Math.hypot(b0.vx, b0.vy) || 1;
     const tx = -b0.vy / sp, ty = b0.vx / sp;
@@ -336,7 +343,11 @@
     );
     if (phase === 'draw') sand.settle(dt);
     actors.update(Math.min(dt, 0.05), sand, magnet, user, phase === 'draw');
-    if (phase === 'draw' && sideH < -0.42 && rand() < 0.45) spawnSpark(actors.ball.x, actors.ball.y);
+    if (phase === 'draw') {
+      drawTravel += Math.hypot(actors.ball.x - bx0, actors.ball.y - by0);
+      drawTime += dt;
+      if (sideH < -0.42 && rand() < 0.28) spawnSpark(actors.ball.x, actors.ball.y);
+    }
 
     for (let i = sparkles.length - 1; i >= 0; i--) {
       sparkles[i].life -= dt;
@@ -473,18 +484,12 @@
     for (let i = 0; i < sparkles.length; i++) {
       const s = sparkles[i];
       const a = Math.max(0, s.life / s.max);
-      ctx.save();
-      ctx.translate(s.x * R, s.y * R);
-      ctx.rotate(s.hue * 3);
-      ctx.globalAlpha = a;
-      ctx.strokeStyle = s.hue > 0.5 ? 'rgba(180, 255, 240, 0.9)' : 'rgba(255, 236, 190, 0.95)';
-      ctx.lineWidth = 1;
+      ctx.globalAlpha = a * 0.85;
+      ctx.fillStyle = s.hue > 0.5 ? 'rgba(190, 255, 236, 0.9)' : 'rgba(255, 236, 200, 0.95)';
       ctx.beginPath();
-      const L = 3 + (1 - a) * 4;
-      ctx.moveTo(-L, 0); ctx.lineTo(L, 0);
-      ctx.moveTo(0, -L); ctx.lineTo(0, L);
-      ctx.stroke();
-      ctx.restore();
+      ctx.arc(s.x * R, s.y * R, 1.6 + (1 - a) * 1.4, 0, 7);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
 
@@ -522,13 +527,6 @@
     ctx.arc(bx - br * 0.25, by - br * 0.28, br * 0.28, 0.4, 2.4);
     ctx.stroke();
 
-    if (pointer && effects) {
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(140, 230, 220, 0.45)';
-      ctx.lineWidth = 1.5;
-      ctx.arc(pointer.x * R, pointer.y * R, br * 2.2, 0, 7);
-      ctx.stroke();
-    }
     ctx.restore();
 
     const vig = ctx.createRadialGradient(cx, cy, R * 0.7, cx, cy, Math.max(w, h) * 0.72);
@@ -539,25 +537,22 @@
   }
 
   function hud() {
-    const pat = patterns[patternId];
-    const label = phase === 'rake' ? 'Raking the sand' : pat.name;
-    patternEl.textContent = label;
     const line = music.line();
+    const shown = nowEl.getAttribute('data-line');
+    if (shown === line) return;
+    nowEl.setAttribute('data-line', line);
     nowEl.textContent = '';
-    if (music.track && music.unlocked) {
+    if (music.track && music.unlocked && line) {
       const a = document.createElement('a');
       a.href = music.track.page;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = line;
       nowEl.appendChild(a);
-    } else {
-      nowEl.textContent = line;
     }
   }
 
   let last = performance.now();
-  let hintUntil = last + 9000;
   function frame(now) {
     let dt = (now - last) / 1000;
     last = now;
@@ -566,7 +561,6 @@
     update(dt);
     draw();
     hud();
-    if (now > hintUntil) hintEl.classList.add('hide');
     requestAnimationFrame(frame);
   }
 
@@ -590,6 +584,33 @@
     get pattern() { return patterns[patternId].name; },
     get patternId() { return patterns[patternId].id; },
     get groove() { return sand.groove(); },
+    get coverage() { return sand.coverage(); },
+    get progress() { return progressU(); },
+    get ballSpeed() { return drawTime > 0.4 ? drawTravel / drawTime : 0; },
+    /* Share of recent magnet samples that lie on an earlier stretch of the
+       same path. A pattern that redraws itself scores high. */
+    retrace: function () {
+      const n = magSamples.length / 2;
+      if (n < 16) return 0;
+      const step = 3;
+      let bad = 0, tested = 0;
+      const eps = 0.02;
+      for (let i = step * 4; i < n - step * 3; i++) {
+        tested++;
+        let matched = false;
+        for (let j = 0; j < i - step * 4 && !matched; j++) {
+          let ok = true;
+          for (let k = 0; k < 3; k++) {
+            const ax = magSamples[(i + k * step) * 2], ay = magSamples[(i + k * step) * 2 + 1];
+            const bx = magSamples[(j + k * step) * 2], by = magSamples[(j + k * step) * 2 + 1];
+            if (ax == null || bx == null || (ax - bx) * (ax - bx) + (ay - by) * (ay - by) > eps * eps) { ok = false; break; }
+          }
+          if (ok) matched = true;
+        }
+        if (matched) bad++;
+      }
+      return tested ? bad / tested : 0;
+    },
     get rover() { return { x: actors.rover.x, y: actors.rover.y, pose: actors.rover.pose }; },
     get astro() { return { x: actors.astro.x, y: actors.astro.y, pose: actors.astro.pose }; },
     get ball() { return { x: actors.ball.x, y: actors.ball.y }; },
