@@ -1,30 +1,26 @@
 /* Nursery music for Me & My Placenta.
-   Real recordings, streamed at play time. Nothing is stored in the repo.
-   Safari plays the MP3 set. Each URL was checked: it answers audio/mpeg,
-   sends Access-Control-Allow-Origin: *, and ffprobe reads a duration.
-   A short file simply hands the night-light to the next shuffled piece. */
+   Clean modern recordings only, streamed at play time. Nothing is stored in the repo.
+   Each file was checked: HTTP 200, an audio content type, and a quiet noise floor.
+   The night starts on a random piece, then keeps shuffling. Playback stays at 1x. */
 (function (root) {
   'use strict';
 
   const TRACKS = [
-    { composer: 'Johannes Brahms', piece: 'Wiegenlied, Op. 49 No. 4', performer: 'Ernestine Schumann-Heink, Victor Orchestra (1906)', license: 'Public domain', url: 'https://archive.org/download/78_wiegenlied-cradle-song_ernestine-schumann-heink-victor-orchestra-brahms_gbia0455298a/Wiegenlied%20(Cradle%20Song)%20-%20Ernestine%20Schumann-Heink.mp3', page: 'https://archive.org/details/78_wiegenlied-cradle-song_ernestine-schumann-heink-victor-orchestra-brahms_gbia0455298a' },
-    { composer: 'Johannes Brahms', piece: 'Lullaby', performer: 'Elsie Baker (1912)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-132112-lullaby/jukebox-132112_lullaby.mp3', page: 'https://archive.org/details/loc-jukebox-132112-lullaby' },
-    { composer: 'Johannes Brahms', piece: 'Lullaby', performer: 'Edna White Trumpet Quartet (1918)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-658837-lullaby/jukebox-658837_lullaby.mp3', page: 'https://archive.org/details/loc-jukebox-658837-lullaby' },
-    { composer: 'Johannes Brahms', piece: 'Cradle Song', performer: 'Percy Grainger and Porter Grainger (1922)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-668736-cradle-song/jukebox-668736_cradle-song.mp3', page: 'https://archive.org/details/loc-jukebox-668736-cradle-song' },
-    { composer: 'Franz Schubert', piece: 'Wiegenlied', performer: 'Emmy Destinn, with Walter B. Rogers (1915)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-12052-wiegenlied/jukebox-12052_wiegenlied.mp3', page: 'https://archive.org/details/loc-jukebox-12052-wiegenlied' },
-    { composer: 'Frédéric Chopin', piece: 'Berceuse in D-flat major, Op. 57', performer: 'Frank La Forge (1913)', license: 'Public domain', url: 'https://archive.org/download/1913-berceuse-chopin-frank-la-forge-vic-55031-a/1913%20Berceuse%20-%20Chopin%20-%20Frank%20La%20Forge%20VIC%2055031%20A.mp3', page: 'https://archive.org/details/1913-berceuse-chopin-frank-la-forge-vic-55031-a' },
-    { composer: 'Frédéric Chopin', piece: 'Berceuse, Op. 57', performer: 'Leopold Godowsky (1913)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-750801-berceuse/jukebox-750801_berceuse.mp3', page: 'https://archive.org/details/loc-jukebox-750801-berceuse' },
-    { composer: 'Traditional Welsh (Ar Hyd y Nos)', piece: 'All Through the Night', performer: 'David Bispham (1911)', license: 'Public domain', url: 'https://archive.org/download/a-5320-bishpham-all-through-the-night/A%205320%20Bishpham%20-%20All%20through%20the%20Night.mp3', page: 'https://archive.org/details/a-5320-bishpham-all-through-the-night' },
-    { composer: 'Traditional Welsh (Ar Hyd y Nos)', piece: 'All Through the Night', performer: 'Evan Williams (1908)', license: 'Public domain', url: 'https://archive.org/download/AllThroughTheNight_201812/All%20through%20the%20night.mp3', page: 'https://archive.org/details/AllThroughTheNight_201812' },
-    { composer: 'Traditional Welsh (Ar Hyd y Nos)', piece: 'All Through the Night', performer: 'Margaret Romaine (1922)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-709646-all-through-the-night/jukebox-709646_all-through-the-night.mp3', page: 'https://archive.org/details/loc-jukebox-709646-all-through-the-night' },
-    { composer: 'Benjamin Godard', piece: 'Berceuse, from Jocelyn', performer: 'William Beck (1912)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-762750-berceuse-lullaby/jukebox-762750_berceuse-lullaby.mp3', page: 'https://archive.org/details/loc-jukebox-762750-berceuse-lullaby' },
-    { composer: 'Benjamin Godard', piece: 'Berceuse', performer: 'Gudrun Carlson (1906)', license: 'Public domain', url: 'https://archive.org/download/loc-jukebox-124191-berceuse/jukebox-124191_berceuse.mp3', page: 'https://archive.org/details/loc-jukebox-124191-berceuse' },
-    { composer: 'Bernhard Flies, long attributed to Mozart', piece: 'Wiegenlied (cradle song)', performer: 'Frieda Hempel (1915)', license: 'Public domain', url: 'https://archive.org/download/78_wiegenlied-cradle-song_frieda-hempel-mozart_gbia0132351a_item/Wiegenlied(Cradle%20Song)-Frieda%20Hempel.mp3', page: 'https://archive.org/details/78_wiegenlied-cradle-song_frieda-hempel-mozart_gbia0132351a_item' },
     { composer: 'Robert Schumann', piece: 'Kinderszenen, Op. 15 No. 1, Of Foreign Lands and Peoples', performer: 'Gregory Tait, piano (2020)', license: 'CC BY 4.0', url: 'https://archive.org/download/schumann-kinderszenen-op.-15/Schumann%20Kinderszenen%20No.%201.mp3', page: 'https://archive.org/details/schumann-kinderszenen-op.-15' },
     { composer: 'Robert Schumann', piece: 'Kinderszenen, Op. 15 No. 7, Träumerei', performer: 'Gregory Tait, piano (2020)', license: 'CC BY 4.0', url: 'https://archive.org/download/schumann-kinderszenen-op.-15/Schumann%20Kinderszenen%20No.%207.mp3', page: 'https://archive.org/details/schumann-kinderszenen-op.-15' },
     { composer: 'Robert Schumann', piece: 'Kinderszenen, Op. 15 No. 12, Child Falling Asleep', performer: 'Gregory Tait, piano (2020)', license: 'CC BY 4.0', url: 'https://archive.org/download/schumann-kinderszenen-op.-15/Schumann%20Kinderszenen%20No.%2012.mp3', page: 'https://archive.org/details/schumann-kinderszenen-op.-15' },
     { composer: 'Robert Schumann', piece: 'Kinderszenen, Op. 15 No. 13, The Poet Speaks', performer: 'Gregory Tait, piano (2020)', license: 'CC BY 4.0', url: 'https://archive.org/download/schumann-kinderszenen-op.-15/Schumann%20Kinderszenen%20No.%2013.mp3', page: 'https://archive.org/details/schumann-kinderszenen-op.-15' },
-    { composer: 'Johann Sebastian Bach', piece: 'Sheep May Safely Graze, BWV 208', performer: 'Kevin MacLeod', license: 'CC BY 3.0', url: 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Sheep_May_Safely_Graze_-_BWV_208_%28ISRC_USUAN1100079%29.mp3', page: 'https://commons.wikimedia.org/wiki/File:Sheep_May_Safely_Graze_-_BWV_208_(ISRC_USUAN1100079).mp3' }
+    { composer: 'Johann Sebastian Bach', piece: 'Sheep May Safely Graze, BWV 208', performer: 'Kevin MacLeod', license: 'CC BY 3.0', url: 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Sheep_May_Safely_Graze_-_BWV_208_%28ISRC_USUAN1100079%29.mp3', page: 'https://commons.wikimedia.org/wiki/File:Sheep_May_Safely_Graze_-_BWV_208_(ISRC_USUAN1100079).mp3' },
+    { composer: 'Erik Satie', piece: 'Gymnopédie No. 1', performer: 'Kevin MacLeod', license: 'CC BY 3.0', url: 'https://upload.wikimedia.org/wikipedia/commons/2/2a/Gymnopedie_No._1_%28ISRC_USUAN1100787%29.mp3', page: 'https://commons.wikimedia.org/wiki/File:Gymnopedie_No._1_(ISRC_USUAN1100787).mp3' },
+    { composer: 'Erik Satie', piece: 'Gymnopédie No. 3', performer: 'Kevin MacLeod', license: 'CC BY 3.0', url: 'https://upload.wikimedia.org/wikipedia/commons/1/18/Gymnopedie_No._3_%28ISRC_USUAN1100785%29.mp3', page: 'https://commons.wikimedia.org/wiki/File:Gymnopedie_No._3_(ISRC_USUAN1100785).mp3' },
+    { composer: 'Johann Sebastian Bach', piece: 'Goldberg Variations, BWV 988, Aria', performer: 'Kimiko Ishizaka, piano', license: 'CC0', url: 'https://upload.wikimedia.org/wikipedia/commons/5/59/Kimiko_Ishizaka_-_J.S._Bach-_-Open-_Goldberg_Variations%2C_BWV_988_%28Piano%29_-_01_Aria.mp3', page: 'https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_J.S._Bach-_-Open-_Goldberg_Variations,_BWV_988_(Piano)_-_01_Aria.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Nocturne in D-flat major, Op. 27 No. 2', performer: 'Musopen', license: 'CC0', url: 'https://upload.wikimedia.org/wikipedia/commons/3/3f/NocturneOp27No2.mp3', page: 'https://commons.wikimedia.org/wiki/File:NocturneOp27No2.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Nocturne in E-flat major, Op. 9 No. 2', performer: 'Frank Levy, piano', license: 'Public domain', url: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Nocturne_in_E_flat_major%2C_Op._9_no._2.mp3', page: 'https://commons.wikimedia.org/wiki/File:Nocturne_in_E_flat_major,_Op._9_no._2.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Prelude in D-flat major, Op. 28 No. 15, Raindrop', performer: 'Musopen', license: 'CC0', url: 'https://upload.wikimedia.org/wikipedia/commons/f/fc/Prelude_Op._28_no._15.mp3', page: 'https://commons.wikimedia.org/wiki/File:Prelude_Op._28_no._15.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Prelude in A major, Op. 28 No. 7', performer: 'Musopen', license: 'CC0', url: 'https://upload.wikimedia.org/wikipedia/commons/d/d6/Prelude_Op._28_no._7.mp3', page: 'https://commons.wikimedia.org/wiki/File:Prelude_Op._28_no._7.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Prelude in B minor, Op. 28 No. 6', performer: 'Musopen', license: 'CC0', url: 'https://upload.wikimedia.org/wikipedia/commons/6/6d/Prelude_Op._28_no._6.mp3', page: 'https://commons.wikimedia.org/wiki/File:Prelude_Op._28_no._6.mp3' },
+    { composer: 'Claude Debussy', piece: 'Clair de lune', performer: 'United States Air Force Band of Flight, Wright Brass', license: 'Public domain', url: 'https://upload.wikimedia.org/wikipedia/commons/6/63/Clair_de_Lune_-_Wright_Brass_-_United_States_Air_Force_Band_of_Flight.mp3', page: 'https://commons.wikimedia.org/wiki/File:Clair_de_Lune_-_Wright_Brass_-_United_States_Air_Force_Band_of_Flight.mp3' },
+    { composer: 'Frédéric Chopin', piece: 'Nocturne in G major, Op. 37 No. 2', performer: 'Olga Gurevich, piano', license: 'CC0', url: 'https://archive.org/download/parso-1c53a71e4ef6f47591ab605d801bc3780b27824a/000_Chopin_Nocturne_Op_37_no_2_in_G_major_Olga_Gurevich.mp3', page: 'https://archive.org/details/parso-1c53a71e4ef6f47591ab605d801bc3780b27824a' }
   ];
 
   function canPlay(url) {
@@ -41,7 +37,7 @@
     this.muted = false;
     this.duck = 0.78;
     this.unlocked = false;
-    this.track = this.tracks[0] || null;
+    this.track = null;
     this.bag = [];
     this.failures = 0;
     this._switching = false;
@@ -56,18 +52,25 @@
     if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
     for (let i = 0; i < 2; i++) this.els.push(this._make());
     this._refill();
+    this.track = this._take() || this.tracks[0] || null;
     if (this.track) this._assign(this.els[0], this.track);
   }
 
   Music.prototype._make = function () {
     const el = new Audio();
     /* No crossOrigin. These files are only played, never read through Web Audio.
-       A CORS miss would make the element silent in Safari and Chrome. */
+       A CORS miss would make the element silent in Safari and Chrome.
+       Speed stays at 1. The narration slider does not touch the lullaby. */
     el.preload = 'auto';
     el.loop = false;
+    el.playbackRate = 1;
     el.setAttribute('playsinline', '');
     el.setAttribute('webkit-playsinline', '');
     const self = this;
+    el.addEventListener('pause', function () {
+      if (self.els[self.hot] !== el || self._switching) return;
+      self.keepAlive();
+    });
     el.addEventListener('error', function () {
       if (!el.error || el.error.code === 1) return;
       if (!self.unlocked) return;
@@ -130,6 +133,7 @@
   Music.prototype.setMuted = function (m) {
     this.muted = !!m;
     this.apply();
+    if (!this.muted) this.keepAlive();
   };
 
   Music.prototype.toggleMuted = function () { this.setMuted(!this.muted); };
@@ -146,9 +150,27 @@
     this.unlocked = true;
     const el = this.els[this.hot];
     if (el.error && this.track) el.src = this.track.url;
+    try { el.playbackRate = 1; } catch (e) {}
     this.apply();
     const p = el.play();
     if (p && p.catch) p.catch(function () {});
+  };
+
+  /* If a narration swap pauses the lullaby, play it again in this same turn.
+     A muted lullaby stays quiet. A failure here must not throw. */
+  Music.prototype.keepAlive = function () {
+    if (this._keeping || !this.unlocked || this.muted || this._switching) return;
+    const el = this.els[this.hot];
+    if (!el || (!el.paused && !el.ended)) return;
+    if (el.ended || (isFinite(el.duration) && el.duration > 8 && el.currentTime >= el.duration - 0.35)) {
+      this.next();
+      return;
+    }
+    this._keeping = true;
+    try { el.playbackRate = 1; } catch (e) {}
+    const p = el.play();
+    if (p && p.catch) p.catch(function () {});
+    this._keeping = false;
   };
 
   Music.prototype.next = function () {
@@ -160,6 +182,7 @@
     const el = this.els[nxt];
     this.track = incoming;
     this._assign(el, incoming);
+    try { el.playbackRate = 1; } catch (e) {}
     el.volume = 0;
     const self = this;
     const go = el.play();
@@ -185,7 +208,17 @@
   Music.prototype.tick = function () {
     if (!this.unlocked || this._switching) return;
     const el = this.els[this.hot];
-    if (!el || el.paused || !isFinite(el.duration) || el.duration < 8) return;
+    if (!el) return;
+    try { if (el.playbackRate !== 1) el.playbackRate = 1; } catch (e) {}
+    if (el.paused || el.ended) {
+      const now = performance.now();
+      if (!this._keepAt || now - this._keepAt > 450) {
+        this._keepAt = now;
+        this.keepAlive();
+      }
+      return;
+    }
+    if (!isFinite(el.duration) || el.duration < 8) return;
     if (el.currentTime > el.duration - 2.4) this.next();
     else this.apply();
   };
