@@ -65,8 +65,31 @@
   }
 
   function applyNarrationGain() {
-    narration.volume = narrMuted ? 0 : narrVol;
+    try { narration.volume = narrMuted ? 0 : narrVol; } catch (e) {}
     narration.muted = false;
+  }
+
+  /* Call from the tap itself. Opens playback even when the iPhone ringer is silent,
+     and does not attach the narration or the lullabies to the context. */
+  function unlockAudio() {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch (e) {}
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      if (!unlockAudio.ctx) unlockAudio.ctx = new AC();
+      const ctx = unlockAudio.ctx;
+      if (ctx.state !== 'running') {
+        const r = ctx.resume();
+        if (r && r.catch) r.catch(function () {});
+      }
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch (e) {}
   }
 
   function duck() {
@@ -187,7 +210,15 @@
   }
 
   function playChapter(i, time) {
-    if (!chapters.length) return;
+    if (!chapters.length) {
+      narration.src = 'audio/clip-04-12sec.mp3';
+      narration.setAttribute('playsinline', '');
+      narration.setAttribute('webkit-playsinline', '');
+      applyNarrationGain();
+      const early = narration.play();
+      if (early && early.catch) early.catch(function () {});
+      return;
+    }
     index = (i + chapters.length) % chapters.length;
     endShown = false;
     show('end', false);
@@ -197,7 +228,13 @@
     cueIndex = -1;
     carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm' };
     narration.src = 'audio/' + ch.file;
+    narration.setAttribute('playsinline', '');
+    narration.setAttribute('webkit-playsinline', '');
     applyNarrationGain();
+    /* play() has to run in this same turn as the tap. Waiting for
+       loadedmetadata makes Safari ignore it. */
+    const startedPlay = narration.play();
+    if (startedPlay && startedPlay.catch) startedPlay.catch(function () {});
     const startAt = function () {
       const want = time || 0;
       const place = function () {
@@ -217,8 +254,6 @@
         narration.addEventListener('progress', again);
         narration.addEventListener('canplay', again);
       }
-      const p = narration.play();
-      if (p && p.catch) p.catch(function () {});
       applyCue();
       setCaption();
       renderList();
@@ -241,6 +276,7 @@
   }
 
   function begin() {
+    unlockAudio();
     if (mode === 'play') play.stop();
     mode = 'listen';
     show('play-hud', false);
@@ -305,6 +341,7 @@
   }
 
   function startPlay() {
+    unlockAudio();
     if (narration.src) { narration.pause(); }
     started = false;
     endShown = false;
