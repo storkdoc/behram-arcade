@@ -5,6 +5,20 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'me-and-my-placenta',
+    title: 'ME & MY PLACENTA',
+    marquee: 'sunset',
+    tagline: 'Float with Cletus the Fetus and Placy, his placenta, through a watercolor cosmos while the story is read aloud.',
+    description: 'A listening room for Me & My Placenta: The Incredible Story of Me & My Best Friend, by Steve Behram, MD. It is not a scored game. Cletus’s chapters play in the ear, nursery music shuffles underneath like a night-light, and the author’s watercolors breathe: the cord sways, dust drifts, and Placy hovers at the edge of every scene. When the story comes to Earth a painted globe floats in. When it is time to be born, rose theater curtains open, because birth is a stage entrance. A mustachioed doctor in a white coat — a warm caricature of Dr. Behram — stands in the wings and lets Cletus tell it. The opening, the dedication, Chapter 5 (The Grand Entrance, My Grand Exit), and the closing are here; the earlier chapters can be added later. The book’s own QR code and a quiet link to Amazon live on the title screen and the end card.',
+    thumb: 'games/me-and-my-placenta/thumb.png',
+    added: '2026-11-13',
+    genre: 'STORY',
+    year: 'A BEDTIME',
+    controls: 'SPACE plays or pauses the narration · ENTER or → next chapter · ← previous chapter · M music · N narration · C chapters · Esc closes a panel · gamepad: A play/pause, X or RB next chapter, LB previous, Start mutes the music',
+    touch: 'tap to begin · play, chapter skip, and separate voice and music volumes sit in a quiet bar · tap the small QR code to see it larger · works full screen on iPhone, iPad, and Mac',
+    accent: '#e7a0c4'
+  },
+  {
     slug: 'relax',
     title: 'RELAX',
     marquee: 'sunset',

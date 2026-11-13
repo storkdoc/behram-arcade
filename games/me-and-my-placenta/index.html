@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#100c18">
+<meta name="description" content="Me &amp; My Placenta: float with Cletus and Placy while Steve Behram’s story is read aloud.">
+<title>Me &amp; My Placenta</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<a class="home" href="../../index.html">← Arcade</a>
+
+<section id="title">
+  <img id="cover" src="art/cover.jpg" alt="Cletus the Fetus smiling in a pink placenta bowl among the stars, with Placy floating above">
+  <div class="title-copy">
+    <p class="kicker">A story to float in</p>
+    <h1>Me &amp; My Placenta</h1>
+    <p class="sub">The Incredible Story of Me &amp; My Best Friend</p>
+    <p class="by">Steve Behram, MD</p>
+    <button type="button" id="begin">tap to begin</button>
+  </div>
+  <a id="buy" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">The book on Amazon</a>
+  <button type="button" class="qr-mini" data-qr aria-label="Show the QR code larger">
+    <img id="qr" src="qr/qr-code.png" alt="QR code linking to the author’s page">
+  </button>
+</section>
+
+<div id="story" hidden>
+  <p id="caption"></p>
+  <p id="now"></p>
+  <input id="bar" type="range" min="0" max="1" step="0.001" value="0" aria-label="Place in this chapter">
+  <div class="dock">
+    <button type="button" id="prev" aria-label="Previous chapter">Prev</button>
+    <button type="button" id="play" aria-label="Play narration">Play</button>
+    <button type="button" id="next" aria-label="Next chapter">Next</button>
+    <button type="button" id="chapters-btn" aria-label="Chapters">Chapters</button>
+    <label>Voice <input id="voice-vol" type="range" min="0" max="1" step="0.01" value="1" aria-label="Narration volume"></label>
+    <button type="button" id="voice-mute" aria-pressed="false">Voice</button>
+    <label>Music <input id="music-vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Nursery music volume"></label>
+    <button type="button" id="music-mute" aria-pressed="false">Music</button>
+    <button type="button" id="music-note" aria-expanded="false" aria-controls="music-line">Notes</button>
+  </div>
+  <div id="music-line" class="panel" hidden>
+    <div id="music-credit"></div>
+  </div>
+  <div id="list" class="panel" hidden>
+    <header>
+      <h2>Chapters</h2>
+      <button type="button" id="list-close" aria-label="Close chapters">Close</button>
+    </header>
+    <p class="quiet">Chapters 1–4 are not in this copy yet. What is here is the opening, the dedication, Chapter 5, and the closing. Another recording can be dropped into <span>audio/</span> and named in the manifest.</p>
+    <ol id="chapters"></ol>
+  </div>
+</div>
+
+<section id="end" hidden>
+  <p class="kicker">Placy lives on</p>
+  <h2>Your placenta will thank you</h2>
+  <p class="quiet">The rest of Cletus and Placy is in the book.</p>
+  <img id="qr-end" src="qr/qr-code.png" alt="QR code linking to the author’s page">
+  <a id="buy-end" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">The book on Amazon</a>
+  <div class="end-actions">
+    <button type="button" id="again" class="ghost">Listen again</button>
+    <button type="button" id="end-chapters" class="ghost">Chapters</button>
+  </div>
+</section>
+
+<div id="qr-box" hidden>
+  <img src="qr/qr-code.png" alt="QR code linking to the author’s page">
+</div>
+
+<script src="js/stage.js"></script>
+<script src="js/music.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
