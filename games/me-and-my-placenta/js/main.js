@@ -32,6 +32,7 @@
   let endShown = false;
 
   const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor'];
+  for (let n = 1; n <= 23; n++) keys.push('sb' + (n < 10 ? '0' : '') + n);
 
   function mood(name) {
     if (window.MoodSticker && MoodSticker.screen) MoodSticker.screen(name);

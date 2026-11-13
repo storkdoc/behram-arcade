@@ -1,5 +1,5 @@
 {
-  "note": "Drop another narration mp3 in this folder and add a chapter object. Cues are seconds into that file. Unspecified fields carry forward. kind is opening, dedication, chapter, credits, or closing.",
+  "note": "Drop another narration mp3 in this folder and add a chapter object. Cues are seconds into that file. Unspecified fields carry forward. kind is opening, dedication, chapter, credits, or closing. Storyboard frames are sb01–sb23 in art/board/.",
   "chapters": [
     {
       "id": "opening",
@@ -8,7 +8,8 @@
       "kicker": "Opening",
       "kind": "opening",
       "cues": [
-        { "t": 0, "art": "cover", "doctor": 0, "globe": 0, "curtain": 1, "mood": "calm" }
+        { "t": 0, "art": "sb01", "doctor": 0, "globe": 0, "curtain": 1, "mood": "calm" },
+        { "t": 6, "art": "sb02", "mood": "tender" }
       ]
     },
     {
@@ -18,9 +19,9 @@
       "kicker": "Dedication",
       "kind": "dedication",
       "cues": [
-        { "t": 0, "art": "cover", "doctor": 0.9, "globe": 0.15, "mood": "tender" },
-        { "t": 8, "art": "pointing", "doctor": 0.55, "globe": 0 },
-        { "t": 16, "art": "toddler", "doctor": 0.4, "mood": "calm" },
+        { "t": 0, "art": "sb03", "doctor": 0.85, "globe": 0.1, "curtain": 1, "mood": "tender" },
+        { "t": 10, "art": "sb19", "doctor": 0.45, "globe": 0 },
+        { "t": 18, "art": "hug", "doctor": 0.4, "mood": "calm" },
         { "t": 24, "art": "cover", "doctor": 0.35, "mood": "tender" }
       ]
     },
@@ -31,37 +32,39 @@
       "kicker": "Chapter 5",
       "kind": "chapter",
       "cues": [
-        { "t": 0, "art": "shell", "doctor": 0.58, "globe": 0, "curtain": 1, "mood": "calm" },
-        { "t": 10, "art": "curled", "mood": "squeeze", "doctor": 0.46 },
-        { "t": 24, "art": "shell", "mood": "squeeze" },
-        { "t": 36, "art": "hug", "mood": "tender", "doctor": 0.42 },
-        { "t": 50, "art": "cheek", "mood": "tender" },
-        { "t": 59, "art": "fishbowl", "mood": "ride", "doctor": 0.4 },
-        { "t": 74, "art": "drop", "mood": "ride" },
-        { "t": 82, "art": "cap", "mood": "calm" },
+        { "t": 0, "art": "sb20", "doctor": 0.4, "globe": 0, "curtain": 1, "mood": "calm" },
+        { "t": 8, "art": "sb16", "mood": "ride" },
+        { "t": 10, "art": "sb06", "mood": "squeeze", "doctor": 0.42 },
+        { "t": 20, "art": "sb05", "mood": "squeeze" },
+        { "t": 28, "art": "sb06", "mood": "squeeze" },
+        { "t": 36, "art": "sb07", "mood": "tender", "doctor": 0.4 },
+        { "t": 50, "art": "hug", "mood": "tender" },
+        { "t": 59, "art": "sb17", "mood": "ride", "doctor": 0.36 },
+        { "t": 70, "art": "sb18", "mood": "ride" },
+        { "t": 78, "art": "sb16", "mood": "ride" },
         { "t": 89, "art": "uterus", "mood": "squeeze", "doctor": 0.48 },
-        { "t": 112, "art": "birth", "mood": "squeeze" },
-        { "t": 128, "art": "manatee", "mood": "ride" },
-        { "t": 146, "art": "drop", "mood": "birth" },
-        { "t": 158, "art": "stage", "curtain": 0, "mood": "birth", "doctor": 0.52 },
-        { "t": 170, "curtain": 0.42 },
-        { "t": 184, "curtain": 1, "doctor": 0.74 },
-        { "t": 206, "art": "stage", "doctor": 0.8, "mood": "tender" },
-        { "t": 236, "art": "bag", "doctor": 0.7, "mood": "tender" },
-        { "t": 257, "art": "hug", "mood": "farewell", "doctor": 0.48 },
-        { "t": 286, "art": "singing", "mood": "farewell" },
-        { "t": 322, "art": "singing", "doctor": 0.72 },
-        { "t": 360, "art": "toddler", "mood": "tender", "doctor": 0.4 },
-        { "t": 396, "art": "hug", "mood": "farewell", "doctor": 0.38 },
-        { "t": 421, "art": "pointing", "mood": "tender", "doctor": 0.5 },
-        { "t": 454, "art": "ovum", "mood": "cosmos", "doctor": 0.42 },
-        { "t": 486, "art": "nest", "mood": "cosmos" },
-        { "t": 508, "art": "astronaut", "mood": "cosmos", "globe": 0.2 },
-        { "t": 527, "art": "earth", "globe": 1, "mood": "cosmos", "doctor": 0.6 },
-        { "t": 566, "art": "planets", "globe": 0.72, "mood": "cosmos" },
-        { "t": 590, "art": "toddler", "globe": 0.28, "mood": "tender", "doctor": 0.36 },
-        { "t": 614, "art": "earth", "globe": 0.9, "mood": "cosmos" },
-        { "t": 636, "art": "cover", "globe": 0.22, "mood": "tender", "doctor": 0.4 }
+        { "t": 112, "art": "sb07", "mood": "squeeze" },
+        { "t": 126, "art": "sb08", "mood": "ride" },
+        { "t": 141, "art": "sb09", "mood": "ride" },
+        { "t": 152, "art": "drop", "mood": "birth" },
+        { "t": 158, "art": "sb10", "curtain": 0, "mood": "birth", "doctor": 0.5 },
+        { "t": 170, "curtain": 0.45 },
+        { "t": 184, "curtain": 1, "doctor": 0.7 },
+        { "t": 206, "art": "sb11", "doctor": 0.28, "mood": "tender" },
+        { "t": 247, "art": "sb12", "mood": "farewell", "doctor": 0.4 },
+        { "t": 300, "art": "sb13", "mood": "farewell", "doctor": 0.35 },
+        { "t": 322, "art": "sb22", "doctor": 0.62 },
+        { "t": 346, "art": "sb13", "mood": "farewell", "doctor": 0.35 },
+        { "t": 370, "art": "hug", "mood": "tender", "doctor": 0.32 },
+        { "t": 407, "art": "sb20", "mood": "tender", "doctor": 0.4 },
+        { "t": 430, "art": "pointing", "mood": "tender" },
+        { "t": 446, "art": "sb14", "mood": "cosmos", "doctor": 0.42, "globe": 0.25 },
+        { "t": 490, "art": "sb04", "globe": 0.55, "mood": "cosmos" },
+        { "t": 520, "art": "sb21", "globe": 1, "mood": "cosmos", "doctor": 0.5 },
+        { "t": 560, "art": "sb16", "globe": 0.4, "mood": "cosmos" },
+        { "t": 590, "art": "sb19", "globe": 0.2, "mood": "tender", "doctor": 0.32 },
+        { "t": 614, "art": "sb21", "globe": 0.75, "mood": "cosmos" },
+        { "t": 636, "art": "sb15", "globe": 0.15, "mood": "tender", "doctor": 0.35 }
       ]
     },
     {
@@ -71,8 +74,8 @@
       "kicker": "Credits",
       "kind": "credits",
       "cues": [
-        { "t": 0, "art": "cover", "doctor": 0.45, "globe": 0.1, "curtain": 1, "mood": "calm" },
-        { "t": 16, "art": "shell", "doctor": 0.72, "mood": "tender" }
+        { "t": 0, "art": "sb23", "doctor": 0.4, "globe": 0.1, "curtain": 1, "mood": "tender" },
+        { "t": 14, "art": "sb15", "doctor": 0.35, "mood": "calm" }
       ]
     },
     {
@@ -82,10 +85,10 @@
       "kicker": "Closing",
       "kind": "closing",
       "cues": [
-        { "t": 0, "art": "cover", "doctor": 0.4, "globe": 0.2, "mood": "tender" },
-        { "t": 22, "art": "hug", "doctor": 0.35, "globe": 0.1, "mood": "farewell" },
-        { "t": 42, "art": "earth", "globe": 0.85, "mood": "cosmos", "doctor": 0.5 },
-        { "t": 54, "art": "cover", "globe": 0.3, "mood": "tender", "doctor": 0.4 }
+        { "t": 0, "art": "sb23", "doctor": 0.35, "globe": 0.15, "curtain": 1, "mood": "tender" },
+        { "t": 16, "art": "sb15", "mood": "tender", "doctor": 0.3 },
+        { "t": 36, "art": "sb21", "globe": 0.7, "mood": "cosmos", "doctor": 0.45 },
+        { "t": 52, "art": "sb15", "globe": 0.2, "mood": "tender", "doctor": 0.3 }
       ]
     }
   ]

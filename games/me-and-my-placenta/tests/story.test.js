@@ -81,6 +81,18 @@ const check = (ok, msg, extra) => {
   });
   check(qr.src === 'qr/qr-code.png' && qr.endSrc === 'qr/qr-code.png' && qr.w === 3000 && qr.h === 3000 && qr.n === 105342, 'QR image is the provided file', qr);
 
+  const board = await page.evaluate(async () => {
+    const names = ['01-cosmic-ballet-conception.jpg', '10-grand-entrance.jpg', '23-thank-you.jpg'];
+    const out = [];
+    for (const name of names) {
+      const r = await fetch('art/board/' + name);
+      const buf = await r.arrayBuffer();
+      out.push({ name, ok: r.ok, n: buf.byteLength, type: r.headers.get('content-type') });
+    }
+    return out;
+  });
+  check(board.every(b => b.ok && b.n > 200000 && /jpeg/.test(b.type || '')), 'storyboard frames are served', board);
+
   await page.click('#begin');
   await page.waitForFunction(() => PLACENTA.chapterId === 'grand' && PLACENTA.narration.currentTime > 0.02, null, { timeout: 8000 });
   const before = await page.evaluate(() => PLACENTA.art);
