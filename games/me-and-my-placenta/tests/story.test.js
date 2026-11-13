@@ -54,14 +54,20 @@ const check = (ok, msg, extra) => {
   });
   check(!title.hidden && title.w > 400 && title.h > 300 && title.natural > 0, 'title screen shows the cover', title);
   check(title.src === 'art/cover.jpg', 'cover image is the official file', title.src);
-  check(/Steve Behram/.test(title.text) && /tap to begin/i.test(title.text), 'title names the author and invites a tap', title.text);
+  check(/Steve Behram/.test(title.text) && /play/i.test(title.text) && /Listen to the book/.test(title.text), 'title names the author and offers play and listen', title.text);
 
   const buy = await page.evaluate(() => {
     const a = document.getElementById('buy');
     const b = document.getElementById('buy-end');
     return { href: a.href, target: a.target, rel: a.rel, end: b.href, endTarget: b.target };
   });
-  check(buy.href === AMAZON && buy.target === '_blank' && buy.end === AMAZON && buy.endTarget === '_blank', 'Amazon buttons use the official URL and open a new tab', buy);
+  check(buy.href === AMAZON && buy.target === '_blank' && /noopener/.test(buy.rel) && buy.end === AMAZON && buy.endTarget === '_blank', 'Amazon buttons use the official URL and open a new tab', buy);
+  const review = await page.evaluate(() => {
+    const a = document.getElementById('review');
+    const b = document.getElementById('review-end');
+    return { text: a.textContent, href: a.href, target: a.target, rel: a.rel, endText: b.textContent, end: b.href, endTarget: b.target, endRel: b.rel };
+  });
+  check(review.text === 'Leave a review on Amazon' && review.endText === 'Leave a review on Amazon' && review.href === AMAZON && review.end === AMAZON && review.target === '_blank' && review.endTarget === '_blank' && /noopener/.test(review.rel) && /noopener/.test(review.endRel), 'review links use the official search and open a new tab', review);
 
   const qr = await page.evaluate(async () => {
     const img = document.getElementById('qr');
@@ -93,7 +99,7 @@ const check = (ok, msg, extra) => {
   });
   check(board.every(b => b.ok && b.n > 200000 && /jpeg/.test(b.type || '')), 'storyboard frames are served', board);
 
-  await page.click('#begin');
+  await page.click('#listen');
   await page.waitForFunction(() => PLACENTA.chapterId === 'grand' && PLACENTA.narration.currentTime > 0.02, null, { timeout: 8000 });
   const before = await page.evaluate(() => PLACENTA.art);
   const audio = await page.waitForFunction(() => {
@@ -131,6 +137,39 @@ const check = (ok, msg, extra) => {
 
   const clean = errs.filter(e => !/net::ERR_ABORTED/.test(e));
   check(clean.length === 0, 'no console errors', clean);
+
+  const playPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const playErrs = [];
+  playPage.on('pageerror', (e) => playErrs.push('PAGEERR ' + e.message));
+  playPage.on('console', (m) => { if (m.type() === 'error') playErrs.push(m.text()); });
+  await playPage.goto(BASE + '?fast=1', { waitUntil: 'domcontentloaded' });
+  await playPage.evaluate(() => PLACENTA.ready);
+  await playPage.click('#play-game');
+  await playPage.waitForFunction(() => PLACENTA.mode === 'play' && PLACENTA.playStage === 'meet', null, { timeout: 4000 });
+  const x0 = await playPage.evaluate(() => PLACENTA.player.x);
+  await playPage.keyboard.down('ArrowRight');
+  await playPage.waitForTimeout(500);
+  const x1 = await playPage.evaluate(() => PLACENTA.player.x);
+  await playPage.keyboard.up('ArrowRight');
+  check(x1 > x0 + 0.02, 'arrow keys float Cletus toward Placy', { x0, x1 });
+  await playPage.keyboard.down('ArrowRight');
+  const kicked = await playPage.waitForFunction(() => PLACENTA.playStage === 'kick', null, { timeout: 8000 })
+    .then(() => true).catch(() => false);
+  await playPage.keyboard.up('ArrowRight');
+  check(kicked, 'reaching Placy opens kicking practice', await playPage.evaluate(() => PLACENTA.playStage));
+  for (let i = 0; i < 6; i++) {
+    await playPage.keyboard.press('Space');
+    await playPage.waitForTimeout(180);
+  }
+  const afterKick = await playPage.evaluate(() => ({ stage: PLACENTA.playStage, kicks: PLACENTA.kicks, actions: PLACENTA.actions }));
+  check(afterKick.actions >= 4 && (afterKick.kicks >= 1 || afterKick.stage !== 'kick'), 'space kicks on the beat', afterKick);
+  await playPage.keyboard.press('Escape');
+  const paused = await playPage.evaluate(() => PLACENTA.paused === true && !document.getElementById('paused').hasAttribute('hidden'));
+  check(paused, 'escape pauses the journey');
+  await playPage.keyboard.press('Escape');
+  const back = await playPage.evaluate(() => PLACENTA.mode === 'title' && !document.getElementById('title').hasAttribute('hidden'));
+  check(back, 'escape again returns to the title');
+  check(playErrs.length === 0, 'play mode has no console errors', playErrs);
 
   const home = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await home.goto(HOME, { waitUntil: 'domcontentloaded' });
