@@ -140,6 +140,11 @@ const check = (ok, msg, extra) => {
     return { np: n && n.paused, nt: n && n.currentTime, nv: n && n.volume, ne: n && n.error && n.error.code, mp: m && m.paused, mt: m && m.currentTime, mv: m && m.volume, me: m && m.error && m.error.code, art: PLACENTA.art, chapter: PLACENTA.chapterId, ducked: PLACENTA.ducked };
   }) }));
   check(!audio.error && audio.different && audio.nv > 0 && audio.nt > 0.1 && audio.mv > 0 && audio.mt > 0 && audio.ducked, 'narration plays on a gesture and nursery music ducks under it', audio);
+  const policy = await page.evaluate(() => {
+    const m = PLACENTA.musicElement();
+    return { cross: m.crossOrigin || '', hidden: !!(m.closest && m.closest('[hidden]')) };
+  });
+  check(!policy.cross && !policy.hidden, 'music plays on its own element, not through a hidden or CORS-locked node', policy);
   check(audio.chapter === 'grand' && audio.tracks >= 15, 'fast mode plays the long chapter over a real lullaby set', audio);
 
   const changed = await page.waitForFunction((first) => PLACENTA.art && PLACENTA.art !== first, before, { timeout: 8000 })

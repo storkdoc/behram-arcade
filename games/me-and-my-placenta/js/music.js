@@ -49,8 +49,9 @@
     this.hot = 0;
     const self = this;
     this.holder = document.createElement('div');
-    this.holder.hidden = true;
     this.holder.setAttribute('aria-hidden', 'true');
+    /* Not display:none. Safari refuses to play media inside a hidden element. */
+    this.holder.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
     const mount = function () { if (!self.holder.parentNode) document.body.appendChild(self.holder); };
     if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
     for (let i = 0; i < 2; i++) this.els.push(this._make());
@@ -60,17 +61,21 @@
 
   Music.prototype._make = function () {
     const el = new Audio();
-    el.crossOrigin = 'anonymous';
+    /* No crossOrigin. These files are only played, never read through Web Audio.
+       A CORS miss would make the element silent in Safari and Chrome. */
     el.preload = 'auto';
     el.loop = false;
     el.setAttribute('playsinline', '');
     el.setAttribute('webkit-playsinline', '');
     const self = this;
     el.addEventListener('error', function () {
-      if (self.els[self.hot] !== el) return;
       if (!el.error || el.error.code === 1) return;
+      if (!self.unlocked) return;
+      if (self.els[self.hot] !== el && !self._switching) return;
       self.failures++;
-      if (self.unlocked) self.next();
+      self._switching = false;
+      if (self.failures > 8) return;
+      self.next();
     });
     el.addEventListener('ended', function () {
       if (self.els[self.hot] !== el || self._switching) return;
@@ -99,8 +104,7 @@
 
   Music.prototype._assign = function (el, track) {
     if (!track) return;
-    el.src = track.url;
-    el.load();
+    if (el.src !== track.url && !String(el.src || '').endsWith(track.url)) el.src = track.url;
   };
 
   Music.prototype._level = function () {
@@ -110,7 +114,7 @@
 
   Music.prototype.apply = function () {
     if (this._switching) return;
-    this.els[this.hot].volume = this._level();
+    try { this.els[this.hot].volume = this._level(); } catch (e) {}
   };
 
   Music.prototype.setDuck = function (n) {
@@ -141,11 +145,10 @@
   Music.prototype.start = function () {
     this.unlocked = true;
     const el = this.els[this.hot];
+    if (el.error && this.track) el.src = this.track.url;
     this.apply();
-    if (el.paused) {
-      const p = el.play();
-      if (p && p.catch) p.catch(function () {});
-    }
+    const p = el.play();
+    if (p && p.catch) p.catch(function () {});
   };
 
   Music.prototype.next = function () {
@@ -167,8 +170,7 @@
     const to = this._level();
     function step(now) {
       const u = Math.min(1, (now - t0) / 1400);
-      old.volume = from * (1 - u);
-      el.volume = to * u;
+      try { old.volume = from * (1 - u); el.volume = to * u; } catch (e) {}
       if (u < 1) requestAnimationFrame(step);
       else {
         old.pause();
