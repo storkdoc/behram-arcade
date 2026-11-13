@@ -99,6 +99,23 @@ const check = (ok, msg, extra) => {
   });
   check(board.every(b => b.ok && b.n > 200000 && /jpeg/.test(b.type || '')), 'storyboard frames are served', board);
 
+  const book = await page.evaluate(async () => {
+    const html = await fetch('index.html').then(r => r.text());
+    const m = await fetch('audio/manifest.json').then(r => r.json());
+    const ids = m.chapters.map(c => c.id + '|' + c.file + '|' + c.kicker);
+    const sizes = {};
+    for (const name of ['03-ch01.mp3', '04-ch02.mp3', '05-ch03.mp3', '06-ch04.mp3']) {
+      const r = await fetch('audio/' + name, { method: 'HEAD' });
+      sizes[name] = { ok: r.ok, len: r.headers.get('content-length') };
+    }
+    return { ids, missing: /not in this copy/i.test(html), sizes };
+  });
+  const order = ['opening|clip-04-12sec.mp3|Opening', 'dedication|clip-05-30sec.mp3|Dedication', 'ch01|03-ch01.mp3|Chapter 1', 'ch02|04-ch02.mp3|Chapter 2', 'ch03|05-ch03.mp3|Chapter 3', 'ch04|06-ch04.mp3|Chapter 4', 'grand|clip-03-656sec.mp3|Chapter 5', 'goodbye|clip-01-66sec.mp3|Acknowledgments', 'credits|clip-02-29sec.mp3|Credits'];
+  check(!book.missing && JSON.stringify(book.ids) === JSON.stringify(order), 'nine tracks are in official order and the missing-chapter note is gone', book.ids);
+  const want = { '03-ch01.mp3': '7002528', '04-ch02.mp3': '12751008', '05-ch03.mp3': '22289712', '06-ch04.mp3': '22079184' };
+  const sizeOk = Object.keys(want).every(n => book.sizes[n] && book.sizes[n].ok && book.sizes[n].len === want[n]);
+  check(sizeOk, 'chapter mp3 content lengths match', book.sizes);
+
   await page.click('#listen');
   await page.waitForFunction(() => PLACENTA.chapterId === 'grand' && PLACENTA.narration.currentTime > 0.02, null, { timeout: 8000 });
   const before = await page.evaluate(() => PLACENTA.art);

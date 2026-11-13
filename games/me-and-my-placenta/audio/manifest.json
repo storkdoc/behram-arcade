@@ -1,5 +1,5 @@
 {
-  "note": "Drop another narration mp3 in this folder and add a chapter object. Cues are seconds into that file. Unspecified fields carry forward. kind is opening, dedication, chapter, credits, or closing. Storyboard frames are sb01–sb23 in art/board/.",
+  "note": "Drop another narration mp3 in this folder and add a chapter object. Cues are seconds into that file. Unspecified fields carry forward. kind is opening, dedication, chapter, credits, or closing. Storyboard frames are sb01\u2013sb23 in art/board/. Do not point cues at tadpole variants.",
   "chapters": [
     {
       "id": "opening",
@@ -8,8 +8,19 @@
       "kicker": "Opening",
       "kind": "opening",
       "cues": [
-        { "t": 0, "art": "sb01", "doctor": 0, "globe": 0, "curtain": 1, "mood": "calm" },
-        { "t": 6, "art": "sb02", "mood": "tender" }
+        {
+          "t": 0,
+          "art": "sb01",
+          "doctor": 0,
+          "globe": 0,
+          "curtain": 1,
+          "mood": "calm"
+        },
+        {
+          "t": 6,
+          "art": "sb02",
+          "mood": "tender"
+        }
       ]
     },
     {
@@ -19,10 +30,184 @@
       "kicker": "Dedication",
       "kind": "dedication",
       "cues": [
-        { "t": 0, "art": "sb03", "doctor": 0.85, "globe": 0.1, "curtain": 1, "mood": "tender" },
-        { "t": 10, "art": "sb19", "doctor": 0.45, "globe": 0 },
-        { "t": 18, "art": "hug", "doctor": 0.4, "mood": "calm" },
-        { "t": 24, "art": "cover", "doctor": 0.35, "mood": "tender" }
+        {
+          "t": 0,
+          "art": "sb03",
+          "doctor": 0.85,
+          "globe": 0.1,
+          "curtain": 1,
+          "mood": "tender"
+        },
+        {
+          "t": 10,
+          "art": "sb19",
+          "doctor": 0.45,
+          "globe": 0
+        },
+        {
+          "t": 18,
+          "art": "hug",
+          "doctor": 0.4,
+          "mood": "calm"
+        },
+        {
+          "t": 24,
+          "art": "cover",
+          "doctor": 0.35,
+          "mood": "tender"
+        }
+      ]
+    },
+    {
+      "id": "ch01",
+      "file": "03-ch01.mp3",
+      "title": "In the Beginning",
+      "kicker": "Chapter 1",
+      "kind": "chapter",
+      "cues": [
+        {
+          "t": 321.81,
+          "art": "sb04",
+          "mood": "tender",
+          "doctor": 0.4,
+          "globe": 0.25,
+          "curtain": 1
+        },
+        {
+          "t": 665.46,
+          "art": "sb01",
+          "mood": "cosmos",
+          "doctor": 0.2,
+          "globe": 0
+        },
+        {
+          "t": 743.76,
+          "art": "sb01"
+        },
+        {
+          "t": 815,
+          "art": "sb01"
+        }
+      ]
+    },
+    {
+      "id": "ch02",
+      "file": "04-ch02.mp3",
+      "title": "The First Trimester",
+      "kicker": "Chapter 2",
+      "kind": "chapter",
+      "cues": [
+        {
+          "t": 296.78,
+          "art": "sb02",
+          "mood": "tender",
+          "doctor": 0.35,
+          "globe": 0,
+          "curtain": 1
+        },
+        {
+          "t": 597.14,
+          "art": "sb03"
+        },
+        {
+          "t": 816.98,
+          "art": "sb03"
+        }
+      ]
+    },
+    {
+      "id": "ch03",
+      "file": "05-ch03.mp3",
+      "title": "The Second Trimester",
+      "kicker": "Chapter 3",
+      "kind": "chapter",
+      "cues": [
+        {
+          "t": 5.79,
+          "art": "sb17",
+          "mood": "ride",
+          "doctor": 0.35,
+          "globe": 0,
+          "curtain": 1
+        },
+        {
+          "t": 142.42,
+          "art": "sb17"
+        },
+        {
+          "t": 1773.59,
+          "art": "sb05",
+          "mood": "ride"
+        },
+        {
+          "t": 1937.3,
+          "art": "sb07",
+          "mood": "tender"
+        },
+        {
+          "t": 2237.62,
+          "art": "sb07",
+          "mood": "squeeze"
+        },
+        {
+          "t": 2711.13,
+          "art": "sb03",
+          "mood": "tender"
+        },
+        {
+          "t": 3690.42,
+          "art": "sb06",
+          "mood": "tender"
+        }
+      ]
+    },
+    {
+      "id": "ch04",
+      "file": "06-ch04.mp3",
+      "title": "The Third Trimester",
+      "kicker": "Chapter 4",
+      "kind": "chapter",
+      "cues": [
+        {
+          "t": 283.55,
+          "art": "sb04",
+          "mood": "tender",
+          "doctor": 0.4,
+          "globe": 0,
+          "curtain": 1
+        },
+        {
+          "t": 833.45,
+          "art": "sb05",
+          "mood": "ride"
+        },
+        {
+          "t": 1101.57,
+          "art": "sb19",
+          "mood": "calm"
+        },
+        {
+          "t": 2160.94,
+          "art": "sb16",
+          "mood": "cosmos",
+          "globe": 0.2
+        },
+        {
+          "t": 2912.89,
+          "art": "sb16",
+          "globe": 0.35
+        },
+        {
+          "t": 2955.53,
+          "art": "sb05",
+          "mood": "ride",
+          "globe": 0
+        },
+        {
+          "t": 3624.25,
+          "art": "sb06",
+          "mood": "squeeze"
+        }
       ]
     },
     {
@@ -32,39 +217,233 @@
       "kicker": "Chapter 5",
       "kind": "chapter",
       "cues": [
-        { "t": 0, "art": "sb20", "doctor": 0.4, "globe": 0, "curtain": 1, "mood": "calm" },
-        { "t": 8, "art": "sb16", "mood": "ride" },
-        { "t": 10, "art": "sb06", "mood": "squeeze", "doctor": 0.42 },
-        { "t": 20, "art": "sb05", "mood": "squeeze" },
-        { "t": 28, "art": "sb06", "mood": "squeeze" },
-        { "t": 36, "art": "sb07", "mood": "tender", "doctor": 0.4 },
-        { "t": 50, "art": "hug", "mood": "tender" },
-        { "t": 59, "art": "sb17", "mood": "ride", "doctor": 0.36 },
-        { "t": 70, "art": "sb18", "mood": "ride" },
-        { "t": 78, "art": "sb16", "mood": "ride" },
-        { "t": 89, "art": "uterus", "mood": "squeeze", "doctor": 0.48 },
-        { "t": 112, "art": "sb07", "mood": "squeeze" },
-        { "t": 126, "art": "sb08", "mood": "ride" },
-        { "t": 141, "art": "sb09", "mood": "ride" },
-        { "t": 152, "art": "drop", "mood": "birth" },
-        { "t": 158, "art": "sb10", "curtain": 0, "mood": "birth", "doctor": 0.5 },
-        { "t": 170, "curtain": 0.45 },
-        { "t": 184, "curtain": 1, "doctor": 0.7 },
-        { "t": 206, "art": "sb11", "doctor": 0.28, "mood": "tender" },
-        { "t": 247, "art": "sb12", "mood": "farewell", "doctor": 0.4 },
-        { "t": 300, "art": "sb13", "mood": "farewell", "doctor": 0.35 },
-        { "t": 322, "art": "sb22", "doctor": 0.62 },
-        { "t": 346, "art": "sb13", "mood": "farewell", "doctor": 0.35 },
-        { "t": 370, "art": "hug", "mood": "tender", "doctor": 0.32 },
-        { "t": 407, "art": "sb20", "mood": "tender", "doctor": 0.4 },
-        { "t": 430, "art": "pointing", "mood": "tender" },
-        { "t": 446, "art": "sb14", "mood": "cosmos", "doctor": 0.42, "globe": 0.25 },
-        { "t": 490, "art": "sb04", "globe": 0.55, "mood": "cosmos" },
-        { "t": 520, "art": "sb21", "globe": 1, "mood": "cosmos", "doctor": 0.5 },
-        { "t": 560, "art": "sb16", "globe": 0.4, "mood": "cosmos" },
-        { "t": 590, "art": "sb19", "globe": 0.2, "mood": "tender", "doctor": 0.32 },
-        { "t": 614, "art": "sb21", "globe": 0.75, "mood": "cosmos" },
-        { "t": 636, "art": "sb15", "globe": 0.15, "mood": "tender", "doctor": 0.35 }
+        {
+          "t": 0,
+          "art": "sb20",
+          "doctor": 0.4,
+          "globe": 0,
+          "curtain": 1,
+          "mood": "calm"
+        },
+        {
+          "t": 8,
+          "art": "sb16",
+          "mood": "ride"
+        },
+        {
+          "t": 10,
+          "art": "sb06",
+          "mood": "squeeze",
+          "doctor": 0.42
+        },
+        {
+          "t": 20,
+          "art": "sb05",
+          "mood": "squeeze"
+        },
+        {
+          "t": 28,
+          "art": "sb06",
+          "mood": "squeeze"
+        },
+        {
+          "t": 36,
+          "art": "sb07",
+          "mood": "tender",
+          "doctor": 0.4
+        },
+        {
+          "t": 50,
+          "art": "hug",
+          "mood": "tender"
+        },
+        {
+          "t": 59,
+          "art": "sb17",
+          "mood": "ride",
+          "doctor": 0.36
+        },
+        {
+          "t": 70,
+          "art": "sb18",
+          "mood": "ride"
+        },
+        {
+          "t": 78,
+          "art": "sb16",
+          "mood": "ride"
+        },
+        {
+          "t": 89,
+          "art": "uterus",
+          "mood": "squeeze",
+          "doctor": 0.48
+        },
+        {
+          "t": 112,
+          "art": "sb07",
+          "mood": "squeeze"
+        },
+        {
+          "t": 126,
+          "art": "sb08",
+          "mood": "ride"
+        },
+        {
+          "t": 141,
+          "art": "sb09",
+          "mood": "ride"
+        },
+        {
+          "t": 152,
+          "art": "drop",
+          "mood": "birth"
+        },
+        {
+          "t": 158,
+          "art": "sb10",
+          "curtain": 0,
+          "mood": "birth",
+          "doctor": 0.5
+        },
+        {
+          "t": 170,
+          "curtain": 0.45
+        },
+        {
+          "t": 184,
+          "curtain": 1,
+          "doctor": 0.7
+        },
+        {
+          "t": 206,
+          "art": "sb11",
+          "doctor": 0.28,
+          "mood": "tender"
+        },
+        {
+          "t": 247,
+          "art": "sb12",
+          "mood": "farewell",
+          "doctor": 0.4
+        },
+        {
+          "t": 300,
+          "art": "sb13",
+          "mood": "farewell",
+          "doctor": 0.35
+        },
+        {
+          "t": 322,
+          "art": "sb22",
+          "doctor": 0.62
+        },
+        {
+          "t": 346,
+          "art": "sb13",
+          "mood": "farewell",
+          "doctor": 0.35
+        },
+        {
+          "t": 370,
+          "art": "hug",
+          "mood": "tender",
+          "doctor": 0.32
+        },
+        {
+          "t": 407,
+          "art": "sb20",
+          "mood": "tender",
+          "doctor": 0.4
+        },
+        {
+          "t": 430,
+          "art": "pointing",
+          "mood": "tender"
+        },
+        {
+          "t": 446,
+          "art": "sb14",
+          "mood": "cosmos",
+          "doctor": 0.42,
+          "globe": 0.25
+        },
+        {
+          "t": 490,
+          "art": "sb04",
+          "globe": 0.55,
+          "mood": "cosmos"
+        },
+        {
+          "t": 520,
+          "art": "sb21",
+          "globe": 1,
+          "mood": "cosmos",
+          "doctor": 0.5
+        },
+        {
+          "t": 560,
+          "art": "sb16",
+          "globe": 0.4,
+          "mood": "cosmos"
+        },
+        {
+          "t": 590,
+          "art": "sb19",
+          "globe": 0.2,
+          "mood": "tender",
+          "doctor": 0.32
+        },
+        {
+          "t": 614,
+          "art": "sb21",
+          "globe": 0.75,
+          "mood": "cosmos"
+        },
+        {
+          "t": 636,
+          "art": "sb15",
+          "globe": 0.15,
+          "mood": "tender",
+          "doctor": 0.35
+        }
+      ]
+    },
+    {
+      "id": "goodbye",
+      "file": "clip-01-66sec.mp3",
+      "title": "Your Placenta Will Thank You",
+      "kicker": "Acknowledgments",
+      "kind": "closing",
+      "cues": [
+        {
+          "t": 0,
+          "art": "sb23",
+          "doctor": 0.35,
+          "globe": 0.15,
+          "curtain": 1,
+          "mood": "tender"
+        },
+        {
+          "t": 16,
+          "art": "sb15",
+          "mood": "tender",
+          "doctor": 0.3
+        },
+        {
+          "t": 36,
+          "art": "sb21",
+          "globe": 0.7,
+          "mood": "cosmos",
+          "doctor": 0.45
+        },
+        {
+          "t": 52,
+          "art": "sb15",
+          "globe": 0.2,
+          "mood": "tender",
+          "doctor": 0.3
+        }
       ]
     },
     {
@@ -74,21 +453,20 @@
       "kicker": "Credits",
       "kind": "credits",
       "cues": [
-        { "t": 0, "art": "sb23", "doctor": 0.4, "globe": 0.1, "curtain": 1, "mood": "tender" },
-        { "t": 14, "art": "sb15", "doctor": 0.35, "mood": "calm" }
-      ]
-    },
-    {
-      "id": "goodbye",
-      "file": "clip-01-66sec.mp3",
-      "title": "Your Placenta Will Thank You",
-      "kicker": "Closing",
-      "kind": "closing",
-      "cues": [
-        { "t": 0, "art": "sb23", "doctor": 0.35, "globe": 0.15, "curtain": 1, "mood": "tender" },
-        { "t": 16, "art": "sb15", "mood": "tender", "doctor": 0.3 },
-        { "t": 36, "art": "sb21", "globe": 0.7, "mood": "cosmos", "doctor": 0.45 },
-        { "t": 52, "art": "sb15", "globe": 0.2, "mood": "tender", "doctor": 0.3 }
+        {
+          "t": 0,
+          "art": "sb23",
+          "doctor": 0.4,
+          "globe": 0.1,
+          "curtain": 1,
+          "mood": "tender"
+        },
+        {
+          "t": 14,
+          "art": "sb15",
+          "doctor": 0.35,
+          "mood": "calm"
+        }
       ]
     }
   ]

@@ -88,9 +88,9 @@
     const ch = chapter();
     if (!ch || !ch.cues || !ch.cues.length) return;
     const t = storyTime();
-    let i = 0;
+    let i = -1;
     for (let k = 0; k < ch.cues.length; k++) if (ch.cues[k].t <= t + 0.02) i = k;
-    if (i === cueIndex) return;
+    if (i < 0 || i === cueIndex) return;
     cueIndex = i;
     const cue = ch.cues[i];
     carried = {
