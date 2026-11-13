@@ -826,7 +826,7 @@ function startGame() {
 function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
-  enemies = []; eshots = []; pshots = []; mines = []; shards = []; bolts = []; zfx = null; zapUses = 0; zap.active = false; rot = 0;
+  enemies = []; eshots = []; pshots = []; mines = []; shards = []; bolts = []; zfx = null; zapUses = 0; zap.active = false; rot = 0; graceT = 0;
   jump.t = -1; jump.cd = 0; cleanLevel = true;
   placeClaw(web.start, 0); player.z = 0; player.alive = true; player.heat = 0; player.overheat = false;
   pups = []; if (power.droid && power.droid.until < L) power.droid = null; if (power.droid) power.droid.pos = player.pos + web.n / 2;
@@ -856,17 +856,43 @@ function startWarp() {
   }
 }
 function killPlayer(kind, captor) {
-  if (invincible || !player.alive) return;
+  if (invincible || graceT > 0 || !player.alive) return;
   if (airborne() && JUMP_DODGE.has(kind)) { jumpDodge(kind); return; }
   player.alive = false; eshots = []; cleanLevel = false;
   jump.t = -1; jump.cd = 0;
-  if (power.laser || power.droid || power.jump) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
+  const hadPower = power.laser || power.droid || power.jump, savedPower = power;
+  if (hadPower && kind !== 'capture') msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
   power = { laser: false, droid: null, jump: false, n: 0 }; pups = [];
-  death = { kind, t: 0, captor, exploded: false, inWarp: state === 'warp' };
+  death = { kind, t: 0, captor, exploded: false, inWarp: state === 'warp', savedPower: kind === 'capture' && hadPower ? savedPower : null };
   state = 'dying'; window.MoodSticker && window.MoodSticker.event('hit');
-  if (kind === 'capture') Sound.play('capture'); else explodePlayer();
+  if (kind === 'capture') {
+    Sound.play('capture');
+    if (canBreakFree()) { breakFreeStats.offers++; msg(touch.on ? 'TAP ZAP TO BREAK FREE!' : 'ZAP TO BREAK FREE!', 1.3, 0.62, '#ff47e6', 3.4); }
+  } else explodePlayer();
+}
+/* Day 16 (2026-11-12): BREAK FREE. Captures are the #1 killer in the bot eval (13 of 42 deaths today) and, unlike every
+   other death, the player watched it coming for a whole second while being dragged down the tube with nothing to do.
+   Now, while a grabber is dragging the claw down (before it reaches BREAK_FREE_Z), the Superzapper (Enter / right click /
+   ZAP button / gamepad zap) blasts the captor and springs the claw back to the rim. It spends the level's BIG zap (the
+   small second zap is still left), so it is at most once per level and a real resource decision; once the big zap is
+   used the capture is fatal as before. Power-ups survive a break-free. Brief 0.9 s invulnerability so the next rim enemy can't re-grab instantly. */
+const BREAK_FREE_Z = 0.8, BREAK_FREE_GRACE = 0.9;
+let breakFreeStats = { offers: 0, used: 0, failed: 0 }, graceT = 0;
+function canBreakFree() { return state === 'dying' && death && death.kind === 'capture' && !death.exploded && player.z < BREAK_FREE_Z && zapUses === 0; }
+function breakFree() {
+  if (!canBreakFree()) { if (state === 'dying' && death && death.kind === 'capture' && !death.exploded) Sound.play('nozap'); return false; }
+  const c = death.captor; breakFreeStats.used++;
+  zapUses = 1; zap.flash = 0.45; zapFxStart(false); Sound.play('zap');
+  if (c && !c.dead) { const p = centerOf(c); boltTo(p); shardBurst([p[0], p[1]], p[2], [enemyColor(c), '#ffffff', '#ff47e6'], 26, 1); zap.kill = true; killEnemy(c, false); zap.kill = false; }
+  enemies = enemies.filter(e => !e.dead);
+  if (death.savedPower) power = death.savedPower;
+  player.alive = true; state = 'play'; death = null; graceT = BREAK_FREE_GRACE; shake = Math.max(shake, 0.25);
+  msg('BROKE FREE!', 1.4, 0.62, '#ff47e6', 4); window.MoodSticker && window.MoodSticker.event('big');
+  return true;
 }
 function explodePlayer() {
+  if (death.kind === 'capture' && death.savedPower) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
+  if (death.kind === 'capture' && zapUses === 0) breakFreeStats.failed++;
   death.exploded = true; Sound.play('die'); shake = 0.6; flash = 0.35; flashColor = '#fff';
   const f = player.vis, E0 = railF(f), E1 = railF(f + 1);
   fx.push({ x: (E0[0] + E1[0]) / 2, y: (E0[1] + E1[1]) / 2, zw: player.z * LL, t: 0, dur: 1.5, size: 0.75, rays: 30, colors: RAINBOW, seed: Math.random() * 6, big: true });
@@ -874,7 +900,7 @@ function explodePlayer() {
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
   shot: ['HIT BY AN ENEMY SHOT', 'ENEMY GLOWS, THEN FIRES. SHOOT IT OR STEP ASIDE'],
-  capture: ['GRABBED AT THE RIM', 'ORANGE RIM FLASH + BWAH = ABOUT TO GRAB. SHOOT OR JUMP'],
+  capture: ['GRABBED AT THE RIM', 'ORANGE RIM FLASH = GRAB. SHOOT/JUMP, OR ZAP TO BREAK FREE'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
@@ -929,6 +955,7 @@ function onPress(k) {
       if (k === 'KeyP' || k === 'Escape') { paused = !paused; return; }
       if (paused) { if (confirm || k === 'Space') paused = false; return; }
       if (confirm && state === 'play') superzap();
+      else if (confirm && state === 'dying') breakFree();
       if (k === 'KeyJ' || k === 'ShiftLeft' || k === 'ShiftRight') doJump();
       break;
     case 'gameover':
@@ -1695,6 +1722,8 @@ function packKill(e, zapped) {
 /* ============================== state updates ============================== */
 function update(dt) {
   T += dt;
+  if (graceT > 0) graceT = Math.max(0, graceT - dt);
+  if (state === 'play' && player.alive && player.z > 0) player.z = Math.max(0, player.z - dt * 3.2);   // break-free spring back to the rim
   switch (state) {
     case 'attract': {
       attract.t += dt; attract.modeT += dt;
@@ -2493,6 +2522,20 @@ function drawClaw() {
     if (player.overheat) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#ffb36a'; for (let i = 0; i < 3; i++) { const q = pts[(i * 3 + Math.floor(T * 12)) % pts.length], up = ((T * 2.3 + i * 0.33) % 1); ctx.fillRect(q[0] - DPR, q[1] - up * 14 * DPR, 2 * DPR, 2 * DPR); } }
     ctx.restore();
   }
+  if (graceT > 0 && state === 'play') {   // break-free: magenta shield shimmer while the 0.9 s grace lasts
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = clamp(graceT / BREAK_FREE_GRACE, 0, 1) * (0.55 + 0.35 * Math.sin(T * 40));
+    ctx.strokeStyle = '#ff47e6'; ctx.lineWidth = LW(3); ctx.shadowColor = '#ff47e6'; ctx.shadowBlur = 14 * DPR;
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawBreakFreeHint() {
+  const c = clawWorld(), p = proj(c[0], c[1], c[2]); if (!p) return;
+  const k = player.z / BREAK_FREE_Z, R = (10 + 18 * (1 - k)) * DPR * (1 + 0.15 * Math.sin(T * 30));
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.85 - 0.5 * k; ctx.strokeStyle = '#ff47e6'; ctx.lineWidth = LW(2);
+  ctx.shadowColor = '#ff47e6'; ctx.shadowBlur = 12 * DPR;
+  ctx.beginPath(); ctx.arc(p[0], p[1], R, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k)); ctx.stroke();   // the ring drains as the window closes
+  ctx.restore();
 }
 function drawFx() {
   for (const f of fx) {
@@ -2558,6 +2601,7 @@ function drawGameScene() {
   drawPups();
   drawShots();
   if (showClaw) drawClaw();
+  if (canBreakFree()) drawBreakFreeHint();
   drawDroid();
   drawFx();
   drawShards();
@@ -3133,6 +3177,8 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length, cd: player.fireCd, sputter: heatStats.sputter, overheats: heatStats.overheats, tip: heatStats.tip }),
   deathKind: () => death ? death.kind : null,
+  breakFree: () => ({ ...breakFreeStats, can: canBreakFree(), grace: graceT, z: player.z, windowZ: BREAK_FREE_Z }),
+  tryBreakFree() { return breakFree(); },
   cont: () => Object.assign({ state, min: CONT_MIN, sec: CONT_SEC }, cont),
   shotWarn: () => shotWarnLevel(),
   shotWarnCues: () => shotWarnCues,
