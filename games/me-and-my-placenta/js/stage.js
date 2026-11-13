@@ -16,6 +16,39 @@
     farewell: 0.52
   };
 
+  const BOARD = {
+    sb01: '01-cosmic-ballet-conception.jpg',
+    sb02: '02-meeting-placy.jpg',
+    sb03: '03-best-friends.jpg',
+    sb04: '04-parental-selection.jpg',
+    sb05: '05-kicking-practice.jpg',
+    sb06: '06-hug-contest.jpg',
+    sb07: '07-hang-on.jpg',
+    sb08: '08-car-wash-canal.jpg',
+    sb09: '09-jello-tunnel.jpg',
+    sb10: '10-grand-entrance.jpg',
+    sb11: '11-placenta-delivered.jpg',
+    sb12: '12-placy-in-the-basin.jpg',
+    sb13: '13-cletus-wails.jpg',
+    sb14: '14-cosmic-relay.jpg',
+    sb15: '15-placy-lives-on.jpg',
+    sb16: '16-astronaut.jpg',
+    sb17: '17-singing.jpg',
+    sb18: '18-manatee.jpg',
+    sb19: '19-sleeping.jpg',
+    sb20: '20-star-gazing.jpg',
+    sb21: '21-earth-celebration.jpg',
+    sb22: '22-pathology-refused.jpg',
+    sb23: '23-thank-you.jpg'
+  };
+
+  function srcFor(key) {
+    if (key === 'cover') return 'art/cover.jpg';
+    if (key === 'nebula') return 'art/nebula.jpg';
+    if (BOARD[key]) return 'art/board/' + BOARD[key];
+    return 'art/' + key + '.png';
+  }
+
   function Stage(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
@@ -63,7 +96,7 @@
           self.images[key] = img;
           if (--left === 0) resolve();
         };
-        img.src = key === 'cover' ? 'art/cover.jpg' : key === 'nebula' ? 'art/nebula.jpg' : ('art/' + key + '.png');
+        img.src = srcFor(key);
       });
     });
   };
@@ -178,8 +211,9 @@
     if (!img) return;
     const w = this.w;
     const h = this.h;
-    const maxH = h * 0.8;
-    const maxW = w * 0.78;
+    const story = key === 'cover' || !!BOARD[key];
+    const maxH = h * (story ? 0.9 : 0.8);
+    const maxW = w * (story ? 0.9 : 0.78);
     const sc = Math.min(maxW / img.width, maxH / img.height) * breathe * ken;
     const dw = img.width * sc;
     const dh = img.height * sc;
@@ -187,7 +221,7 @@
     const sway = drift * Math.cos(this.t * 0.33) * w * 0.01;
     const x = (w - dw) / 2 + sway;
     const y = (h - dh) / 2 + bob - h * 0.02;
-    if (key === 'stage' && curtain < 0.98) this._curtains(img, x, y, dw, dh, curtain);
+    if ((key === 'stage' || key === 'sb10') && curtain < 0.98) this._curtains(img, x, y, dw, dh, curtain);
     else {
       this.ctx.drawImage(img, x, y, dw, dh);
     }
