@@ -683,3 +683,77 @@ Day 6 in a row with nothing to cluster or act on.
    shows a one-time BARREL HOT: FIRE IN BURSTS tip. Tests: vortex-sputter ALL PASS (desktop + iPhone, also against the live
    site); vortex-rim ALL PASSED; all other VORTEX tests green.
 - Live check: game.js, mood-sticker.js and triage cases.js served by Pages match the pushed commits.
+
+## 2026-11-13 (day 17): first real player feedback acted on + VORTEX fuseball lock-on
+
+Fresh worktree `/workspace/arcade-daily-2026-11-13` from `57e0234`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone.
+**Why Nov 11–12 have no entry:** Nov 11 pushed `6f06737` (VORTEX fuseball landing warning) but never wrote the log. Nov 12 left
+BREAK FREE + two bank fixes uncommitted in its worktree and ran two full test sweeps in parallel with Neuro Arena; the second
+sweep was still finishing ~14 h later, so the run never got to commit. Today: carry-over committed and pushed first, every long
+job ran in the background with `timeout`, and each change was pushed as soon as its tests passed.
+Skipped as under active development by the user: Me & My Placenta (10 commits Nov 13), Relax, Jukebox.
+
+### Player feedback (last 72 h, `node tools/read-feedback.mjs --hours 72`): 3 real submissions
+| game | fun | okay | skip | notes |
+|---|---|---|---|---|
+| Congressional OB GYN (Clinic Day) | 0 | 0 | 0 | 1: "add normal lab values as reference for the vignettes like we would for exams" (2 min, last screen enc) |
+| FEUD & DELIVERY | 0 | 0 | 0 | 1: "the fast money needs more than 20 sec, not enough time to type" (16 min session, won, played Fast Money) |
+| Me & My Placenta | 1 | 0 | 0 | none (1 min) |
+Clusters: (a) exam-style reference support in Clinic Day; (b) Fast Money time pressure too tight for typed answers. Both acted on.
+
+### Findings
+- **Smoke, 26 pages × desktop + iPhone (56 loads):** no page errors, no local 4xx.
+- **Clinic Day:** answer-length ALL PASS, bank-cues ALL PASS (with Nov 12's new duplicate-sentence lint), core/access/page ALL PASS
+  (PIN only as salted hash, student codes accept/expire), hub.test ALL PASSED. Copy stays generic ("Student"). No lab reference
+  existed, which is what the player asked for.
+- **Feud:** engine 14/14, page tests pass. Fast Money was 20 s / 25 s, the TV values, for typed diagnoses.
+- **Star Raider:** sim all ok (Novice 100%, Pilot 67% sloppy / 100% sharp, Warrior 0% / 50%, Commander 0% / 17%). war.test not re-run.
+- **MELTDOWN:** sim 47/47.
+- **VORTEX:** 4-game bot eval on main (with BREAK FREE): fuseballs were the #1 killer again (fuse death tips 10 of ~17; fd hooks
+  13 fuse events: arrive 4, chase 5, rimjump 3). The only counterplay, shooting a fuseball mid-hop, had no on-screen tell.
+  `vortex-fuseland` flaked once in 4 runs (desktop: the climbing fuseball did a random hop on the first step). Pre-existing, logged.
+
+### Changes
+1. `ad4f1cc` **VORTEX BREAK FREE** (Nov 12 carry-over). While a grabber drags the claw down (z < 0.8), Superzapper (Enter /
+   right click / ZAP button / pad B) kills the captor and springs the claw back. It spends the level's big zap, keeps power-ups, and gives 0.9 s grace.
+   breakfree / rim / grabwarn / grabimminent / continue / powerups / touch ALL PASS.
+2. `2275ac5` Clinic Day: two duplicated explanation sentences removed (gonorrhea doxy dose, breast-lump biopsy) + lint (carry-over).
+3. `46139c8` **FEUD Fast Money 20/25 s → 40/45 s** (player feedback). One `FM_TIMES` constant drives the clock, dock text and rules.
+   Engine test asserts it; page tests pass (clock reads 40).
+4. `fe9abd9` **Clinic Day Lab values sheet** (player feedback). Lab values button + `L` key (pad/arrow nav, tap) on the chart,
+   question and answer screens. It holds 43 adult-female teaching ranges (USMLE/NBME-style) with ACOG/SMFM/CDC/IADPSG pregnancy thresholds
+   (anemia by trimester, preeclampsia severe features, HELLP, MgSO4 levels, GTT cutoffs, bile acids, hCG, AFI, Triple I...).
+   "In this chart" rows are highlighted from vignette + stem keywords (tuned so "delivered" ≠ liver, vulvar itching ≠ ICP).
+   **The question clock and speed bonus pause while it is open.** tests/labs.test.js 20/20 local and **against the live site**.
+5. `15e3976` **VORTEX fuseball LOCK-ON.** While a tube fuseball is mid-hop and shootable, cyan lock-on brackets snap around
+   it and its lane glows. A rising blip plays once per hop if the lane is the claw's or adjacent. Hit window widened 15–85% → 10–90%.
+   Rim fuseballs are still invulnerable. Death tip now names the cue. fuselock 16/16 (desktop + iPhone), fusewarn, fuseland (3/4,
+   flake above), tips, powerups, jump pass.
+   Post-change bot (4 games, same seeds): fuse events 13 → 5, captures now top (10 tips). The bot does not aim at the
+   brackets, so that drop comes from the wider window + noise with n=4. It is not proof the telegraph works for humans.
+- **Live check:** Pages serves labs.js, FM_TIMES [40,45], FUSEBALL LOCK-ON, BREAK_FREE_Z and the bank fix. labs.test passes on live.
+
+### Neuro Arena (seed 1113; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5). Nov 12 (seed 1112) for comparison
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | reaps | Nov 12 |
+|---|---|---|---|---|---|---|
+| divisor | 8% | 35→67% | 51% vs 66% | −0.15 | 3 | 64% vs 66%, −0.02 |
+| simon | 25% | 49→82→66% (peak r5, fell) | 31% vs 26% | +0.05 | 0 | 55%, **+0.29** |
+| text | 8% | 32→44→38% | 12% vs 25% | −0.13 | 2 | 9%, −0.16 |
+| add | 5% | 28→83% | 9% vs 10% | −0.01 | 2 | 10%, 0 |
+| sub | 10% | 92→86% (lv 3) | 25% vs 18% | +0.07 | 1 | 22%, +0.04 |
+| big | 50% | 66→88% | – (prior 78%) | +0.10 | 2 | +0.06 |
+| pattern | 13% | 65→100% (r4) | – | +0.50 | 3 | +0.50 |
+| pong | – | 48→68% flat 5 r, 96% in r10 | hit 96% vs open-side prior 65% | +0.16 | 2 | 40% flat |
+| echo / dots / rps / tug | | 100% from round 1–2 | – | 0 | | saturated |
+- Honest read: champion duel accuracy rises in every contest, but on **full-task** accuracy only simon (+5 pts) and sub
+  (+7 pts) beat their priors, and only by a little. **Divisor fell below the frequency prior** (51% vs 66%) after being at/above it
+  Nov 7 and Nov 12, so it swings run to run. **Text is stuck below the position baseline for the 4th straight run** (12% vs 25%).
+  Pong's late jump to 96% hit is **mostly reflex**: ablating all learned units only drops it to 92% (reflex-only 94%), so
+  little of it is learning. Echo/dots/rps/tug are saturated from round 1 and give no learning signal at this size.
+  Simon peaked at 82% in round 5 and then fell back with 0 reaps, which looks like champion drift rather than memorization.
+
+### For tomorrow
+- Text: still try `FIX=mix` / longer `matchSec` (THINKING bumps did not help). Consider harder echo/dots/rps/tug levels so they measure something.
+- VORTEX: captures are top again after the fuse fix. Check BREAK FREE uptake (bot offers 2, used 0, because the bot never presses zap
+  while dragged) and the grab telegraph on touch. De-flake vortex-fuseland (pin `jumping:false` before the first step).
+- Re-read feedback first: these were the first real notes in 7 days. Check whether 40/45 s and the lab sheet change behaviour.
