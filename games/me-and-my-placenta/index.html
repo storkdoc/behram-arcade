@@ -24,9 +24,15 @@
     <h1>Me &amp; My Placenta</h1>
     <p class="sub">The Incredible Story of Me &amp; My Best Friend</p>
     <p class="by">Steve Behram, MD</p>
-    <button type="button" id="begin">tap to begin</button>
+    <div class="choices">
+      <button type="button" id="play-game">Play</button>
+      <button type="button" id="listen">Listen to the book</button>
+    </div>
   </div>
-  <a id="buy" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">The book on Amazon</a>
+  <div class="shelf">
+    <a id="buy" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">Buy on Amazon</a>
+    <a id="review" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">Leave a review on Amazon</a>
+  </div>
   <button type="button" class="qr-mini" data-qr aria-label="Show the QR code larger">
     <img id="qr" src="qr/qr-code.png" alt="QR code linking to the author’s page">
   </button>
@@ -60,14 +66,26 @@
   </div>
 </div>
 
+<div id="play-hud" hidden>
+  <p id="play-line"></p>
+  <button type="button" id="act" aria-label="Action">●</button>
+  <button type="button" id="pause-btn" aria-label="Pause">Pause</button>
+  <div id="journey" aria-hidden="true"><i id="journey-bar"></i></div>
+</div>
+<div id="paused" hidden><p>Paused</p></div>
+
 <section id="end" hidden>
   <p class="kicker">Placy lives on</p>
-  <h2>Your placenta will thank you</h2>
-  <p class="quiet">The rest of Cletus and Placy is in the book.</p>
+  <h2 id="end-title">Placy lives on</h2>
+  <p class="quiet" id="end-note">The rest of Cletus and Placy is in the book.</p>
   <img id="qr-end" src="qr/qr-code.png" alt="QR code linking to the author’s page">
-  <a id="buy-end" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">The book on Amazon</a>
+  <div class="end-links">
+    <a id="buy-end" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">Buy on Amazon</a>
+    <a id="review-end" class="buy" href="https://www.amazon.com/s?k=steve+behram&amp;crid=HGRQYCNCX1JN&amp;sprefix=steve+behram%2Caps%2C79&amp;ref=nb_sb_noss_1" target="_blank" rel="noopener noreferrer">Leave a review on Amazon</a>
+  </div>
   <div class="end-actions">
     <button type="button" id="again" class="ghost">Listen again</button>
+    <button type="button" id="listen-end" class="ghost">Listen to the book</button>
     <button type="button" id="end-chapters" class="ghost">Chapters</button>
   </div>
 </section>
@@ -78,6 +96,7 @@
 
 <script src="js/stage.js"></script>
 <script src="js/music.js"></script>
+<script src="js/play.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

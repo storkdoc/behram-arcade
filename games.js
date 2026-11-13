@@ -8,14 +8,14 @@ window.ARCADE_GAMES = [
     slug: 'me-and-my-placenta',
     title: 'ME & MY PLACENTA',
     marquee: 'sunset',
-    tagline: 'Float with Cletus the Fetus and Placy, his placenta, through a watercolor cosmos while the story is read aloud.',
-    description: 'A listening room for Me & My Placenta: The Incredible Story of Me & My Best Friend, by Steve Behram, MD. It is not a scored game. Cletus’s chapters play in the ear, nursery music shuffles underneath like a night-light, and a 23-frame watercolor storyboard, painted in the same spirit as the book, breathes with the narration: the cord sways, dust drifts, and Placy hovers at the edge of every scene. The original illustrations stay in the mix, and the official cover remains the title screen and the cabinet. When the story comes to Earth a painted globe floats in. When it is time to be born, rose theater curtains open, because birth is a stage entrance. A mustachioed doctor in a white coat — a warm caricature of Dr. Behram — stands in the wings and lets Cletus tell it. The opening, the dedication, Chapter 5 (The Grand Entrance, My Grand Exit), and the closing are here; the earlier chapters can be added later. The book’s own QR code and a quiet link to Amazon live on the title screen and the end card.',
+    tagline: 'Float with Cletus the Fetus until you find Placy, then stay with her through the birth. Or listen to the book.',
+    description: 'Play is a short journey with Cletus the Fetus and Placy the Placenta, from Me & My Placenta: The Incredible Story of Me & My Best Friend, by Steve Behram, MD. Float through the cosmos until you reach her, kick on the beat, hug back through the contractions, hold on, steer the car-wash canal and the jello tunnel, and burst through rose curtains. Then refuse to leave her in the basin. A listening room for the audiobook is still there: nursery music shuffles underneath, the storyboard breathes, the cord sways, and Placy hovers at the edge of every scene. The official cover remains the title screen and the cabinet. A mustachioed doctor in a white coat stands in the wings and lets Cletus tell it. The book’s own QR code, a quiet buy link, and a review link live on the title screen and the end card.',
+    controls: 'Play: arrows or WASD steer · SPACE is the stroke, kick, hug, hold, or no · ENTER is Placy helping · ESC pauses, and again returns · gamepad stick steers, A acts, X helps, Start pauses. Listen: SPACE pauses the chapter · ENTER next chapter · M music · N narration',
+    touch: 'drag anywhere to float and tap the round button for the action · Listen keeps play, skip, and the two volumes in a quiet bar · the QR code and the Amazon links sit in the corners · works full screen on iPhone, iPad, and Mac',
     thumb: 'games/me-and-my-placenta/thumb.png',
     added: '2026-11-13',
     genre: 'STORY',
     year: 'A BEDTIME',
-    controls: 'SPACE plays or pauses the narration · ENTER or → next chapter · ← previous chapter · M music · N narration · C chapters · Esc closes a panel · gamepad: A play/pause, X or RB next chapter, LB previous, Start mutes the music',
-    touch: 'tap to begin · play, chapter skip, and separate voice and music volumes sit in a quiet bar · tap the small QR code to see it larger · works full screen on iPhone, iPad, and Mac',
     accent: '#e7a0c4'
   },
   {

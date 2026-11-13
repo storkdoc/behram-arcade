@@ -15,6 +15,12 @@
   const canvas = $('sky');
   const stage = new window.PlacentaStage(canvas);
   const music = new window.PlacentaMusic(Math.random);
+  let mode = 'title';
+  const play = new window.PlacentaPlay(stage, {
+    fast: FAST,
+    onEnd: function () { finishPlay(); },
+    onLine: function (text) { setPlayLine(text); }
+  });
   const narration = new Audio();
   narration.preload = 'auto';
   narration.setAttribute('playsinline', '');
@@ -235,6 +241,10 @@
   }
 
   function begin() {
+    if (mode === 'play') play.stop();
+    mode = 'listen';
+    show('play-hud', false);
+    show('paused', false);
     ensure();
     if (!narration.paused && narration.src) return;
     const saved = FAST ? null : loadStore();
@@ -273,12 +283,79 @@
 
   function showEnd() {
     endShown = true;
+    mode = 'end';
     show('end', true);
     show('list', false);
+    show('play-hud', false);
+    show('paused', false);
+    $('end-title').textContent = 'Placy lives on';
+    $('end-note').textContent = 'The rest of Cletus and Placy is in the book.';
+    $('again').textContent = 'Listen again';
+    show('listen-end', false);
+    show('end-chapters', true);
     duck();
     syncUi();
     mood('end');
     if (window.MoodSticker && MoodSticker.event) MoodSticker.event('big');
+  }
+
+  function setPlayLine(text) {
+    const el = $('play-line');
+    if (el) el.textContent = text || '';
+  }
+
+  function startPlay() {
+    if (narration.src) { narration.pause(); }
+    started = false;
+    endShown = false;
+    mode = 'play';
+    show('title', false);
+    show('story', false);
+    show('end', false);
+    show('list', false);
+    show('paused', false);
+    show('play-hud', true);
+    music.start();
+    play.start();
+    mood('play');
+  }
+
+  function finishPlay() {
+    mode = 'end';
+    endShown = true;
+    play.stop();
+    show('play-hud', false);
+    show('paused', false);
+    show('end', true);
+    $('end-title').textContent = 'Placy lives on';
+    $('end-note').textContent = 'The story keeps going in the book.';
+    $('again').textContent = 'Play again';
+    show('listen-end', true);
+    show('end-chapters', false);
+    if (window.MoodSticker && MoodSticker.event) MoodSticker.event('big');
+    mood('end');
+  }
+
+  function leavePlay() {
+    play.stop();
+    mode = 'title';
+    show('play-hud', false);
+    show('paused', false);
+    show('title', true);
+    show('story', false);
+    show('end', false);
+    mood('title');
+  }
+
+  function escPlay() {
+    if (!play.active && mode !== 'play') return false;
+    if (!play.paused) {
+      play.paused = true;
+      show('paused', true);
+      return true;
+    }
+    leavePlay();
+    return true;
   }
 
   narration.addEventListener('timeupdate', function () {
@@ -311,8 +388,24 @@
   function onKey(e) {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
-    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
+    const steer = e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'KeyA' || e.code === 'KeyD' || e.code === 'KeyW' || e.code === 'KeyS';
+    if (e.code === 'Space' || e.code === 'Enter' || steer) e.preventDefault();
+    if (mode === 'play') {
+      if (e.code === 'Escape') {
+        if (e.repeat) return;
+        escPlay();
+        return;
+      }
+      if (e.repeat && (e.code === 'Space' || e.code === 'Enter')) return;
+      play.key(e.code, true);
+      return;
+    }
     if (e.repeat) return;
+    if (!$('title').hasAttribute('hidden')) {
+      if (e.code === 'Space') startPlay();
+      else if (e.code === 'Enter') begin();
+      return;
+    }
     if (e.code === 'Space') toggle();
     else if (e.code === 'Enter') nextChapter();
     else if (e.code === 'ArrowRight') nextChapter();
@@ -326,12 +419,34 @@
       else if (started && !narration.paused) { narration.pause(); syncUi(); }
     }
   }
+  function onKeyUp(e) {
+    if (mode === 'play') play.key(e.code, false);
+  }
   window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', function () { play.held = {}; });
 
-  $('begin').addEventListener('click', function (e) { e.stopPropagation(); begin(); });
-  $('title').addEventListener('click', function (e) {
-    if (e.target.closest('a, button')) return;
-    begin();
+  $('play-game').addEventListener('click', function (e) { e.stopPropagation(); startPlay(); });
+  $('listen').addEventListener('click', function (e) { e.stopPropagation(); begin(); });
+  $('listen-end').addEventListener('click', function () { show('end', false); endShown = false; begin(); });
+  $('act').addEventListener('click', function (e) { e.stopPropagation(); play.action(); });
+  $('pause-btn').addEventListener('click', function (e) { e.stopPropagation(); escPlay(); });
+  $('paused').addEventListener('click', function () { escPlay(); });
+  canvas.addEventListener('pointerdown', function (e) {
+    if (mode !== 'play' || play.paused) return;
+    document.body.classList.add('touch');
+    const r = canvas.getBoundingClientRect();
+    play.pointerDown((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (mode !== 'play' || !play._down) return;
+    const r = canvas.getBoundingClientRect();
+    play.pointerMove((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  });
+  canvas.addEventListener('pointerup', function (e) {
+    if (mode !== 'play') return;
+    const r = canvas.getBoundingClientRect();
+    play.pointerUp((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
   });
   $('play').addEventListener('click', function () { toggle(); });
   $('next').addEventListener('click', function () { nextChapter(); });
@@ -365,7 +480,12 @@
     });
   });
   $('qr-box').addEventListener('click', function () { show('qr-box', false); });
-  $('again').addEventListener('click', function () { playChapter(0, 0); });
+  $('again').addEventListener('click', function () {
+    show('end', false);
+    endShown = false;
+    if ($('again').textContent.indexOf('Play') === 0) startPlay();
+    else playChapter(0, 0);
+  });
   $('end-chapters').addEventListener('click', function () { show('list', true); });
 
   const gpWas = { a: false, x: false, lb: false, rb: false, start: false };
@@ -380,9 +500,20 @@
     const lb = pressed(4);
     const rb = pressed(5);
     const start = pressed(9);
-    if (a && !gpWas.a) toggle();
-    if ((x && !gpWas.x) || (rb && !gpWas.rb)) nextChapter();
-    if (lb && !gpWas.lb) prevChapter();
+    if (mode === 'play') {
+      if (start && !gpWas.start) escPlay();
+      gpWas.a = a; gpWas.x = x; gpWas.lb = lb; gpWas.rb = rb; gpWas.start = start;
+      return;
+    }
+    if (a && !gpWas.a) {
+      if (!$('title').hasAttribute('hidden')) startPlay();
+      else toggle();
+    }
+    if ((x && !gpWas.x) || (rb && !gpWas.rb)) {
+      if (!$('title').hasAttribute('hidden')) begin();
+      else nextChapter();
+    }
+    if (lb && !gpWas.lb && $('title').hasAttribute('hidden')) prevChapter();
     if (start && !gpWas.start) { ensure(); music.toggleMuted(); syncUi(); saveStore(); }
     gpWas.a = a; gpWas.x = x; gpWas.lb = lb; gpWas.rb = rb; gpWas.start = start;
   }
@@ -393,10 +524,16 @@
     last = now;
     pollPad();
     music.tick();
-    if (started && narration.src) applyCue();
+    if (mode === 'play') play.tick(dt);
+    else if (started && narration.src) applyCue();
     duck();
     stage.tick(dt);
     stage.draw();
+    if (mode === 'play') {
+      play.draw(stage.ctx);
+      const bar = $('journey-bar');
+      if (bar) bar.style.width = (play.fraction() * 100) + '%';
+    }
     requestAnimationFrame(frame);
   }
 
@@ -447,6 +584,12 @@
       ensure();
       const i = chapters.findIndex(function (c) { return c.id === id; });
       if (i >= 0) playChapter(i, 0);
-    }
+    },
+    get mode() { return mode; },
+    get playStage() { return play.stageId; },
+    get player() { return { x: play.player.x, y: play.player.y }; },
+    get kicks() { return play.kicks; },
+    get actions() { return play.actions; },
+    get paused() { return play.paused; }
   };
 })();
