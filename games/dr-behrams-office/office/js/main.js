@@ -449,7 +449,7 @@
       html = steps() + '<div class="phase"><span>PATIENT CHART · ' + esc(p.topic.t.toUpperCase()) + '</span><span>' + enc.qs.length + ' QUESTIONS</span></div>' +
         '<div class="vign"><b>' + esc(p.c.n) + '</b>, ' + p.c.a + (p.c.ga ? ', ' + esc(p.c.ga) : '') + '.\n' + esc(p.c.v) + '</div>' +
         '<div class="coach">' + faceImg('') + '<div><div class="who">DR. BEHRAM</div><div class="ex">' + esc(coachIntro(p)) + '</div></div></div>' +
-        '<div class="enc-actions"><button class="btn primary" id="begin" data-nav data-default>Begin encounter <span class="k">SPACE</span></button><span class="sp"></span>' + (enc.practice ? '' : '<button class="btn ghost small" id="leave" data-nav data-back>Back to hallway</button>') + '</div>';
+        '<div class="enc-actions"><button class="btn primary" id="begin" data-nav data-default>Begin encounter <span class="k">SPACE</span></button><button class="btn ghost small" id="labs" data-nav>Lab values <span class="k">L</span></button><span class="sp"></span>' + (enc.practice ? '' : '<button class="btn ghost small" id="leave" data-nav data-back>Back to hallway</button>') + '</div>';
     } else {
       var q = enc.qs[enc.i], r = enc.res[enc.i];
       html = steps() + '<div class="phase"><span>' + esc(q.phase.toUpperCase()) + ' · QUESTION ' + (enc.i + 1) + ' OF ' + enc.qs.length + '</span><span class="tm" id="tm"></span></div><div class="timer"><i id="tbar"></i></div>' +
@@ -459,14 +459,15 @@
           return '<button class="opt ' + cls + '" data-k="' + k + '"' + (r ? '' : ' data-nav') + '><span class="l">' + LET[k] + '</span><span>' + esc(o.txt) + '</span></button>';
         }).join('') + '</div>';
       if (r) html += '<div class="coach ' + (r.ok ? '' : 'no') + '">' + faceImg('') + '<div><div class="who">DR. BEHRAM</div><div class="verdict">' + esc(r.line) + (r.ok && r.pts ? ' <span style="color:#b07a10">+' + r.pts + '</span>' : '') + '</div><div class="ex">' + esc(q.expl) + '</div>' + (r.ok ? '' : '<div class="ans">Answer: ' + esc(q.answerText) + '</div>') + '</div></div>' +
-        '<div class="enc-actions"><span class="sp"></span><button class="btn primary" id="next" data-nav data-default>' + (enc.i + 1 < enc.qs.length ? 'Next question' : 'Finish encounter') + ' <span class="k">SPACE</span></button></div>';
-      else html += '<div class="enc-actions"><button class="btn ghost small" id="hint" data-nav' + (day.hints > 0 ? '' : ' disabled') + '>Ask Dr. Behram (' + day.hints + ' left) <span class="k">ENTER</span></button><span class="sp"></span><span class="hint-line" style="color:#5a6f84">Keys 1–' + q.opts.length + ' to answer</span></div>';
+        '<div class="enc-actions"><button class="btn ghost small" id="labs" data-nav>Lab values <span class="k">L</span></button><span class="sp"></span><button class="btn primary" id="next" data-nav data-default>' + (enc.i + 1 < enc.qs.length ? 'Next question' : 'Finish encounter') + ' <span class="k">SPACE</span></button></div>';
+      else html += '<div class="enc-actions"><button class="btn ghost small" id="hint" data-nav' + (day.hints > 0 ? '' : ' disabled') + '>Ask Dr. Behram (' + day.hints + ' left) <span class="k">ENTER</span></button><button class="btn ghost small" id="labs" data-nav>Lab values <span class="k">L</span></button><span class="sp"></span><span class="hint-line" style="color:#5a6f84">Keys 1–' + q.opts.length + ' to answer</span></div>';
     }
     s.innerHTML = '<div class="enc-left">' + chartCard(p) + '</div><div class="enc-panel" id="panel">' + html + '</div>';
     var panel = $('#panel'); panel.scrollTop = 0;
     if (enc.i < 0) { $('#begin').onclick = function () { enc.i = 0; startQ(); }; var lv = $('#leave'); if (lv) lv.onclick = function () { p.state = 'roomed'; enc = null; S.sfx.door(); hub(); }; }
     else if (enc.res[enc.i]) { $('#next').onclick = nextQ; var cc = $('.coach', panel); if (cc && cc.scrollIntoView) setTimeout(function () { try { cc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }, 60); }
     else { $$('.opt', panel).forEach(function (b) { b.onclick = function () { answer(+b.getAttribute('data-k'), b); }; }); var hb = $('#hint'); if (hb) hb.onclick = useHint; }
+    var lb = $('#labs', panel); if (lb) lb.onclick = openLabs;
     focusIdx = -1; if (!isTouch) setTimeout(autoFocus, 20);
   }
   function coachIntro(p) {
@@ -477,9 +478,32 @@
   function startQ() { enc.qt = now(); enc.gone = []; enc.hinted = false; renderEnc(); S.sfx.page(); clearInterval(qTimer); qTimer = setInterval(tickQ, 200); tickQ(); }
   function tickQ() {
     if (!enc || cur !== 'enc' || enc.res[enc.i]) { clearInterval(qTimer); return; }
+    if (enc.labT0) return;   // paused while the lab sheet is open
     var t = now() - enc.qt, f = Math.max(0, Math.min(1, (38 - t) / 30)), tb = $('#tbar'), tm = $('#tm');
     if (tb) tb.style.transform = 'scaleX(' + (t < 8 ? 1 : f) + ')'; if (tm) tm.textContent = (t < 38 ? 'SPEED BONUS +' + Math.round(50 * Math.min(1, f)) + ' · ' : '') + Math.floor(t) + 's';
   }
+  /* 2026-11-13: reference lab values (player feedback). Opens over the encounter; an unanswered question's clock (and
+     speed bonus) is paused while the sheet is open, so looking a value up never costs points. */
+  function openLabs() {
+    var L = window.COBLabs; if (!enc || !L || modalOpen()) return;
+    var q = enc.i >= 0 ? enc.qs[enc.i] : null, txt = enc.p.c.v + ' ' + (enc.p.c.cc || '') + ' ' + (q ? q.stem : ''), rel = L.relevant(txt);
+    if (q && !enc.res[enc.i]) enc.labT0 = now();
+    var row = function (r) { return '<tr class="' + (rel.indexOf(r[0]) >= 0 ? 'rel' : '') + '"><th>' + esc(r[0]) + '</th><td>' + esc(r[1]) + (r[2] ? '<small>' + esc(r[2]) + '</small>' : '') + '</td></tr>'; };
+    var relRows = []; L.LABS.forEach(function (g) { g[1].forEach(function (r) { if (rel.indexOf(r[0]) >= 0) relRows.push(r); }); });
+    var h = '<div class="modal-card labs-card" role="dialog" aria-label="Reference lab values"><div class="t-pre">REFERENCE</div><h2>Lab values</h2>' +
+      '<p class="labs-src">' + esc(L.source) + (q && !enc.res[enc.i] ? ' <b>The question clock is paused.</b>' : '') + '</p><div class="labs-scroll">' +
+      (relRows.length ? '<h3>In this chart</h3><table>' + relRows.map(row).join('') + '</table>' : '') +
+      L.LABS.map(function (g) { return '<h3>' + esc(g[0]) + '</h3><table>' + g[1].map(row).join('') + '</table>'; }).join('') +
+      '</div><div class="enc-actions" style="justify-content:center"><button class="btn primary" id="labs-close" data-nav data-default data-back>Back to the patient <span class="k">ESC</span></button></div></div>';
+    modal(h); try { S.sfx.page(); } catch (e) {}
+    $('#labs-close').onclick = closeLabs;
+    keyHandlers.modal = function (k) { if (k === 'Escape' || k === 'l' || k === 'L') { closeLabs(); return true; } return false; };
+  }
+  function closeLabs() {
+    modal(null); keyHandlers.modal = null;
+    if (enc && enc.labT0) { enc.qt += now() - enc.labT0; enc.labT0 = 0; }
+  }
+  COB.openLabs = openLabs; COB.closeLabs = closeLabs;
   function useHint() {
     if (!enc || enc.hinted || day.hints <= 0 || enc.res[enc.i]) return;
     var q = enc.qs[enc.i], wrong = []; q.opts.forEach(function (o, k) { if (!o.correct) wrong.push(k); });
@@ -507,6 +531,7 @@
   keyHandlers.enc = function (k) {
     if (!enc) return false;
     if (enc.done) return false;
+    if (k === 'l' || k === 'L') { openLabs(); return true; }
     var answered = enc.i >= 0 && enc.res[enc.i];
     if (/^[1-6]$/.test(k) && enc.i >= 0 && !answered) { var b = $('.opt[data-k="' + (+k - 1) + '"]'); if (b) answer(+k - 1, b); return true; }
     if (k === ' ') { if (enc.i < 0) { $('#begin').click(); return true; } if (answered) { S.sfx.click(); nextQ(); return true; } return activate(focused()); }
@@ -616,10 +641,10 @@
   }
   function help() {
     pageShell('help', 'How to play', '<div class="help"><h3 style="margin-top:0">A day at Congressional OB GYN</h3>Patients check in to the waiting room and are roomed into Exam 1–4. Each door shows the patient, her chief complaint and whether she is OB (pink chart) or GYN (teal chart). The status light turns amber, then red, the longer she waits.' +
-      '<h3>Encounters</h3>Read the chart, then answer ' + '4–6 board-style questions that walk through the visit: history, workup, diagnosis and management. Dr. Behram explains every answer. Stuck? <b>Ask Dr. Behram</b> removes wrong options for half points (3 per day).' +
+      '<h3>Encounters</h3>Read the chart, then answer ' + '4–6 board-style questions that walk through the visit: history, workup, diagnosis and management. Dr. Behram explains every answer. Stuck? <b>Ask Dr. Behram</b> removes wrong options for half points (3 per day). Need a normal value? <b>Lab values</b> opens a reference sheet, like on a board exam, and pauses the question clock.' +
       '<h3>Scoring</h3>100 points per correct answer + up to 50 speed bonus (answer within 8 seconds for the full bonus). Streaks multiply points: ×1.5 at 3, ×2 at 5, ×3 at 8. A perfect encounter adds 150. Stars come from accuracy; patient hearts from accuracy and how long she waited. The day ends with a letter grade (A ≥ 90%).' +
       '<h3>Progress</h3>XP promotes you Student → Intern → Resident → Chief → Attending, unlocking harder topics. Topic Mastery schedules reviews with spaced repetition. The Daily Challenge is the same 5 patients for everyone each day.' +
-      '<h3>Controls</h3><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>1</kbd>–<kbd>4</kbd> pick a room · <kbd>1</kbd>–<kbd>5</kbd> answer · <kbd>Space</kbd> continue · <kbd>Enter</kbd> Ask Dr. Behram · <kbd>Esc</kbd> back · <kbd>M</kbd> sound · <kbd>N</kbd> music. Touch and gamepads work too (A = continue, X/Y = ask, B = back).' +
+      '<h3>Controls</h3><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>1</kbd>–<kbd>4</kbd> pick a room · <kbd>1</kbd>–<kbd>5</kbd> answer · <kbd>Space</kbd> continue · <kbd>Enter</kbd> Ask Dr. Behram · <kbd>L</kbd> lab values · <kbd>Esc</kbd> back · <kbd>M</kbd> sound · <kbd>N</kbd> music. Touch and gamepads work too (A = continue, X/Y = ask, B = back).' +
       '<p style="font-size:12px;color:#5a6f84;margin-top:14px">Patients are fictional. Content is for teaching and reflects common US guidelines (ACOG, CDC, ASCCP, USPSTF) as of 2026; always confirm with current guidance. Not medical advice.</p></div>');
   }
 
