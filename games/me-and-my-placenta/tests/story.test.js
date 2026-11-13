@@ -230,7 +230,7 @@ const check = (ok, msg, extra) => {
   check(poseCue === 'speculum', 'the any-day-now cue asks for the speculum pose', poseCue);
 
   const doctors = await page.evaluate(async () => {
-    const names = ['doctor.png', 'doctor-doppler.png', 'doctor-ultrasound.png', 'doctor-tape.png', 'doctor-speculum.png'];
+    const names = ['doctor.png', 'doctor-doppler.png', 'doctor-ultrasound.png', 'doctor-tape.png', 'doctor-speculum.png', 'doctor-stethoscope.png', 'doctor-chart.png', 'doctor-reading.png', 'doctor-delivery.png', 'doctor-holding-baby.png', 'doctor-waving.png'];
     const out = [];
     for (const name of names) {
       const r = await fetch('art/' + name);
@@ -260,7 +260,35 @@ const check = (ok, msg, extra) => {
   await playPage.goto(BASE + '?fast=1', { waitUntil: 'domcontentloaded' });
   await playPage.evaluate(() => PLACENTA.ready);
   await playPage.click('#play-game');
-  await playPage.waitForFunction(() => PLACENTA.mode === 'play' && PLACENTA.playStage === 'meet', null, { timeout: 4000 });
+  const card = await playPage.evaluate(() => {
+    const box = document.getElementById('howto');
+    const ink = getComputedStyle(document.querySelector('.howto-card h2')).color;
+    return { open: box && !box.hasAttribute('hidden'), text: box.innerText, ink: ink };
+  });
+  check(card.open && /Drag on the screen/.test(card.text) && /arrow keys/.test(card.text) && /Got it/.test(card.text) && /Space/.test(card.text) && /doctor-reading/.test(card.text) === false, 'how to play explains drag and the action button', card);
+  const reader = await playPage.evaluate(() => {
+    const img = document.querySelector('.howto-card img');
+    const end = document.querySelector('#end .doctor-cameo');
+    return { src: img && img.getAttribute('src'), w: img && img.naturalWidth, end: end && end.getAttribute('src') };
+  });
+  check(reader.src === 'art/doctor-reading.png' && reader.w > 200 && reader.end === 'art/doctor-waving.png', 'how to play shows him reading and the ending shows him waving', reader);
+  check(/28,\s*16,\s*24|1c1018/i.test(card.ink) || card.ink.indexOf('28') === 4 || card.ink.startsWith('rgb(28'), 'how to play uses the same dark ink as the title', card.ink);
+  await playPage.click('#howto-ok');
+  await playPage.waitForFunction(() => PLACENTA.mode === 'play' && PLACENTA.playStage === 'meet' && document.getElementById('howto').hasAttribute('hidden'), null, { timeout: 4000 });
+  const coach = await playPage.evaluate(() => ({
+    how: document.getElementById('play-coach-line').textContent,
+    story: document.getElementById('play-line').textContent,
+    banner: document.getElementById('play-banner').textContent,
+    act: document.getElementById('act').getBoundingClientRect().width
+  }));
+  check(coach.how === 'Float to Placy and stay close to her.' && coach.story === 'She is right there.' && coach.banner === coach.how && coach.act >= 80, 'the stage shows a plain instruction and a large action button', coach);
+  await playPage.click('#howto-btn');
+  const asked = await playPage.evaluate(() => ({
+    open: !document.getElementById('howto').hasAttribute('hidden'),
+    paused: PLACENTA.paused === true
+  }));
+  check(asked.open && asked.paused, 'the question mark reopens how to play and pauses');
+  await playPage.click('#howto-ok');
   const playMusic = await playPage.waitForFunction(() => {
     const m = PLACENTA.musicElement();
     return m && !m.paused && m.playbackRate === 1 && m.currentTime > 0.05;
@@ -270,10 +298,15 @@ const check = (ok, msg, extra) => {
       birth: PlacentaStage.poseFor('sb10', 'speculum'),
       scan: PlacentaStage.poseFor('sb03', null),
       tape: PlacentaStage.poseFor('sb19', null),
-      asked: PlacentaStage.poseFor('sb05', 'speculum')
+      asked: PlacentaStage.poseFor('sb05', 'speculum'),
+      early: PlacentaStage.poseFor('sb01', null),
+      chart: PlacentaStage.poseFor('sb02', null),
+      baby: PlacentaStage.poseFor('sb11', null),
+      wave: PlacentaStage.poseFor('sb15', null),
+      read: PlacentaStage.poseFor('cover', null)
     }};
   })).catch(async (e) => ({ error: String(e) }));
-  check(!playMusic.error && playMusic.rate === 1 && playMusic.t > 0 && playMusic.pose === playMusic.forArt && playMusic.map.birth === 'doppler' && playMusic.map.scan === 'ultrasound' && playMusic.map.tape === 'tape' && playMusic.map.asked === 'speculum', 'play starts on a lullaby and the doctor pose follows the scene', playMusic);
+  check(!playMusic.error && playMusic.rate === 1 && playMusic.t > 0 && playMusic.pose === playMusic.forArt && playMusic.map.birth === 'delivery' && playMusic.map.scan === 'ultrasound' && playMusic.map.tape === 'tape' && playMusic.map.asked === 'speculum' && playMusic.map.early === 'stethoscope' && playMusic.map.chart === 'chart' && playMusic.map.baby === 'holding-baby' && playMusic.map.wave === 'waving' && playMusic.map.read === 'reading', 'play starts on a lullaby and the doctor pose follows the scene', playMusic);
   const x0 = await playPage.evaluate(() => PLACENTA.player.x);
   await playPage.keyboard.down('ArrowRight');
   await playPage.waitForTimeout(500);

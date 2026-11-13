@@ -42,20 +42,53 @@
     sb23: '23-thank-you.jpg'
   };
 
-  /* Doppler for heartbeat, kicks, and birth monitoring.
-     Ultrasound when the story is looking at the baby.
-     Tape for third-trimester growth.
-     Speculum only when a cue asks, and never on a birth close-up. */
+  /* Drop art/doctor-<name>.png in the art folder, add the name to POSES,
+     and teach ART_POSE or a cue's doctorPose when to show it.
+     Speculum is only when a cue asks, and never on a birth close-up. */
+  const POSES = ['doppler', 'ultrasound', 'tape', 'speculum', 'stethoscope', 'chart', 'reading', 'delivery', 'holding-baby', 'waving'];
   const BIRTH_CLOSE = { sb10: 1, sb11: 1, sb12: 1, sb13: 1, sb22: 1, drop: 1, stage: 1, birth: 1 };
-  const TAPE_ART = { sb16: 1, sb19: 1, astronaut: 1, nest: 1 };
-  const SCAN_ART = { sb03: 1, sb17: 1, sb21: 1, singing: 1, earth: 1 };
+  const ART_POSE = {
+    cover: 'reading',
+    sb01: 'stethoscope',
+    sb02: 'chart',
+    sb03: 'ultrasound',
+    sb04: 'stethoscope',
+    sb05: 'doppler',
+    sb06: 'chart',
+    hug: 'chart',
+    sb07: 'doppler',
+    sb08: 'stethoscope',
+    sb09: 'ultrasound',
+    drop: 'delivery',
+    stage: 'delivery',
+    birth: 'delivery',
+    sb10: 'delivery',
+    sb11: 'holding-baby',
+    sb12: 'holding-baby',
+    sb13: 'holding-baby',
+    sb22: 'holding-baby',
+    sb14: 'waving',
+    sb15: 'waving',
+    pointing: 'chart',
+    sb16: 'tape',
+    astronaut: 'tape',
+    nest: 'tape',
+    sb17: 'ultrasound',
+    singing: 'ultrasound',
+    sb18: 'reading',
+    manatee: 'reading',
+    sb19: 'tape',
+    sb20: 'reading',
+    sb21: 'ultrasound',
+    earth: 'ultrasound',
+    sb23: 'waving',
+    uterus: 'stethoscope'
+  };
 
   function poseFor(art, asked) {
-    if (BIRTH_CLOSE[art]) return 'doppler';
-    if (asked === 'speculum' || asked === 'tape' || asked === 'ultrasound' || asked === 'doppler') return asked;
-    if (TAPE_ART[art]) return 'tape';
-    if (SCAN_ART[art]) return 'ultrasound';
-    return 'doppler';
+    if (asked === 'speculum') return BIRTH_CLOSE[art] ? (ART_POSE[art] || 'delivery') : 'speculum';
+    if (asked && POSES.indexOf(asked) !== -1) return asked;
+    return ART_POSE[art] || 'reading';
   }
 
   function srcFor(key) {
@@ -173,13 +206,13 @@
     this.globe = lerp(this.globe, this.globeTarget, this.reduced ? 1 : (1 - Math.exp(-dt * 0.55)));
     this.doctor = lerp(this.doctor, this.doctorTarget, this.reduced ? 1 : (1 - Math.exp(-dt * 0.9)));
     if (this.poseFade < 1) this.poseFade = Math.min(1, this.poseFade + dt / 0.7);
-    if (!this.reduced) {
-      for (let i = 0; i < this.dust.length; i++) {
-        const p = this.dust[i];
-        p.v -= p.s * dt;
-        p.u += Math.sin(this.t * 0.2 + i) * 0.002 * dt;
-        if (p.v < -0.02) { p.v = 1.02; p.u = Math.random(); }
-      }
+    const calm = this.reduced ? 0.22 : 1;
+    for (let i = 0; i < this.dust.length; i++) {
+      const p = this.dust[i];
+      const depth = 0.35 + p.r * 0.45;
+      p.v -= p.s * dt * calm * depth;
+      p.u += Math.sin(this.t * 0.22 * depth + i) * 0.004 * dt * calm * depth;
+      if (p.v < -0.02) { p.v = 1.02; p.u = Math.random(); }
     }
   };
 
@@ -203,18 +236,17 @@
       this._nebula(neb, 1.48, 1.7, 0.38);
     }
     const rate = MOOD[this.mood] || 0.8;
-    const breathe = 1 + Math.sin(this.t * rate) * (this.reduced ? 0.004 : 0.016);
-    const ken = 1 + Math.min(0.06, this.sceneAge * 0.004);
-    const drift = this.reduced ? 0 : 1;
+    const breathe = 1 + Math.sin(this.t * rate) * (this.reduced ? 0.004 : 0.02);
+    const drift = this.reduced ? 0.2 : 1;
     if (this.prevKey && this.fade < 1) {
       ctx.save();
       ctx.globalAlpha = 1 - this.fade;
-      this._painting(this.prevKey, breathe, ken * 0.99, drift, 1);
+      this._painting(this.prevKey, breathe, drift, 1);
       ctx.restore();
     }
     ctx.save();
     ctx.globalAlpha = this.prevKey ? this.fade : 1;
-    this._painting(this.artKey, breathe, ken, drift, this.artKey === 'stage' ? this.curtain : 1);
+    this._painting(this.artKey, breathe, drift, this.artKey === 'stage' ? this.curtain : 1);
     ctx.restore();
     this._globe(breathe);
     this._doctor(breathe);
@@ -237,21 +269,25 @@
     ctx.restore();
   };
 
-  Stage.prototype._painting = function (key, breathe, ken, drift, curtain) {
+  Stage.prototype._painting = function (key, breathe, drift, curtain) {
     const img = this._img(key);
     if (!img) return;
     const w = this.w;
     const h = this.h;
     const story = key === 'cover' || !!BOARD[key];
-    const maxH = h * (story ? 0.9 : 0.8);
-    const maxW = w * (story ? 0.9 : 0.78);
+    const phase = (key.length * 1.7) % 6.2;
+    const ken = 1.05 + Math.sin(this.sceneAge * 0.085 + phase) * 0.04 * drift;
+    const maxH = h * (story ? 0.92 : 0.8);
+    const maxW = w * (story ? 0.92 : 0.78);
     const sc = Math.min(maxW / img.width, maxH / img.height) * breathe * ken;
     const dw = img.width * sc;
     const dh = img.height * sc;
-    const bob = drift * Math.sin(this.t * 0.55 + (key.length)) * h * 0.012;
-    const sway = drift * Math.cos(this.t * 0.33) * w * 0.01;
-    const x = (w - dw) / 2 + sway;
-    const y = (h - dh) / 2 + bob - h * 0.02;
+    const bob = drift * Math.sin(this.t * 0.45 + phase) * h * 0.012;
+    const sway = drift * Math.cos(this.t * 0.28 + phase) * w * 0.012;
+    const panX = Math.sin(this.sceneAge * 0.065 + phase) * w * 0.04 * drift;
+    const panY = Math.cos(this.sceneAge * 0.05 + phase * 1.3) * h * 0.028 * drift;
+    const x = (w - dw) / 2 + sway + panX;
+    const y = (h - dh) / 2 + bob + panY - h * 0.02;
     if ((key === 'stage' || key === 'sb10') && curtain < 0.98) this._curtains(img, x, y, dw, dh, curtain);
     else {
       this.ctx.drawImage(img, x, y, dw, dh);
@@ -319,8 +355,9 @@
       dw = maxW * 0.94;
       dh = dw * (img.height / img.width);
     }
-    const sway = Math.sin(this.t * 0.35) * 3;
-    const bob = Math.cos(this.t * 0.45) * 3;
+    const calm = this.reduced ? 0.25 : 1;
+    const sway = Math.sin(this.t * 0.7) * 9 * calm;
+    const bob = Math.cos(this.t * 0.9) * 7 * calm;
     let x = w - dw - margin + sway;
     let y = h - dock - dh + bob;
     x = Math.max(margin, Math.min(w - dw - margin, x));
@@ -347,6 +384,64 @@
     ctx.globalAlpha = Math.min(0.94, this.doctor * (prev ? this.poseFade : 1));
     ctx.drawImage(img, box.x, box.y, box.dw, box.dh);
     ctx.restore();
+    this._instrument(box, this.pose, this.doctor * (prev ? this.poseFade : 1));
+  };
+
+  Stage.prototype._instrument = function (box, pose, alpha) {
+    if (alpha < 0.08) return;
+    const ctx = this.ctx;
+    const calm = this.reduced ? 0.35 : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.9, alpha);
+    ctx.lineCap = 'round';
+    if (pose === 'doppler' || pose === 'stethoscope') {
+      const ox = box.x + box.dw * (pose === 'stethoscope' ? 0.68 : 0.3);
+      const oy = box.y + box.dh * (pose === 'stethoscope' ? 0.4 : 0.4);
+      const sweep = Math.sin(this.t * 1.5) * 0.7 * calm;
+      ctx.translate(ox, oy);
+      ctx.rotate(sweep);
+      ctx.strokeStyle = pose === 'stethoscope' ? 'rgba(70, 90, 110, 0.75)' : 'rgba(86, 156, 196, 0.9)';
+      ctx.lineWidth = Math.max(2, box.dw * 0.012);
+      ctx.beginPath();
+      ctx.arc(0, 0, box.dw * (0.05 + Math.sin(this.t * 2.2) * 0.012 * calm), 0, Math.PI * 1.6);
+      ctx.stroke();
+    } else if (pose === 'chart') {
+      const x = box.x + box.dw * (0.22 + Math.sin(this.t * 1.3) * 0.04 * calm);
+      const y = box.y + box.dh * (0.34 + Math.cos(this.t * 1.1) * 0.02 * calm);
+      ctx.fillStyle = 'rgba(180, 60, 70, 0.85)';
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(3, box.dw * 0.015), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (pose === 'waving') {
+      const ox = box.x + box.dw * 0.16;
+      const oy = box.y + box.dh * 0.2;
+      ctx.strokeStyle = 'rgba(232, 140, 162, 0.8)';
+      ctx.lineWidth = Math.max(2, box.dw * 0.012);
+      ctx.beginPath();
+      ctx.arc(ox, oy, box.dw * (0.08 + Math.sin(this.t * 2.4) * 0.02 * calm), -0.4, 1.2);
+      ctx.stroke();
+    } else if (pose === 'reading') {
+      const y = box.y + box.dh * 0.48;
+      const x0 = box.x + box.dw * 0.16;
+      const w = box.dw * 0.34 * (0.92 + Math.sin(this.t * 0.9) * 0.08 * calm);
+      ctx.strokeStyle = 'rgba(90, 120, 160, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0, y, w, box.dh * 0.012);
+    } else if (pose === 'tape') {
+      const y = box.y + box.dh * 0.4;
+      const x0 = box.x + box.dw * 0.18;
+      const full = box.dw * 0.64;
+      const u = this.reduced ? 0.85 : (0.45 + (Math.sin(this.t * 0.85) + 1) * 0.275);
+      ctx.strokeStyle = 'rgba(212, 170, 42, 0.95)';
+      ctx.lineWidth = Math.max(3, box.dh * 0.012);
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0 + full * u, y);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 236, 170, 0.95)';
+      ctx.fillRect(x0 + full * u - 2, y - box.dh * 0.02, 3, box.dh * 0.04);
+    }
+    ctx.restore();
   };
 
   Stage.prototype._placy = function (breathe) {
@@ -356,10 +451,11 @@
     const w = this.w;
     const h = this.h;
     const amp = (this.mood === 'squeeze' || this.mood === 'ride') ? 1.45 : 1;
+    const calm = this.reduced ? 0.25 : 1;
     const ph = h * 0.2 * breathe;
     const pw = ph * (img.width / img.height);
-    const x = w * 0.05 + Math.sin(this.t * 0.41) * w * 0.012;
-    const y = h * 0.1 + Math.cos(this.t * 0.53) * h * 0.016;
+    const x = w * 0.05 + Math.sin(this.t * 0.41) * w * 0.022 * calm;
+    const y = h * 0.1 + Math.cos(this.t * 0.53) * h * 0.03 * calm;
     const anchorX = x + pw * 0.62;
     const anchorY = y + ph * 0.22;
     this._cord(anchorX, anchorY + ph * 0.55, amp);
@@ -421,5 +517,6 @@
   };
 
   Stage.poseFor = poseFor;
+  Stage.poses = POSES;
   root.PlacentaStage = Stage;
 })(window);
