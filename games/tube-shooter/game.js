@@ -389,6 +389,7 @@ const Sound = {
       case 'hit': this.noise(0.42, 0.38, 3200, 160, 0.8); this.tone('triangle', 340, 50, 0.3, 0.16); break;
       case 'tanker': this.noise(0.5, 0.42, 1800, 90, 0.7); this.tone('sawtooth', 220, 40, 0.4, 0.12); break;
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
+      case 'fuselock': this.tone('sine', 1250, 2500, 0.07, 0.06); this.tone('triangle', 2500, 2500, 0.04, 0.03, 0.07); break;   // fuseball crossing a lane near you: shootable now
       case 'flip': this.tone('triangle', 520, 880, 0.05, 0.05); break;
       case 'eshot': this.tone('sawtooth', 260, 900, 0.09, 0.035); break;
       case 'die': this.noise(1.6, 0.6, 5000, 60, 0.6, 'lowpass'); this.tone('sawtooth', 500, 30, 1.4, 0.2); break;
@@ -905,7 +906,7 @@ const DEATH_TIPS = {
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
   spark: ['SPARK', 'IT HOMES IN. DODGE LATE OR LURE IT ONTO RIM FOES'],
   mine: ['MINE', 'SHOOT MINES ON THE WAY UP, BEFORE THEY ARM'],
-  fuse: ['FUSEBALL', 'WHITE RIM SPARKS OR RING = FUSEBALL. DODGE OR JUMP; SHOOT THEM MID-JUMP'],
+  fuse: ['FUSEBALL', 'WHITE RIM SPARKS = DODGE OR JUMP. CYAN BRACKETS = SHOOT IT NOW'],
 };
 let deathTipCount = {};
 function deathTip(kind) {
@@ -1223,7 +1224,7 @@ function killEnemy(e, byShot) {
     case 'tanker': pts = 100; break;
     case 'spiker': pts = 50; break;
     case 'pulsar': pts = 200; break;
-    case 'fuseball': pts = e.z > 0.66 ? 250 : e.z > 0.33 ? 500 : 750; break;
+    case 'fuseball': pts = e.z > 0.66 ? 250 : e.z > 0.33 ? 500 : 750; fuseLock.kills++; break;
     default: if (NEWE[e.type]) pts = NEWE[e.type].pts;
   }
   addScore(pts);
@@ -1467,10 +1468,22 @@ function startJump(e, d) {
   if (!web.closed && (t < 0 || t > web.n)) { d = -d; t = e.rail + d; }
   e.jumping = true; e.jdir = d; e.jt = 0; e.jumpDur = e.atRim ? 0.42 : 0.32;
 }
+/* FUSEBALL LOCK-ON (2026-11-13). Bot eval today: fuseballs were again the #1 killer (10 of ~17 deaths), and the only way
+   to kill one before it reaches the rim is to shoot it MID-JUMP between rails, a window players could not see (the tip
+   text said "shoot them mid-jump", nothing on screen did). Now, while a fuseball in the tube is crossing a lane and can be
+   hit, cyan lock-on brackets snap around it and its lane floor glows; if that lane is the claw's or next to it, a short
+   rising "lock" blip plays once per jump. The window is also a bit wider (10-90% of the hop instead of 15-85%).
+   Rim fuseballs stay invulnerable (arcade rule); nothing else changes. */
+const FUSE_OPEN = [0.1, 0.9];
+const fuseLock = { opens: 0, cues: 0, frames: 0, kills: 0 };
+function fuseOpen(e) { return e.type === 'fuseball' && !e.atRim && e.jumping && e.jt >= FUSE_OPEN[0] && e.jt <= FUSE_OPEN[1]; }
+function fuseOpenLane(e) { return e.jdir > 0 ? e.rail : wrapLane(e.rail - 1); }
 function updFuse(e, dt) {
   const pl = player.lane;
   if (e.jumping) {
+    const was = fuseOpen(e);
     e.jt += dt / e.jumpDur;
+    if (!was && fuseOpen(e)) { fuseLock.opens++; if (player.alive && Math.abs(laneDiff(fuseOpenLane(e), pl)) <= 1) { fuseLock.cues++; Sound.play('fuselock'); } }
     if (e.atRim && player.alive && e.jt > 0.42 && e.jt < 0.58) {
       const lane = e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
       if (lane === pl) { fuseDeaths.rimjump++; killPlayer('fuse'); return; }
@@ -1504,7 +1517,7 @@ function hittableLane(e) {
   if (e.type === 'phaser' && e.ph && !(e.ph === 'in' && e.phT > 0.07)) return -1;   // phased out: shots pass through
   if (e.type === 'fuseball') {
     if (e.atRim) return -1;               // arcade rule: fuseballs on the rim are invulnerable, dodge them
-    if (!e.jumping || e.jt < 0.15 || e.jt > 0.85) return -1;
+    if (!fuseOpen(e)) return -1;
     return e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
   }
   if (e.flipping) {
@@ -2162,6 +2175,21 @@ function drawSpiral(cx, cy, R, color, spin) {
   ctx.stroke();
 }
 function laneWidthPx(l, zw) { const a = rail(l), b = rail(l + 1); return Math.hypot(b[0] - a[0], b[1] - a[1]) * scaleAt(zw); }
+function drawFuseLock(e, p, R) {
+  fuseLock.frames++;
+  const lane = fuseOpenLane(e), near = Math.abs(laneDiff(lane, player.lane)) <= 1, k = (e.jt - FUSE_OPEN[0]) / (FUSE_OPEN[1] - FUSE_OPEN[0]);
+  const snap = 1 + 0.6 * Math.max(0, 1 - k * 5), r = R * 1.35 * snap, b = r * 0.45;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  // the lane it is crossing: a faint floor glow from its depth up to the rim, so you know where to aim
+  const m = laneMid(lane); ctx.globalAlpha = near ? 0.35 : 0.18; ctx.strokeStyle = '#7dffea'; ctx.shadowColor = '#2affd5'; ctx.shadowBlur = 10 * DPR;
+  ctx.lineWidth = LW(near ? 2.4 : 1.4); ctx.beginPath(); seg3(m[0], m[1], e.z * LL, m[0], m[1], 0); ctx.stroke();
+  // lock-on brackets
+  ctx.globalAlpha = (near ? 1 : 0.7) * (0.75 + 0.25 * Math.sin(T * 50)); ctx.lineWidth = LW(near ? 2.2 : 1.5); ctx.shadowBlur = 14 * DPR;
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    ctx.beginPath(); ctx.moveTo(p[0] + sx * r, p[1] + sy * (r - b)); ctx.lineTo(p[0] + sx * r, p[1] + sy * r); ctx.lineTo(p[0] + sx * (r - b), p[1] + sy * r); ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawFuse(cx, cy, R, t) {
   const cols = ['#ff2a2a', '#ffe81a', '#2bff4c', '#3e9bff', '#ff47e6'];
   for (let i = 0; i < 5; i++) {
@@ -2201,6 +2229,7 @@ function drawEnemy(e) {
     const c = centerOf(e), p = proj(c[0], c[1], c[2]); if (!p) return;
     const lw = laneWidthPx(wrapLane(Math.floor(e.rail)), c[2]);
     drawFuse(p[0], p[1], lw * 0.42 * sp, T + e.phase);
+    if (fuseOpen(e)) drawFuseLock(e, p, lw * 0.42 * sp);
   } else if (NEWE[e.type]) drawNewEnemy(e, sp);
 }
 const PHASER = [[0, 0], [0.25, -0.034], [0.5, 0], [0.75, -0.034], [1, 0], [0.75, 0.034], [0.5, 0], [0.25, 0.034]];
@@ -3191,6 +3220,8 @@ window.VORTEX = {
   grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, landT: t.e.landT, imminent: !!t.e.gimminent })), frames: grabWarnFrames, cues: grabWarnCues, imminent: grabImminentCues }),
   deathTips: () => Object.assign({}, deathTipCount),
   fuseDeaths: () => Object.assign({}, fuseDeaths),
+  fuseLock: () => Object.assign({ window: FUSE_OPEN.slice() }, fuseLock),
+  fuseOpen: id => { const e = enemies.find(e => e.id === id); return !!(e && fuseOpen(e)); },
   fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump, landing: !!t.landing, climbing: !!t.climbing })), frames: fuseWarnFrames, cues: fuseWarnCues, landFrames: fuseLandFrames, landCues: fuseLandCues, grace: FUSE_LAND_GRACE, landZ: FUSE_LAND_Z }),
   zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
