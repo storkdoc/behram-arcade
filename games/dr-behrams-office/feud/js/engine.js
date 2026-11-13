@@ -285,9 +285,10 @@
   };
 
   // ---------- Fast Money ----------
+  var FM_TIMES = [40, 45];   // seconds for seat 1 / seat 2 (typed answers need about twice the TV show's 20 / 25 s)
   function FastMoney(prompts, opts) {
     opts = opts || {};
-    this.prompts = prompts; this.target = opts.target || 200; this.times = opts.times || [20, 25];
+    this.prompts = prompts; this.target = opts.target || 200; this.times = opts.times || FM_TIMES;
     this.ans = [prompts.map(function () { return null; }), prompts.map(function () { return null; })];
   }
   // returns {type:'hit'|'gag'|'miss'|'dupe'|'empty', pts, idx?}; dupe = same board slot as seat 1 -> try again
@@ -367,7 +368,7 @@
   }
 
   var api = { normalize: normalize, dist: dist, match: match, matchGag: matchGag, GAGS: GAGS, MULT: MULT, Round: Round,
-    Match: Match, FastMoney: FastMoney, LEVELS: LEVELS, rivalGuess: rivalGuess, rivalBuzzDelay: rivalBuzzDelay,
+    Match: Match, FastMoney: FastMoney, FM_TIMES: FM_TIMES, LEVELS: LEVELS, rivalGuess: rivalGuess, rivalBuzzDelay: rivalBuzzDelay,
     vocab: vocab, Bag: Bag, shuffle: shuffle, other: other };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeudEngine = api;

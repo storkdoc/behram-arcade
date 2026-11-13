@@ -149,6 +149,8 @@ t('match: multipliers 1,1,2,3, commit, over, sudden death on a tie', () => {
 t('fast money: scoring, seat-2 duplicate try-again, pass, target 200', () => {
   const prompts = ['tri3-bleed', 'pph-4t', 'discharge', 'hirsutism', 'incontinence'].map(byId);
   const F = new E.FastMoney(prompts);
+  // 2026-11-13 player feedback: 20 s was not enough time to type -> 40 / 45 s
+  assert.deepStrictEqual(F.times, [40, 45]); assert.ok(F.times[0] >= 40 && F.times[1] > F.times[0]);
   assert.strictEqual(F.submit(0, 0, 'abruption').pts, 26);
   assert.strictEqual(F.submit(0, 1, 'atony').pts, 68);
   F.pass(0, 2); assert.deepStrictEqual(F.open(0), [2, 3, 4]);

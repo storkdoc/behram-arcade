@@ -359,14 +359,14 @@
   };
   function startFM(o) {
     clearTimers(); $('#s-game').innerHTML = '';
-    var fm = new E.FastMoney(o.prompts, { target: 200, times: [20, 25] });
+    var fm = new E.FastMoney(o.prompts, { target: 200, times: E.FM_TIMES });   // 2026-11-13: 40 s / 45 s. Player feedback: 20 s was not enough time to TYPE five diagnoses (the TV show is spoken)
     var S = G.fmState = { fm: fm, seat: 0, i: 0, time: 0, tick: null, running: false, seats: o.seats, team: o.team };
     F.debug.fm = fm;
     var rows = o.prompts.map(function (p, i) {
       return '<div class="fmrow" id="fr' + i + '"><div class="cond">' + (i + 1) + '. ' + esc(p.q) + '</div><div class="a a1"></div><div class="s s1"></div><div class="a a2"></div><div class="s s2"></div></div>';
     }).join('');
     $('#s-fm').innerHTML = '<div class="fm"><div class="fmboard"><div class="fmhead"><span>Fast Money</span><span id="fm-who">' + esc(o.team) + '</span></div>' + rows + '</div>' +
-      '<div class="fmside"><div class="clock" id="clock"><small>TIME</small><b id="clk">20</b></div><div class="total"><small>TOTAL · 200 TO WIN</small><b id="fmtotal">0</b></div>' +
+      '<div class="fmside"><div class="clock" id="clock"><small>TIME</small><b id="clk">' + fm.times[0] + '</b></div><div class="total"><small>TOTAL · 200 TO WIN</small><b id="fmtotal">0</b></div>' +
       '<div class="hostzone"><div class="bubble"></div><img class="host" src="assets/host-happy.webp" alt="Dr. Behram, host"></div></div></div><div class="dock" id="dock"></div>';
     $('#chip-round').textContent = 'FAST MONEY'; $('#chip-mult').textContent = 'TARGET 200';
     F.show('fm'); A.fanfare(); F.mood('start');

@@ -37,7 +37,7 @@ Live at `/games/dr-behrams-office/feud/` (moved 2026-10-31; `/games/feud-and-del
   - **Play:** 3 strikes and the other side gets one steal for the whole bank.
   - A repeated answer is waved off with no strike.
 - **Ties after round 4:** a single-answer sudden-death face-off.
-- **Fast Money:** the winner plays. Seat 1 gets 20 s and seat 2 gets 25 s for the same 5 presentations.
+- **Fast Money:** the winner plays. Seat 1 gets 40 s and seat 2 gets 45 s for the same 5 presentations (raised from the TV show's 20/25 s on 2026-11-13: players type their answers, and 20 s was not enough time to type).
   - Seat 2 must not repeat seat 1's answers.
   - Reaching 200 points wins. TAB passes and returns to the condition later.
 - **1 player:** you against the simulated **Night Float** team.
