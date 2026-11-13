@@ -146,6 +146,27 @@ const check = (ok, msg, extra) => {
   });
   check(!policy.cross && !policy.hidden, 'music plays on its own element, not through a hidden or CORS-locked node', policy);
   check(audio.chapter === 'grand' && audio.tracks >= 15, 'fast mode plays the long chapter over a real lullaby set', audio);
+  check(audio.line && !/1906|1912|1913|1915|1918|1922|Schumann-Heink|jukebox/i.test(audio.line), 'the lullaby that is playing is a clean modern recording', audio.line);
+
+  const shellac = await page.evaluate(async () => {
+    const js = await fetch('js/music.js').then(r => r.text());
+    return /jukebox-|gbia0|Schumann-Heink|78_wiegenlied|loc-jukebox/.test(js);
+  });
+  check(!shellac, 'the playlist source has no shellac 78s');
+
+  const shuffle = await page.evaluate(() => {
+    function first(seed) {
+      let s = seed;
+      const rand = function () {
+        s = (s * 16807) % 2147483647;
+        return (s - 1) / 2147483646;
+      };
+      return new PlacentaMusic(rand).line();
+    }
+    const lines = [1, 3, 9, 17, 42, 99, 256, 4096].map(first);
+    return { lines: lines, uniq: new Set(lines).size };
+  });
+  check(shuffle.uniq >= 3, 'a new night starts on a shuffled lullaby, not always the first track', shuffle);
 
   const changed = await page.waitForFunction((first) => PLACENTA.art && PLACENTA.art !== first, before, { timeout: 8000 })
     .then(() => page.evaluate((first) => ({ first: first, now: PLACENTA.art, curtain: PLACENTA.curtain, globe: PLACENTA.globe }), before))
@@ -156,6 +177,78 @@ const check = (ok, msg, extra) => {
   await page.waitForFunction(() => !PLACENTA.ducked, null, { timeout: 2000 }).catch(() => {});
   const risen = await page.evaluate(() => ({ ducked: PLACENTA.ducked, mv: PLACENTA.musicElement().volume, paused: PLACENTA.narration.paused }));
   check(risen.paused && !risen.ducked && risen.mv > 0, 'music rises when the narration pauses', risen);
+  await page.click('#play');
+
+  const held = await page.evaluate(() => {
+    const el = PLACENTA.musicElement();
+    return { t: el.currentTime, rate: el.playbackRate, paused: el.paused };
+  });
+  await page.click('#next');
+  await page.waitForTimeout(700);
+  const afterNext = await page.evaluate((before) => {
+    const m = PLACENTA.musicElement();
+    return {
+      chapter: PLACENTA.chapterId,
+      paused: m.paused,
+      t: m.currentTime,
+      rate: m.playbackRate,
+      grew: m.currentTime > before.t + 0.15,
+      narr: PLACENTA.narration.paused
+    };
+  }, held);
+  check(afterNext.chapter !== 'grand' && !afterNext.paused && afterNext.grew && afterNext.rate === 1, 'advancing a chapter keeps the lullaby playing at 1x', { before: held, after: afterNext });
+
+  await page.evaluate(() => {
+    const el = document.getElementById('adhd');
+    el.focus();
+    el.value = '2';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const adhd = await page.evaluate(() => {
+    const n = PLACENTA.narration;
+    const m = PLACENTA.musicElement();
+    const stored = JSON.parse(localStorage.getItem('placenta.place') || '{}');
+    const mark = document.querySelector('.adhd-marks .is-on');
+    return {
+      narr: n.playbackRate,
+      pitch: n.preservesPitch,
+      webkit: n.webkitPreservesPitch,
+      music: m.playbackRate,
+      mark: mark && mark.textContent,
+      stored: stored.rate,
+      musicPaused: m.paused
+    };
+  });
+  check(adhd.narr === 2 && adhd.pitch === true && adhd.webkit === true && adhd.music === 1 && adhd.mark === 'Squirrel!' && adhd.stored === 2 && !adhd.musicPaused, 'ADHD slider speeds narration only and remembers Squirrel!', adhd);
+
+  const poseCue = await page.evaluate(async () => {
+    const m = await fetch('audio/manifest.json').then(r => r.json());
+    const ch = m.chapters.find(c => c.id === 'ch04');
+    const cue = ch.cues.find(c => c.t === 2955.53);
+    return cue && cue.doctorPose;
+  });
+  check(poseCue === 'speculum', 'the any-day-now cue asks for the speculum pose', poseCue);
+
+  const doctors = await page.evaluate(async () => {
+    const names = ['doctor.png', 'doctor-doppler.png', 'doctor-ultrasound.png', 'doctor-tape.png', 'doctor-speculum.png'];
+    const out = [];
+    for (const name of names) {
+      const r = await fetch('art/' + name);
+      const buf = await r.arrayBuffer();
+      out.push({ name, ok: r.ok, type: r.headers.get('content-type'), n: buf.byteLength });
+    }
+    return out;
+  });
+  check(doctors.every(d => d.ok && d.n > 20000 && /png/.test(d.type || '')), 'doctor cutouts are served', doctors);
+
+  await page.focus('#adhd');
+  await page.keyboard.press('ArrowLeft');
+  const stepped = await page.evaluate(() => ({
+    narr: PLACENTA.narration.playbackRate,
+    mark: document.querySelector('.adhd-marks .is-on').textContent,
+    music: PLACENTA.musicElement().playbackRate
+  }));
+  check(stepped.narr === 1.75 && stepped.mark === 'Severe' && stepped.music === 1, 'arrow keys step the ADHD scale and leave the lullaby at 1x', stepped);
 
   const clean = errs.filter(e => !/net::ERR_ABORTED/.test(e));
   check(clean.length === 0, 'no console errors', clean);
@@ -168,6 +261,19 @@ const check = (ok, msg, extra) => {
   await playPage.evaluate(() => PLACENTA.ready);
   await playPage.click('#play-game');
   await playPage.waitForFunction(() => PLACENTA.mode === 'play' && PLACENTA.playStage === 'meet', null, { timeout: 4000 });
+  const playMusic = await playPage.waitForFunction(() => {
+    const m = PLACENTA.musicElement();
+    return m && !m.paused && m.playbackRate === 1 && m.currentTime > 0.05;
+  }, null, { timeout: 8000 }).then(() => playPage.evaluate(() => {
+    const m = PLACENTA.musicElement();
+    return { t: m.currentTime, rate: m.playbackRate, pose: PLACENTA.pose, art: PLACENTA.art, forArt: PlacentaStage.poseFor(PLACENTA.art, null), map: {
+      birth: PlacentaStage.poseFor('sb10', 'speculum'),
+      scan: PlacentaStage.poseFor('sb03', null),
+      tape: PlacentaStage.poseFor('sb19', null),
+      asked: PlacentaStage.poseFor('sb05', 'speculum')
+    }};
+  })).catch(async (e) => ({ error: String(e) }));
+  check(!playMusic.error && playMusic.rate === 1 && playMusic.t > 0 && playMusic.pose === playMusic.forArt && playMusic.map.birth === 'doppler' && playMusic.map.scan === 'ultrasound' && playMusic.map.tape === 'tape' && playMusic.map.asked === 'speculum', 'play starts on a lullaby and the doctor pose follows the scene', playMusic);
   const x0 = await playPage.evaluate(() => PLACENTA.player.x);
   await playPage.keyboard.down('ArrowRight');
   await playPage.waitForTimeout(500);
@@ -209,6 +315,35 @@ const check = (ok, msg, extra) => {
     };
   });
   check(cab.first === 'me-and-my-placenta' && cab.inDom && cab.img === 'games/me-and-my-placenta/thumb.png', 'cabinet is on the home carousel with the cover thumb', cab);
+
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await phone.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await phone.evaluate(() => PLACENTA.ready);
+  const look = await phone.evaluate(() => {
+    const nums = (c) => (c.match(/\d+/g) || []).map(Number);
+    const h1 = getComputedStyle(document.querySelector('.title-copy h1'));
+    const play = getComputedStyle(document.getElementById('play-game'));
+    const listen = getComputedStyle(document.getElementById('listen'));
+    const buy = getComputedStyle(document.getElementById('buy'));
+    return {
+      ink: nums(h1.color),
+      play: nums(play.backgroundColor),
+      listen: nums(listen.backgroundColor),
+      buy: nums(buy.backgroundColor),
+      playH: document.getElementById('play-game').getBoundingClientRect().height,
+      coverW: document.getElementById('cover').getBoundingClientRect().width
+    };
+  });
+  check(look.ink[0] < 80 && look.play[0] > 150 && look.listen[2] > 100 && look.playH >= 40 && look.coverW > 320, 'a phone shows dark title ink and solid Play and Listen buttons', look);
+  await phone.click('#listen');
+  await phone.waitForSelector('#story:not([hidden])');
+  const scale = await phone.evaluate(() => {
+    const box = document.querySelector('.adhd').getBoundingClientRect();
+    const marks = [...document.querySelectorAll('.adhd-marks span')].map((s) => s.textContent);
+    const slider = document.getElementById('adhd').getBoundingClientRect();
+    return { w: box.width, bottom: box.bottom, vh: innerHeight, sliderH: slider.height, marks: marks };
+  });
+  check(scale.w > 280 && scale.bottom <= scale.vh + 2 && scale.sliderH >= 28 && scale.marks.join(',') === 'Focused,Mild,Moderate,Severe,Squirrel!', 'the ADHD scale fits on a phone', scale);
 
   await browser.close();
   if (fails) { console.log(fails + ' failed'); process.exit(1); }

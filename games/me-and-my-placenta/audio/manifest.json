@@ -201,7 +201,8 @@
           "t": 2955.53,
           "art": "sb05",
           "mood": "ride",
-          "globe": 0
+          "globe": 0,
+          "doctorPose": "speculum"
         },
         {
           "t": 3624.25,

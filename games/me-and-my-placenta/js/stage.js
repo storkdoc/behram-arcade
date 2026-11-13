@@ -42,6 +42,22 @@
     sb23: '23-thank-you.jpg'
   };
 
+  /* Doppler for heartbeat, kicks, and birth monitoring.
+     Ultrasound when the story is looking at the baby.
+     Tape for third-trimester growth.
+     Speculum only when a cue asks, and never on a birth close-up. */
+  const BIRTH_CLOSE = { sb10: 1, sb11: 1, sb12: 1, sb13: 1, sb22: 1, drop: 1, stage: 1, birth: 1 };
+  const TAPE_ART = { sb16: 1, sb19: 1, astronaut: 1, nest: 1 };
+  const SCAN_ART = { sb03: 1, sb17: 1, sb21: 1, singing: 1, earth: 1 };
+
+  function poseFor(art, asked) {
+    if (BIRTH_CLOSE[art]) return 'doppler';
+    if (asked === 'speculum' || asked === 'tape' || asked === 'ultrasound' || asked === 'doppler') return asked;
+    if (TAPE_ART[art]) return 'tape';
+    if (SCAN_ART[art]) return 'ultrasound';
+    return 'doppler';
+  }
+
   function srcFor(key) {
     if (key === 'cover') return 'art/cover.jpg';
     if (key === 'nebula') return 'art/nebula.jpg';
@@ -65,6 +81,9 @@
     this.globeTarget = 0;
     this.doctor = 0;
     this.doctorTarget = 0;
+    this.pose = 'doppler';
+    this.prevPose = null;
+    this.poseFade = 1;
     this.mood = 'calm';
     this.reduced = false;
     try { this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
@@ -116,7 +135,8 @@
 
   Stage.prototype.set = function (opts) {
     if (!opts) return;
-    if (opts.art && opts.art !== this.artKey) {
+    const artChanged = !!(opts.art && opts.art !== this.artKey);
+    if (artChanged) {
       this.prevKey = this.artKey;
       this.artKey = opts.art;
       this.fade = 0;
@@ -130,6 +150,16 @@
     if (typeof opts.doctor === 'number') this.doctorTarget = opts.doctor;
     if (opts.mood) this.mood = opts.mood;
     if (opts.fast) this.fadeDur = 0.45;
+    const poseTouch = Object.prototype.hasOwnProperty.call(opts, 'doctorPose') || artChanged;
+    if (poseTouch) {
+      const asked = Object.prototype.hasOwnProperty.call(opts, 'doctorPose') ? opts.doctorPose : null;
+      const next = poseFor(opts.art || this.artKey, asked);
+      if (next !== this.pose) {
+        this.prevPose = this.pose;
+        this.pose = next;
+        this.poseFade = this.reduced ? 1 : 0;
+      }
+    }
   };
 
   function lerp(a, b, u) { return a + (b - a) * u; }
@@ -142,6 +172,7 @@
     this.curtain = lerp(this.curtain, this.curtainTarget, this.reduced ? 1 : (1 - Math.exp(-dt * 1.8)));
     this.globe = lerp(this.globe, this.globeTarget, this.reduced ? 1 : (1 - Math.exp(-dt * 0.55)));
     this.doctor = lerp(this.doctor, this.doctorTarget, this.reduced ? 1 : (1 - Math.exp(-dt * 0.9)));
+    if (this.poseFade < 1) this.poseFade = Math.min(1, this.poseFade + dt / 0.7);
     if (!this.reduced) {
       for (let i = 0; i < this.dust.length; i++) {
         const p = this.dust[i];
@@ -271,21 +302,50 @@
     ctx.restore();
   };
 
+  Stage.prototype._poseImg = function (name) {
+    return this._img('doctor-' + name) || this._img('doctor');
+  };
+
+  Stage.prototype._placeDoctor = function (img, breathe) {
+    const w = this.w;
+    const h = this.h;
+    const margin = Math.max(8, Math.min(w, h) * 0.025);
+    const dock = Math.max(214, h * 0.26);
+    const maxH = Math.max(48, h - dock - margin);
+    const maxW = Math.max(48, w - margin * 2);
+    let dh = Math.min(h * 0.56 * breathe, maxH);
+    let dw = dh * (img.width / img.height);
+    if (dw > maxW * 0.94) {
+      dw = maxW * 0.94;
+      dh = dw * (img.height / img.width);
+    }
+    const sway = Math.sin(this.t * 0.35) * 3;
+    const bob = Math.cos(this.t * 0.45) * 3;
+    let x = w - dw - margin + sway;
+    let y = h - dock - dh + bob;
+    x = Math.max(margin, Math.min(w - dw - margin, x));
+    y = Math.max(margin, Math.min(h - dh - margin, y));
+    return { x: x, y: y, dw: dw, dh: dh };
+  };
+
   Stage.prototype._doctor = function (breathe) {
     if (this.doctor < 0.03) return;
     if (this.artKey === 'doctor' && this.fade > 0.8) return;
-    const img = this._img('doctor');
+    const img = this._poseImg(this.pose);
     if (!img) return;
     const ctx = this.ctx;
-    const w = this.w;
-    const h = this.h;
-    const dh = h * 0.46 * breathe;
-    const dw = dh * (img.width / img.height);
-    const x = w - dw * 0.78 + Math.sin(this.t * 0.35) * 5;
-    const y = h * 0.36 + Math.cos(this.t * 0.45) * 4;
+    const box = this._placeDoctor(img, breathe);
+    const prev = this.prevPose && this.poseFade < 1 ? this._poseImg(this.prevPose) : null;
+    if (prev) {
+      const old = this._placeDoctor(prev, breathe);
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.94, this.doctor * (1 - this.poseFade));
+      ctx.drawImage(prev, old.x, old.y, old.dw, old.dh);
+      ctx.restore();
+    }
     ctx.save();
-    ctx.globalAlpha = Math.min(0.94, this.doctor);
-    ctx.drawImage(img, x, y, dw, dh);
+    ctx.globalAlpha = Math.min(0.94, this.doctor * (prev ? this.poseFade : 1));
+    ctx.drawImage(img, box.x, box.y, box.dw, box.dh);
     ctx.restore();
   };
 
@@ -360,5 +420,6 @@
     ctx.fillRect(0, 0, w, h);
   };
 
+  Stage.poseFor = poseFor;
   root.PlacentaStage = Stage;
 })(window);

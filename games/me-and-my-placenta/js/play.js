@@ -148,6 +148,7 @@
     this.stage.set({
       art: this.art,
       doctor: 0.48,
+      doctorPose: window.PlacentaStage.poseFor(this.art, null),
       globe: this.globe,
       curtain: this.curtain,
       mood: this.mood,
@@ -348,6 +349,7 @@
     this.stage.set({
       art: this.art,
       doctor: this.art === 'sb11' ? 0.26 : 0.55,
+      doctorPose: window.PlacentaStage.poseFor(this.art, null),
       globe: 0,
       curtain: 1,
       mood: this.mood,

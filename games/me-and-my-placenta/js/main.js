@@ -34,10 +34,18 @@
   let carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm' };
   let narrVol = 1;
   let narrMuted = false;
+  let narrRate = 1;
+  const ADHD = [
+    { v: 1, name: 'Focused' },
+    { v: 1.25, name: 'Mild' },
+    { v: 1.5, name: 'Moderate' },
+    { v: 1.75, name: 'Severe' },
+    { v: 2, name: 'Squirrel!' }
+  ];
   let saveAt = 0;
   let endShown = false;
 
-  const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor'];
+  const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor', 'doctor-doppler', 'doctor-ultrasound', 'doctor-tape', 'doctor-speculum'];
   for (let n = 1; n <= 23; n++) keys.push('sb' + (n < 10 ? '0' : '') + n);
 
   function mood(name) {
@@ -59,14 +67,43 @@
         musicVol: music.volume,
         narrVol: narrVol,
         musicMuted: music.muted,
-        narrMuted: narrMuted
+        narrMuted: narrMuted,
+        rate: narrRate
       }));
     } catch (e) {}
+  }
+
+  function snapRate(n) {
+    let best = ADHD[0];
+    let gap = 99;
+    const x = Number(n);
+    for (let i = 0; i < ADHD.length; i++) {
+      const d = Math.abs(ADHD[i].v - x);
+      if (d < gap) { gap = d; best = ADHD[i]; }
+    }
+    return best;
   }
 
   function applyNarrationGain() {
     try { narration.volume = narrMuted ? 0 : narrVol; } catch (e) {}
     narration.muted = false;
+    const step = snapRate(narrRate);
+    narrRate = step.v;
+    try {
+      narration.playbackRate = narrRate;
+      narration.preservesPitch = true;
+      narration.webkitPreservesPitch = true;
+    } catch (e) {}
+    const slider = $('adhd');
+    if (slider && slider.value !== String(narrRate)) slider.value = String(narrRate);
+    if (slider) slider.setAttribute('aria-valuetext', narrRate + 'x ' + step.name);
+    const marks = document.querySelectorAll('.adhd-marks [data-rate]');
+    for (let i = 0; i < marks.length; i++) {
+      const on = Math.abs(Number(marks[i].getAttribute('data-rate')) - narrRate) < 0.01;
+      marks[i].classList.toggle('is-on', on);
+    }
+    const now = $('adhd-now');
+    if (now) now.textContent = narrRate + 'x ' + step.name;
   }
 
   /* Call from the tap itself. Opens playback even when the iPhone ringer is silent,
@@ -121,11 +158,13 @@
       doctor: typeof cue.doctor === 'number' ? cue.doctor : carried.doctor,
       globe: typeof cue.globe === 'number' ? cue.globe : carried.globe,
       curtain: typeof cue.curtain === 'number' ? cue.curtain : carried.curtain,
-      mood: cue.mood || carried.mood
+      mood: cue.mood || carried.mood,
+      doctorPose: cue.doctorPose || null
     };
     stage.set({
       art: carried.art,
       doctor: carried.doctor,
+      doctorPose: carried.doctorPose,
       globe: carried.globe,
       curtain: carried.curtain,
       mood: carried.mood,
@@ -217,6 +256,7 @@
       applyNarrationGain();
       const early = narration.play();
       if (early && early.catch) early.catch(function () {});
+      music.keepAlive();
       return;
     }
     index = (i + chapters.length) % chapters.length;
@@ -226,15 +266,17 @@
     show('title', false);
     const ch = chapter();
     cueIndex = -1;
-    carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm' };
+    carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm', doctorPose: null };
     narration.src = 'audio/' + ch.file;
     narration.setAttribute('playsinline', '');
     narration.setAttribute('webkit-playsinline', '');
     applyNarrationGain();
     /* play() has to run in this same turn as the tap. Waiting for
-       loadedmetadata makes Safari ignore it. */
+       loadedmetadata makes Safari ignore it. The lullaby is asked to
+       keep going in this same turn, in case the swap paused it. */
     const startedPlay = narration.play();
     if (startedPlay && startedPlay.catch) startedPlay.catch(function () {});
+    music.keepAlive();
     const startAt = function () {
       const want = time || 0;
       const place = function () {
@@ -301,6 +343,7 @@
     if (narration.paused) {
       const p = narration.play();
       if (p && p.catch) p.catch(function () {});
+      music.keepAlive();
     } else narration.pause();
     duck();
     syncUi();
@@ -353,6 +396,7 @@
     show('paused', false);
     show('play-hud', true);
     music.start();
+    music.keepAlive();
     play.start();
     mood('play');
   }
@@ -503,6 +547,23 @@
     duck();
     saveStore();
   });
+  $('adhd').addEventListener('input', function () {
+    narrRate = snapRate($('adhd').value).v;
+    applyNarrationGain();
+    saveStore();
+  });
+  $('adhd').addEventListener('change', function () {
+    narrRate = snapRate($('adhd').value).v;
+    applyNarrationGain();
+    saveStore();
+  });
+  document.querySelectorAll('.adhd-marks [data-rate]').forEach(function (mark) {
+    mark.addEventListener('click', function () {
+      narrRate = snapRate(mark.getAttribute('data-rate')).v;
+      applyNarrationGain();
+      saveStore();
+    });
+  });
   $('music-note').addEventListener('click', function () {
     const line = $('music-line');
     const open = line.hasAttribute('hidden');
@@ -579,6 +640,7 @@
     if (!saved || FAST) return;
     if (typeof saved.musicVol === 'number') music.setVolume(saved.musicVol);
     if (typeof saved.narrVol === 'number') narrVol = saved.narrVol;
+    if (typeof saved.rate === 'number') narrRate = snapRate(saved.rate).v;
     music.setMuted(!!saved.musicMuted);
     narrMuted = !!saved.narrMuted;
     $('music-vol').value = String(music.volume);
@@ -615,6 +677,8 @@
     get art() { return stage.artKey; },
     get chapterId() { return chapter() ? chapter().id : ''; },
     get ducked() { return music.duck < 0.45; },
+    get narrRate() { return narration.playbackRate; },
+    get pose() { return stage.pose; },
     get curtain() { return stage.curtain; },
     get globe() { return stage.globe; },
     playChapter: function (id) {

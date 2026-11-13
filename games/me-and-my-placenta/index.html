@@ -52,6 +52,17 @@
     <label>Music <input id="music-vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Nursery music volume"></label>
     <button type="button" id="music-mute" aria-pressed="false">Music</button>
     <button type="button" id="music-note" aria-expanded="false" aria-controls="music-line">Notes</button>
+    <div class="adhd">
+      <p class="adhd-q" id="adhd-label">How bad is your ADHD?</p>
+      <input id="adhd" type="range" min="1" max="2" step="0.25" value="1" aria-labelledby="adhd-label" aria-valuemin="1" aria-valuemax="2" aria-valuetext="1x Focused">
+      <div class="adhd-marks" aria-hidden="true">
+        <span data-rate="1">Focused</span>
+        <span data-rate="1.25">Mild</span>
+        <span data-rate="1.5">Moderate</span>
+        <span data-rate="1.75">Severe</span>
+        <span data-rate="2">Squirrel!</span>
+      </div>
+    </div>
   </div>
   <div id="music-line" class="panel" hidden>
     <div id="music-credit"></div>
