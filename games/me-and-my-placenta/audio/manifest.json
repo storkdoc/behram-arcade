@@ -1,0 +1,92 @@
+{
+  "note": "Drop another narration mp3 in this folder and add a chapter object. Cues are seconds into that file. Unspecified fields carry forward. kind is opening, dedication, chapter, credits, or closing.",
+  "chapters": [
+    {
+      "id": "opening",
+      "file": "clip-04-12sec.mp3",
+      "title": "Me & My Placenta",
+      "kicker": "Opening",
+      "kind": "opening",
+      "cues": [
+        { "t": 0, "art": "cover", "doctor": 0, "globe": 0, "curtain": 1, "mood": "calm" }
+      ]
+    },
+    {
+      "id": "dedication",
+      "file": "clip-05-30sec.mp3",
+      "title": "Dedicated to Nancy",
+      "kicker": "Dedication",
+      "kind": "dedication",
+      "cues": [
+        { "t": 0, "art": "cover", "doctor": 0.9, "globe": 0.15, "mood": "tender" },
+        { "t": 8, "art": "pointing", "doctor": 0.55, "globe": 0 },
+        { "t": 16, "art": "toddler", "doctor": 0.4, "mood": "calm" },
+        { "t": 24, "art": "cover", "doctor": 0.35, "mood": "tender" }
+      ]
+    },
+    {
+      "id": "grand",
+      "file": "clip-03-656sec.mp3",
+      "title": "The Grand Entrance, My Grand Exit",
+      "kicker": "Chapter 5",
+      "kind": "chapter",
+      "cues": [
+        { "t": 0, "art": "shell", "doctor": 0.58, "globe": 0, "curtain": 1, "mood": "calm" },
+        { "t": 10, "art": "curled", "mood": "squeeze", "doctor": 0.46 },
+        { "t": 24, "art": "shell", "mood": "squeeze" },
+        { "t": 36, "art": "hug", "mood": "tender", "doctor": 0.42 },
+        { "t": 50, "art": "cheek", "mood": "tender" },
+        { "t": 59, "art": "fishbowl", "mood": "ride", "doctor": 0.4 },
+        { "t": 74, "art": "drop", "mood": "ride" },
+        { "t": 82, "art": "cap", "mood": "calm" },
+        { "t": 89, "art": "uterus", "mood": "squeeze", "doctor": 0.48 },
+        { "t": 112, "art": "birth", "mood": "squeeze" },
+        { "t": 128, "art": "manatee", "mood": "ride" },
+        { "t": 146, "art": "drop", "mood": "birth" },
+        { "t": 158, "art": "stage", "curtain": 0, "mood": "birth", "doctor": 0.52 },
+        { "t": 170, "curtain": 0.42 },
+        { "t": 184, "curtain": 1, "doctor": 0.74 },
+        { "t": 206, "art": "stage", "doctor": 0.8, "mood": "tender" },
+        { "t": 236, "art": "bag", "doctor": 0.7, "mood": "tender" },
+        { "t": 257, "art": "hug", "mood": "farewell", "doctor": 0.48 },
+        { "t": 286, "art": "singing", "mood": "farewell" },
+        { "t": 322, "art": "singing", "doctor": 0.72 },
+        { "t": 360, "art": "toddler", "mood": "tender", "doctor": 0.4 },
+        { "t": 396, "art": "hug", "mood": "farewell", "doctor": 0.38 },
+        { "t": 421, "art": "pointing", "mood": "tender", "doctor": 0.5 },
+        { "t": 454, "art": "ovum", "mood": "cosmos", "doctor": 0.42 },
+        { "t": 486, "art": "nest", "mood": "cosmos" },
+        { "t": 508, "art": "astronaut", "mood": "cosmos", "globe": 0.2 },
+        { "t": 527, "art": "earth", "globe": 1, "mood": "cosmos", "doctor": 0.6 },
+        { "t": 566, "art": "planets", "globe": 0.72, "mood": "cosmos" },
+        { "t": 590, "art": "toddler", "globe": 0.28, "mood": "tender", "doctor": 0.36 },
+        { "t": 614, "art": "earth", "globe": 0.9, "mood": "cosmos" },
+        { "t": 636, "art": "cover", "globe": 0.22, "mood": "tender", "doctor": 0.4 }
+      ]
+    },
+    {
+      "id": "credits",
+      "file": "clip-02-29sec.mp3",
+      "title": "Thank You for Listening",
+      "kicker": "Credits",
+      "kind": "credits",
+      "cues": [
+        { "t": 0, "art": "cover", "doctor": 0.45, "globe": 0.1, "curtain": 1, "mood": "calm" },
+        { "t": 16, "art": "shell", "doctor": 0.72, "mood": "tender" }
+      ]
+    },
+    {
+      "id": "goodbye",
+      "file": "clip-01-66sec.mp3",
+      "title": "Your Placenta Will Thank You",
+      "kicker": "Closing",
+      "kind": "closing",
+      "cues": [
+        { "t": 0, "art": "cover", "doctor": 0.4, "globe": 0.2, "mood": "tender" },
+        { "t": 22, "art": "hug", "doctor": 0.35, "globe": 0.1, "mood": "farewell" },
+        { "t": 42, "art": "earth", "globe": 0.85, "mood": "cosmos", "doctor": 0.5 },
+        { "t": 54, "art": "cover", "globe": 0.3, "mood": "tender", "doctor": 0.4 }
+      ]
+    }
+  ]
+}

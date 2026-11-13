@@ -1,0 +1,451 @@
+/* Me & My Placenta — a listening room.
+   Space plays and pauses the narration. Enter goes to the next chapter.
+   Nursery music stays under the voice and lifts a little between chapters. */
+(function () {
+  'use strict';
+
+  const AMAZON = 'https://www.amazon.com/s?k=steve+behram&crid=HGRQYCNCX1JN&sprefix=steve+behram%2Caps%2C79&ref=nb_sb_noss_1';
+  const STORE = 'placenta.place';
+  const qs = new URLSearchParams(location.search);
+  const FAST = qs.get('fast') === '1';
+  const CUE_SCALE = FAST ? 28 : 1;
+
+  const $ = function (id) { return document.getElementById(id); };
+
+  const canvas = $('sky');
+  const stage = new window.PlacentaStage(canvas);
+  const music = new window.PlacentaMusic(Math.random);
+  const narration = new Audio();
+  narration.preload = 'auto';
+  narration.setAttribute('playsinline', '');
+  narration.setAttribute('webkit-playsinline', '');
+  document.body.appendChild(narration);
+
+  let chapters = [];
+  let index = 0;
+  let started = false;
+  let cueIndex = -1;
+  let carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm' };
+  let narrVol = 1;
+  let narrMuted = false;
+  let saveAt = 0;
+  let endShown = false;
+
+  const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor'];
+
+  function mood(name) {
+    if (window.MoodSticker && MoodSticker.screen) MoodSticker.screen(name);
+  }
+
+  function loadStore() {
+    try {
+      const raw = localStorage.getItem(STORE);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+  function saveStore() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({
+        id: chapters[index] ? chapters[index].id : 'opening',
+        time: narration.currentTime || 0,
+        musicVol: music.volume,
+        narrVol: narrVol,
+        musicMuted: music.muted,
+        narrMuted: narrMuted
+      }));
+    } catch (e) {}
+  }
+
+  function applyNarrationGain() {
+    narration.volume = narrMuted ? 0 : narrVol;
+    narration.muted = false;
+  }
+
+  function duck() {
+    const speaking = started && !narration.paused && !narrMuted && narrVol > 0.01 && !endShown;
+    music.setDuck(speaking ? 0.26 : 0.7);
+    return speaking;
+  }
+
+  function chapter() { return chapters[index] || null; }
+
+  function storyTime() {
+    const t = narration.currentTime || 0;
+    const ch = chapter();
+    if (ch && ch.id === 'grand') return t * CUE_SCALE;
+    return t;
+  }
+
+  function applyCue() {
+    const ch = chapter();
+    if (!ch || !ch.cues || !ch.cues.length) return;
+    const t = storyTime();
+    let i = 0;
+    for (let k = 0; k < ch.cues.length; k++) if (ch.cues[k].t <= t + 0.02) i = k;
+    if (i === cueIndex) return;
+    cueIndex = i;
+    const cue = ch.cues[i];
+    carried = {
+      art: cue.art || carried.art,
+      doctor: typeof cue.doctor === 'number' ? cue.doctor : carried.doctor,
+      globe: typeof cue.globe === 'number' ? cue.globe : carried.globe,
+      curtain: typeof cue.curtain === 'number' ? cue.curtain : carried.curtain,
+      mood: cue.mood || carried.mood
+    };
+    stage.set({
+      art: carried.art,
+      doctor: carried.doctor,
+      globe: carried.globe,
+      curtain: carried.curtain,
+      mood: carried.mood,
+      fast: FAST
+    });
+  }
+
+  function show(id, on) {
+    const el = $(id);
+    if (!el) return;
+    if (on) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', '');
+  }
+
+  function renderList() {
+    const ol = $('chapters');
+    ol.innerHTML = '';
+    chapters.forEach(function (ch, i) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chapter' + (i === index && started ? ' is-on' : '');
+      b.innerHTML = '<span class="k">' + (ch.kicker || '') + '</span><span class="n">' + ch.title + '</span>';
+      b.addEventListener('click', function () {
+        ensure();
+        playChapter(i, 0);
+        show('list', false);
+      });
+      li.appendChild(b);
+      ol.appendChild(li);
+    });
+  }
+
+  function setCaption() {
+    const ch = chapter();
+    const cap = $('caption');
+    if (!ch) return;
+    cap.innerHTML = '<span>' + (ch.kicker || '') + '</span> ' + ch.title;
+    cap.classList.remove('fade');
+    void cap.offsetWidth;
+    cap.classList.add('show');
+    clearTimeout(setCaption._t);
+    setCaption._t = setTimeout(function () { cap.classList.add('fade'); }, FAST ? 700 : 5200);
+  }
+
+  function syncUi() {
+    const playing = started && !narration.paused && !endShown;
+    const btn = $('play');
+    btn.textContent = playing ? 'Pause' : 'Play';
+    btn.setAttribute('aria-label', playing ? 'Pause narration' : 'Play narration');
+    btn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    $('music-mute').textContent = music.muted ? 'Music off' : 'Music';
+    $('music-mute').setAttribute('aria-pressed', music.muted ? 'true' : 'false');
+    $('voice-mute').textContent = narrMuted ? 'Voice off' : 'Voice';
+    $('voice-mute').setAttribute('aria-pressed', narrMuted ? 'true' : 'false');
+    const ch = chapter();
+    $('now').textContent = ch ? ((ch.kicker ? ch.kicker + ' · ' : '') + ch.title) : '';
+    const dur = narration.duration;
+    const bar = $('bar');
+    if (dur && isFinite(dur)) bar.value = String(narration.currentTime / dur);
+    const credit = $('music-line');
+    if (credit && !credit.hidden) fillCredit();
+  }
+
+  function fillCredit() {
+    const t = music.track;
+    const box = $('music-credit');
+    if (!t) { box.textContent = ''; return; }
+    box.innerHTML = '';
+    const p = document.createElement('p');
+    p.textContent = t.composer + ' — ' + t.piece;
+    const q = document.createElement('p');
+    q.textContent = t.performer + ' · ' + t.license;
+    const a = document.createElement('a');
+    a.href = t.page;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Source';
+    box.appendChild(p);
+    box.appendChild(q);
+    box.appendChild(a);
+  }
+
+  function playChapter(i, time) {
+    if (!chapters.length) return;
+    index = (i + chapters.length) % chapters.length;
+    endShown = false;
+    show('end', false);
+    show('story', true);
+    show('title', false);
+    const ch = chapter();
+    cueIndex = -1;
+    carried = { art: 'cover', doctor: 0, globe: 0, curtain: 1, mood: 'calm' };
+    narration.src = 'audio/' + ch.file;
+    applyNarrationGain();
+    const startAt = function () {
+      const want = time || 0;
+      const place = function () {
+        if (want < 0.35) return true;
+        const end = narration.seekable.length ? narration.seekable.end(narration.seekable.length - 1) : 0;
+        if (end < want) return false;
+        try { narration.currentTime = Math.min(want, Math.max(0, narration.duration - 0.2)); } catch (e) { return false; }
+        return true;
+      };
+      if (!place()) {
+        const again = function () {
+          if (place()) {
+            narration.removeEventListener('progress', again);
+            narration.removeEventListener('canplay', again);
+          }
+        };
+        narration.addEventListener('progress', again);
+        narration.addEventListener('canplay', again);
+      }
+      const p = narration.play();
+      if (p && p.catch) p.catch(function () {});
+      applyCue();
+      setCaption();
+      renderList();
+      syncUi();
+      saveStore();
+      mood('play');
+    };
+    if (narration.readyState >= 1) startAt();
+    else narration.addEventListener('loadedmetadata', startAt, { once: true });
+  }
+
+  function ensure() {
+    if (started) return;
+    started = true;
+    music.start();
+    show('title', false);
+    show('story', true);
+    mood('play');
+    duck();
+  }
+
+  function begin() {
+    ensure();
+    if (!narration.paused && narration.src) return;
+    const saved = FAST ? null : loadStore();
+    let i = 0;
+    let t = 0;
+    if (FAST) {
+      i = Math.max(0, chapters.findIndex(function (c) { return c.id === 'grand'; }));
+    } else if (saved) {
+      const found = chapters.findIndex(function (c) { return c.id === saved.id; });
+      if (found >= 0) { i = found; t = saved.time || 0; }
+    }
+    playChapter(i, t);
+  }
+
+  function toggle() {
+    if (!started || !narration.src) { begin(); return; }
+    if (endShown) { playChapter(0, 0); return; }
+    if (narration.paused) {
+      const p = narration.play();
+      if (p && p.catch) p.catch(function () {});
+    } else narration.pause();
+    duck();
+    syncUi();
+    saveStore();
+  }
+
+  function nextChapter() {
+    if (!started) { begin(); return; }
+    if (index >= chapters.length - 1) { showEnd(); return; }
+    playChapter(index + 1, 0);
+  }
+  function prevChapter() {
+    if (!started) { begin(); return; }
+    playChapter(index - 1, 0);
+  }
+
+  function showEnd() {
+    endShown = true;
+    show('end', true);
+    show('list', false);
+    duck();
+    syncUi();
+    mood('end');
+    if (window.MoodSticker && MoodSticker.event) MoodSticker.event('big');
+  }
+
+  narration.addEventListener('timeupdate', function () {
+    applyCue();
+    const dur = narration.duration;
+    if (dur && isFinite(dur)) $('bar').value = String((narration.currentTime || 0) / dur);
+    const now = performance.now();
+    if (now - saveAt > 2000) { saveAt = now; saveStore(); }
+  });
+  narration.addEventListener('ended', function () {
+    saveStore();
+    if (index >= chapters.length - 1) showEnd();
+    else {
+      duck();
+      setTimeout(function () { if (!endShown) playChapter(index + 1, 0); }, FAST ? 180 : 1400);
+    }
+  });
+  narration.addEventListener('play', function () { duck(); syncUi(); });
+  narration.addEventListener('pause', function () { duck(); syncUi(); saveStore(); });
+
+  $('bar').addEventListener('input', function () {
+    const dur = narration.duration;
+    if (!dur || !isFinite(dur)) return;
+    ensure();
+    narration.currentTime = Number($('bar').value) * dur;
+    cueIndex = -1;
+    applyCue();
+  });
+
+  function onKey(e) {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
+    if (e.repeat) return;
+    if (e.code === 'Space') toggle();
+    else if (e.code === 'Enter') nextChapter();
+    else if (e.code === 'ArrowRight') nextChapter();
+    else if (e.code === 'ArrowLeft') prevChapter();
+    else if (e.code === 'KeyM') { ensure(); music.toggleMuted(); syncUi(); saveStore(); }
+    else if (e.code === 'KeyN') { narrMuted = !narrMuted; applyNarrationGain(); duck(); syncUi(); saveStore(); }
+    else if (e.code === 'KeyC') show('list', $('list').hasAttribute('hidden'));
+    else if (e.code === 'Escape') {
+      if (!$('qr-box').hasAttribute('hidden')) show('qr-box', false);
+      else if (!$('list').hasAttribute('hidden')) show('list', false);
+      else if (started && !narration.paused) { narration.pause(); syncUi(); }
+    }
+  }
+  window.addEventListener('keydown', onKey);
+
+  $('begin').addEventListener('click', function (e) { e.stopPropagation(); begin(); });
+  $('title').addEventListener('click', function (e) {
+    if (e.target.closest('a, button')) return;
+    begin();
+  });
+  $('play').addEventListener('click', function () { toggle(); });
+  $('next').addEventListener('click', function () { nextChapter(); });
+  $('prev').addEventListener('click', function () { prevChapter(); });
+  $('chapters-btn').addEventListener('click', function () { show('list', $('list').hasAttribute('hidden')); });
+  $('list-close').addEventListener('click', function () { show('list', false); });
+  $('music-mute').addEventListener('click', function () { ensure(); music.toggleMuted(); syncUi(); saveStore(); });
+  $('voice-mute').addEventListener('click', function () { narrMuted = !narrMuted; applyNarrationGain(); duck(); syncUi(); saveStore(); });
+  $('music-vol').addEventListener('input', function () {
+    ensure();
+    music.setVolume(Number($('music-vol').value));
+    saveStore();
+  });
+  $('voice-vol').addEventListener('input', function () {
+    narrVol = Number($('voice-vol').value);
+    applyNarrationGain();
+    duck();
+    saveStore();
+  });
+  $('music-note').addEventListener('click', function () {
+    const line = $('music-line');
+    const open = line.hasAttribute('hidden');
+    show('music-line', open);
+    if (open) fillCredit();
+    $('music-note').setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-qr]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      show('qr-box', true);
+    });
+  });
+  $('qr-box').addEventListener('click', function () { show('qr-box', false); });
+  $('again').addEventListener('click', function () { playChapter(0, 0); });
+  $('end-chapters').addEventListener('click', function () { show('list', true); });
+
+  const gpWas = { a: false, x: false, lb: false, rb: false, start: false };
+  function pollPad() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let pad = null;
+    for (let i = 0; i < (pads ? pads.length : 0); i++) if (pads[i] && pads[i].connected) pad = pads[i];
+    if (!pad) return;
+    const pressed = function (n) { return !!(pad.buttons[n] && pad.buttons[n].pressed); };
+    const a = pressed(0);
+    const x = pressed(2);
+    const lb = pressed(4);
+    const rb = pressed(5);
+    const start = pressed(9);
+    if (a && !gpWas.a) toggle();
+    if ((x && !gpWas.x) || (rb && !gpWas.rb)) nextChapter();
+    if (lb && !gpWas.lb) prevChapter();
+    if (start && !gpWas.start) { ensure(); music.toggleMuted(); syncUi(); saveStore(); }
+    gpWas.a = a; gpWas.x = x; gpWas.lb = lb; gpWas.rb = rb; gpWas.start = start;
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    pollPad();
+    music.tick();
+    if (started && narration.src) applyCue();
+    duck();
+    stage.tick(dt);
+    stage.draw();
+    requestAnimationFrame(frame);
+  }
+
+  function bootSaved() {
+    const saved = loadStore();
+    if (!saved || FAST) return;
+    if (typeof saved.musicVol === 'number') music.setVolume(saved.musicVol);
+    if (typeof saved.narrVol === 'number') narrVol = saved.narrVol;
+    music.setMuted(!!saved.musicMuted);
+    narrMuted = !!saved.narrMuted;
+    $('music-vol').value = String(music.volume);
+    $('voice-vol').value = String(narrVol);
+    applyNarrationGain();
+  }
+
+  stage.resize();
+  window.addEventListener('resize', function () { stage.resize(); });
+
+  const ready = Promise.all([
+    stage.load(keys),
+    fetch('audio/manifest.json').then(function (r) { return r.json(); })
+  ]).then(function (res) {
+    chapters = (res[1] && res[1].chapters) || [];
+    bootSaved();
+    renderList();
+    syncUi();
+    mood('title');
+    stage.resize();
+    stage.draw();
+  });
+
+  requestAnimationFrame(frame);
+
+  window.PLACENTA = {
+    amazon: AMAZON,
+    fast: FAST,
+    ready: ready,
+    narration: narration,
+    musicElement: function () { return music.element(); },
+    musicLine: function () { return music.line(); },
+    trackCount: function () { return music.tracks.length; },
+    get art() { return stage.artKey; },
+    get chapterId() { return chapter() ? chapter().id : ''; },
+    get ducked() { return music.duck < 0.45; },
+    get curtain() { return stage.curtain; },
+    get globe() { return stage.globe; },
+    playChapter: function (id) {
+      ensure();
+      const i = chapters.findIndex(function (c) { return c.id === id; });
+      if (i >= 0) playChapter(i, 0);
+    }
+  };
+})();
