@@ -77,14 +77,36 @@
 </div>
 
 <div id="play-hud" hidden>
-  <p id="play-line"></p>
-  <button type="button" id="act" aria-label="Action">●</button>
+  <div id="play-coach">
+    <p id="play-banner"></p>
+    <p id="play-coach-line"></p>
+    <p id="play-line"></p>
+  </div>
+  <p id="play-assist" hidden>Need help? Placy is helping</p>
+  <button type="button" id="howto-btn" aria-label="How to play">?</button>
+  <button type="button" id="act" aria-label="Act">
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <circle class="ring-bg" cx="18" cy="18" r="15.5"></circle>
+      <circle id="act-ring" class="ring-fg" cx="18" cy="18" r="15.5"></circle>
+    </svg>
+    <span>●</span>
+  </button>
   <button type="button" id="pause-btn" aria-label="Pause">Pause</button>
   <div id="journey" aria-hidden="true"><i id="journey-bar"></i></div>
+</div>
+<div id="howto" hidden>
+  <div class="howto-card" role="dialog" aria-labelledby="howto-title">
+    <img class="doctor-cameo" src="art/doctor-reading.png" alt="Dr. Behram reading a picture book">
+    <h2 id="howto-title">How to play</h2>
+    <p>Drag on the screen, or use the arrow keys, to float Cletus.</p>
+    <p>Tap the big ● button, or press Space, to act.</p>
+    <button type="button" id="howto-ok">Got it</button>
+  </div>
 </div>
 <div id="paused" hidden><p>Paused</p></div>
 
 <section id="end" hidden>
+  <img class="doctor-cameo" src="art/doctor-waving.png" alt="Dr. Behram waving goodbye">
   <p class="kicker">Placy lives on</p>
   <h2 id="end-title">Placy lives on</h2>
   <p class="quiet" id="end-note">The rest of Cletus and Placy is in the book.</p>

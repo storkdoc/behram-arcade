@@ -11,7 +11,8 @@
         {
           "t": 0,
           "art": "sb01",
-          "doctor": 0,
+          "doctor": 0.55,
+          "doctorPose": "reading",
           "globe": 0,
           "curtain": 1,
           "mood": "calm"

@@ -19,7 +19,9 @@
   const play = new window.PlacentaPlay(stage, {
     fast: FAST,
     onEnd: function () { finishPlay(); },
-    onLine: function (text) { setPlayLine(text); }
+    onLine: function (text) { setPlayLine(text); },
+    onCoach: function (how, line) { setCoach(how, line); },
+    onHelp: function (on) { show('play-assist', !!on); }
   });
   const narration = new Audio();
   narration.preload = 'auto';
@@ -45,7 +47,8 @@
   let saveAt = 0;
   let endShown = false;
 
-  const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor', 'doctor-doppler', 'doctor-ultrasound', 'doctor-tape', 'doctor-speculum'];
+  const keys = ['cover', 'nebula', 'placy', 'globe', 'shell', 'curled', 'hug', 'cheek', 'fishbowl', 'drop', 'cap', 'uterus', 'birth', 'manatee', 'stage', 'bag', 'singing', 'toddler', 'pointing', 'ovum', 'nest', 'astronaut', 'earth', 'planets', 'orbs', 'doctor'];
+  (window.PlacentaStage.poses || []).forEach(function (name) { keys.push('doctor-' + name); });
   for (let n = 1; n <= 23; n++) keys.push('sb' + (n < 10 ? '0' : '') + n);
 
   function mood(name) {
@@ -383,6 +386,36 @@
     if (el) el.textContent = text || '';
   }
 
+  function setCoach(how, line) {
+    const banner = $('play-banner');
+    const hint = $('play-coach-line');
+    if (banner) {
+      banner.textContent = how || '';
+      banner.classList.remove('is-quiet');
+    }
+    if (hint) hint.textContent = how || '';
+    setPlayLine(line);
+  }
+
+  function openHowto() {
+    if (mode !== 'play') return;
+    if (play.active) play.paused = true;
+    show('paused', false);
+    show('howto', true);
+  }
+
+  function closeHowto() {
+    show('howto', false);
+    if (!play.active) {
+      show('play-hud', true);
+      show('paused', false);
+      play.start();
+    } else {
+      play.paused = false;
+      show('paused', false);
+    }
+  }
+
   function startPlay() {
     unlockAudio();
     if (narration.src) { narration.pause(); }
@@ -394,10 +427,11 @@
     show('end', false);
     show('list', false);
     show('paused', false);
-    show('play-hud', true);
+    show('play-hud', false);
+    show('play-assist', false);
     music.start();
     music.keepAlive();
-    play.start();
+    show('howto', true);
     mood('play');
   }
 
@@ -407,6 +441,8 @@
     play.stop();
     show('play-hud', false);
     show('paused', false);
+    show('howto', false);
+    show('play-assist', false);
     show('end', true);
     $('end-title').textContent = 'Placy lives on';
     $('end-note').textContent = 'The story keeps going in the book.';
@@ -422,6 +458,8 @@
     mode = 'title';
     show('play-hud', false);
     show('paused', false);
+    show('howto', false);
+    show('play-assist', false);
     show('title', true);
     show('story', false);
     show('end', false);
@@ -429,7 +467,16 @@
   }
 
   function escPlay() {
+    if (!$('howto').hasAttribute('hidden')) {
+      if (!play.active) leavePlay();
+      else {
+        show('howto', false);
+        show('paused', true);
+      }
+      return true;
+    }
     if (!play.active && mode !== 'play') return false;
+    if (!play.active) { leavePlay(); return true; }
     if (!play.paused) {
       play.paused = true;
       show('paused', true);
@@ -469,6 +516,11 @@
   function onKey(e) {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    if (!$('howto').hasAttribute('hidden')) {
+      if (e.code === 'Escape') { e.preventDefault(); escPlay(); }
+      else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); closeHowto(); }
+      return;
+    }
     const steer = e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'KeyA' || e.code === 'KeyD' || e.code === 'KeyW' || e.code === 'KeyS';
     if (e.code === 'Space' || e.code === 'Enter' || steer) e.preventDefault();
     if (mode === 'play') {
@@ -508,9 +560,22 @@
   window.addEventListener('blur', function () { play.held = {}; });
 
   $('play-game').addEventListener('click', function (e) { e.stopPropagation(); startPlay(); });
+  $('howto-ok').addEventListener('click', function (e) { e.stopPropagation(); closeHowto(); });
+  $('howto-btn').addEventListener('click', function (e) { e.stopPropagation(); openHowto(); });
   $('listen').addEventListener('click', function (e) { e.stopPropagation(); begin(); });
   $('listen-end').addEventListener('click', function () { show('end', false); endShown = false; begin(); });
-  $('act').addEventListener('click', function (e) { e.stopPropagation(); play.action(); });
+  $('act').addEventListener('pointerdown', function (e) {
+    e.stopPropagation();
+    play.buttonHold = true;
+    play.action();
+  });
+  $('act').addEventListener('pointerup', function () { play.buttonHold = false; });
+  $('act').addEventListener('pointercancel', function () { play.buttonHold = false; });
+  $('act').addEventListener('pointerleave', function () { play.buttonHold = false; });
+  $('act').addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (e.detail === 0) play.action();
+  });
   $('pause-btn').addEventListener('click', function (e) { e.stopPropagation(); escPlay(); });
   $('paused').addEventListener('click', function () { escPlay(); });
   canvas.addEventListener('pointerdown', function (e) {
@@ -631,6 +696,16 @@
       play.draw(stage.ctx);
       const bar = $('journey-bar');
       if (bar) bar.style.width = (play.fraction() * 100) + '%';
+      const banner = $('play-banner');
+      if (banner && play.active) banner.classList.toggle('is-quiet', play.t >= (play.bannerUntil || 0));
+      const ring = $('act-ring');
+      const act = $('act');
+      if (ring && act && play.active) {
+        const circ = 97.4;
+        const u = Math.max(0, Math.min(1, play.inner()));
+        ring.style.strokeDashoffset = String(circ * (1 - u));
+        act.classList.toggle('is-open', !!play.cueOpen);
+      }
     }
     requestAnimationFrame(frame);
   }
