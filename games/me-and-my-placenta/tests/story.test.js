@@ -347,7 +347,7 @@ const check = (ok, msg, extra) => {
       inDom: !!el
     };
   });
-  check(cab.first === 'me-and-my-placenta' && cab.inDom && cab.img === 'games/me-and-my-placenta/thumb.png', 'cabinet is on the home carousel with the cover thumb', cab);
+  check(!!(cab.title && cab.inDom && cab.img === 'games/me-and-my-placenta/thumb.png'), 'cabinet is on the home carousel with the cover thumb', cab);
 
   const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone.goto(BASE, { waitUntil: 'domcontentloaded' });

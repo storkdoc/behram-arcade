@@ -5,6 +5,20 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'cubertron',
+    title: 'CUBERTRON',
+    marquee: 'neon',
+    tagline: 'Hop a living pyramid of glossy cubes, paint every face, and shoot the drones before you fall.',
+    description: 'An original cube-hopping arena on a machine world of floating beveled blocks. Cubertron, a small robot, hops the four diagonals. Each landing paints a cube, and a stage clears when every face matches. Hoppers close in, tumblers bounce down the slope, skydrops bomb from above, and later drones unpaint your work. Shoot energy bolts, grab a shield, rapid fire, slow time, or a smart-bomb pulse, and if you step off the edge a disc may carry you home. Stages add two-hit cubes, toggle cubes, crumbling cubes, and moving platforms, and every few stages a boss mech hangs over the board. The view is a modern isometric scene: PBR materials, an environment map, soft shadows, bloom, particles, screen shake, and squash-and-stretch hops, with a quality toggle that drops post-processing on weaker phones. Score, combo, and lives sit on the glass, high scores stay on this device, and the first run shows a short tutorial. The soundtrack is real recorded orchestral and band music, shuffled and kept playing across stages. Sound effects are synthesized.',
+    controls: 'arrows or WASD hop the four diagonals · SPACE fires · SHIFT dashes · ENTER uses a pulse · Q/E turn the camera · P or ESC pauses · M mutes · gamepad: stick hops, A fires, B dashes, X pulse, Start pauses',
+    touch: 'tap a neighboring cube to hop there · tap a farther cube and Cubertron walks it one hop at a time · a ghost marks the cube under your finger · tap or drag a drone to fire, with an aim line and reticle while the finger is down · AIM toggles auto-aim · DASH and PULSE buttons · large hit targets · works in portrait and landscape on iPhone and iPad',
+    thumb: 'games/cubertron/thumb.png',
+    added: '2026-11-16',
+    genre: 'ARCADE',
+    year: 'CUBE AGE',
+    accent: '#3ee7ff'
+  },
+  {
     slug: 'me-and-my-placenta',
     title: 'ME & MY PLACENTA',
     marquee: 'sunset',

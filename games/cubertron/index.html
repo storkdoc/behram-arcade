@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07060d">
+<title>CUBERTRON — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+(function () {
+  var shown = false;
+  window.CBFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'CUBERTRON hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD';
+      b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  addEventListener('error', function (e) {
+    if (!(e instanceof ErrorEvent)) return;
+    if (!(window.CUBERTRON && window.CUBERTRON.booted)) CBFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+  }, true);
+  addEventListener('unhandledrejection', function (e) {
+    if (!(window.CUBERTRON && window.CUBERTRON.booted)) CBFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown'));
+  });
+  setTimeout(function () {
+    if (!(window.CUBERTRON && window.CUBERTRON.booted)) CBFatal('The game did not start (scripts failed to load). Check your connection and reload. iOS 16.4 or newer is required.');
+  }, 25000);
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+  var last = 0;
+  document.addEventListener('touchend', function (e) {
+    var t = Date.now();
+    if (t - last < 320 && e.target && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) e.preventDefault();
+    last = t;
+  }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+</script>
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<a id="home" href="../../">←<span> ARCADE</span></a>
+<div id="flash"></div>
+
+<div id="hud" hidden>
+  <div class="topbar">
+    <div class="stat"><b id="score">0</b><span id="combo"></span><span id="lives">♥♥♥</span></div>
+    <div id="stage">STAGE 1</div>
+  </div>
+  <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+  <div id="bossbar" hidden><b id="bossname">BOSS</b><i><span id="bosshp"></span></i></div>
+  <div id="banner"></div>
+  <button type="button" class="iconbtn" id="btn-pause" aria-label="Pause">II</button>
+  <button type="button" class="iconbtn" id="btn-mute" aria-label="Mute" aria-pressed="false">SND</button>
+  <div class="dock">
+    <button type="button" id="btn-aim" aria-pressed="false">AIM</button>
+    <button type="button" id="btn-dash">DASH</button>
+    <button type="button" id="btn-bomb" hidden>PULSE</button>
+  </div>
+  <div id="pops"></div>
+</div>
+
+<div id="title" class="screen">
+  <div class="card">
+    <p class="eyebrow">BEHRAM ARCADE</p>
+    <h1>CUBE<i>R</i>TRON</h1>
+    <p class="tag">Paint every cube. Outshoot the drones. Don’t fall.</p>
+    <div class="menu" id="title-menu">
+      <button type="button" class="primary" id="play" data-go="play">PLAY</button>
+      <div class="row">
+        <button type="button" data-go="how">HOW TO PLAY</button>
+        <button type="button" data-go="scores">HIGH SCORES</button>
+      </div>
+      <div class="row">
+        <button type="button" data-go="options">OPTIONS</button>
+        <button type="button" data-go="credits">CREDITS</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="how" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>HOW TO PLAY</h2>
+    <p>Cubertron hops the diagonals of a living pyramid. Each landing paints the cube. Clear the stage when every face matches. Some cubes need two landings, some flip off if you land again, some crumble, and some slide along the edge.</p>
+    <p>Drones hop toward you, tumble down the slope, or drop from above. Later ones unpaint cubes. Shoot them. A shield, rapid fire, slow time, and a pulse appear on the board. Fall off and a disc may carry you home. Every few stages a boss waits.</p>
+    <table class="keys">
+      <tr><td>Arrows / WASD</td><td>Hop the four diagonals</td></tr>
+      <tr><td>Space</td><td>Fire</td></tr>
+      <tr><td>Shift</td><td>Dash two hops</td></tr>
+      <tr><td>Enter</td><td>Pulse, if you are holding one</td></tr>
+      <tr><td>Q / E</td><td>Turn the camera</td></tr>
+      <tr><td>P / Esc</td><td>Pause</td></tr>
+      <tr><td>M</td><td>Mute</td></tr>
+      <tr><td>Touch</td><td>Tap a cube to hop there. Tap a farther cube and Cubertron walks it. Tap or drag a drone to fire, with an aim line while your finger is down.</td></tr>
+      <tr><td>Gamepad</td><td>Stick hops, A fires, B dashes, X pulse, Start pauses</td></tr>
+    </table>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="scores" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>HIGH SCORES</h2>
+    <div id="scorelist"></div>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="credits" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>CREDITS</h2>
+    <div id="creditlist"></div>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="options" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>OPTIONS</h2>
+    <div class="field"><label for="vol">VOLUME</label><input id="vol" type="range" min="0" max="100" value="80"></div>
+    <div class="field"><span>QUALITY</span>
+      <select id="quality">
+        <option value="auto">AUTO</option>
+        <option value="high">HIGH</option>
+        <option value="med">MEDIUM</option>
+        <option value="low">LOW</option>
+      </select>
+    </div>
+    <button type="button" id="opt-aim" aria-pressed="false">AUTO AIM: OFF</button>
+    <button type="button" id="opt-mute">SOUND: ON</button>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <div class="menu">
+      <button type="button" class="primary" id="resume">RESUME</button>
+      <button type="button" data-go="options">OPTIONS</button>
+      <button type="button" data-go="how">HOW TO PLAY</button>
+      <button type="button" id="quit">QUIT</button>
+    </div>
+  </div>
+</div>
+
+<div id="over" class="screen" hidden>
+  <div class="panel">
+    <h2 id="overtitle">GAME OVER</h2>
+    <p id="overscore"></p>
+    <div id="initials">
+      <p>NEW HIGH SCORE. ENTER YOUR INITIALS.</p>
+      <div class="letters">
+        <button type="button" data-li="0">A</button>
+        <button type="button" data-li="1">A</button>
+        <button type="button" data-li="2">A</button>
+      </div>
+      <button type="button" class="wide" id="save-score">SAVE</button>
+    </div>
+    <div class="menu">
+      <button type="button" class="primary" id="again">PLAY AGAIN</button>
+      <button type="button" id="over-menu">MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="tut" class="screen" hidden>
+  <div class="card">
+    <div class="demo" aria-hidden="true">
+      <i class="cubelet" style="left:12%;top:48%"></i>
+      <i class="cubelet" style="left:38%;top:28%"></i>
+      <i class="cubelet" style="left:64%;top:42%"></i>
+      <i class="bot"></i>
+    </div>
+    <h2 id="tut-title">HOP</h2>
+    <p id="tut-body"></p>
+    <div class="dots" id="tut-dots"></div>
+    <div class="row">
+      <button type="button" id="tut-skip">SKIP</button>
+      <button type="button" class="primary" id="tut-next">NEXT</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
