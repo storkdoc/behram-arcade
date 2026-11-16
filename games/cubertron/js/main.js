@@ -8,8 +8,8 @@ const CFG = 'cubertron.cfg';
 const SCORES = 'cubertron.grid.scores';
 const TUT = 'cubertron.grid.tut';
 const TUTORIAL = [
-  ['WALK THE GRID', 'Arrows or WASD move eight ways. On a touch screen, tap or drag the floor and the walker goes there. A marker shows the point.'],
-  ['FIRE', 'Space shoots the way you face. Hold Shift and press an arrow to shoot that way without stepping. Tap a sentry to fire at it. The aim line and reticle stay up while your finger is down.'],
+  ['TAP', 'Arrows or WASD move eight ways. Tap to move and fire that way. Hold or drag and the walker keeps going, firing toward your finger. A marker, aim line, and reticle stay up.'],
+  ['AIM', 'Space shoots the way you face. Hold Shift and press an arrow to shoot that way without stepping. A tap on or near a sentry aims that shot at the sentry.'],
   ['WALLS KILL', 'A wall or a sentry ends the run. Sentries also fall apart if they hit a wall, each other, or a bolt that was not their own.'],
   ['LEAVE, OR THE GLEAM COMES', 'A lit door opens the next sector, and the door you used seals. Clear the sentries for a bonus. Wait too long and the Gleam bounces in. It cannot be destroyed.']
 ];
@@ -169,19 +169,23 @@ function onDown(e) {
   }
   if (screen !== 'play' || game.phase === 'over') return;
   if (!$('tut').hidden && e.target.closest && e.target.closest('#tut')) return;
-  const bot = pickRobot(e.clientX, e.clientY);
-  if (bot) {
-    pointers.set(e.pointerId, { type: 'robot', id: bot.id, x: e.clientX, y: e.clientY });
-    game.target = null;
-    game.fireAim(bot.x - game.player.x, bot.z - game.player.z);
-  } else {
-    const pt = clampRoom(view.floorPoint(e.clientX, e.clientY));
-    const spot = pt || { x: game.player.x, z: game.player.z };
-    pointers.set(e.pointerId, { type: 'move', x: spot.x, z: spot.z, sx: e.clientX, sy: e.clientY });
-    game.target = { x: spot.x, z: spot.z };
-    game.wish.x = 0; game.wish.z = 0; game.wish.kill = false;
-  }
+  const touch = touchAt(e.clientX, e.clientY);
+  pointers.set(e.pointerId, { type: 'touch', x: touch.x, z: touch.z, id: touch.id, sx: e.clientX, sy: e.clientY });
+  beginTouch(touch);
   e.preventDefault();
+}
+function touchAt(clientX, clientY) {
+  const bot = pickRobot(clientX, clientY);
+  const pt = clampRoom(view.floorPoint(clientX, clientY));
+  const spot = pt || (bot ? { x: bot.x, z: bot.z } : { x: game.player.x, z: game.player.z });
+  return { x: spot.x, z: spot.z, id: bot ? bot.id : 0 };
+}
+function beginTouch(touch) {
+  game.target = { x: touch.x, z: touch.z };
+  game.wish.x = 0; game.wish.z = 0; game.wish.kill = false;
+  const bot = touch.id ? game.robots.find(b => b.id === touch.id) : null;
+  if (bot) game.fireAim(bot.x - game.player.x, bot.z - game.player.z);
+  else game.fireAim(touch.x - game.player.x, touch.z - game.player.z);
 }
 function movePointer(e) {
   const rec = pointers.get(e.pointerId);
@@ -200,13 +204,8 @@ function movePointer(e) {
     return;
   }
   rec.sx = e.clientX; rec.sy = e.clientY;
-  if (rec.type === 'robot') {
-    const bot = pickRobot(e.clientX, e.clientY);
-    if (bot) rec.id = bot.id;
-  } else {
-    const pt = clampRoom(view.floorPoint(e.clientX, e.clientY));
-    if (pt) { rec.x = pt.x; rec.z = pt.z; }
-  }
+  const touch = touchAt(e.clientX, e.clientY);
+  rec.x = touch.x; rec.z = touch.z; rec.id = touch.id;
 }
 function onMove(e) { movePointer(e); }
 function onUp(e) {
@@ -296,10 +295,9 @@ function applyInput() {
       game.aim = { x: game.player.faceX, z: game.player.faceZ };
     }
   }
-  let moveFinger = null, fireFinger = null, left = null, right = null;
+  let touchFinger = null, left = null, right = null;
   for (const rec of pointers.values()) {
-    if (rec.type === 'move') moveFinger = rec;
-    else if (rec.type === 'robot') fireFinger = rec;
+    if (rec.type === 'touch') touchFinger = rec;
     else if (rec.type === 'left') left = rec;
     else if (rec.type === 'right') right = rec;
   }
@@ -312,24 +310,17 @@ function applyInput() {
       game.firing = true;
       game.aim = { x: right.x, z: right.z };
     }
-  if (fireFinger) {
-    const bot = game.robots.find(b => b.id === fireFinger.id) || game.robots[0];
-    if (bot) {
-      game.target = null;
-      game.firing = true;
-      game.aim = { x: bot.x - game.player.x, z: bot.z - game.player.z };
-      ui.aim = { x: bot.x, z: bot.z };
-      ui.target = null;
-    }
-  } else if (moveFinger && screen === 'play') {
+  if (touchFinger && screen === 'play') {
+    const bot = touchFinger.id ? game.robots.find(b => b.id === touchFinger.id) : null;
     if (!left) {
-      game.target = { x: moveFinger.x, z: moveFinger.z };
+      game.target = { x: touchFinger.x, z: touchFinger.z };
       game.wish.x = 0; game.wish.z = 0; game.wish.kill = false;
     }
-    ui.target = { x: moveFinger.x, z: moveFinger.z };
-    const aim = autoAim ? game.autoAim(game.player.faceX, game.player.faceZ) : { x: game.player.faceX, z: game.player.faceZ };
-    const L = Math.hypot(aim.x, aim.z) || 1;
-    ui.aim = { x: game.player.x + aim.x / L * 2.1, z: game.player.z + aim.z / L * 2.1 };
+    game.firing = true;
+    if (bot) game.aim = { x: bot.x - game.player.x, z: bot.z - game.player.z };
+    else game.aim = { x: touchFinger.x - game.player.x, z: touchFinger.z - game.player.z };
+    ui.target = { x: touchFinger.x, z: touchFinger.z };
+    ui.aim = bot ? { x: bot.x, z: bot.z } : { x: touchFinger.x, z: touchFinger.z };
   } else if (game.firing) {
     const L = Math.hypot(game.aim.x, game.aim.z) || 1;
     ui.aim = { x: game.player.x + game.aim.x / L * 2.2, z: game.player.z + game.aim.z / L * 2.2 };
@@ -338,7 +329,8 @@ function applyInput() {
     ui.aim = null;
     ui.target = game.target;
   }
-  if (autoAim && game.firing) game.aim = game.autoAim(game.aim.x, game.aim.z);
+  const touching = [...pointers.values()].some(r => r.type === 'touch');
+  if (autoAim && game.firing && !touching) game.aim = game.autoAim(game.aim.x, game.aim.z);
 }
 
 function pollPad() {
@@ -525,7 +517,8 @@ function frame(now) {
     else { game.firing = false; game.wish.x = 0; game.wish.z = 0; }
     if (screen === 'play' || screen === 'title') {
       if (screen === 'play' && game.phase !== 'over') pollPad();
-      if (autoAim && game.firing && game.aim) game.aim = game.autoAim(game.aim.x, game.aim.z);
+      const touching = [...pointers.values()].some(r => r.type === 'touch');
+      if (autoAim && game.firing && game.aim && !touching) game.aim = game.autoAim(game.aim.x, game.aim.z);
       const serial = game.roomSerial;
       game.step(dt);
       if (screen === 'play' && serial !== game.roomSerial && audio.voices) audio.speak(game.rx * 13 + game.ry + game.visits);

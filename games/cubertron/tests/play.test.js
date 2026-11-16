@@ -69,13 +69,18 @@ const check = (ok, msg, extra) => {
     check(!!spot && spot.clear > 80, label + ': found an open floor point away from sentries', spot && { clear: Math.round(spot.clear) });
     if (spot) {
       const before = Math.hypot(spot.px - spot.x, spot.pz - spot.z);
+      const shotsBefore = await p.evaluate(() => CUBERTRON.game.shotsFired);
       await p.touchscreen.tap(spot.s.x, spot.s.y);
       await p.waitForTimeout(450);
       const after = await p.evaluate((s) => {
-        const p = CUBERTRON.game.player;
-        return { dist: Math.hypot(p.x - s.x, p.z - s.z), x: p.x, z: p.z };
+        const g = CUBERTRON.game;
+        const pl = g.player;
+        const bolt = g.bullets[g.bullets.length - 1];
+        const dx = s.x - s.px, dz = s.z - s.pz;
+        const aimed = !!(bolt && bolt.vx * dx + bolt.vz * dz > 0);
+        return { dist: Math.hypot(pl.x - s.x, pl.z - s.z), shots: g.shotsFired, aimed };
       }, spot);
-      check(after.dist < before - 0.12, label + ': tap on the floor walks toward that point', { before: +before.toFixed(2), after: +after.dist.toFixed(2) });
+      check(after.dist < before - 0.12 && after.shots > shotsBefore, label + ': one tap walks toward the point and fires that way', { before: +before.toFixed(2), after: +after.dist.toFixed(2), shotsBefore, shots: after.shots, aimed: after.aimed });
     }
 
     const visibleBot = () => p.evaluate(() => {
@@ -106,6 +111,7 @@ const check = (ok, msg, extra) => {
       bot = await visibleBot();
     }
     if (bot.bot) {
+      await p.evaluate(() => { CUBERTRON.game.player.cool = 0; });
       await p.touchscreen.tap(bot.bot.s.x, bot.bot.s.y);
       await p.waitForTimeout(120);
       const shots = await p.evaluate(() => CUBERTRON.game.shotsFired);
