@@ -279,3 +279,17 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-breakfree.test.js now covers grab 2 (offered with the last zap, Enter / ZAP button breaks free, both
   zaps spent, touch ZAP greys out) and grab 3 (no offer, costs a life). vortex-runreport.test.js: touch START now waits for
   the ladder's START button to be laid out (it raced the first frame under load: yesterday's 2 failures).
+
+## Day 20 (2026-11-16): PULSAR CHARGE-UP
+- Why: bot eval today (8 games, sharp + average, from level 8, BF=1): lives lost by tip count fuseball 19, grab 13,
+  **pulsar zap 11**, spike 6, shot 2. The only pulsar sound ('zapwarn') played the instant the lane was already lethal, so
+  it announced the death rather than warning of it, and the visual charge was 25 % of the pulse period (a dim lane tint).
+- What: charge phase now starts at `PULSE_CHARGE` = 45 % of the period (lethal window unchanged at 80-100 %). While a
+  pulsar in the claw's lane charges: a rising whine (`zapcharge`, + light rumble on pads / Android) at the START of the
+  charge, the claw's rim segment fills with a yellow→white charge bar, the nearest pulsar-free neighbour lane lights green
+  on the rim, and STEP ASIDE (or JUMP! when no safe lane within 3) is drawn outside the rim. Measured lead from cue to the
+  lethal pulse: L9 0.66 s, L20 0.51 s, L40 0.38 s (was 0 s for the sound).
+- Hooks: `zapWarn()` + `chargeCues`, `lead[]`, `prog`, `safe`, `label`, `drawn`, `period`, `chargeFrac`; `clearEShots()`.
+- Test: tests/vortex-zapcharge.test.js (desktop, iPhone 14, landscape): one cue per charge, lead >= 0.35 s at L9/20/40,
+  staying still dies to 'zap', bar fills, label drawn, stepping aside 0.25 s after the cue survives, no cue for a pulsar
+  4 lanes away, no console errors. Regression: fusewarn, tips, v4, waves, jump, spikewarn, haptics, rim, touch pass.

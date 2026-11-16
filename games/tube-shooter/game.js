@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -410,6 +410,7 @@ const Sound = {
       case 'grabwarn': this.tone('sawtooth', 190, 300, 0.09, 0.055); this.tone('sawtooth', 240, 380, 0.09, 0.05, 0.1); this.tone('sine', 95, 95, 0.2, 0.05); break;   // a rim grabber next to the claw (low 'wup-wup', unlike the high shot beep)
       case 'grabimminent': this.tone('square', 220, 90, 0.22, 0.12); this.tone('sawtooth', 340, 160, 0.18, 0.08, 0.04); this.tone('sine', 70, 55, 0.28, 0.07); break;   // same-lane grab countdown past 40%: sharper 'bwaah' than grabwarn
       case 'fusewarn': this.tone('triangle', 1680, 2400, 0.07, 0.055); this.tone('sine', 2400, 3200, 0.06, 0.04, 0.05); this.tone('square', 880, 1320, 0.05, 0.03, 0.09); break;   // rim fuseball nearby (bright chirp, not the low grab wup or high shot beep)
+      case 'zapcharge': this.tone('sine', 240, 960, 0.4, 0.06); this.tone('triangle', 480, 1920, 0.36, 0.035, 0.03); this.tone('square', 120, 120, 0.05, 0.03); break;   // a pulsar in your lane is CHARGING: rising whine, time to step aside
       case 'zapwarn': this.tone('sawtooth', 520, 1800, 0.11, 0.07); this.tone('square', 1600, 400, 0.09, 0.05, 0.04); this.noise(0.12, 0.1, 5000, 1200, 2); break;   // your lane is about to take a pulsar zap
       case 'mineboom': this.noise(0.6, 0.5, 2600, 90, 0.7); this.tone('sawtooth', 300, 40, 0.4, 0.12); break;
       case 'sparkspawn': this.noise(0.28, 0.08, 9000, 3000, 4); this.tone('sawtooth', 2200, 3300, 0.1, 0.02); break;
@@ -1620,12 +1621,20 @@ function updShots(dt) {
   }
   eshots = eshots.filter(s => !s.dead);
 }
+/* Day 20 (2026-11-16): PULSAR CHARGE-UP. Pulsar zaps took 11 of ~51 lives in today's bot eval (2nd after fuseballs), and
+   the only sound, 'zapwarn', played the instant the lane was ALREADY lethal, so it announced the death instead of warning.
+   The visible charge phase was 25 % of the pulse period (about 0.3-0.5 s, a dim lane tint). Now the charge starts at 45 %
+   of the period (0.4-0.8 s of warning, still shorter at higher levels), and while a pulsar in the claw's lane charges:
+   a rising whine plays at charge start ('zapcharge', + light rumble), the claw's rim segment fills with a yellow-to-white
+   charge bar, and a STEP ASIDE arrow points to the nearest pulsar-free lane. Lethal window and rules are unchanged. */
+const PULSE_CHARGE = 0.45;
+let zapCharge = { cues: 0, lead: [], startT: -1, prog: 0, safe: 0, label: '', drawn: 0 };
 function updPulse(dt) {
   const hasP = enemies.some(e => e.type === 'pulsar');
   pulseT += dt; const ph = (pulseT % LP.pulsePeriod) / LP.pulsePeriod;
   pulsing = false; pulseAmt = 0;
   if (hasP) {
-    if (ph > 0.55 && ph < 0.8) pulseAmt = (ph - 0.55) / 0.25 * 0.6;
+    if (ph > PULSE_CHARGE && ph < 0.8) pulseAmt = (ph - PULSE_CHARGE) / (0.8 - PULSE_CHARGE) * 0.6;
     else if (ph >= 0.8) { pulseAmt = 1; pulsing = true; }
   }
   Sound.hum(hasP ? pulseAmt * 0.07 : 0);
@@ -2123,13 +2132,45 @@ function zapWarnUpdate(dt) {
   let threat = false;
   for (const e of enemies) {
     if (e.dead || e.type !== 'pulsar' || e.flipping || e.spawnT < 1) continue;
-    if (e.lane === player.lane && e.z < 0.8 && pulseAmt > 0.55) { threat = true; break; }
+    if (e.lane === player.lane && e.z < 0.8 && pulseAmt > 0) { threat = true; break; }
   }
-  if (!threat) { zapWarnArmed = false; return; }
+  if (!threat) { zapWarnArmed = false; zapCharge.prog = 0; zapCharge.armed = false; return; }
+  if (!pulsing) {   // charging: warn at the START of the charge, not when it is already lethal
+    zapCharge.prog = Math.min(1, pulseAmt / 0.6);
+    if (!zapCharge.armed) { zapCharge.armed = true; zapCharge.cues++; zapCharge.startT = pulseT; zapCharge.safe = pulsarSafeDir(); Sound.play('zapcharge'); }
+  } else { if (zapCharge.armed && zapCharge.startT >= 0) { if (zapCharge.lead.length > 30) zapCharge.lead.shift(); zapCharge.lead.push(+(pulseT - zapCharge.startT).toFixed(3)); zapCharge.startT = -1; } zapCharge.prog = 1; }
   if (pulsing && !zapWarnArmed && zapWarnCd <= 0) {
     zapWarnArmed = true; zapWarnCd = 0.55; zapWarnCues++; Sound.play('zapwarn');
   }
   if (!pulsing) zapWarnArmed = false;
+}
+// nearest lane (−1 / +1) without a charging pulsar; 0 if none within 3 steps
+function pulsarSafeDir() {
+  const N = web.n, bad = l => enemies.some(e => !e.dead && e.type === 'pulsar' && !e.flipping && e.spawnT >= 1 && e.lane === l && e.z < 0.8);
+  for (let d = 1; d <= 3; d++) for (const s of [-1, 1]) { let l = player.lane + s * d; if (web.closed) l = (l + N) % N; else if (l < 0 || l >= N) continue; if (!bad(l)) return s; }
+  return 0;
+}
+function drawZapCharge() {
+  if (state !== 'play' || !player.alive || zapCharge.prog <= 0 || !zapCharge.armed) return;
+  const a = rail(player.lane), b = rail(player.lane + 1), k = zapCharge.prog, mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const col = pulsing ? '#ffffff' : k > 0.7 ? '#fff7b0' : '#ffe81a';
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 14 * DPR; ctx.lineWidth = LW(3.2);
+  ctx.globalAlpha = 0.65 + 0.35 * Math.sin(T * (20 + 40 * k));
+  ctx.beginPath();   // charge bar fills in from both rails toward the middle of the claw's rim segment
+  seg3(a[0], a[1], 0, lerp(a[0], mid[0], k), lerp(a[1], mid[1], k), 0); seg3(b[0], b[1], 0, lerp(b[0], mid[0], k), lerp(b[1], mid[1], k), 0);
+  ctx.stroke(); ctx.restore();
+  const dir = zapCharge.safe = pulsarSafeDir();
+  if (dir) {   // the nearest pulsar-free neighbour lane lights green on the rim, like the warp spike guide
+    let l = player.lane + dir; if (web.closed) l = (l + web.n) % web.n;
+    const c = rail(l), d = rail(l + 1);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#2bff4c'; ctx.shadowColor = '#2bff4c'; ctx.shadowBlur = 12 * DPR; ctx.lineWidth = LW(2.6);
+    ctx.globalAlpha = 0.55 + 0.35 * Math.sin(T * 18); ctx.beginPath(); seg3(c[0], c[1], 0, d[0], d[1], 0); ctx.stroke(); ctx.restore();
+  }
+  const p = proj(mid[0], mid[1], 0); if (!p) return;
+  zapCharge.label = dir ? 'STEP ASIDE' : 'JUMP!'; zapCharge.drawn++;
+  const o = proj(0, 0, 0); let dx = 0, dy = -1; if (o) { const L0 = Math.hypot(p[0] - o[0], p[1] - o[1]) || 1; dx = (p[0] - o[0]) / L0; dy = (p[1] - o[1]) / L0; }
+  const lx = clamp(p[0] + dx * U * 12, U * 10, W - U * 10), ly = clamp(p[1] + dy * U * 6, U * 4, H - U * 4);   // outside the rim, clear of the claw
+  text(zapCharge.label, lx, ly, U * 1.8, col, 'center', 0.7 + 0.3 * Math.sin(T * 25));
 }
 
 function drawPulseLanes() {
@@ -2666,6 +2707,7 @@ function drawGameScene() {
   const showClaw = state === 'play' || state === 'warp' || (state === 'zoom' && zoom.t > 0.78) || (state === 'dying' && !death.exploded);
   drawWeb(webColor, showClaw && state !== 'dying' ? pal.lane : null, true);
   drawPulseLanes();
+  drawZapCharge();
   drawShotWarn();
   drawGrabWarn();
   drawFuseWarn();
@@ -3227,6 +3269,7 @@ window.VORTEX = {
   // test harness: deterministic fast-forward (call freeze(true) first so the rAF loop doesn't also advance)
   key(code, down) { keys[code] = !!down; },
   step(sec, until, noRender) { const n = Math.round(sec * 120); let done = sec; for (let i = 0; i < n; i++) { update(1 / 120); if (until && until()) { done = i / 120; break; } } if (!noRender) { render(); touchSync(); } return done; }, // noRender: fast headless bots
+  clearEShots() { eshots = []; },
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
@@ -3271,7 +3314,7 @@ window.VORTEX = {
   fuseLock: () => Object.assign({ window: FUSE_OPEN.slice() }, fuseLock),
   fuseOpen: id => { const e = enemies.find(e => e.id === id); return !!(e && fuseOpen(e)); },
   fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump, landing: !!t.landing, climbing: !!t.climbing })), frames: fuseWarnFrames, cues: fuseWarnCues, landFrames: fuseLandFrames, landCues: fuseLandCues, grace: FUSE_LAND_GRACE, landZ: FUSE_LAND_Z }),
-  zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed }),
+  zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed, chargeCues: zapCharge.cues, lead: zapCharge.lead.slice(), prog: zapCharge.prog, safe: zapCharge.safe, label: zapCharge.label, drawn: zapCharge.drawn, period: LP && LP.pulsePeriod, chargeFrac: PULSE_CHARGE }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),
   // touch-test helpers (CSS px)
