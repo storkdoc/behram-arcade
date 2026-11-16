@@ -9,12 +9,12 @@ const CHROME = process.env.CHROME || '/usr/bin/google-chrome';
 let fails = 0;
 const check = (ok, label) => { console.log((ok ? 'PASS ' : 'FAIL ') + label); if (!ok) fails++; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-// play level L, lose the last life to an enemy shot, run GAME OVER out (4 s) -> continue offer / initials / attract
+// play level L, lose the last life to an enemy shot, run GAME OVER out (8 s since the Nov 14 run report) -> continue offer / initials / attract
 const dieOn = (pg, L, extraScore = 0) => pg.evaluate(({ L, extraScore }) => {
   const V = VORTEX; V.freeze(true); V.setAuto(false); V.gotoLevel(L); V.step(4, () => V.state.state === 'play');
   if (extraScore) V.addScore(extraScore); V.setLives(1);
   V.addEShot(V.playerLane(), 0.02); V.step(8, () => V.state.state === 'gameover');
-  const go = V.state.state; V.step(4.2, () => V.state.state !== 'gameover');
+  const go = V.state.state; V.step(8.2, () => V.state.state !== 'gameover');
   return { go, after: V.state.state, cont: V.cont() };
 }, { L, extraScore });
 (async () => {

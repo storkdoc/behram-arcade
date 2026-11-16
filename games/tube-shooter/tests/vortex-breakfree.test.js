@@ -39,12 +39,21 @@ const GRAB = `(() => { const V = VORTEX; window.__noWarp = true; V.emptyField();
     check(a1.z2 === 0, 'claw springs back to the rim', a1.z2);
     check(pw0.n === 0 || (a1.pw.laser === pw0.laser && a1.pw.jump === pw0.jump), 'power-ups survive a break-free', { before: pw0, after: { laser: a1.pw.laser, jump: a1.pw.jump } });
     check(a1.msgs.includes('BROKE FREE!'), 'BROKE FREE! message');
-    // second grab on the same level: no big zap left -> fatal
+    // second grab on the same level (day 19): the small zap is still left, so it can break free once more, spending it
     const g2 = await pg.evaluate(GRAB);
-    check(g2.st === 'dying' && !g2.bf.can, 'second grab this level: no offer (big zap spent)', g2.bf);
+    check(g2.st === 'dying' && g2.bf.can && g2.msgs.some(m => /LAST ZAP/.test(m)), 'second grab this level: offered again with the LAST zap', { bf: g2.bf, msgs: g2.msgs });
+    if (!touch) await pg.keyboard.press('Enter'); else await pg.tap('#tzap');
+    await pg.waitForTimeout(80);
+    const a2 = await pg.evaluate(() => { const V = VORTEX; return { st: V.state.state, lives: V.state.lives, zap: V.state.zapUses, bf: V.breakFree() }; });
+    check(a2.st === 'play' && a2.lives === 3 && a2.zap === 2 && a2.bf.lastZap === 1, 'the last zap breaks free too (both zaps now spent)', a2);
+    if (touch) check(await pg.waitForFunction(() => document.getElementById('tzap').classList.contains('used'), null, { timeout: 8000 }).then(() => true, () => false), 'ZAP button greys out once both zaps are gone');
+    // third grab on the same level: no zap left -> fatal
+    await pg.evaluate(() => VORTEX.step(1.2));
+    const g3x = await pg.evaluate(GRAB);
+    check(g3x.st === 'dying' && !g3x.bf.can, 'third grab this level: no offer (both zaps spent)', g3x.bf);
     if (!touch) await pg.mouse.click(720, 450, { button: 'right' }); else await pg.tap('#tzap');
-    const a2 = await pg.evaluate(() => { const V = VORTEX; V.step(4, () => V.state.state !== 'dying'); return { st: V.state.state, lives: V.state.lives, zap: V.state.zapUses }; });
-    check(a2.lives === 2, 'without the big zap the capture still costs a life', a2);
+    const a3 = await pg.evaluate(() => { const V = VORTEX; V.step(4, () => V.state.state !== 'dying'); return { st: V.state.state, lives: V.state.lives, zap: V.state.zapUses }; });
+    check(a3.lives === 2, 'with no zap left the capture still costs a life', a3);
     // new level restores the offer; too late (claw dragged past the window) cannot break free
     const g3 = await pg.evaluate(() => { const V = VORTEX; V.gotoLevel(7); V.step(3, () => V.state.state === 'play'); return 1; });
     const g4 = await pg.evaluate(GRAB);

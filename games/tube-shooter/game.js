@@ -822,6 +822,7 @@ function startGame() {
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
+  runReset(startLevel);
   beginLevel(startLevel);
 }
 function beginLevel(L) {
@@ -868,7 +869,7 @@ function killPlayer(kind, captor) {
   state = 'dying'; window.MoodSticker && window.MoodSticker.event('hit');
   if (kind === 'capture') {
     Sound.play('capture');
-    if (canBreakFree()) { breakFreeStats.offers++; msg(touch.on ? 'TAP ZAP TO BREAK FREE!' : 'ZAP TO BREAK FREE!', 1.3, 0.62, '#ff47e6', 3.4); }
+    if (canBreakFree()) { breakFreeStats.offers++; msg(touch.on ? 'TAP ZAP TO BREAK FREE!' : 'ZAP TO BREAK FREE!', 1.3, 0.62, '#ff47e6', 3.4); if (zapUses === 1) msg('USES YOUR LAST ZAP', 1.3, 0.69, '#ffe81a', 2); }
   } else explodePlayer();
 }
 /* Day 16 (2026-11-12): BREAK FREE. Captures are the #1 killer in the bot eval (13 of 42 deaths today) and, unlike every
@@ -877,13 +878,19 @@ function killPlayer(kind, captor) {
    ZAP button / gamepad zap) blasts the captor and springs the claw back to the rim. It spends the level's BIG zap (the
    small second zap is still left), so it is at most once per level and a real resource decision; once the big zap is
    used the capture is fatal as before. Power-ups survive a break-free. Brief 0.9 s invulnerability so the next rim enemy can't re-grab instantly. */
+/* Day 19 (2026-11-15): LAST-ZAP BREAK FREE. Captures were still the #1 bot killer (12 of 36 lives), yet break-free was only
+   offered on 4 of them: by the time a grabber struck, the big zap was usually already spent on a rim emergency. The small
+   second zap was still lit on the HUD / ZAP button, so pressing ZAP while dragged just buzzed 'nozap', which read as a bug.
+   Now either remaining zap breaks free: the big one first, else the small one (prompt adds USES YOUR LAST ZAP). With both
+   zaps gone a capture is fatal as before, so it is at most twice per level and still a resource decision. */
 const BREAK_FREE_Z = 0.8, BREAK_FREE_GRACE = 0.9;
-let breakFreeStats = { offers: 0, used: 0, failed: 0 }, graceT = 0;
-function canBreakFree() { return state === 'dying' && death && death.kind === 'capture' && !death.exploded && player.z < BREAK_FREE_Z && zapUses === 0; }
+let breakFreeStats = { offers: 0, used: 0, failed: 0, lastZap: 0 }, graceT = 0;
+function canBreakFree() { return state === 'dying' && death && death.kind === 'capture' && !death.exploded && player.z < BREAK_FREE_Z && zapUses < 2; }
 function breakFree() {
   if (!canBreakFree()) { if (state === 'dying' && death && death.kind === 'capture' && !death.exploded) Sound.play('nozap'); return false; }
   const c = death.captor; breakFreeStats.used++;
-  zapUses = 1; zap.flash = 0.45; zapFxStart(false); Sound.play('zap');
+  const last = zapUses === 1; zapUses++; if (last) breakFreeStats.lastZap++;
+  zap.flash = 0.45; zapFxStart(false); Sound.play(last ? 'zap2' : 'zap');
   if (c && !c.dead) { const p = centerOf(c); boltTo(p); shardBurst([p[0], p[1]], p[2], [enemyColor(c), '#ffffff', '#ff47e6'], 26, 1); zap.kill = true; killEnemy(c, false); zap.kill = false; }
   enemies = enemies.filter(e => !e.dead);
   if (death.savedPower) power = death.savedPower;
@@ -893,7 +900,7 @@ function breakFree() {
 }
 function explodePlayer() {
   if (death.kind === 'capture' && death.savedPower) msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
-  if (death.kind === 'capture' && zapUses === 0) breakFreeStats.failed++;
+  if (death.kind === 'capture' && zapUses < 2) breakFreeStats.failed++;
   death.exploded = true; Sound.play('die'); shake = 0.6; flash = 0.35; flashColor = '#fff';
   const f = player.vis, E0 = railF(f), E1 = railF(f + 1);
   fx.push({ x: (E0[0] + E1[0]) / 2, y: (E0[1] + E1[1]) / 2, zw: player.z * LL, t: 0, dur: 1.5, size: 0.75, rays: 30, colors: RAINBOW, seed: Math.random() * 6, big: true });
@@ -909,6 +916,43 @@ const DEATH_TIPS = {
   fuse: ['FUSEBALL', 'WHITE RIM SPARKS = DODGE OR JUMP. CYAN BRACKETS = SHOOT IT NOW'],
 };
 let deathTipCount = {};
+/* Day 18 (2026-11-14): RUN REPORT. The last life's cause was never shown (finishDeath went straight to GAME OVER before
+   deathTip), and GAME OVER was a bare title for 4 s, so a player never learned what kept ending their runs. Now the GAME
+   OVER screen is a short debrief: what took the final life, the levels covered and score, every life lost by cause, the
+   top killer with its counter-play tip (always shown here, even after the in-game tips have stopped), kills / JUMP dodges /
+   break-frees, and NEW BEST LEVEL. It stays up to GAMEOVER_SEC (skip with fire / Enter / tap / pad A after 1.2 s). */
+const GAMEOVER_SEC = 8;
+const DEATH_SHORT = { shot: 'SHOT', capture: 'GRAB', spike: 'SPIKE', zap: 'ZAP', spark: 'SPARK', mine: 'MINE', fuse: 'FUSEBALL' };
+let run = { deaths: {}, order: [], kills: 0, from: 1, best0: 1, bf0: 0, last: null };
+function runReset(L) { run = { deaths: {}, order: [], kills: 0, from: L, best0: bestLevel, bf0: breakFreeStats.used, last: null }; }
+function runReport() {
+  const ks = Object.keys(run.deaths), total = ks.reduce((a, k) => a + run.deaths[k], 0);
+  let top = null; for (const k of run.order) if (!top || run.deaths[k] >= run.deaths[top]) top = k;   // ties: the most recent
+  const lost = ks.sort((a, b) => run.deaths[b] - run.deaths[a]).map(k => (DEATH_SHORT[k] || k.toUpperCase()) + ' ' + run.deaths[k]).join('   ');
+  const extra = ['KILLS ' + run.kills]; if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
+  const bf = breakFreeStats.used - run.bf0; if (bf > 0) extra.push('BREAK-FREES ' + bf);
+  return { total, last: run.last, top, from: run.from, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
+    lines: { final: run.last && DEATH_TIPS[run.last] ? 'FINAL LIFE: ' + DEATH_TIPS[run.last][0] : '', levels: 'LEVEL ' + run.from + (level > run.from ? ' → ' + level : '') + '   SCORE ' + score,
+      lost: total ? 'LIVES LOST:   ' + lost : '', topLabel: top ? (total > 1 ? 'TOP KILLER: ' + (DEATH_SHORT[top] || top.toUpperCase()) : 'HOW TO SURVIVE IT') : '',
+      tip: top && DEATH_TIPS[top] ? DEATH_TIPS[top][1] : '', extra: extra.join('   ') } };
+}
+function drawGameOver() {
+  const a = Math.min(1, gameOverT * 2), r = runReport(), L = r.lines;
+  const fit = (str, size) => Math.min(size, W * 0.94 / Math.max(1, str.length));
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(0,0,0,' + (0.72 * Math.min(1, gameOverT * 1.5)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  text('GAME OVER', W / 2, H * 0.2, fit('GAME OVER', U * 7), '#ff2a2a', 'center', a);
+  const b = Math.min(1, Math.max(0, gameOverT - 0.35) * 2.5);   // the report fades in just after the title
+  if (b <= 0) return;
+  let y = H * 0.33; const row = (str, size, col, gap, al = b) => { if (!str) return; text(str, W / 2, y, fit(str, size), col, 'center', al); y += H * gap; };
+  row(L.final, U * 2.3, '#ff5a5a', 0.075);
+  row(L.levels, U * 2.4, '#ffe81a', 0.075);
+  row(L.lost, U * 1.8, '#36e6ff', 0.085);
+  row(L.topLabel, U * 1.9, '#ff47e6', 0.05);
+  row(L.tip, U * 1.7, '#ffffff', 0.075);
+  row(L.extra, U * 1.6, '#2bff4c', 0.07);
+  if (r.newBest) row('NEW BEST LEVEL!', U * 2.4, '#ff47e6', 0.07, b * (0.7 + 0.3 * Math.sin(T * 7)));
+  if (gameOverT > 1.2) text(touch.on ? 'TAP TO GO ON' : 'FIRE / ENTER TO GO ON', W / 2, H * 0.9, fit('FIRE / ENTER TO GO ON', U * 1.6), '#888', 'center', 0.6 + 0.4 * Math.sin(T * 4));
+}
 function deathTip(kind) {
   const d = DEATH_TIPS[kind]; if (!d) return;
   msg(d[0], 2.6, 0.62, pal.eshot || '#f44', 3);
@@ -917,6 +961,7 @@ function deathTip(kind) {
 }
 function finishDeath() {
   lives--;
+  if (death) { const k = death.kind; run.deaths[k] = (run.deaths[k] || 0) + 1; run.order = run.order.filter(x => x !== k).concat(k); run.last = k; }
   if (lives <= 0) { state = 'gameover'; gameOverT = 0; cont.level = level; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
   if (death) deathTip(death.kind);
   if (death.inWarp) { beginLevel(level + 1); return; }
@@ -996,6 +1041,7 @@ function doContinue() {
   score = 0; lives = 3; nextLife = 20000; tokens = 0; startLevel = L; bonusPending = 0;
   pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 };
   Sound.play('start'); window.MoodSticker && window.MoodSticker.screen('play');
+  runReset(L);
   beginLevel(L);
   msg('CONTINUE ' + cont.used + ': LEVEL ' + L, 2.4, 0.6, '#2bff4c', 3);
 }
@@ -1216,7 +1262,7 @@ function centerOf(e) {
 }
 function enemyColor(e) { return e.type === 'fuseball' ? '#fff' : NEWE[e.type] ? NEWE[e.type].col : pal[e.type] || '#fff'; }
 function killEnemy(e, byShot) {
-  if (e.dead) return; e.dead = true;
+  if (e.dead) return; e.dead = true; run.kills++;
   const c = centerOf(e);
   let pts = 0;
   switch (e.type) {
@@ -1791,7 +1837,7 @@ function update(dt) {
       if (death.exploded && death.t - (death.t2 || 0) > (death.kind === 'capture' ? 1.6 : 2.2) && (death.kind !== 'capture' || death.t2)) finishDeath();
       break;
     case 'gameover':
-      gameOverT += dt; if (gameOverT > 4) endGameOver();
+      gameOverT += dt; if (gameOverT > GAMEOVER_SEC) endGameOver();
       break;
     case 'continue': {
       cont.t += dt; const left = Math.ceil(CONT_SEC - cont.t);
@@ -2561,8 +2607,9 @@ function drawClaw() {
 function drawBreakFreeHint() {
   const c = clawWorld(), p = proj(c[0], c[1], c[2]); if (!p) return;
   const k = player.z / BREAK_FREE_Z, R = (10 + 18 * (1 - k)) * DPR * (1 + 0.15 * Math.sin(T * 30));
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.85 - 0.5 * k; ctx.strokeStyle = '#ff47e6'; ctx.lineWidth = LW(2);
-  ctx.shadowColor = '#ff47e6'; ctx.shadowBlur = 12 * DPR;
+  const col = zapUses === 1 ? '#ffe81a' : '#ff47e6';   // yellow = this break-free spends the last zap
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.85 - 0.5 * k; ctx.strokeStyle = col; ctx.lineWidth = LW(2);
+  ctx.shadowColor = col; ctx.shadowBlur = 12 * DPR;
   ctx.beginPath(); ctx.arc(p[0], p[1], R, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k)); ctx.stroke();   // the ring drains as the window closes
   ctx.restore();
 }
@@ -2818,7 +2865,7 @@ function render() {
     drawHUD();
     drawZapScreen();
     drawMsgs();
-    if (state === 'gameover') { text('GAME OVER', W / 2, H * 0.47, U * 7, '#ff2a2a', 'center', Math.min(1, gameOverT * 2)); }
+    if (state === 'gameover') drawGameOver();
     if (paused) { ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'lighter'; text('PAUSED', W / 2, H * 0.44, U * 6, '#ffffff', 'center'); text(touch.on ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, H * 0.56, U * 2, '#36e6ff', 'center'); }
   }
   ctx.globalCompositeOperation = 'source-over';
@@ -3206,6 +3253,7 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length, cd: player.fireCd, sputter: heatStats.sputter, overheats: heatStats.overheats, tip: heatStats.tip }),
   deathKind: () => death ? death.kind : null,
+  runReport: () => runReport(),
   breakFree: () => ({ ...breakFreeStats, can: canBreakFree(), grace: graceT, z: player.z, windowZ: BREAK_FREE_Z }),
   tryBreakFree() { return breakFree(); },
   cont: () => Object.assign({ state, min: CONT_MIN, sec: CONT_SEC }, cont),

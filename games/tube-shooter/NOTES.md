@@ -251,3 +251,31 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Hooks: `fuseWarn()` -> + `landFrames`, `landCues`, `grace`, `landZ`, per-threat `landing` / `climbing`; `fuseDeaths()`.
 - Test: tests/vortex-fuseland.test.js (desktop, iPhone 14, iPhone 14 landscape). Regression: fusewarn, grabwarn,
   grabimminent, spikewarn, jump, tips, v4, waves, sputter, powerups, continue, modebtn, tests/vortex-rim all pass.
+
+## Day 18 (2026-11-14): RUN REPORT on GAME OVER
+- Why: the final life's cause was never shown (`finishDeath` went straight to GAME OVER, skipping `deathTip`), and GAME OVER
+  was a bare title for 4 s, so a player never learned what kept ending their runs. Bot eval today (8 games, sharp + average,
+  bot now uses BREAK FREE): lives lost to shots 10, spikes 9 (all in the warp, where the bot does not steer), fuseballs 7,
+  zaps 6, grabs 4. Causes spread evenly, so the useful thing to show a player is *their own* top killer.
+- What: GAME OVER dims the tube and shows a debrief: `FINAL LIFE: <cause>`, `LEVEL a → b  SCORE`, `LIVES LOST: SHOT 2  GRAB 1`
+  (worst first), `TOP KILLER: <cause>` (or `HOW TO SURVIVE IT` after a single death) with that cause's counter-play tip
+  (always shown here, even after the in-game tips stopped), `KILLS / JUMP DODGES / BREAK-FREES`, and a pulsing
+  `NEW BEST LEVEL!`. Rows are auto-fitted to the screen width (iPhone portrait included).
+- GAME OVER now lasts up to `GAMEOVER_SEC` = 8 s (was 4); fire / Enter / click / tap / pad A skip it after 1.2 s as before.
+  A CONTINUE starts a fresh report.
+- Hooks: `VORTEX.runReport()` -> {total, last, top, from, to, score, kills, newBest, lines{final, levels, lost, topLabel, tip, extra}}.
+- Test: tests/vortex-runreport.test.js (desktop, iPhone 14, iPhone 14 landscape: game started from the ladder, shot / grab /
+  shot deaths, every report line, rows drawn and inside the screen, still up after 4 s, Space / tap / pad A skip, 8-s
+  timeout, next game resets, no console errors). vortex-continue updated for the 8-s GAME OVER.
+
+## Day 19 (2026-11-15): LAST-ZAP BREAK FREE
+- Why: bot eval today (8 games, sharp + average, levels 8-13): captures were again the #1 killer (12 of 36 lives; shots 8,
+  fuseballs 8, zaps 5). BREAK FREE was offered on only 4 of the 12, because the big zap had usually been spent on a rim
+  emergency first. The small second zap was still lit on the HUD and the touch ZAP button, so pressing ZAP while being
+  dragged only buzzed `nozap`, which reads as a broken button.
+- What: either remaining zap now breaks free (big zap first, else the small one). When it is the last zap the prompt adds
+  `USES YOUR LAST ZAP` (yellow) and the draining ring around the claw turns yellow; the small-zap sound plays. With both zaps
+  spent a capture is fatal as before, so it is at most twice per level. `breakFree()` hook adds `lastZap`.
+- Test: tests/vortex-breakfree.test.js now covers grab 2 (offered with the last zap, Enter / ZAP button breaks free, both
+  zaps spent, touch ZAP greys out) and grab 3 (no offer, costs a life). vortex-runreport.test.js: touch START now waits for
+  the ladder's START button to be laid out (it raced the first frame under load: yesterday's 2 failures).
