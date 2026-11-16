@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#07060d">
+<meta name="theme-color" content="#070910">
 <title>CUBERTRON — Behram Arcade</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="css/style.css">
@@ -53,17 +53,20 @@
 <div id="hud" hidden>
   <div class="topbar">
     <div class="stat"><b id="score">0</b><span id="combo"></span><span id="lives">♥♥♥</span></div>
-    <div id="stage">STAGE 1</div>
+    <div id="stage">SECTOR 1</div>
   </div>
-  <div class="meter" aria-hidden="true"><i id="meter"></i></div>
-  <div id="bossbar" hidden><b id="bossname">BOSS</b><i><span id="bosshp"></span></i></div>
+  <canvas id="map" width="92" height="92" aria-hidden="true"></canvas>
   <div id="banner"></div>
+  <div id="gleamwarn" hidden>THE GLEAM</div>
   <button type="button" class="iconbtn" id="btn-pause" aria-label="Pause">II</button>
-  <button type="button" class="iconbtn" id="btn-mute" aria-label="Mute" aria-pressed="false">SND</button>
+  <button type="button" class="iconbtn" id="btn-mute" aria-label="Mute">SND</button>
   <div class="dock">
     <button type="button" id="btn-aim" aria-pressed="false">AIM</button>
-    <button type="button" id="btn-dash">DASH</button>
-    <button type="button" id="btn-bomb" hidden>PULSE</button>
+    <button type="button" id="btn-sticks" aria-pressed="false">STICKS</button>
+  </div>
+  <div id="sticks" hidden>
+    <div class="stick" id="stick-l" aria-label="Move"><i></i></div>
+    <div class="stick" id="stick-r" aria-label="Aim and fire"><i></i></div>
   </div>
   <div id="pops"></div>
 </div>
@@ -71,10 +74,10 @@
 <div id="title" class="screen">
   <div class="card">
     <p class="eyebrow">BEHRAM ARCADE</p>
-    <h1>CUBE<i>R</i>TRON</h1>
-    <p class="tag">Paint every cube. Outshoot the drones. Don’t fall.</p>
-    <div class="menu" id="title-menu">
-      <button type="button" class="primary" id="play" data-go="play">PLAY</button>
+    <h1>CUBERTRON</h1>
+    <p class="tag">Electrified rooms. Sentries that shoot back. Leave before the Gleam arrives.</p>
+    <div class="menu">
+      <button type="button" class="primary" data-go="play">PLAY</button>
       <div class="row">
         <button type="button" data-go="how">HOW TO PLAY</button>
         <button type="button" data-go="scores">HIGH SCORES</button>
@@ -91,18 +94,16 @@
   <div class="panel">
     <button type="button" class="x" data-back aria-label="Close">✕</button>
     <h2>HOW TO PLAY</h2>
-    <p>Cubertron hops the diagonals of a living pyramid. Each landing paints the cube. Clear the stage when every face matches. Some cubes need two landings, some flip off if you land again, some crumble, and some slide along the edge.</p>
-    <p>Drones hop toward you, tumble down the slope, or drop from above. Later ones unpaint cubes. Shoot them. A shield, rapid fire, slow time, and a pulse appear on the board. Fall off and a disc may carry you home. Every few stages a boss waits.</p>
+    <p>You are a walker in a grid of electrified rooms. Sentries patrol and fire. Touching a wall or a sentry ends you. Their bolts, and theirs alone, can destroy each other, and a sentry that runs into a wall comes apart.</p>
+    <p>Leave through a lit door. The door you entered seals behind you. Clear a room for a bonus. Linger, and the Gleam — a faceless shard of light — bounces in. Nothing stops it.</p>
     <table class="keys">
-      <tr><td>Arrows / WASD</td><td>Hop the four diagonals</td></tr>
-      <tr><td>Space</td><td>Fire</td></tr>
-      <tr><td>Shift</td><td>Dash two hops</td></tr>
-      <tr><td>Enter</td><td>Pulse, if you are holding one</td></tr>
-      <tr><td>Q / E</td><td>Turn the camera</td></tr>
+      <tr><td>Arrows / WASD</td><td>Move, eight ways</td></tr>
+      <tr><td>Space</td><td>Fire the way you are facing</td></tr>
+      <tr><td>Shift + arrow</td><td>Fire that way without moving</td></tr>
+      <tr><td>Gamepad</td><td>Left stick moves, right stick aims and fires</td></tr>
+      <tr><td>Touch</td><td>Drag a point to walk there. Tap a sentry to shoot it. An aim line and reticle stay up while your finger is down. STICKS adds a pair of on-screen sticks.</td></tr>
       <tr><td>P / Esc</td><td>Pause</td></tr>
       <tr><td>M</td><td>Mute</td></tr>
-      <tr><td>Touch</td><td>Tap a cube to hop there. Tap a farther cube and Cubertron walks it. Tap or drag a drone to fire, with an aim line while your finger is down.</td></tr>
-      <tr><td>Gamepad</td><td>Stick hops, A fires, B dashes, X pulse, Start pauses</td></tr>
     </table>
     <button type="button" class="wide" data-back>BACK</button>
   </div>
@@ -139,7 +140,9 @@
         <option value="low">LOW</option>
       </select>
     </div>
-    <button type="button" id="opt-aim" aria-pressed="false">AUTO AIM: OFF</button>
+    <button type="button" id="opt-aim">AUTO AIM: OFF</button>
+    <button type="button" id="opt-sticks">ON-SCREEN STICKS: OFF</button>
+    <button type="button" id="opt-voices">SENTRY VOICES: OFF</button>
     <button type="button" id="opt-mute">SOUND: ON</button>
     <button type="button" class="wide" data-back>BACK</button>
   </div>
@@ -159,7 +162,7 @@
 
 <div id="over" class="screen" hidden>
   <div class="panel">
-    <h2 id="overtitle">GAME OVER</h2>
+    <h2>GRID DOWN</h2>
     <p id="overscore"></p>
     <div id="initials">
       <p>NEW HIGH SCORE. ENTER YOUR INITIALS.</p>
@@ -179,15 +182,8 @@
 
 <div id="tut" class="screen" hidden>
   <div class="card">
-    <div class="demo" aria-hidden="true">
-      <i class="cubelet" style="left:12%;top:48%"></i>
-      <i class="cubelet" style="left:38%;top:28%"></i>
-      <i class="cubelet" style="left:64%;top:42%"></i>
-      <i class="bot"></i>
-    </div>
-    <h2 id="tut-title">HOP</h2>
+    <h2 id="tut-title">MOVE</h2>
     <p id="tut-body"></p>
-    <div class="dots" id="tut-dots"></div>
     <div class="row">
       <button type="button" id="tut-skip">SKIP</button>
       <button type="button" class="primary" id="tut-next">NEXT</button>

@@ -5,14 +5,13 @@ import { createAudio, TRACKS } from './audio.js';
 
 const qs = new URLSearchParams(location.search);
 const CFG = 'cubertron.cfg';
-const SCORES = 'cubertron.scores';
-const TUT = 'cubertron.tut';
-const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const SCORES = 'cubertron.grid.scores';
+const TUT = 'cubertron.grid.tut';
 const TUTORIAL = [
-  ['HOP THE DIAGONALS', 'Land on a cube and the face takes the target color. A stage ends when every cube matches.'],
-  ['POINT WHERE TO GO', 'Arrows or WASD hop. On a touch screen, tap a neighboring cube. Tap a farther one and Cubertron walks there, one hop at a time. A ghost marks the cube under your finger.'],
-  ['FIRE AT THE DRONES', 'Space fires. Tap or drag a drone and an aim line follows your finger. Shift or DASH hops twice. Auto aim, if you want it, bends shots toward the nearest drone.'],
-  ['THE DISC CAN CATCH YOU', 'Step off the edge and you fall. A floating disc may carry you back to the top. Shields, rapid fire, slow time, and a pulse show up as the stages get stranger.']
+  ['WALK THE GRID', 'Arrows or WASD move eight ways. On a touch screen, tap or drag the floor and the walker goes there. A marker shows the point.'],
+  ['FIRE', 'Space shoots the way you face. Hold Shift and press an arrow to shoot that way without stepping. Tap a sentry to fire at it. The aim line and reticle stay up while your finger is down.'],
+  ['WALLS KILL', 'A wall or a sentry ends the run. Sentries also fall apart if they hit a wall, each other, or a bolt that was not their own.'],
+  ['LEAVE, OR THE GLEAM COMES', 'A lit door opens the next sector, and the door you used seals. Clear the sentries for a bonus. Wait too long and the Gleam bounces in. It cannot be destroyed.']
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -22,99 +21,79 @@ let view;
 try { view = createView(canvas); }
 catch (err) { window.CBFatal(err && err.message ? err.message : 'WebGL failed'); throw err; }
 
+function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG) || '{}'); } catch (e) { return {}; } }
 const cfg = loadCfg();
-let autoAim = cfg.autoAim == null ? matchMedia('(pointer: coarse)').matches : !!cfg.autoAim;
+const coarse = matchMedia('(pointer: coarse)').matches;
+let autoAim = cfg.autoAim == null ? coarse : !!cfg.autoAim;
+let sticksOn = cfg.sticks == null ? false : !!cfg.sticks;
 let qualityMode = cfg.quality || 'auto';
 let qualityManual = qualityMode !== 'auto';
 audio.setVolume(cfg.vol == null ? 0.8 : cfg.vol);
 audio.setMuted(!!cfg.muted);
+audio.voices = !!cfg.voices;
 if (qualityMode === 'auto') view.setTier(detectTier());
 else view.setTier(qualityMode === 'high' ? 2 : qualityMode === 'low' ? 0 : 1);
 
 let screen = 'title';
 let returnScreen = 'title';
 let game = createGame({ seed: (Math.random() * 1e9) | 0, demo: true });
-let finger = null;
 let tutStep = 0;
 let slowFrames = 0;
 let letters = ['A', 'A', 'A'];
 let letterAt = 0;
 let overOpened = false;
+let lastSerial = -1;
 const held = new Set();
 const gpWas = [];
-const ui = { aim: null, ghost: null, path: null };
+const pointers = new Map();
+const ui = { target: null, aim: null };
 
 const api = {
   booted: false,
   get screen() { return screen; },
   get game() { return game; },
-  audio,
-  view,
-  projectCell(q, r) {
-    const w = game.cellWorld(q, r);
-    return view.project(w.x, w.y + 0.04, w.z);
-  },
-  projectFoe(id) {
-    const f = game.foes.find(o => o.id === id) || (game.boss && game.boss.id === id ? game.boss : null);
-    return f ? view.project(f.x, f.y + 0.25, f.z) : null;
-  },
-  spawn(kind, q, r) { return game.spawnFoe(kind, q, r); },
-  hopTo(q, r) { return game.hopTo(q, r); }
+  audio, view,
+  project(x, z) { return view.project(x, z); }
 };
 window.CUBERTRON = api;
 
-function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(CFG) || '{}'); } catch (e) { return {}; }
-}
 function saveCfg() {
   try {
-    localStorage.setItem(CFG, JSON.stringify({ vol: audio.volume, muted: audio.muted, quality: qualityMode, autoAim }));
+    localStorage.setItem(CFG, JSON.stringify({
+      vol: audio.volume, muted: audio.muted, quality: qualityMode, autoAim, sticks: sticksOn, voices: audio.voices
+    }));
   } catch (e) { /* private mode */ }
 }
-function loadScores() {
-  try { return JSON.parse(localStorage.getItem(SCORES) || '[]'); } catch (e) { return []; }
-}
-function saveScores(list) {
-  try { localStorage.setItem(SCORES, JSON.stringify(list.slice(0, 8))); } catch (e) { /* ignore */ }
-}
-
+function loadScores() { try { return JSON.parse(localStorage.getItem(SCORES) || '[]'); } catch (e) { return []; } }
+function saveScores(list) { try { localStorage.setItem(SCORES, JSON.stringify(list.slice(0, 8))); } catch (e) { /* ignore */ } }
 function unlock() { audio.start(); }
 
 function show(name) {
   screen = name;
-  for (const id of ['title', 'how', 'scores', 'credits', 'options', 'pause', 'over', 'tut']) {
-    $(id).hidden = id !== name;
-  }
+  for (const id of ['title', 'how', 'scores', 'credits', 'options', 'pause', 'over', 'tut']) $(id).hidden = id !== name;
   if (name === 'play') {
     for (const id of ['title', 'how', 'scores', 'credits', 'options', 'pause', 'over']) $(id).hidden = true;
   }
-  $('hud').hidden = name !== 'play' && name !== 'pause';
+  $('hud').hidden = !(name === 'play' || name === 'pause');
   if (name === 'scores') renderScores();
   if (name === 'credits') renderCredits();
   syncOptions();
-  const panel = document.querySelector('.screen:not([hidden]) button');
-  if (panel && name !== 'play') panel.focus({ preventScroll: true });
+  applySticks();
 }
 
 function startGame(seed, tut) {
   game = createGame({ seed: seed == null ? (Math.random() * 1e9) | 0 : seed | 0, hold: !!tut });
   overOpened = false;
+  lastSerial = -1;
   show('play');
-  if (tut) openTut();
+  if (tut) { tutStep = 0; $('tut').hidden = false; renderTut(); }
   else $('tut').hidden = true;
   layout();
-}
-
-function openTut() {
-  tutStep = 0;
-  $('tut').hidden = false;
-  renderTut();
 }
 function renderTut() {
   const step = TUTORIAL[tutStep];
   $('tut-title').textContent = step[0];
   $('tut-body').textContent = step[1];
-  $('tut-dots').innerHTML = TUTORIAL.map((_, i) => `<i class="${i === tutStep ? 'on' : ''}"></i>`).join('');
   $('tut-next').textContent = tutStep === TUTORIAL.length - 1 ? 'GO' : 'NEXT';
 }
 function closeTut() {
@@ -122,200 +101,141 @@ function closeTut() {
   game.hold = false;
   try { localStorage.setItem(TUT, '1'); } catch (e) { /* ignore */ }
 }
-
 function renderScores() {
   const list = loadScores();
   $('scorelist').innerHTML = list.length ? list.map((s, i) =>
-    `<div class="scoreline"><span>${i + 1}  ${s.name}</span><b>${s.score}</b><span>ST ${s.stage}</span></div>`
+    `<div class="scoreline"><span>${i + 1}  ${s.name}</span><b>${s.score}</b><span>S${s.sector}</span></div>`
   ).join('') : '<p>No scores on this device yet.</p>';
 }
 function renderCredits() {
   $('creditlist').innerHTML = TRACKS.map(t =>
     `<p><b>${t.piece}</b><br>${t.composer}. ${t.performer}. ${t.license}.</p>`
-  ).join('');
+  ).join('') + '<p>Sentry voices, when enabled, are spoken by this device.</p>';
 }
 function syncOptions() {
   $('vol').value = String(Math.round(audio.volume * 100));
   $('quality').value = qualityMode;
-  $('opt-aim').textContent = 'AUTO AIM: ' + (autoAim ? 'ON' : 'OFF');
-  $('opt-aim').setAttribute('aria-pressed', autoAim ? 'true' : 'false');
+  const set = (id, on, label) => {
+    const b = $(id);
+    b.textContent = label + (on ? 'ON' : 'OFF');
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+  set('opt-aim', autoAim, 'AUTO AIM: ');
+  set('opt-sticks', sticksOn, 'ON-SCREEN STICKS: ');
+  set('opt-voices', audio.voices, 'SENTRY VOICES: ');
   $('opt-mute').textContent = 'SOUND: ' + (audio.muted ? 'OFF' : 'ON');
   $('btn-mute').textContent = audio.muted ? 'OFF' : 'SND';
-  $('btn-mute').setAttribute('aria-pressed', audio.muted ? 'true' : 'false');
-  $('btn-aim').setAttribute('aria-pressed', autoAim ? 'true' : 'false');
   $('btn-aim').textContent = autoAim ? 'AIM*' : 'AIM';
+  $('btn-aim').setAttribute('aria-pressed', autoAim ? 'true' : 'false');
+  $('btn-sticks').textContent = sticksOn ? 'STICKS*' : 'STICKS';
+  $('btn-sticks').setAttribute('aria-pressed', sticksOn ? 'true' : 'false');
 }
-
-function layout() {
-  const coarse = matchMedia('(pointer: coarse)').matches;
-  const portrait = innerHeight > innerWidth;
-  view.insets = {
-    top: 86,
-    bottom: coarse ? (portrait ? 108 : 70) : 28,
-    left: 16,
-    right: coarse && !portrait ? 108 : 18
-  };
-  view.fit(game);
-  view.resize();
+function applySticks() {
+  $('sticks').hidden = !(sticksOn && screen === 'play');
 }
-
-function directionStep(dx, dy) {
-  const p = game.player;
-  if (p.q < -20) return null;
-  const origin = view.project(p.x, p.y + 0.2, p.z);
-  let best = null, score = 0.28;
-  for (const [dq, dr] of DIRS) {
-    const w = game.cellWorld(p.q + dq, p.r + dr);
-    const s = view.project(w.x, w.y, w.z);
-    const vx = s.x - origin.x, vy = s.y - origin.y;
-    const L = Math.hypot(vx, vy) || 1;
-    const dot = (vx / L) * dx + (vy / L) * dy;
-    if (dot > score) { score = dot; best = { dq, dr }; }
-  }
-  return best;
-}
-
-function nearestFoe() {
-  const p = game.player;
-  let best = null, bestD = 1e9;
-  const list = game.foes.slice();
-  if (game.boss && game.boss.hp > 0) list.push(game.boss);
-  for (const f of list) {
-    const d = (f.x - p.x) ** 2 + (f.z - p.z) ** 2 + (f.y - p.y) ** 2;
-    if (d < bestD) { bestD = d; best = f; }
-  }
-  return best;
-}
-
-function fireToward(x, y, z) {
-  if (autoAim) {
-    const n = nearestFoe();
-    if (n) {
-      const dx = n.x - game.player.x, dz = n.z - game.player.z;
-      const tx = x - game.player.x, tz = z - game.player.z;
-      const along = dx * tx + dz * tz;
-      if (along > 0 || (tx === 0 && tz === 0)) return game.fireAt(n.x, n.y + 0.3, n.z);
-    }
-  }
-  return game.fireAt(x, y, z);
-}
-
-function fireFacing() {
-  const n = autoAim ? nearestFoe() : null;
-  if (n) return game.fireAt(n.x, n.y + 0.3, n.z);
-  const p = game.player;
-  return game.fireAt(p.x + p.facing.x * 5, p.y + 0.45, p.z + p.facing.z * 5);
-}
-
-function pick(x, y) {
-  const coarse = matchMedia('(pointer: coarse)').matches;
-  const foeR = coarse ? 86 : 60;
-  let best = null, bestD = foeR;
-  const consider = (obj, lift) => {
-    const p = view.project(obj.x, obj.y + lift, obj.z);
-    if (p.behind) return;
-    const d = Math.hypot(p.x - x, p.y - y);
-    if (d < bestD) { bestD = d; best = obj; }
-  };
-  for (const f of game.foes) consider(f, 0.28);
-  if (game.boss && game.boss.hp > 0) consider(game.boss, 0.5);
-  if (best) return { type: 'enemy', id: best.id, x: best.x, y: best.y + 0.3, z: best.z };
-  const hits = view.raycast(x, y);
-  if (hits[0] && hits[0].object.userData) {
-    const u = hits[0].object.userData;
-    return { type: 'cube', q: u.q, r: u.r };
-  }
-  let cube = null, cd = coarse ? 58 : 40;
-  for (const c of game.cubes) {
-    if (c.gone) continue;
-    const w = game.worldOf(c);
-    const p = view.project(w.x, w.y + 0.02, w.z);
-    const d = Math.hypot(p.x - x, p.y - y);
-    if (d < cd) { cd = d; cube = c; }
-  }
-  if (cube) {
-    if (cube.kind === 'mover') {
-      const cell = game.moverCell(cube);
-      return { type: 'cube', q: cell.q, r: cell.r };
-    }
-    return { type: 'cube', q: cube.q, r: cube.r };
-  }
-  return { type: 'sky' };
-}
+function layout() { view.resize(); }
 
 function interactive(target) {
-  return target && target.closest && target.closest('button, a, input, select, .panel, .card');
+  return target && target.closest && target.closest('button, a, input, select, .panel, .card, .stick');
+}
+function pickRobot(x, y) {
+  const rad = matchMedia('(pointer: coarse)').matches ? 74 : 48;
+  let best = null, bestD = rad;
+  for (const bot of game.robots) {
+    const s = view.project(bot.x, bot.z);
+    if (s.behind) continue;
+    const d = Math.hypot(s.x - x, s.y - y);
+    if (d < bestD) { bestD = d; best = bot; }
+  }
+  return best;
+}
+function clampRoom(pt) {
+  if (!pt) return null;
+  return {
+    x: Math.max(0.45, Math.min(game.COLS - 0.45, pt.x)),
+    z: Math.max(0.45, Math.min(game.ROWS - 0.45, pt.z))
+  };
 }
 
 function onDown(e) {
   unlock();
-  if (interactive(e.target)) return;
-  if (screen === 'title' && game.demo) {
-    /* Let a tap on the pyramid hop the attract robot, and also unlock music. */
+  if (interactive(e.target) && !(e.target.closest && e.target.closest('.stick'))) return;
+  const stick = e.target.closest && e.target.closest('.stick');
+  if (stick && sticksOn) {
+    pointers.set(e.pointerId, { type: stick.id === 'stick-l' ? 'left' : 'right' });
+    movePointer(e);
+    e.preventDefault();
+    return;
   }
   if (screen !== 'play' || game.phase === 'over') return;
-  if ($('tut') && !$('tut').hidden && e.target.closest && e.target.closest('#tut')) return;
-  const hit = pick(e.clientX, e.clientY);
-  if (hit.type === 'enemy') {
-    finger = { mode: 'aim', pid: e.pointerId, id: hit.id, x: e.clientX, y: e.clientY };
-    game.fireAt(hit.x, hit.y, hit.z);
-  } else if (hit.type === 'cube') {
-    finger = { mode: 'move', pid: e.pointerId, q: hit.q, r: hit.r, x: e.clientX, y: e.clientY };
+  if (!$('tut').hidden && e.target.closest && e.target.closest('#tut')) return;
+  const bot = pickRobot(e.clientX, e.clientY);
+  if (bot) {
+    pointers.set(e.pointerId, { type: 'robot', id: bot.id, x: e.clientX, y: e.clientY });
+    game.target = null;
+    game.fireAim(bot.x - game.player.x, bot.z - game.player.z);
   } else {
-    const n = autoAim ? nearestFoe() : null;
-    finger = { mode: 'aim', pid: e.pointerId, id: n ? n.id : 0, x: e.clientX, y: e.clientY };
-    if (n) game.fireAt(n.x, n.y + 0.3, n.z);
+    const pt = clampRoom(view.floorPoint(e.clientX, e.clientY));
+    const spot = pt || { x: game.player.x, z: game.player.z };
+    pointers.set(e.pointerId, { type: 'move', x: spot.x, z: spot.z, sx: e.clientX, sy: e.clientY });
+    game.target = { x: spot.x, z: spot.z };
+    game.wish.x = 0; game.wish.z = 0; game.wish.kill = false;
   }
-  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
   e.preventDefault();
 }
-
-function onMove(e) {
-  if (!finger || e.pointerId !== finger.pid) return;
-  finger.x = e.clientX; finger.y = e.clientY;
-  const hit = pick(e.clientX, e.clientY);
-  if (finger.mode === 'move' && hit.type === 'enemy') {
-    finger.mode = 'aim';
-    finger.id = hit.id;
-    game.fireAt(hit.x, hit.y, hit.z);
-  } else if (finger.mode === 'move' && hit.type === 'cube') {
-    finger.q = hit.q; finger.r = hit.r;
-  } else if (finger.mode === 'aim') {
-    if (hit.type === 'enemy') finger.id = hit.id;
-    const id = finger.id;
-    const f = game.foes.find(o => o.id === id) || (game.boss && game.boss.id === id ? game.boss : null);
-    if (f) game.fireAt(f.x, f.y + 0.3, f.z);
-    else if (autoAim) {
-      const n = nearestFoe();
-      if (n) game.fireAt(n.x, n.y + 0.3, n.z);
-    }
+function movePointer(e) {
+  const rec = pointers.get(e.pointerId);
+  if (!rec) return;
+  if (rec.type === 'left' || rec.type === 'right') {
+    const el = $(rec.type === 'left' ? 'stick-l' : 'stick-r');
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - (r.left + r.width / 2)) / (r.width * 0.42);
+    const y = (e.clientY - (r.top + r.height / 2)) / (r.height * 0.42);
+    const L = Math.hypot(x, y) || 1;
+    const k = Math.min(1, L);
+    rec.x = x / L * k;
+    rec.z = y / L * k;
+    const knob = el.querySelector('i');
+    knob.style.transform = `translate(${rec.x * 28}px, ${rec.z * 28}px)`;
+    return;
+  }
+  rec.sx = e.clientX; rec.sy = e.clientY;
+  if (rec.type === 'robot') {
+    const bot = pickRobot(e.clientX, e.clientY);
+    if (bot) rec.id = bot.id;
+  } else {
+    const pt = clampRoom(view.floorPoint(e.clientX, e.clientY));
+    if (pt) { rec.x = pt.x; rec.z = pt.z; }
   }
 }
-
+function onMove(e) { movePointer(e); }
 function onUp(e) {
-  if (!finger || e.pointerId !== finger.pid) return;
-  if (finger.mode === 'move') game.hopTo(finger.q, finger.r);
-  finger = null;
+  const rec = pointers.get(e.pointerId);
+  pointers.delete(e.pointerId);
+  if (rec && (rec.type === 'left' || rec.type === 'right')) {
+    const el = $(rec.type === 'left' ? 'stick-l' : 'stick-r');
+    const knob = el.querySelector('i');
+    knob.style.transform = '';
+  }
 }
 
 canvas.addEventListener('pointerdown', onDown);
-canvas.addEventListener('pointermove', onMove);
-canvas.addEventListener('pointerup', onUp);
-canvas.addEventListener('pointercancel', onUp);
+window.addEventListener('pointerdown', (e) => { if (e.target && e.target.closest && e.target.closest('.stick')) onDown(e); });
+window.addEventListener('pointermove', onMove);
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
 
 window.addEventListener('keydown', (e) => {
   unlock();
-  if (e.code === 'KeyM') { audio.toggleMuted(); saveCfg(); syncOptions(); return; }
-  if (e.code === 'KeyQ') { view.spin -= 0.35; return; }
-  if (e.code === 'KeyE') { view.spin += 0.35; return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyM') { audio.toggleMuted(); saveCfg(); syncOptions(); return; }
   if (screen === 'title' && (e.code === 'Enter' || e.code === 'Space')) { startGame(null, !localStorage.getItem(TUT)); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') {
     if (!$('tut').hidden) { closeTut(); return; }
     if (screen === 'play') { show('pause'); return; }
     if (screen === 'pause') { show('play'); return; }
     if (screen === 'over') { toTitle(); return; }
-    if (screen !== 'title' && screen !== 'play') { show(returnScreen === 'pause' ? 'pause' : 'title'); }
+    if (screen !== 'title') show(returnScreen === 'pause' ? 'pause' : 'title');
     return;
   }
   if (screen === 'over' && !$('initials').hidden) {
@@ -332,46 +252,93 @@ window.addEventListener('keydown', (e) => {
   if (screen !== 'play' || game.phase === 'over') return;
   held.add(e.code);
   if (e.repeat) return;
-  if (e.code === 'Space') fireFacing();
-  else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') doDash();
-  else if (e.code === 'Enter') game.pulse();
-  else keyboardHop(true);
+  const shift = held.has('ShiftLeft') || held.has('ShiftRight');
+  const vec = keyVector();
+  if (shift && Math.hypot(vec.x, vec.z) > 0) {
+    game.wish.x = 0; game.wish.z = 0;
+    const aim = autoAim ? game.autoAim(vec.x, vec.z) : vec;
+    game.fireAim(aim.x, aim.z);
+  } else if (e.code === 'Space') {
+    const aim = autoAim ? game.autoAim(game.player.faceX, game.player.faceZ) : { x: game.player.faceX, z: game.player.faceZ };
+    game.fireAim(aim.x, aim.z);
+  }
 });
 window.addEventListener('keyup', (e) => held.delete(e.code));
 window.addEventListener('blur', () => held.clear());
 
-function keyboardHop(force) {
-  if (screen !== 'play' || game.phase !== 'play') return;
-  const p = game.player;
-  if (p.mode !== 'ground') return;
-  let x = 0, y = 0;
+function keyVector() {
+  let x = 0, z = 0;
   if (held.has('ArrowRight') || held.has('KeyD')) x += 1;
   if (held.has('ArrowLeft') || held.has('KeyA')) x -= 1;
-  if (held.has('ArrowDown') || held.has('KeyS')) y += 1;
-  if (held.has('ArrowUp') || held.has('KeyW')) y -= 1;
-  if (!x && !y) return;
-  const L = Math.hypot(x, y);
-  const step = directionStep(x / L, y / L);
-  if (!step) return;
-  if (force) p.path = [];
-  if (p.path.length) return;
-  game.hopTo(p.q + step.dq, p.r + step.dr);
+  if (held.has('ArrowDown') || held.has('KeyS')) z += 1;
+  if (held.has('ArrowUp') || held.has('KeyW')) z -= 1;
+  return { x, z };
 }
 
-function doDash() {
-  const p = game.player;
-  let dq = p.dq || 1, dr = p.dr || 0;
-  let x = 0, y = 0;
-  if (held.has('ArrowRight') || held.has('KeyD')) x += 1;
-  if (held.has('ArrowLeft') || held.has('KeyA')) x -= 1;
-  if (held.has('ArrowDown') || held.has('KeyS')) y += 1;
-  if (held.has('ArrowUp') || held.has('KeyW')) y -= 1;
-  if (x || y) {
-    const L = Math.hypot(x, y);
-    const step = directionStep(x / L, y / L);
-    if (step) { dq = step.dq; dr = step.dr; }
+function applyInput() {
+  game.wish.x = 0; game.wish.z = 0; game.wish.kill = true;
+  game.firing = false;
+  const shift = held.has('ShiftLeft') || held.has('ShiftRight');
+  const keys = keyVector();
+  const keyMag = Math.hypot(keys.x, keys.z);
+  if (screen === 'play' && game.phase === 'play') {
+    if (shift && keyMag > 0) {
+      game.target = null;
+      game.firing = true;
+      game.aim = { x: keys.x, z: keys.z };
+    } else if (keyMag > 0) {
+      game.target = null;
+      game.wish.x = keys.x; game.wish.z = keys.z;
+      game.aim = { x: keys.x, z: keys.z };
+      game.firing = held.has('Space');
+    } else if (held.has('Space')) {
+      game.firing = true;
+      game.aim = { x: game.player.faceX, z: game.player.faceZ };
+    }
   }
-  game.dash(dq, dr);
+  let moveFinger = null, fireFinger = null, left = null, right = null;
+  for (const rec of pointers.values()) {
+    if (rec.type === 'move') moveFinger = rec;
+    else if (rec.type === 'robot') fireFinger = rec;
+    else if (rec.type === 'left') left = rec;
+    else if (rec.type === 'right') right = rec;
+  }
+  if (sticksOn && left && Math.hypot(left.x, left.z) > 0.2) {
+    game.target = null;
+    game.wish.x = left.x; game.wish.z = left.z;
+    game.aim = { x: left.x, z: left.z };
+  }
+    if (sticksOn && right && Math.hypot(right.x, right.z) > 0.28) {
+      game.firing = true;
+      game.aim = { x: right.x, z: right.z };
+    }
+  if (fireFinger) {
+    const bot = game.robots.find(b => b.id === fireFinger.id) || game.robots[0];
+    if (bot) {
+      game.target = null;
+      game.firing = true;
+      game.aim = { x: bot.x - game.player.x, z: bot.z - game.player.z };
+      ui.aim = { x: bot.x, z: bot.z };
+      ui.target = null;
+    }
+  } else if (moveFinger && screen === 'play') {
+    if (!left) {
+      game.target = { x: moveFinger.x, z: moveFinger.z };
+      game.wish.x = 0; game.wish.z = 0; game.wish.kill = false;
+    }
+    ui.target = { x: moveFinger.x, z: moveFinger.z };
+    const aim = autoAim ? game.autoAim(game.player.faceX, game.player.faceZ) : { x: game.player.faceX, z: game.player.faceZ };
+    const L = Math.hypot(aim.x, aim.z) || 1;
+    ui.aim = { x: game.player.x + aim.x / L * 2.1, z: game.player.z + aim.z / L * 2.1 };
+  } else if (game.firing) {
+    const L = Math.hypot(game.aim.x, game.aim.z) || 1;
+    ui.aim = { x: game.player.x + game.aim.x / L * 2.2, z: game.player.z + game.aim.z / L * 2.2 };
+    ui.target = game.target;
+  } else {
+    ui.aim = null;
+    ui.target = game.target;
+  }
+  if (autoAim && game.firing) game.aim = game.autoAim(game.aim.x, game.aim.z);
 }
 
 function pollPad() {
@@ -380,83 +347,89 @@ function pollPad() {
   if (!gp) return;
   const pressed = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
   const edge = (i) => pressed(i) && !gpWas[i];
-  if (edge(9) || edge(8)) {
-    for (let i = 0; i < gp.buttons.length; i++) gpWas[i] = pressed(i);
+  if (edge(9)) {
     if (screen === 'play') show('pause');
     else if (screen === 'pause') show('play');
     else if (screen === 'title') startGame(null, !localStorage.getItem(TUT));
-    return;
   }
-  if (screen !== 'play' || game.phase !== 'play') {
-    for (let i = 0; i < gp.buttons.length; i++) gpWas[i] = pressed(i);
-    return;
+  if (screen === 'play' && game.phase === 'play') {
+    const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
+    if (Math.hypot(lx, ly) > 0.22) {
+      game.wish.x = lx; game.wish.z = ly; game.wish.kill = true;
+      game.target = null;
+      if (!game.firing) game.aim = { x: lx, z: ly };
+    }
+    const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
+    if (Math.hypot(rx, ry) > 0.35) {
+      game.firing = true;
+      game.aim = { x: rx, z: ry };
+    } else if (pressed(0) || pressed(7)) {
+      game.firing = true;
+      if (!game.aim) game.aim = { x: game.player.faceX, z: game.player.faceZ };
+    }
   }
-  if (edge(0)) fireFacing();
-  if (edge(1)) doDash();
-  if (edge(2)) game.pulse();
-  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
-  if (Math.hypot(ax, ay) > 0.55 && game.player.mode === 'ground' && !game.player.path.length) {
-    const step = directionStep(ax, ay);
-    if (step) game.hopTo(game.player.q + step.dq, game.player.r + step.dr);
-  }
-  const rx = gp.axes[2] || 0;
-  if (Math.abs(rx) > 0.4) view.spin += rx * 0.03;
   for (let i = 0; i < gp.buttons.length; i++) gpWas[i] = pressed(i);
 }
 
 function driveDemo() {
   if (screen !== 'title' || !game.demo) return;
-  const p = game.player;
-  if (p.mode !== 'ground' || p.path.length) return;
-  if (Math.random() > 0.05) return;
-  const left = game.cubes.filter(c => !c.gone && c.prog < c.need && !(c.q === p.q && c.r === p.r));
-  if (!left.length) {
-    const n = DIRS.find(([dq, dr]) => game.hasFooting(p.q + dq, p.r + dr));
-    if (n) game.hopTo(p.q + n[0], p.r + n[1]);
-    return;
+  game.firing = false;
+  game.wish.x = Math.sin(game.time * 0.7);
+  game.wish.z = Math.cos(game.time * 0.5) * 0.65;
+  game.wish.kill = false;
+  game.target = null;
+  const bot = game.robots[0];
+  if (bot && Math.sin(game.time * 3) > 0.65) {
+    game.firing = true;
+    game.aim = { x: bot.x - game.player.x, z: bot.z - game.player.z };
   }
-  left.sort((a, b) => (Math.abs(a.q - p.q) + Math.abs(a.r - p.r)) - (Math.abs(b.q - p.q) + Math.abs(b.r - p.r)));
-  game.hopTo(left[0].q, left[0].r);
-  if (game.foes[0] && p.cool <= 0) game.fireAt(game.foes[0].x, game.foes[0].y, game.foes[0].z);
 }
 
 function playFx() {
   for (const ev of game.fx) {
-    if (ev.k === 'hop' || ev.k === 'dash') audio.playFx('hop');
-    else if (ev.k === 'land') audio.playFx('land');
-    else if (ev.k === 'shot') audio.playFx('shot');
-    else if (ev.k === 'paint') audio.playFx('paint');
-    else if (ev.k === 'boom' || ev.k === 'pulse' || ev.k === 'crumble') audio.playFx('boom');
+    if (ev.k === 'shot') audio.playFx('shot');
+    else if (ev.k === 'boom') audio.playFx('boom');
     else if (ev.k === 'hurt') audio.playFx('hurt');
-    else if (ev.k === 'power' || ev.k === 'shield' || ev.k === 'catch' || ev.k === 'clear' || ev.k === 'life') audio.playFx(ev.k === 'clear' ? 'clear' : 'power');
+    else if (ev.k === 'gleam') audio.playFx('gleam');
+    else if (ev.k === 'clear') audio.playFx('clear');
+    else if (ev.k === 'power' || ev.k === 'shield' || ev.k === 'life') audio.playFx('power');
+  }
+}
+
+function drawMap() {
+  const c = $('map');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  const s = 12;
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const key = (game.rx + dx) + ',' + (game.ry + dy);
+      const here = dx === 0 && dy === 0;
+      if (!here && !game.visited[key]) continue;
+      ctx.fillStyle = here ? '#7ef6ff' : 'rgba(90,140,160,0.85)';
+      ctx.fillRect(w / 2 + dx * s - 4, h / 2 + dy * s - 4, 8, 8);
+    }
   }
 }
 
 function updateHud() {
   $('score').textContent = String(game.score).padStart(6, '0');
-  $('combo').textContent = game.combo > 1 ? 'x' + game.combo : '';
-  $('stage').textContent = game.def.boss ? game.def.name : ('STAGE ' + (game.stage + 1));
+  $('combo').textContent = game.combo > 1 ? ' x' + game.combo + ' ' : '';
+  $('stage').textContent = 'SECTOR ' + game.visits;
   const hearts = Math.max(0, game.player.lives);
-  $('lives').textContent = hearts ? '♥'.repeat(Math.min(5, hearts)) : '—';
-  const prog = game.painted();
-  $('meter').style.width = (prog.need ? (100 * prog.n / prog.need) : 0) + '%';
+  $('lives').textContent = hearts ? '♥'.repeat(Math.min(6, hearts)) : '—';
   const b = $('banner');
   if (game.bannerT > 0) { b.textContent = game.banner; b.classList.add('on'); }
   else b.classList.remove('on');
-  const boss = game.boss && game.boss.hp > 0;
-  $('bossbar').hidden = !boss;
-  if (boss) {
-    $('bossname').textContent = game.boss.name;
-    $('bosshp').style.width = Math.max(0, 100 * game.boss.hp / game.boss.max) + '%';
-  }
-  $('btn-bomb').hidden = !(game.player.bombs > 0);
+  $('gleamwarn').hidden = !(game.gleamIn < 2.2 && game.gleamIn > 0 && !game.gleam);
+  drawMap();
   const box = $('pops');
-  const pops = game.pops;
-  while (box.children.length < pops.length) box.appendChild(document.createElement('div'));
-  while (box.children.length > pops.length) box.removeChild(box.lastChild);
-  pops.forEach((pop, i) => {
+  while (box.children.length < game.pops.length) box.appendChild(document.createElement('div'));
+  while (box.children.length > game.pops.length) box.removeChild(box.lastChild);
+  game.pops.forEach((pop, i) => {
     const el = box.children[i];
-    const s = view.project(pop.x, pop.y + pop.age * 0.6, pop.z);
+    const s = view.project(pop.x, pop.z);
     el.className = 'pop';
     el.style.left = s.x + 'px';
     el.style.top = s.y + 'px';
@@ -464,23 +437,20 @@ function updateHud() {
     el.style.color = pop.tint;
     el.textContent = pop.text;
   });
-  if (game.shake > 0.4) {
-    $('flash').style.opacity = String(Math.min(0.45, game.shake * 0.5));
-  } else $('flash').style.opacity = '0';
+  $('flash').style.opacity = game.shake > 0.35 ? String(Math.min(0.4, game.shake * 0.45)) : '0';
 }
 
 function paintLetters() {
   document.querySelectorAll('[data-li]').forEach((b) => {
     const i = Number(b.getAttribute('data-li'));
     b.textContent = letters[i];
-    b.style.borderColor = i === letterAt ? '#7ef0ff' : '';
+    b.style.borderColor = i === letterAt ? '#3ee7ff' : '';
   });
 }
-
 function openOver() {
   overOpened = true;
   show('over');
-  $('overscore').textContent = 'SCORE ' + game.score + '   ·   REACHED STAGE ' + (game.stage + 1);
+  $('overscore').textContent = 'SCORE ' + game.score + '   ·   SECTOR ' + game.visits;
   const list = loadScores();
   const qualify = game.score > 0 && (list.length < 8 || game.score > list[list.length - 1].score);
   $('initials').hidden = !qualify;
@@ -488,7 +458,7 @@ function openOver() {
 }
 function commitScore() {
   const list = loadScores();
-  list.push({ name: letters.join(''), score: game.score, stage: game.stage + 1 });
+  list.push({ name: letters.join(''), score: game.score, sector: game.visits });
   list.sort((a, b) => b.score - a.score);
   saveScores(list);
   $('initials').hidden = true;
@@ -497,7 +467,6 @@ function toTitle() {
   game = createGame({ seed: (Math.random() * 1e9) | 0, demo: true });
   overOpened = false;
   show('title');
-  layout();
 }
 
 document.body.addEventListener('click', (e) => {
@@ -506,7 +475,6 @@ document.body.addEventListener('click', (e) => {
     unlock();
     if (go === 'play') { startGame(null, !localStorage.getItem(TUT)); return; }
     returnScreen = screen === 'pause' ? 'pause' : 'title';
-    if (screen === 'play') returnScreen = 'pause';
     show(go);
     return;
   }
@@ -520,9 +488,10 @@ $('save-score').addEventListener('click', commitScore);
 $('btn-pause').addEventListener('click', () => { if (screen === 'play') show('pause'); });
 $('btn-mute').addEventListener('click', () => { audio.toggleMuted(); saveCfg(); syncOptions(); });
 $('btn-aim').addEventListener('click', () => { autoAim = !autoAim; saveCfg(); syncOptions(); });
-$('btn-dash').addEventListener('click', () => { unlock(); doDash(); });
-$('btn-bomb').addEventListener('click', () => { unlock(); game.pulse(); });
+$('btn-sticks').addEventListener('click', () => { sticksOn = !sticksOn; saveCfg(); syncOptions(); applySticks(); });
 $('opt-aim').addEventListener('click', () => { autoAim = !autoAim; saveCfg(); syncOptions(); });
+$('opt-sticks').addEventListener('click', () => { sticksOn = !sticksOn; saveCfg(); syncOptions(); applySticks(); });
+$('opt-voices').addEventListener('click', () => { audio.voices = !audio.voices; saveCfg(); syncOptions(); });
 $('opt-mute').addEventListener('click', () => { audio.toggleMuted(); saveCfg(); syncOptions(); });
 $('vol').addEventListener('input', () => { audio.setVolume(Number($('vol').value) / 100); saveCfg(); });
 $('quality').addEventListener('change', () => {
@@ -546,39 +515,23 @@ document.querySelectorAll('[data-li]').forEach((b) => {
   });
 });
 
-function aimVisual() {
-  ui.ghost = null;
-  ui.aim = null;
-  ui.path = game.player.path;
-  if (!finger || screen !== 'play') return;
-  if (finger.mode === 'move') ui.ghost = { q: finger.q, r: finger.r };
-  else {
-    const f = game.foes.find(o => o.id === finger.id) || (game.boss && game.boss.id === finger.id ? game.boss : null);
-    if (f) ui.aim = { on: true, x: f.x, y: f.y + 0.35, z: f.z };
-    else {
-      const hits = view.raycast(finger.x, finger.y);
-      if (hits[0]) ui.aim = { on: true, x: hits[0].point.x, y: hits[0].point.y + 0.3, z: hits[0].point.z };
-      else ui.aim = { on: true, x: game.player.x + game.player.facing.x * 2, y: game.player.y + 0.6, z: game.player.z + game.player.facing.z * 2 };
-    }
-  }
-}
-
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   try {
-    if (screen === 'play' && game.phase !== 'over') {
-      keyboardHop(false);
-      pollPad();
+    if (screen === 'title') driveDemo();
+    else if (screen === 'play' && game.phase !== 'over') applyInput();
+    else { game.firing = false; game.wish.x = 0; game.wish.z = 0; }
+    if (screen === 'play' || screen === 'title') {
+      if (screen === 'play' && game.phase !== 'over') pollPad();
+      if (autoAim && game.firing && game.aim) game.aim = game.autoAim(game.aim.x, game.aim.z);
+      const serial = game.roomSerial;
       game.step(dt);
-    } else if (screen === 'title') {
-      driveDemo();
-      game.step(dt);
+      if (screen === 'play' && serial !== game.roomSerial && audio.voices) audio.speak(game.rx * 13 + game.ry + game.visits);
     }
     if (game.phase === 'over' && screen === 'play' && !overOpened) openOver();
     playFx();
-    aimVisual();
     view.sync(game, dt, ui);
     view.render();
     if (screen === 'play' || screen === 'pause') updateHud();
@@ -591,7 +544,6 @@ function frame(now) {
     api.booted = true;
   } catch (err) {
     if (!api.booted) window.CBFatal(err && err.message ? err.message : 'render failed');
-    else console.error(err);
   }
   requestAnimationFrame(frame);
 }

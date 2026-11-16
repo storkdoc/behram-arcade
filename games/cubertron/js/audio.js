@@ -4,37 +4,54 @@
    The element is not wired into Web Audio. Effects are synthesized. */
 export const TRACKS = [
   {
-    file: 'audio/stripes.mp3',
-    composer: 'John Philip Sousa',
-    piece: 'The Stars and Stripes Forever',
-    performer: 'United States Marine Band, Lt. Col. Jason K. Fettig',
+    file: 'audio/mars.mp3',
+    composer: 'Gustav Holst',
+    piece: 'Mars, the Bringer of War',
+    performer: 'United States Air Force Band',
     license: 'Public domain',
-    page: 'https://commons.wikimedia.org/wiki/File:Sousa%27s_%22The_Stars_and_Stripes_Forever%22_-_United_States_Marine_Band_(2017).mp3'
+    page: 'https://commons.wikimedia.org/wiki/File:Holst-_mars.ogg'
   },
   {
-    file: 'audio/valkyries.mp3',
-    composer: 'Richard Wagner',
-    piece: 'Ride of the Valkyries',
+    file: 'audio/uranus.mp3',
+    composer: 'Gustav Holst',
+    piece: 'Uranus, the Magician',
+    performer: 'United States Air Force Band',
+    license: 'Public domain',
+    page: 'https://commons.wikimedia.org/wiki/File:Holst-_uranus.ogg'
+  },
+  {
+    file: 'audio/saturn.mp3',
+    composer: 'Gustav Holst',
+    piece: 'Saturn, the Bringer of Old Age',
+    performer: 'United States Marine Band',
+    license: 'Public domain',
+    page: 'https://commons.wikimedia.org/wiki/File:HOLST_%22The_Planets,_Op._32_5._Saturn,_the_Bringer_of_Old_Age%22_-_%22The_President%27s_Own%22_U.S._Marine_Band.opus'
+  },
+  {
+    file: 'audio/neptune.mp3',
+    composer: 'Gustav Holst',
+    piece: 'Neptune, the Mystic',
+    performer: 'United States Marine Band',
+    license: 'Public domain',
+    page: 'https://commons.wikimedia.org/wiki/File:HOLST_%22The_Planets,_Op._32_7._Neptune,_the_Mystic%22_-_%22The_President%27s_Own%22_U.S._Marine_Band.opus'
+  },
+  {
+    file: 'audio/zarathustra.mp3',
+    composer: 'Richard Strauss',
+    piece: 'Also sprach Zarathustra — Sunrise',
     performer: 'Philip Milman, conductor',
     license: 'CC BY 3.0',
-    page: 'https://commons.wikimedia.org/wiki/File:Ride_of_the_Valkyries.ogg'
-  },
-  {
-    file: 'audio/mountainking.mp3',
-    composer: 'Edvard Grieg',
-    piece: 'In the Hall of the Mountain King',
-    performer: 'Musopen Symphony',
-    license: 'Public domain',
-    page: 'https://commons.wikimedia.org/wiki/File:Grieg_-_Peer_Gynt_Suite_No._1,_Op._46_-_IV._In_the_Hall_of_the_Mountain_King_(Musopen_Symphony).flac'
-  },
-  {
-    file: 'audio/beethoven5.mp3',
-    composer: 'Ludwig van Beethoven',
-    piece: 'Symphony No. 5, I. Allegro con brio',
-    performer: 'Musopen',
-    license: 'Public domain',
-    page: 'https://commons.wikimedia.org/wiki/File:Ludwig_van_Beethoven_-_symphony_no._5_in_c_minor,_op._67_-_i._allegro_con_brio.ogg'
+    page: 'https://commons.wikimedia.org/wiki/File:Richard_Strauss_-_Also_Sprach_Zarathustra_-_Phillip_Milman_-_Lud_and_Schlatts_Musical_Emporium.wav'
   }
+];
+
+const LINES = [
+  'Unlisted walker.',
+  'This sector is closed.',
+  'The light is watching.',
+  'Leave the grid.',
+  'Your path is not filed.',
+  'Turn back.'
 ];
 
 function shuffle(list, rand) {
@@ -64,14 +81,8 @@ export function createAudio(rand = Math.random) {
   let master = null;
   let noiseBuf = null;
   const api = {
-    el,
-    tracks: TRACKS,
-    track: null,
-    bag: [],
-    volume: 0.8,
-    muted: false,
-    unlocked: false,
-    started: false
+    el, tracks: TRACKS, track: null, bag: [],
+    volume: 0.8, muted: false, unlocked: false, voices: false, started: false
   };
 
   function refill() {
@@ -93,14 +104,12 @@ export function createAudio(rand = Math.random) {
   assign(api.track);
 
   function level() { return api.muted ? 0 : Math.max(0, Math.min(1, api.volume)); }
-
   function apply() {
-    try { el.volume = level(); } catch (e) { /* not yet ready */ }
+    try { el.volume = level(); } catch (e) { /* not ready */ }
     if (master) master.gain.value = level();
   }
-
   function ensureCtx() {
-    if (!AC) return null;
+    if (!AC || !api.unlocked) return null;
     if (!ctx) {
       ctx = new AC();
       master = ctx.createGain();
@@ -117,9 +126,7 @@ export function createAudio(rand = Math.random) {
     }
     return ctx;
   }
-
   function blip(freq, dur, type, gain, slide) {
-    if (!api.unlocked) return;
     const c = ensureCtx();
     if (!c || api.muted || level() < 0.01) return;
     const t = c.currentTime;
@@ -133,9 +140,7 @@ export function createAudio(rand = Math.random) {
     o.connect(g); g.connect(master);
     o.start(t); o.stop(t + dur + 0.02);
   }
-
   function noise(dur, gain, freq) {
-    if (!api.unlocked) return;
     const c = ensureCtx();
     if (!c || !noiseBuf || api.muted) return;
     const t = c.currentTime;
@@ -143,7 +148,7 @@ export function createAudio(rand = Math.random) {
     src.buffer = noiseBuf;
     const filter = c.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = freq || 800;
+    filter.frequency.value = freq || 900;
     const g = c.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -155,37 +160,44 @@ export function createAudio(rand = Math.random) {
   api.setVolume = (v) => { api.volume = Math.max(0, Math.min(1, v)); apply(); };
   api.setMuted = (m) => { api.muted = !!m; apply(); if (!api.muted) api.keepAlive(); };
   api.toggleMuted = () => api.setMuted(!api.muted);
-
   api.sfx = {
-    hop: () => blip(520, 0.09, 'sine', 0.05, 1.6),
-    land: () => { noise(0.05, 0.08, 240); blip(180, 0.07, 'triangle', 0.05, 0.7); },
-    shot: () => blip(880, 0.07, 'sawtooth', 0.035, 0.45),
-    paint: () => blip(660, 0.08, 'triangle', 0.05, 1.35),
-    boom: () => { noise(0.18, 0.16, 180); blip(140, 0.2, 'sine', 0.08, 0.4); },
-    hurt: () => { blip(120, 0.22, 'square', 0.05, 0.5); noise(0.12, 0.08, 300); },
-    power: () => { blip(520, 0.1, 'sine', 0.05, 1.5); blip(780, 0.14, 'triangle', 0.04, 1.2); },
-    clear: () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.16, 'triangle', 0.05, 1), i * 90)); },
-    ui: () => blip(440, 0.04, 'sine', 0.03, 1)
+    shot: () => blip(640, 0.06, 'square', 0.04, 0.45),
+    boom: () => { noise(0.16, 0.14, 220); blip(110, 0.18, 'sawtooth', 0.05, 0.4); },
+    hurt: () => { blip(90, 0.22, 'square', 0.05, 0.4); noise(0.1, 0.07, 180); },
+    power: () => blip(520, 0.12, 'sine', 0.05, 1.6),
+    clear: () => { [523, 659, 784].forEach((f, i) => setTimeout(() => blip(f, 0.14, 'triangle', 0.05, 1), i * 80)); },
+    gleam: () => { blip(70, 0.4, 'sawtooth', 0.06, 0.5); noise(0.25, 0.08, 140); },
+    ui: () => blip(420, 0.04, 'sine', 0.03, 1)
+  };
+  api.playFx = (k) => { const fn = api.sfx[k]; if (fn) fn(); };
+
+  api.speak = (salt) => {
+    if (!api.voices || !api.unlocked || api.muted || !window.speechSynthesis) return;
+    const line = LINES[Math.abs(salt | 0) % LINES.length];
+    try {
+      const u = new SpeechSynthesisUtterance(line);
+      u.rate = 0.92;
+      u.pitch = 0.55;
+      u.volume = Math.max(0, Math.min(1, api.volume * 0.7));
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* synthesis is optional */ }
   };
 
   /* Called synchronously from the gesture that unlocks sound. */
   api.start = () => {
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* older browsers */ }
+    api.unlocked = true;
     ensureCtx();
-    if (ctx && ctx.state !== 'running') {
-      const r = ctx.resume();
-      if (r && r.catch) r.catch(() => {});
-    }
     try {
-      const buf = ctx && ctx.createBuffer(1, 1, 22050);
-      if (buf) {
+      if (ctx) {
+        const buf = ctx.createBuffer(1, 1, 22050);
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(ctx.destination);
         src.start(0);
       }
     } catch (e) { /* silent buffer is only a nudge */ }
-    api.unlocked = true;
     if (!el.src) assign(api.track);
     apply();
     try { el.playbackRate = 1; } catch (e) { /* ignore */ }
@@ -201,7 +213,6 @@ export function createAudio(rand = Math.random) {
     const p = el.play();
     if (p && p.catch) p.catch(() => {});
   };
-
   api.next = () => {
     const incoming = take();
     if (!incoming) return;
@@ -211,19 +222,15 @@ export function createAudio(rand = Math.random) {
     const p = el.play();
     if (p && p.catch) p.catch(() => {});
   };
-
   el.addEventListener('ended', () => { if (api.unlocked) api.next(); });
   el.addEventListener('error', () => {
     if (!api.unlocked || !el.error || el.error.code === 1) return;
     api.next();
   });
-
   api.tick = () => {
     if (!api.unlocked) return;
     try { if (el.playbackRate !== 1) el.playbackRate = 1; } catch (e) { /* ignore */ }
     if (el.paused || el.ended) api.keepAlive();
   };
-
-  api.playFx = (k) => { const fn = api.sfx[k]; if (fn) fn(); };
   return api;
 }

@@ -16,10 +16,11 @@ await p.goto('http://127.0.0.1:8091/games/cubertron/?play=1&seed=4', { waitUntil
 await p.waitForFunction(() => window.CUBERTRON && CUBERTRON.booted);
 await p.evaluate(() => {
   const g = CUBERTRON.game;
-  g.cubes.forEach((c, i) => { if (c.kind !== 'mover' && i % 3 !== 1) c.prog = c.need; });
-  g.spawnFoe('hopper', 2, 0);
-  g.spawnFoe('roller', 1, 2);
+  g.player.inv = 30;
   g.bannerT = 0;
+  if (g.openAt(g.player.x + 1.6, g.player.z + 0.4)) g.spawnRobot(g.player.x + 1.6, g.player.z + 0.4, 1);
+  if (g.openAt(g.player.x - 1.2, g.player.z + 1.1)) g.spawnRobot(g.player.x - 1.2, g.player.z + 1.1, 0);
+  g.fireAim(1, 0.2);
   document.getElementById('hud').hidden = true;
   document.getElementById('home').style.display = 'none';
   const sticker = document.querySelector('#mood-sticker, .mood-sticker, button.mood');
