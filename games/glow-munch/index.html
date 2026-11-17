@@ -57,7 +57,13 @@
   <button type="button" class="iconbtn" id="btn-pause" aria-label="Pause">II</button>
   <button type="button" class="iconbtn" id="btn-mute" aria-label="Mute">SND</button>
   <div id="meter" aria-hidden="true"><i></i></div>
-  <button type="button" id="boost">BOOST</button>
+  <div id="dock">
+    <div id="stick" role="slider" aria-label="Joystick" aria-valuetext="center">
+      <span class="stick-cross" aria-hidden="true"></span>
+      <i id="knob"></i>
+    </div>
+    <button type="button" id="boost">BOOST</button>
+  </div>
 </div>
 
 <div id="title" class="screen">
@@ -88,8 +94,10 @@
     <table class="keys">
       <tr><td>Arrows / WASD</td><td>Turn. A press just before a corner is remembered.</td></tr>
       <tr><td>Space</td><td>Dash, when the meter is full</td></tr>
-      <tr><td>Swipe</td><td>Turn that way and keep going</td></tr>
-      <tr><td>Tap</td><td>Head toward that spot. Double-tap dashes.</td></tr>
+      <tr><td>Joystick</td><td>Push the stick. It snaps to four ways, with a small dead zone, and a push just before a corner is remembered.</td></tr>
+      <tr><td>BOOST</td><td>Dash when the meter is full. The button sits beside the stick.</td></tr>
+      <tr><td>Swipe</td><td>Also turns, if you drag on the maze.</td></tr>
+      <tr><td>Gamepad</td><td>Left stick or d-pad turns. A dashes. Start pauses.</td></tr>
       <tr><td>P / Esc</td><td>Pause</td></tr>
       <tr><td>M</td><td>Mute</td></tr>
     </table>

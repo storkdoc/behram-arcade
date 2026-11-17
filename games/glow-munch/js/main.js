@@ -22,10 +22,12 @@
   let overOpened = false;
   const held = [];
   const ptr = { id: null, x: 0, y: 0, swiped: false };
-  let lastTap = 0;
-  let lastTapPos = null;
   const gpWas = [];
   let padHeld = false;
+  let stickHeld = false;
+  let stickPointer = null;
+  const STICK_DEAD = 12;
+  const STICK_MAX = 28;
 
   function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG) || '{}'); } catch (e) { return {}; } }
   const cfg = loadCfg();
@@ -51,11 +53,14 @@
 
   const api = {
     booted: false,
+    stickDir: null,
     get screen() { return screen; },
     get game() { return game; },
     audio: audio,
     project(x, y) { return render.project(x, y); },
-    tileAt(px, py) { return render.tileAt(px, py); }
+    tileAt(px, py) { return render.tileAt(px, py); },
+    board() { return render.view(); },
+    stickOn() { return document.body.classList.contains('stick-on'); }
   };
   window.GLOWMUNCH = api;
 
@@ -155,7 +160,64 @@
     audio.playFx('ui');
   }
 
-  function layout() { render.layout(insets()); }
+  function stickWanted() {
+    if (qs.get('touch') === '0') return false;
+    if (qs.get('touch') === '1') return true;
+    if (matchMedia('(pointer: coarse)').matches) return true;
+    return Math.min(window.innerWidth, window.innerHeight) <= 520;
+  }
+  function placeDock() {
+    const on = stickWanted();
+    const side = on && window.innerWidth > window.innerHeight && window.innerHeight < 520;
+    document.body.classList.toggle('stick-on', on);
+    document.body.classList.toggle('stick-side', side);
+    document.body.classList.toggle('stick-below', on && !side);
+  }
+  function layout() {
+    placeDock();
+    const ins = insets();
+    const side = document.body.classList.contains('stick-side');
+    const below = document.body.classList.contains('stick-below');
+    render.layout({
+      top: ins.top,
+      right: ins.right,
+      bottom: ins.bottom,
+      left: ins.left,
+      extraBottom: below ? 156 : 8,
+      extraLeft: side ? 124 : 8,
+      extraRight: side ? 108 : 8
+    });
+  }
+  function applyStick(dx, dy) {
+    const dist = Math.hypot(dx, dy);
+    let dir = null;
+    let kx = 0;
+    let ky = 0;
+    if (dist >= STICK_DEAD) {
+      dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3);
+      const travel = Math.min(STICK_MAX, dist);
+      kx = dir === 0 ? travel : dir === 2 ? -travel : 0;
+      ky = dir === 1 ? travel : dir === 3 ? -travel : 0;
+    }
+    $('knob').style.transform = 'translate(' + kx.toFixed(1) + 'px,' + ky.toFixed(1) + 'px)';
+    api.stickDir = dir;
+    const names = ['right', 'down', 'left', 'up'];
+    $('stick').setAttribute('aria-valuetext', dir == null ? 'center' : names[dir]);
+    if (!game || screen !== 'play') return;
+    if (dir == null) {
+      if (stickHeld) {
+        stickHeld = false;
+        if (!held.length && !padHeld) game.release();
+      }
+    } else {
+      stickHeld = true;
+      game.hold(dir);
+    }
+  }
+  function stickVector(e) {
+    const r = $('stick').getBoundingClientRect();
+    return { dx: e.clientX - (r.left + r.width / 2), dy: e.clientY - (r.top + r.height / 2) };
+  }
 
   function noteEvents(g) {
     if (!g || !g.events) return;
@@ -187,7 +249,7 @@
     if (gp.buttons[14] && gp.buttons[14].pressed) dir = 2;
     if (gp.buttons[15] && gp.buttons[15].pressed) dir = 0;
     if (dir != null) { game.hold(dir); padHeld = true; }
-    else if (padHeld) { padHeld = false; if (!held.length && ptr.id == null) game.release(); }
+    else if (padHeld) { padHeld = false; if (!held.length && ptr.id == null && !stickHeld) game.release(); }
     const a = gp.buttons[0] && gp.buttons[0].pressed;
     if (a && !gpWas[0]) game.dash();
     gpWas[0] = a;
@@ -245,20 +307,32 @@
     const dist = Math.hypot(x - ptr.x, y - ptr.y);
     ptr.id = null;
     if (screen !== 'play' || !game) return;
-    if (swiped) return;
+    if (swiped || api.stickOn()) return;
     if (dist > 18) return;
-    const nowTap = performance.now();
-    const close = lastTapPos && Math.hypot(x - lastTapPos.x, y - lastTapPos.y) < 32;
-    if (close && nowTap - lastTap < 280) {
-      game.dash();
-      lastTap = 0;
-      return;
-    }
-    lastTap = nowTap;
-    lastTapPos = { x: x, y: y };
     const tile = render.tileAt(x, y);
     if (tile) game.tapTile(tile.x, tile.y);
   });
+  $('stick').addEventListener('pointerdown', (e) => {
+    unlock();
+    if (screen !== 'play') return;
+    stickPointer = e.pointerId;
+    try { $('stick').setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const v = stickVector(e);
+    applyStick(v.dx, v.dy);
+    e.preventDefault();
+  });
+  $('stick').addEventListener('pointermove', (e) => {
+    if (e.pointerId !== stickPointer) return;
+    const v = stickVector(e);
+    applyStick(v.dx, v.dy);
+  });
+  function endStick(e) {
+    if (stickPointer == null || (e && e.pointerId !== stickPointer)) return;
+    stickPointer = null;
+    applyStick(0, 0);
+  }
+  $('stick').addEventListener('pointerup', endStick);
+  $('stick').addEventListener('pointercancel', endStick);
   document.addEventListener('pointercancel', () => { ptr.id = null; });
 
   document.addEventListener('keydown', (e) => {

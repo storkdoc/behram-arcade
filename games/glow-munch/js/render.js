@@ -27,9 +27,9 @@
       }
       const logic = L();
       const top = (inset.top || 0) + 54;
-      const bottom = (inset.bottom || 0) + 10;
-      const left = (inset.left || 0) + 8;
-      const right = (inset.right || 0) + 8;
+      const bottom = (inset.bottom || 0) + (inset.extraBottom == null ? 8 : inset.extraBottom);
+      const left = (inset.left || 0) + (inset.extraLeft == null ? 8 : inset.extraLeft);
+      const right = (inset.right || 0) + (inset.extraRight == null ? 8 : inset.extraRight);
       const availW = Math.max(40, w - left - right);
       const availH = Math.max(40, h - top - bottom);
       const tile = Math.min(availW / logic.COLS, availH / logic.ROWS);
