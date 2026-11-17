@@ -442,7 +442,7 @@ COB_BANK.push(
       'A breast abscess needs drainage, preferably by ultrasound-guided needle aspiration, which may need to be repeated. Send the fluid for culture and consider MRSA coverage. Breastfeeding can continue.'],
     ['Diagnosis', 'At 4 months postpartum she has palpitations, weight loss and a small painless goiter. TSH is low, free T4 is high and anti-TPO antibodies are positive. What is the best management?',
       ['Propranolol for symptoms; no antithyroid drugs', 'Methimazole until levels normalize, as for Graves disease', 'Radioactive iodine, with a pause in breastfeeding', 'Total thyroidectomy, since the goiter will recur', 'High-dose prednisone to suppress the inflammation'],
-      'Postpartum thyroiditis is a destructive thyroiditis: hormone leaks out of the gland rather than being overproduced, so thionamides do not help. The thyrotoxic phase (1\u20134 months) is often followed by hypothyroidism (4\u20138 months). Radioactive iodine is contraindicated while breastfeeding. Then watch for a hypothyroid phase.'],
+      'Postpartum thyroiditis is a destructive thyroiditis: hormone leaks out of the gland rather than being overproduced, so thionamides do not help. The thyrotoxic phase (1\u20134 months) is often followed by hypothyroidism (4\u20138 months). Radioactive iodine is contraindicated while breastfeeding.'],
     ['Diagnosis', 'A different patient had a massive postpartum hemorrhage with hypotension. Her milk never came in and she has fatigue and cold intolerance. What is the most likely diagnosis?',
       ['Sheehan syndrome (pituitary necrosis)', 'Asherman syndrome (intrauterine adhesions)', 'Postpartum (painless) thyroiditis', 'Lactotroph adenoma (prolactinoma)', 'Normal postpartum recovery'],
       'The pituitary enlarges in pregnancy and is vulnerable to ischemia from hemorrhagic shock. Failure to lactate (prolactin) is often the first sign, followed by hypothyroidism, adrenal insufficiency and amenorrhea. Check cortisol, ACTH, TSH/free T4, prolactin and gonadotropins.']
@@ -606,7 +606,7 @@ COB_BANK.push(
       'CDC: only topical azoles for 7 days in pregnancy. Oral fluconazole has been associated with miscarriage and, at high doses, with birth defects.'],
     ['Management', 'She has had 4 culture-confirmed episodes of C. albicans in the past year. What is recommended?',
       ['Fluconazole induction, then weekly for 6 months', 'One fluconazole dose at the start of each episode', 'Treat her partner with fluconazole too', 'Daily oral nystatin, continued indefinitely', 'Long-term metronidazole gel twice weekly'],
-      'Recurrent VVC (3 or more episodes in a year): confirm with culture, then induction (10\u201314 days of topical azole, or fluconazole on days 1, 4 and 7) followed by weekly fluconazole 150 mg for 6 months. Look for diabetes or immunosuppression. Induction is fluconazole every 72 hours for 3 doses.'],
+      'Recurrent VVC (3 or more episodes in a year): confirm with culture, then induction (10\u201314 days of topical azole, or fluconazole on days 1, 4 and 7) followed by weekly fluconazole 150 mg for 6 months. Look for diabetes or immunosuppression.'],
     ['Management', 'A culture during a later episode grows Candida glabrata, which persists after a fluconazole course. What is a good next treatment?',
       ['Vaginal boric acid 600 mg daily for 21 days', 'A higher dose of oral fluconazole for 14 days', 'Oral terbinafine 250 mg daily', 'Oral metronidazole for 7 days', 'Single-dose clotrimazole vaginal cream'],
       'Non-albicans species (especially C. glabrata) are often fluconazole-resistant. CDC suggests a longer course of a non-fluconazole azole first, and boric acid 600 mg vaginally for 3 weeks for recurrence. Boric acid is toxic if swallowed, so it must be kept away from children.']
@@ -834,7 +834,7 @@ COB_BANK.push(
       'Letrozole achieves higher live-birth rates than clomiphene in PCOS (NICHD PPCOS II trial) and is first-line per ASRM and the international guideline. Gonadotropins and IVF are second- and third-line.'],
     ['Counseling', 'Besides medication, which lifestyle step improves her chance of ovulating?',
       ['Modest weight loss', 'Avoiding exercise', 'Strict bed rest', 'Increasing daily caffeine', 'A high-carbohydrate diet'],
-      'Even modest weight loss restores ovulation in many patients with PCOS and improves metabolic risks. Lifestyle should not delay fertility treatment for long, especially as age increases. Losing 5\u201310% of body weight can restore ovulation.'],
+      'Even modest weight loss (5\u201310% of body weight) restores ovulation in many patients with PCOS and improves metabolic risks. Lifestyle should not delay fertility treatment for long, especially as age increases.'],
     ['Workup', 'How can ovulation on letrozole be confirmed?',
       ['A midluteal serum progesterone above 3 ng/mL (about 7 days before menses)', 'A day-3 FSH level below 10 IU/L at the start of the next cycle', 'An AMH level drawn on any day of the cycle', 'A serum estradiol on day 1 of the next period', 'A serum prolactin drawn the morning after expected ovulation'],
       'Ovulation is confirmed by a midluteal progesterone above 3 ng/mL (or ultrasound follicle monitoring, or a urinary LH kit). If she does not ovulate, the dose is increased stepwise.'],
@@ -900,7 +900,7 @@ COB_BANK.push(
       'Contraindications: breast or endometrial cancer, unexplained vaginal bleeding, active or prior VTE or stroke, coronary disease, and active liver disease. Transdermal estrogen carries a lower VTE risk than oral estrogen.'],
     ['Management', 'If she could not use hormones, which nonhormonal medication is FDA-approved for moderate-to-severe hot flashes?',
       ['Fezolinetant (a neurokinin-3 antagonist)', 'Black cohosh extract', 'Vitamin E 800 IU daily', 'Gabapentin, the only approved option', 'Low-dose testosterone'],
-      'Fezolinetant (2023) targets KNDy neurons in the thermoregulatory center. It carries a boxed warning for liver injury, so check liver tests before starting and periodically. Paroxetine 7.5 mg is also FDA-approved. Venlafaxine and gabapentin are off-label options, and elinzanetant was approved later. Monitor liver enzymes on fezolinetant.'],
+      'Fezolinetant (2023) targets KNDy neurons in the thermoregulatory center. It carries a boxed warning for liver injury, so check liver tests before starting and periodically. Paroxetine 7.5 mg is also FDA-approved. Venlafaxine and gabapentin are off-label options, and elinzanetant was approved later.'],
     ['Management', 'A year later she has vaginal dryness and pain with intercourse but no hot flashes. What is the best treatment?',
       ['Low-dose vaginal estrogen', 'Systemic estrogen plus progestin', 'Oral fluconazole', 'Vaginal boric acid', 'Testosterone pellets'],
       'Genitourinary syndrome of menopause responds well to local vaginal estrogen, with minimal systemic absorption and no progestogen needed. Moisturizers and lubricants are first-line for mild symptoms. Vaginal DHEA and ospemifene are alternatives.']
