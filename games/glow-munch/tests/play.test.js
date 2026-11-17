@@ -1,4 +1,4 @@
-/* GLOW MUNCH: boots, keyboard play, swipe and tap-to-steer, iPhone safe layout.
+/* GLOW MUNCH: boots, keyboard play, on-screen joystick, iPhone safe layout.
    python3 -m http.server 8091
    NODE_PATH=<dir with playwright-core> node games/glow-munch/tests/play.test.js
    Env: BASE, CHROME */
@@ -12,6 +12,23 @@ const check = (ok, msg, extra) => {
   if (!ok) fails++;
   console.log(ok ? '  PASS' : '  FAIL', msg, extra === undefined ? '' : JSON.stringify(extra));
 };
+
+async function holdStick(page, x0, y0, x1, y1, ms) {
+  const cdp = await page.context().newCDPSession(page);
+  const pt = (x, y) => ({ x: Math.round(x), y: Math.round(y) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(x0, y0)] });
+  await page.waitForTimeout(40);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [pt(x1, y1)] });
+  await page.waitForFunction(() => GLOWMUNCH.stickDir === 0 && GLOWMUNCH.game.player.dir === 0 && GLOWMUNCH.game.player.x > 10.8, null, { timeout: ms });
+  const mid = await page.evaluate(() => ({
+    x: GLOWMUNCH.game.player.x,
+    dir: GLOWMUNCH.game.player.dir,
+    wish: GLOWMUNCH.game.player.wish,
+    stick: GLOWMUNCH.stickDir
+  }));
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  return mid;
+}
 
 async function swipe(page, x0, y0, x1, y1) {
   const cdp = await page.context().newCDPSession(page);
@@ -33,7 +50,7 @@ async function swipe(page, x0, y0, x1, y1) {
     args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required']
   });
   const open = async (opts, url) => {
-    const c = await b.newContext({ ...opts, hasTouch: true });
+    const c = await b.newContext(opts);
     const p = await c.newPage();
     p.errs = [];
     p.on('console', m => { if (m.type() === 'error') p.errs.push(m.text()); });
@@ -78,6 +95,7 @@ async function swipe(page, x0, y0, x1, y1) {
     return { cross: el.getAttribute('crossorigin'), inline: el.getAttribute('playsinline'), src: el.getAttribute('src') || el.src };
   });
   check(audio.cross == null && audio.inline != null && /galop\.mp3/.test(audio.src), 'music element is inline, with no crossorigin', audio);
+  check(await desk.evaluate(() => getComputedStyle(document.getElementById('dock')).display === 'none'), 'desktop keeps the joystick off the board');
   await desk.evaluate(() => {
     const g = GLOWMUNCH.game;
     g.phase = 'play';
@@ -85,10 +103,10 @@ async function swipe(page, x0, y0, x1, y1) {
     g.ghosts.forEach(gh => { gh.x = 14; gh.y = 10; gh.mode = 'scatter'; });
   });
   await desk.keyboard.down('ArrowRight');
-  await desk.waitForTimeout(450);
+  await desk.waitForFunction(() => GLOWMUNCH.game.player.dir === 0 && GLOWMUNCH.game.player.x > 11, null, { timeout: 2000 });
   await desk.keyboard.up('ArrowRight');
   const moved = await desk.evaluate(() => ({ x: GLOWMUNCH.game.player.x, score: GLOWMUNCH.game.score, phase: GLOWMUNCH.game.phase, dir: GLOWMUNCH.game.player.dir }));
-  check(moved.phase === 'play' && moved.dir === 0 && moved.x > 10.4 && moved.score >= 10, 'arrow key turns, moves, and eats a light', moved);
+  check(moved.phase === 'play' && moved.dir === 0 && moved.x > 11 && moved.score >= 10, 'arrow key turns, moves, and eats a light', moved);
   check(await desk.evaluate(() => GLOWMUNCH.audio.unlocked), 'the first key unlocks audio');
   await desk.evaluate(() => { GLOWMUNCH.game.player.meter = 100; GLOWMUNCH.game.player.dash = 0; });
   await desk.keyboard.press('Space');
@@ -127,21 +145,39 @@ async function swipe(page, x0, y0, x1, y1) {
     const afterSwipe = await p.evaluate(() => ({ x: GLOWMUNCH.game.player.x, y: GLOWMUNCH.game.player.y, dir: GLOWMUNCH.game.player.dir, wish: GLOWMUNCH.game.player.wish }));
     check(afterSwipe.dir === 3 || afterSwipe.wish === 3 || afterSwipe.y < before.y - 0.15, label + ': a swipe up turns the spark upward', { before: before, after: afterSwipe });
 
+    const fit = await p.evaluate(() => {
+      const b = GLOWMUNCH.board();
+      const maze = { left: b.ox, top: b.oy, right: b.ox + b.boardW, bottom: b.oy + b.boardH, tile: b.tile };
+      const stick = document.getElementById('stick').getBoundingClientRect();
+      const boost = document.getElementById('boost').getBoundingClientRect();
+      const hit = (r) => !(r.right < maze.left + 2 || r.left > maze.right - 2 || r.bottom < maze.top + 2 || r.top > maze.bottom - 2);
+      return {
+        maze: maze,
+        stick: { left: stick.left, top: stick.top, right: stick.right, bottom: stick.bottom, w: stick.width, h: stick.height },
+        boost: { left: boost.left, top: boost.top, right: boost.right, bottom: boost.bottom },
+        w: innerWidth, h: innerHeight,
+        shown: getComputedStyle(document.getElementById('dock')).display !== 'none',
+        coverStick: hit(stick),
+        coverBoost: hit(boost)
+      };
+    });
+    check(fit.shown && fit.stick.w >= 80 && fit.stick.h >= 80, label + ': a neon joystick is on screen', fit.stick);
+    check(fit.maze.top >= -1 && fit.maze.left >= -1 && fit.maze.right <= fit.w + 1 && fit.maze.bottom <= fit.h + 1 && fit.maze.tile >= 8, label + ': the maze stays fully on screen', fit.maze);
+    check(!fit.coverStick && !fit.coverBoost, label + ': the stick and boost sit off the maze', { maze: fit.maze, stick: fit.stick, boost: fit.boost });
+    check(Math.abs((fit.stick.top + fit.stick.bottom) / 2 - (fit.boost.top + fit.boost.bottom) / 2) < 80, label + ': boost sits beside the stick', { stick: fit.stick, boost: fit.boost });
     await p.evaluate(() => {
       const g = GLOWMUNCH.game;
       g.phase = 'play';
-      g.player.x = 8; g.player.y = 25; g.player.dir = 2; g.player.wish = null; g.player.wishHeld = false; g.player.goal = null;
+      g.player.x = 10; g.player.y = 25; g.player.dir = 2; g.player.wish = null; g.player.wishHeld = false; g.player.goal = null;
       g.ghosts.forEach(gh => { gh.x = 14; gh.y = 10; gh.mode = 'scatter'; });
     });
-    const aim = await p.evaluate(() => {
-      const s = GLOWMUNCH.project(14, 25);
-      return { x: s.x, y: s.y, tile: GLOWMUNCH.tileAt(s.x, s.y) };
+    const hub = await p.evaluate(() => {
+      const s = document.getElementById('stick').getBoundingClientRect();
+      return { x: s.left + s.width / 2, y: s.top + s.height / 2 };
     });
-    await p.touchscreen.tap(aim.x, aim.y);
-    await p.waitForTimeout(550);
-    const steered = await p.evaluate(() => ({ x: GLOWMUNCH.game.player.x, dir: GLOWMUNCH.game.player.dir }));
-    check(!!aim.tile && steered.dir === 0 && steered.x > 8.6, label + ': a tap heads toward that spot', { aim: aim, steered: steered });
-    check(await p.evaluate(() => GLOWMUNCH.audio.unlocked), label + ': the first tap unlocks audio');
+    const steered = await holdStick(p, hub.x, hub.y, hub.x + 46, hub.y, 2000);
+    check(steered.stick === 0 && steered.dir === 0 && steered.x > 10.8, label + ': pushing the joystick right turns and moves', steered);
+    check(await p.evaluate(() => GLOWMUNCH.audio.unlocked), label + ': the joystick touch unlocks audio');
     const audioEl = await p.evaluate(() => {
       const el = document.querySelector('audio');
       return { cross: el.getAttribute('crossorigin'), inline: el.getAttribute('playsinline') };
@@ -152,6 +188,8 @@ async function swipe(page, x0, y0, x1, y1) {
   }
 
   await touchPlay('iPhone', devices['iPhone 13']);
+  await touchPlay('iPhone 390x844', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await touchPlay('iPhone 375x667', { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await touchPlay('landscape', { ...devices['iPhone 13 landscape'] });
 
   console.log('== iPhone title safe area');
