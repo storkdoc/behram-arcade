@@ -5,6 +5,20 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'glow-munch',
+    title: 'GLOW MUNCH',
+    marquee: 'neon',
+    tagline: 'Eat the lights. Slip the four. Dash when the meter is full.',
+    description: 'A neon maze chase in the spirit of the 1980 dot-eater. You are a spark. The lanes are full of lights, and four wisps hunt you with different minds: Rush comes straight, Veil aims where you are going, Echo steers off Rush, and Loom hangs back until you are close. Power lamps turn the wisps, and a chain of bites pays 200, 400, 800 and 1600. A treat appears twice a lane. Each lane is faster, and an even lane ends with a short act. Eat in a run and the lights are worth more. A boost meter, filled by eating, spends on a dash. The board glows, shakes, and throws sparks when a chain lands. High scores stay on this device. The music is real Marine Band recordings of Offenbach and Sousa. Sound effects are synthesized.',
+    controls: 'arrows or WASD turn, and a press just before a corner is remembered · SPACE dashes when the meter is full · P or ESC pauses · M mutes · ENTER starts · gamepad: stick or d-pad turns, A dashes, Start pauses',
+    touch: 'swipe to turn · tap a spot to head that way · double-tap, or the BOOST button, dashes when the meter is full · works in portrait and landscape on iPhone and iPad, with safe areas',
+    thumb: 'games/glow-munch/thumb.png',
+    added: '2026-11-17',
+    genre: 'ARCADE',
+    year: '1980 STYLE',
+    accent: '#ffd24a'
+  },
+  {
     slug: 'cubertron',
     title: 'CUBERTRON',
     marquee: 'neon',

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07060f">
+<title>GLOW MUNCH — Behram Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script>
+(function () {
+  var shown = false;
+  window.GMFatal = function (msg) {
+    if (shown) return; shown = true;
+    var show = function () {
+      var d = document.createElement('div'); d.id = 'fatal';
+      d.textContent = 'GLOW MUNCH hit a problem on this device:\n' + msg + '\n';
+      var b = document.createElement('button'); b.textContent = 'RELOAD';
+      b.onclick = function () { location.reload(); }; d.appendChild(b);
+      document.body.appendChild(d);
+    };
+    if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+  };
+  addEventListener('error', function (e) {
+    if (!(e instanceof ErrorEvent)) return;
+    if (!(window.GLOWMUNCH && window.GLOWMUNCH.booted)) GMFatal((e.message || 'script error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+  }, true);
+  addEventListener('unhandledrejection', function (e) {
+    if (!(window.GLOWMUNCH && window.GLOWMUNCH.booted)) GMFatal('startup: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown'));
+  });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+  var last = 0;
+  document.addEventListener('touchend', function (e) {
+    var t = Date.now();
+    if (t - last < 320 && e.target && !/INPUT|TEXTAREA|SELECT|BUTTON|A/.test(e.target.tagName)) e.preventDefault();
+    last = t;
+  }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+</script>
+<script src="../../assets/js/mood-sticker.js"></script>
+</head>
+<body>
+<div id="safe" aria-hidden="true"></div>
+<canvas id="view"></canvas>
+<a id="home" href="../../index.html">←<span> ARCADE</span></a>
+
+<div id="hud" hidden>
+  <div class="topbar">
+    <b id="score">0</b>
+    <span id="lane">LANE 1</span>
+    <span id="combo"></span>
+    <span id="lives"></span>
+  </div>
+  <button type="button" class="iconbtn" id="btn-pause" aria-label="Pause">II</button>
+  <button type="button" class="iconbtn" id="btn-mute" aria-label="Mute">SND</button>
+  <div id="meter" aria-hidden="true"><i></i></div>
+  <button type="button" id="boost">BOOST</button>
+</div>
+
+<div id="title" class="screen">
+  <div class="card">
+    <p class="eyebrow">BEHRAM ARCADE</p>
+    <h1>GLOW MUNCH</h1>
+    <p class="tag">Eat the lights. Slip the four. A dash when the meter is full.</p>
+    <div class="menu">
+      <button type="button" class="primary" id="play">PLAY</button>
+      <div class="row">
+        <button type="button" data-go="how">HOW TO PLAY</button>
+        <button type="button" data-go="scores">HIGH SCORES</button>
+      </div>
+      <div class="row">
+        <button type="button" data-go="options">OPTIONS</button>
+        <button type="button" data-go="credits">CREDITS</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="how" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>HOW TO PLAY</h2>
+    <p>You are a spark in a neon maze. Eat every light. Four wisps hunt you, and each one thinks differently. Rush comes straight for you. Veil aims where you are headed. Echo steers off Rush. Loom hangs back until you are close, then peels away.</p>
+    <p>Power lamps turn the wisps. A chain of bites pays 200, then 400, 800, and 1600. Keep moving and the lights are worth more. The meter fills as you eat. Spend it on a dash. Treats appear twice a lane. Each lane is a little faster. Touch a wisp that is not turned and you lose a spark.</p>
+    <table class="keys">
+      <tr><td>Arrows / WASD</td><td>Turn. A press just before a corner is remembered.</td></tr>
+      <tr><td>Space</td><td>Dash, when the meter is full</td></tr>
+      <tr><td>Swipe</td><td>Turn that way and keep going</td></tr>
+      <tr><td>Tap</td><td>Head toward that spot. Double-tap dashes.</td></tr>
+      <tr><td>P / Esc</td><td>Pause</td></tr>
+      <tr><td>M</td><td>Mute</td></tr>
+    </table>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="scores" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>HIGH SCORES</h2>
+    <div id="scorelist"></div>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="credits" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>CREDITS</h2>
+    <div id="creditlist"></div>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="options" class="screen" hidden>
+  <div class="panel">
+    <button type="button" class="x" data-back aria-label="Close">✕</button>
+    <h2>OPTIONS</h2>
+    <div class="field"><label for="vol">VOLUME</label><input id="vol" type="range" min="0" max="100" value="80"></div>
+    <button type="button" id="opt-mute">SOUND: ON</button>
+    <button type="button" class="wide" data-back>BACK</button>
+  </div>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <div class="menu">
+      <button type="button" class="primary" id="resume">RESUME</button>
+      <button type="button" data-go="how">HOW TO PLAY</button>
+      <button type="button" data-go="options">OPTIONS</button>
+      <button type="button" id="quit">QUIT</button>
+    </div>
+  </div>
+</div>
+
+<div id="over" class="screen" hidden>
+  <div class="panel">
+    <h2>GAME OVER</h2>
+    <p id="overscore"></p>
+    <div id="initials">
+      <p>NEW HIGH SCORE. ENTER YOUR INITIALS.</p>
+      <div class="letters">
+        <button type="button" data-li="0">A</button>
+        <button type="button" data-li="1">A</button>
+        <button type="button" data-li="2">A</button>
+      </div>
+      <button type="button" class="wide" id="save-score">SAVE</button>
+    </div>
+    <div class="menu">
+      <button type="button" class="primary" id="again">PLAY AGAIN</button>
+      <button type="button" id="over-menu">MENU</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/logic.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
