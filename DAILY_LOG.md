@@ -757,3 +757,90 @@ Clusters: (a) exam-style reference support in Clinic Day; (b) Fast Money time pr
 - VORTEX: captures are top again after the fuse fix. Check BREAK FREE uptake (bot offers 2, used 0, because the bot never presses zap
   while dragged) and the grab telegraph on touch. De-flake vortex-fuseland (pin `jumping:false` before the first step).
 - Re-read feedback first: these were the first real notes in 7 days. Check whether 40/45 s and the lab sheet change behaviour.
+
+## 2026-11-17 (day 21): VORTEX kill cam + Clinic Day text cleanup
+
+Fresh worktree `/workspace/arcade-daily-2026-11-17` from `8a18af2`, headless Chrome (SwiftShader), desktop 1440×900 + iPhone 14.
+**Why Nov 14–16 have no entry / why yesterday was marked failed:** Nov 14–15 left their work stranded. Nov 16 recovered it and
+pushed 3 commits (`992a42e` VORTEX RUN REPORT + LAST-ZAP BREAK FREE, `e39dc49` Clinic Day Asherman text, `8a18af2` VORTEX
+PULSAR CHARGE-UP). It then ran three test sweeps and Neuro Arena in parallel (load ~35 on 8 cores) and re-ran the failing page
+tests, and it never wrote this log. The work shipped; the log did not. Today each change was pushed as soon as its tests
+passed, and this entry was written before the slow re-runs finished.
+Its leftover failures were re-checked today (see Findings); none is a game bug.
+Skipped as under active development elsewhere: Cubertron (3 cloud-agent commits Nov 15–16 + open `cursor/cubertron-*` branches),
+Me & My Placenta (open `cursor/placenta-*` branches), Jukebox, plus the separate `cosmic-odyssey-wip` branch.
+
+### Player feedback (Nov 13 06:00 → Nov 17, `node tools/read-feedback.mjs --hours 100`): **0 real submissions**
+The store is reachable: the Nov 13 doc still holds the 3 notes acted on that day. The Nov 14–17 docs are empty, test records
+included. So there are no ratings to tally and no suggestions to cluster. We cannot yet tell whether the Nov 13 changes (Fast
+Money 40/45 s, Lab values sheet) changed how people play.
+
+### Findings
+- **Smoke, 28 pages × desktop + iPhone (56 loads):** no page errors, no local 4xx.
+- **Congressional OB GYN → Dr. Behram's Office / Clinic Day** (26 encounters, 257 questions). answer-length, bank-cues, core,
+  labs, page, access, feud (access/engine/page), surgery cases (590) + vitals (942), triage cases/ctg/page all pass.
+  Access test: the PIN is stored only as a salted SHA-256 hash, wrong PINs are rejected, 0 of 3000 random codes and 0 of 248
+  tampered codes were accepted, and future-dated codes are rejected. Copy stays generic, with no faces.
+  **Manual audit of 30 seeded-random items:** no factual errors. NICHD Cat II (minimal variability + recurrent lates),
+  Naegele / CRL redating, CDC 2021 GC/PID regimens, US MEC cat 4, Cu-IUD EC, VVC, POI, CAIS, letrozole, fezolinetant boxed
+  warning and TOLAC 0.5–0.9% all check out. Four explanations ended with a sentence that **paraphrased an earlier one** (the exact-
+  duplicate lint added Nov 12 cannot see paraphrases), so a word-overlap scan was run over the whole bank and those four were fixed.
+- **Star Raider:** sim all ok (campaign Novice 100%, Pilot 67% sloppy / 100% sharp, Warrior 0% / 50%, Commander 0% / 17%;
+  unchanged). war.test ok. The page test fails 5 desktop keyboard checks (arrows steer, Shift+Up/Down, auto-dock), as it did
+  Nov 16. **It is not a game bug:** a manual probe (`_eval/srprobe.mjs`) steers (q.y 0 → 0.233) and ramps throttle 4 → 6.
+  Under SwiftShader the sim advances only ~0.4 game-s per 1.5 s of wall time, so the test's fixed 450 ms hold sees zero frames.
+  The test could hold until game time advances (backlog).
+- **MELTDOWN:** sim 47/47, restart test passes, page test passes all 48 Chromium checks. The page test only "fails" because
+  WebKit is not installed on the box (`webkit-2272` missing). Nov 16's failures were the same.
+- **VORTEX baseline bot** (8 games, sharp + average, from L8, BF=1, on `8a18af2`): death level sharp 13/13/17/16, average
+  14/13/13/13. Lives lost by tip count: **grab 14, fuseball 13, pulsar zap 11**, shot 8, spike 5 (Nov 16 before the charge-up:
+  fuse 19, grab 13, zap 11). The bot ignores visual and audio cues, so zap staying at 11 is not evidence about the charge-up.
+  The cue that was missing for *humans*: at the moment of death the claw just explodes, the cause appears as text 2.2 s later
+  after the field has reset, and nothing shows **which** object killed you or where it was.
+
+### Changes
+1. `dd591ce` **Clinic Day explanation cleanup.** Removed 4 paraphrased repeat sentences (postpartum thyroiditis "watch for a
+   hypothyroid phase", recurrent VVC induction repeated, PCOS "5–10% weight loss" folded into the first sentence, fezolinetant
+   "monitor liver enzymes" repeated). No answers changed. bank-cues / answer-length / core ALL PASS.
+2. `ecefbe8` **VORTEX KILL CAM** (today's Tempest change). For the first 2 s of a death, the killer is frozen in red lock-on
+   brackets that snap in. `KILLED BY` + its name (ENEMY SHOT, FUSEBALL, PULSAR, MINE, SPARK, SPIKE) is drawn outside the
+   brackets on a dark plate, away from the centre messages. A grab reads `GRABBED BY FLIPPER/PHASER/…` while the claw is being
+   dragged and BREAK FREE is still offered. A shot's lane glows red down its length, a dashed trace links the killer to the claw,
+   and a low lock thud plays. It is presentation only, with no change to rules, timing or input, so it works the same for
+   keyboard, mouse, touch and gamepad. New tests/vortex-killcam.test.js ALL PASSED (7 causes × desktop / iPhone 14 /
+   landscape: same death, one cam, right label and lane, drawn on screen, ends at 2 s, BREAK FREE still works). Regression ALL
+   PASS: breakfree 57, runreport 50, tips, fusewarn, fuseland 30/30 (no flake today), fuselock, grabwarn, grabimminent,
+   zapcharge 54, spikewarn, powerups, jump, continue, haptics, root vortex-rim 25, vortex-touch 130.
+   No post-change bot run: the bot cannot read the screen, so its numbers would not move.
+
+### Neuro Arena (seed 1117; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5). Nov 16 = seed 1116 (never logged)
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | reaps | champ changes | Nov 16 |
+|---|---|---|---|---|---|---|---|
+| divisor | 8% | 32→78% | 51% vs 66% | −0.15 | 0 | 7 | 27→72, 43% vs 66%, −0.23 |
+| simon | 25% | 53→77% | 48% vs 26% | +0.22 | 1 | 5 | 46→71, 34%, +0.08 |
+| text | 8% | 20→52% | 14% vs 25% (new/fam 24/38%) | −0.11 | 2 | 7 | 20→40, 13%, −0.12 |
+| add | 5% | 39→83→61% (fell in r10) | 4% vs 10% | −0.06 | 1 | 3 (5 plateau rounds) | 9% vs 10% |
+| sub | 10% | 92→80% (lv 2) | 18% vs 18% | 0 | 3 | 7 | 20% vs 18% |
+| big | 50% | 67→91% | – (prior 78%) | +0.13 | 1 | 4 | 86%, +0.08 |
+| pattern | 12% | 65→100% (r4) | – (prior 50%) | +0.50 | 4 | 3 | same |
+| pong | – | 34→48% flat from r5 | hit 48% vs open-side prior 65% | −0.09 | 0 | 2 | 38% flat, −0.23 |
+| echo / dots / rps | | 100% by round 1–2 | – | 0 | | 0–1 | saturated |
+| tug | 50% | 75→100→50% | – | 0 | 2 | 3 | 100% |
+- Honest read: the champion's duel accuracy rises in 8 of 12 contests. On the **full task**, only **simon** clearly beats its prior
+  (48% vs 26%, best in 3 logged runs). But ablating *all* learned units leaves simon at 40%, about the same as the intact 39% on
+  the end-of-run probe, so this run does not show the gain coming from learned units. **Divisor is below the frequency prior for
+  the 3rd straight run.** **Text is below the position baseline for the 6th straight run.** Nov 16 also tried `FIX=mix` (14–18%,
+  still below 25%), so the mix fix does not rescue it. Pong improved over Nov 16 (48% vs 38%) and learned units do matter
+  (ablating all of them drops it to 26%), but it is still below the open-side prior and flat for 5 rounds. Add peaked and then
+  fell, with 5 plateau rounds. Tug's 100→50% fall is on a 4-duel evaluation (0.25 steps), so it is noise rather than
+  forgetting. Echo / dots / rps / tug still saturate at round 1–2 and measure nothing.
+  There are no memorization signs beyond text's familiar > new gap (38% vs 24%).
+
+### For tomorrow
+- Re-read feedback first (4 days of silence).
+- Star Raider page test: hold keys until `SR.sess.G.t` advances instead of a fixed 450 ms. MELTDOWN page test: skip WebKit when
+  it is not installed. Then both suites can go green on the box.
+- Neuro Arena: text / divisor need a real change (a harder curriculum or a bigger `matchSec`), not more runs. Also make
+  echo/dots/rps/tug harder so they measure learning, and evaluate tug with more than 4 duels.
+- VORTEX: grabs are the #1 bot killer again. Check whether the kill cam's GRABBED BY label clashes with ZAP TO BREAK FREE on small
+  landscape phones in real play (it is clamped on screen in tests).
