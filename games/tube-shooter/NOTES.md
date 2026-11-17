@@ -293,3 +293,22 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-zapcharge.test.js (desktop, iPhone 14, landscape): one cue per charge, lead >= 0.35 s at L9/20/40,
   staying still dies to 'zap', bar fills, label drawn, stepping aside 0.25 s after the cue survives, no cue for a pulsar
   4 lanes away, no console errors. Regression: fusewarn, tips, v4, waves, jump, spikewarn, haptics, rim, touch pass.
+
+## Day 21 (2026-11-17): KILL CAM
+- Why: bot eval today (8 games, sharp + average, from level 8, BF=1; lives lost by tip count): grab 14, fuseball 13, pulsar
+  zap 11, shot 8, spike 5. Every one of those already has a warning cue. But when a life was lost, the claw just exploded and
+  the cause was only named in text 2.2 s later, after the field had reset, so the player never saw WHICH object killed
+  them or where it was. That makes the warnings hard to learn.
+- What: for the first `KILLCAM_SEC` = 2.0 s of the death sequence (the field is already frozen while dying), the killer is
+  held in red lock-on brackets that snap in from 2.4x. The label `KILLED BY` + name sits outside the brackets, away from the
+  screen centre where level / break-free / tip messages go, on a dark plate and clamped on screen. Names: ENEMY SHOT (its
+  lane glows red the whole way down), FLIPPER / PHASER / WARDEN... for grabs, FUSEBALL, PULSAR, MINE, SPARK, SPIKE (warp).
+  A dashed red trace runs from the killer to the claw when they are apart. A grab reads `GRABBED BY <enemy>` while the claw
+  is still being dragged and BREAK FREE is offered; breaking free clears it. There is also a short low "lock" thud (`killcam`).
+- Presentation only: no timing, hit box, rule or input changes. `killPlayer(kind, captor, src)` now gets the killer from
+  every call site.
+- Hooks: `VORTEX.killCam()` -> {shown, frames, last, active, cur{kind, label, sub, lane, drawn, scr{x, y, R, lx, ly, sz, name, head}}, sec}.
+- Test: tests/vortex-killcam.test.js (desktop, iPhone 14, iPhone 14 landscape). For each cause (shot, grab, fuseball, pulsar,
+  mine, spark, warp spike) it checks: the same death still happens, one cam opens, the label and lane are right, the brackets
+  and label are drawn fully on screen, and the cam ends after 2 s. For a grab it also checks GRABBED BY: FLIPPER with BREAK FREE
+  offered, and that BREAK FREE still works and clears the cam. No console errors.

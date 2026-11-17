@@ -394,6 +394,7 @@ const Sound = {
       case 'eshot': this.tone('sawtooth', 260, 900, 0.09, 0.035); break;
       case 'die': this.noise(1.6, 0.6, 5000, 60, 0.6, 'lowpass'); this.tone('sawtooth', 500, 30, 1.4, 0.2); break;
       case 'capture': this.tone('sawtooth', 300, 40, 1.3, 0.16); this.tone('square', 150, 30, 1.3, 0.08); break;
+      case 'killcam': this.tone('sine', 82, 41, 0.5, 0.16); this.tone('square', 1320, 1320, 0.05, 0.03, 0.02); this.tone('square', 990, 990, 0.05, 0.03, 0.09); break;
       case 'zap': this.zapBig(); break;
       case 'zap2': { const b = this.crunchBus(0.7), t = this.ac.currentTime; this.nz(b, t, 0.45, 0.45, 'lowpass', 8000, 300, 0.7); this.osc(b, 'sawtooth', t, 0.4, 0.1, [[0, 140], [0.12, 2400], [0.38, 90]]); this.osc(this.out, 'sine', t, 0.4, 0.35, [[0, 130], [0.38, 40]]); for (let i = 0; i < 8; i++) { const f = rand(3000, 9000); this.nz(b, t + Math.random() * 0.35, 0.025, 0.2, 'highpass', f, f, 1); } break; }
       case 'zkill': this.noise(0.2, 0.22, 5200, 700, 1.2); this.tone('square', 1900, 180, 0.12, 0.04); break;
@@ -858,7 +859,7 @@ function startWarp() {
     window.MoodSticker && window.MoodSticker.screen('bonus');
   }
 }
-function killPlayer(kind, captor) {
+function killPlayer(kind, captor, src) {
   if (invincible || graceT > 0 || !player.alive) return;
   if (airborne() && JUMP_DODGE.has(kind)) { jumpDodge(kind); return; }
   player.alive = false; eshots = []; cleanLevel = false;
@@ -867,6 +868,7 @@ function killPlayer(kind, captor) {
   if (hadPower && kind !== 'capture') msg('POWER-UPS LOST', 2.2, 0.76, '#3dff8a', 1.6);
   power = { laser: false, droid: null, jump: false, n: 0 }; pups = [];
   death = { kind, t: 0, captor, exploded: false, inWarp: state === 'warp', savedPower: kind === 'capture' && hadPower ? savedPower : null };
+  death.cam = makeKillCam(kind, captor || src);
   state = 'dying'; window.MoodSticker && window.MoodSticker.event('hit');
   if (kind === 'capture') {
     Sound.play('capture');
@@ -905,6 +907,72 @@ function explodePlayer() {
   death.exploded = true; Sound.play('die'); shake = 0.6; flash = 0.35; flashColor = '#fff';
   const f = player.vis, E0 = railF(f), E1 = railF(f + 1);
   fx.push({ x: (E0[0] + E1[0]) / 2, y: (E0[1] + E1[1]) / 2, zw: player.z * LL, t: 0, dur: 1.5, size: 0.75, rays: 30, colors: RAINBOW, seed: Math.random() * 6, big: true });
+}
+/* Day 21 (2026-11-17): KILL CAM. Bot eval today (8 games from level 8): lives lost to grabs 14, fuseballs 13, pulsar zaps 11,
+   shots 8, spikes 5. Every one of those already has a warning, but when a life is lost the claw just explodes and the cause
+   is only named in text 2.2 s later, after the field has reset, so the player never sees WHICH object killed them or where
+   it was. Now, for the whole death sequence, the killer is frozen in place inside red lock-on brackets that snap in, with
+   "KILLED BY" + its name next to it (GRABBER: FLIPPER, FUSEBALL, PULSAR, ENEMY SHOT + its lane, SPIKE, MINE, SPARK), a red
+   trace from the killer to the claw, and a low "lock" thud. Pure presentation: no timing, hit box or rule changes. */
+const KILLCAM_SEC = 2.0;
+const KILLCAM_NAME = { shot: 'ENEMY SHOT', zap: 'PULSAR', fuse: 'FUSEBALL', spark: 'SPARK', mine: 'MINE', spike: 'SPIKE', capture: 'GRABBER' };
+let killCamStats = { shown: 0, frames: 0, last: null };
+function enemyName(e) { return e ? (NEWE[e.type] ? NEWE[e.type].name : String(e.type || '').toUpperCase()) : ''; }
+function makeKillCam(kind, who) {
+  if (!who) return null;
+  const cam = { kind, who, t0: T, label: KILLCAM_NAME[kind] || kind.toUpperCase(), sub: '', lane: who.lane != null ? who.lane : -1, frozen: null, drawn: 0, scr: null };
+  if (kind === 'capture') cam.sub = enemyName(who);
+  else if (kind === 'zap' && who.type && who.type !== 'pulsar') cam.sub = enemyName(who);
+  if (who.type) { cam.frozen = centerOf(who); if (who.type === 'fuseball') cam.lane = wrapLane(Math.round(who.rail)); }
+  else { const m = laneMid(who.lane); cam.frozen = [m[0], m[1], (who.z || 0) * LL]; }
+  killCamStats.shown++; killCamStats.last = { kind, label: cam.label, sub: cam.sub, lane: cam.lane };
+  Sound.play('killcam');
+  return cam;
+}
+function drawKillCam() {
+  if (state !== 'dying' || !death || !death.cam) return;
+  const c = death.cam, age = death.t;
+  if (age > KILLCAM_SEC) return;
+  // a grabber is still dragging the claw down: follow it; everything else is frozen where it struck
+  const w = c.kind === 'capture' && c.who && !c.who.dead && !death.exploded ? centerOf(c.who) : c.frozen;
+  const p = proj(w[0], w[1], w[2]); if (!p) return;
+  const fade = Math.min(1, age / 0.08) * Math.min(1, (KILLCAM_SEC - age) / 0.35);
+  const lw = c.lane >= 0 ? laneWidthPx(c.lane, w[2]) : U * 6;
+  const snap = 1 + 1.4 * Math.max(0, 1 - age / 0.2), R = Math.max(U * 2.4, lw * 0.55) * snap, b = R * 0.42;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  // trace from the killer to where the claw was
+  if (c.lane >= 0) {
+    const f = player.vis, E0 = railF(f), E1 = railF(f + 1), cp = proj((E0[0] + E1[0]) / 2, (E0[1] + E1[1]) / 2, player.z * LL);
+    if (c.who && c.who.shot) {   // a shot came up its lane: light the lane it travelled
+      const m = laneMid(c.lane); ctx.globalAlpha = 0.55 * fade; ctx.strokeStyle = '#ff3a3a'; ctx.shadowColor = '#ff2020'; ctx.shadowBlur = 12 * DPR;
+      ctx.lineWidth = LW(2.2); ctx.beginPath(); seg3(m[0], m[1], LL, m[0], m[1], 0); ctx.stroke();
+    }
+    if (cp && Math.hypot(cp[0] - p[0], cp[1] - p[1]) > R * 0.8) {
+      ctx.globalAlpha = 0.5 * fade; ctx.strokeStyle = '#ff6060'; ctx.lineWidth = LW(1.2); ctx.setLineDash([U * 0.8, U * 0.8]);
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(cp[0], cp[1]); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  // lock-on brackets
+  ctx.globalAlpha = fade * (0.8 + 0.2 * Math.sin(T * 30)); ctx.strokeStyle = '#ff3030'; ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 16 * DPR; ctx.lineWidth = LW(2.4);
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    ctx.beginPath(); ctx.moveTo(p[0] + sx * R, p[1] + sy * (R - b)); ctx.lineTo(p[0] + sx * R, p[1] + sy * R); ctx.lineTo(p[0] + sx * (R - b), p[1] + sy * R); ctx.stroke();
+  }
+  ctx.globalAlpha = fade * 0.35; ctx.lineWidth = LW(1); ctx.beginPath(); ctx.arc(p[0], p[1], R * 0.28, 0, TAU); ctx.stroke();
+  ctx.shadowBlur = 0;
+  // label: placed toward the screen centre so it never leaves the screen
+  // label: OUTSIDE the brackets, away from the screen centre (the centre is where level / break-free / tip messages
+  // sit), clamped on screen, on a dark plate so it reads over the explosion
+  const name = c.kind === 'capture' ? (c.sub || c.label) : c.sub ? c.label + ': ' + c.sub : c.label;
+  const sz = Math.min(U * 2.6, (W * 0.9) / Math.max(8, name.length + 1)), dx = p[0] - W / 2, dy = p[1] - H / 2, dl = Math.hypot(dx, dy) || 1;
+  let lx = p[0] + dx / dl * (R + sz * 2.6), ly = p[1] + dy / dl * (R + sz * 2.6) + sz * 0.5;
+  const half = (name.length * sz) / 2; lx = clamp(lx, half + U, W - half - U); ly = clamp(ly, sz * 2.4 + U * 6, H - sz * 1.6);
+  ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.6 * fade; ctx.fillStyle = '#000';
+  ctx.fillRect(lx - half - sz * 0.5, ly - sz * 2.1, half * 2 + sz, sz * 3.2); ctx.restore();
+  c.head = c.kind === 'capture' && !death.exploded ? 'GRABBED BY' : 'KILLED BY';
+  text(c.head, lx, ly - sz * 1.5, sz * 0.6, '#ffb0b0', 'center', fade);
+  text(name, lx, ly, sz, '#ff3a3a', 'center', fade);
+  ctx.restore();
+  c.drawn++; killCamStats.frames++; c.scr = { x: p[0], y: p[1], R, lx, ly, sz, name, head: c.head };
 }
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
@@ -1329,7 +1397,7 @@ function drawShotCharge() {
   }
   ctx.restore();
 }
-function rimGrab(e) { if (e.type === 'pulsar') killPlayer('zap'); else killPlayer('capture', e); }
+function rimGrab(e) { if (e.type === 'pulsar') killPlayer('zap', null, e); else killPlayer('capture', e); }
 function updFlipper(e, dt) {
   const pl = player.lane;
   if (e.flipping) {
@@ -1451,7 +1519,7 @@ function sparkBlast(e) {
   for (const o of enemies) if (!o.dead && o !== e && o.spawnT >= 1 && (o.type === 'fuseball' ? o.z <= 0.12 && Math.abs(laneDiff(wrapLane(o.rail), e.lane)) <= 1 : o.z <= 0.1 && Math.abs(laneDiff(o.lane, e.lane)) <= 1)) { killEnemy(o, false); chain++; }
   for (const m of mines) if (m.armed && Math.abs(laneDiff(m.lane, e.lane)) <= 1) { m.dead = true; chain++; shardBurst(laneMid(m.lane), 0, [NEWE.layer.mine, '#fff'], 8, 0.8); }
   if (chain) { addScore(250 * chain); msg('CHAIN ' + chain + '  +' + 250 * chain, 1.4, 0.64, NEWE.spark.core, 2.6); Sound.play('chain'); }
-  if (player.alive && state === 'play' && player.lane === e.lane) killPlayer('spark');
+  if (player.alive && state === 'play' && player.lane === e.lane) killPlayer('spark', null, e);
 }
 /* MINE LAYER: dives to mid-tube, then crawls sideways from lane to lane dropping mines, then climbs and hunts like a
    flipper. Mines drift up their lane (one shot kills them). A mine that reaches the rim in the claw's lane explodes;
@@ -1479,7 +1547,7 @@ function updMines(dt) {
         if (player.alive && state === 'play' && m.lane === player.lane) {
           m.dead = true; const c = laneMid(m.lane);
           fx.push({ x: c[0], y: c[1], zw: 0, t: 0, dur: 0.6, size: 0.5, rays: 14, colors: [NEWE.layer.mine, '#fff'], seed: 1 });
-          Sound.play('mineboom'); killPlayer('mine'); return;
+          Sound.play('mineboom'); killPlayer('mine', null, { lane: m.lane, z: 0 }); return;
         }
         m.armed = true; m.life = LP.mineLife; Sound.play('arm');
         const armed = mines.filter(x => x.armed && !x.dead);
@@ -1533,7 +1601,7 @@ function updFuse(e, dt) {
     if (!was && fuseOpen(e)) { fuseLock.opens++; if (player.alive && Math.abs(laneDiff(fuseOpenLane(e), pl)) <= 1) { fuseLock.cues++; Sound.play('fuselock'); } }
     if (e.atRim && player.alive && e.jt > 0.42 && e.jt < 0.58) {
       const lane = e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
-      if (lane === pl) { fuseDeaths.rimjump++; killPlayer('fuse'); return; }
+      if (lane === pl) { fuseDeaths.rimjump++; killPlayer('fuse', null, e); return; }
     }
     if (e.jt >= 1) { e.jumping = false; e.rail = wrapRail(e.rail + e.jdir); e.jt = 0; }
     return;
@@ -1549,7 +1617,7 @@ function updFuse(e, dt) {
   // on the rim
   // landing flare: a fuseball that has just reached the rim needs FUSE_LAND_GRACE s to settle before it is lethal
   e.rimAge = (e.rimAge || 0) + dt;
-  if (player.alive && e.rimAge >= FUSE_LAND_GRACE && (e.rail === pl || e.rail === wrapRail(pl + 1))) { fuseDeaths[e.rimAge < FUSE_LAND_GRACE + 0.05 ? 'arrive' : 'chase']++; killPlayer('fuse'); return; }
+  if (player.alive && e.rimAge >= FUSE_LAND_GRACE && (e.rail === pl || e.rail === wrapRail(pl + 1))) { fuseDeaths[e.rimAge < FUSE_LAND_GRACE + 0.05 ? 'arrive' : 'chase']++; killPlayer('fuse', null, e); return; }
   e.rimTimer -= dt;
   if (e.rimTimer <= 0) { e.atRim = false; e.mdir = 1; e.z = 0.01; return; }
   e.pause -= dt;
@@ -1615,7 +1683,7 @@ function updShots(dt) {
   pshots = pshots.filter(s => !s.dead);
   for (const s of eshots) {
     s.pz = s.z; s.z -= LP.eshotSpeed * dt; s.spin += dt * 9;
-    if (s.z <= 0) { s.dead = true; if (state === 'play' && player.alive && s.lane === player.lane) killPlayer('shot'); }
+    if (s.z <= 0) { s.dead = true; if (state === 'play' && player.alive && s.lane === player.lane) killPlayer('shot', null, { lane: s.lane, z: 0, shot: true }); }
     // day 3: the red-rim warning also beeps and buzzes once per shot, so you can hear/feel it without looking at the rim
     else if (!s.warned && state === 'play' && player.alive && s.lane === player.lane && s.z < SHOT_WARN_Z) { s.warned = true; shotWarnCues++; Sound.play('shotwarn'); }
   }
@@ -1638,7 +1706,7 @@ function updPulse(dt) {
     else if (ph >= 0.8) { pulseAmt = 1; pulsing = true; }
   }
   Sound.hum(hasP ? pulseAmt * 0.07 : 0);
-  if (pulsing && player.alive && state === 'play') for (const e of enemies) if (e.type === 'pulsar' && !e.flipping && e.spawnT >= 1 && e.lane === player.lane && e.z < 0.8) { killPlayer('zap'); break; }
+  if (pulsing && player.alive && state === 'play') for (const e of enemies) if (e.type === 'pulsar' && !e.flipping && e.spawnT >= 1 && e.lane === player.lane && e.z < 0.8) { killPlayer('zap', null, e); break; }
 }
 function updEnemies(dt) {
   grabWarnUpdate(dt);
@@ -1829,7 +1897,7 @@ function update(dt) {
       handleMove(dt); handleFire(dt); updShots(dt); checkShotHits();
       warp.t += dt; const v = 0.13 + 0.6 * warp.t;
       player.z += v * dt; camZ = player.z * LL * 0.9;
-      if (player.z <= 1 && spikes[player.lane] > 0 && player.z >= 1 - spikes[player.lane] - 0.01) { killPlayer('spike'); break; }
+      if (player.z <= 1 && spikes[player.lane] > 0 && player.z >= 1 - spikes[player.lane] - 0.01) { killPlayer('spike', null, { lane: player.lane, z: player.z, spike: true }); break; }
       spikeGuideUpdate(dt);
       if (player.z >= 1.42) { player.z = 0; beginLevel(level + 1); }
       Sound.hum(0);
@@ -2720,6 +2788,7 @@ function drawGameScene() {
   drawShots();
   if (showClaw) drawClaw();
   if (canBreakFree()) drawBreakFreeHint();
+  drawKillCam();
   drawDroid();
   drawFx();
   drawShards();
@@ -3296,6 +3365,7 @@ window.VORTEX = {
   enemyList: () => enemies.map(e => ({ id: e.id, type: e.type, lane: e.lane, z: e.z, flipping: e.flipping, ft: e.ft, dir: e.dir, landT: e.landT, atRim: e.atRim, rail: e.rail })),
   fire: () => ({ heat: player.heat, overheat: player.overheat, shots: pshots.length, cd: player.fireCd, sputter: heatStats.sputter, overheats: heatStats.overheats, tip: heatStats.tip }),
   deathKind: () => death ? death.kind : null,
+  killCam: () => ({ shown: killCamStats.shown, frames: killCamStats.frames, last: killCamStats.last, active: !!(state === 'dying' && death && death.cam && death.t <= KILLCAM_SEC), cur: death && death.cam ? { kind: death.cam.kind, label: death.cam.label, sub: death.cam.sub, lane: death.cam.lane, drawn: death.cam.drawn, scr: death.cam.scr } : null, sec: KILLCAM_SEC, W, H }),
   runReport: () => runReport(),
   breakFree: () => ({ ...breakFreeStats, can: canBreakFree(), grace: graceT, z: player.z, windowZ: BREAK_FREE_Z }),
   tryBreakFree() { return breakFree(); },
