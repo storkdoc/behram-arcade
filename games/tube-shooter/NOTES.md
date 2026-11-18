@@ -312,3 +312,18 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
   mine, spark, warp spike) it checks: the same death still happens, one cam opens, the label and lane are right, the brackets
   and label are drawn fully on screen, and the cam ends after 2 s. For a grab it also checks GRABBED BY: FLIPPER with BREAK FREE
   offered, and that BREAK FREE still works and clears the cam. No console errors.
+
+## Day 22 (2026-11-18): MESSAGES CLEAR OF THE TOUCH CONTROLS (portrait)
+- Why: on phones in portrait the touch deck (MODE button, AUTO / full screen / sound / pause bar, ZAP, spinner knob, FIRE)
+  starts at ~67 % of the screen height (iPhone SE 320 / 375, iPhone 14's 664-px Safari viewport, Pixel 5, Galaxy S8), but
+  the centre messages sit at 58-81 %: WAVE: <NAME> + its first-time tip, TAP ZAP TO BREAK FREE! / USES YOUR LAST ZAP,
+  POWER-UPS LOST, power-up / jump tips. They were drawn over the buttons and the knob, half hidden at the moment they
+  matter. Bot eval today (8 games from L8, BF=1): lives lost by tip count shot 13, grab 9, zap 8, fuseball 8, spike 4,
+  mine 1; death level sharp 9/13/12/13, average 14/14/14/12.
+- What: on touch portrait screens the message band from 35 % down is squeezed (`msgBand()`) so the lowest slot (84 %)
+  ends 1.5 U above the deck; order, relative spacing and text size are kept. Desktop and landscape are unchanged.
+  Also: the portrait MODE button is narrowed to end 8 px before the square bar; on 320-px phones it ran under AUTO.
+- Hooks: `VORTEX.msgLayout()` -> {band{y0, k, lim}, drawn[{text, top, bottom, size}], W, H, DPR, ctrlTop, touch}.
+- Test: tests/vortex-msgband.test.js (desktop, iPhone SE 320 + 375, iPhone 14, iPhone 14 landscape): level intro and a
+  grab with BREAK FREE; every message ends above the deck in portrait, no two messages overlap, no band on desktop /
+  landscape, MODE does not overlap the bar, no console errors. Regression: killcam passes.

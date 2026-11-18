@@ -2763,10 +2763,26 @@ function drawHUD() {
     ctx.globalAlpha = 0.85; ctx.strokeStyle = '#3dff8a'; ctx.lineWidth = LW(1); ctx.strokeRect(zx - U * 9, ty + U * 10.4, U * 9, U * 0.6);
     ctx.fillStyle = ready ? '#3dff8a' : 'rgba(61,255,138,0.45)'; ctx.fillRect(zx - U * 9, ty + U * 10.4, U * 9 * k, U * 0.6); ctx.globalAlpha = 1; }
 }
+/* Day 22 (2026-11-18): MESSAGES CLEAR OF THE TOUCH CONTROLS. In portrait the touch control deck (MODE, AUTO / full screen /
+   sound / pause bar, ZAP, spinner knob, FIRE) starts at ~67 % of the screen height on every phone (iPhone SE 667 px and an
+   iPhone 14's 664 px Safari viewport alike), but centre messages sit at 58-81 %: WAVE: <NAME> + its tip, TAP ZAP TO BREAK
+   FREE / USES YOUR LAST ZAP, POWER-UPS LOST, jump / power-up tips were drawn over the buttons and the knob, half hidden at
+   the moment they matter most. Now, on touch portrait screens, the band from MSG_Y0 down is squeezed so the lowest slot
+   (MSG_Y1) ends above the deck. Order, spacing ratios and text size are kept; desktop and landscape are unchanged. */
+const MSG_Y0 = 0.35, MSG_Y1 = 0.84;
+let msgDrawn = [];
+function msgBand() {
+  if (!touch.on || W >= H || !touch.ctrlTop) return null;
+  const lim = touch.ctrlTop * DPR - U * 1.5, y0 = H * MSG_Y0, y1 = H * MSG_Y1;
+  return lim < y1 && lim > y0 ? { y0, k: (lim - y0) / (y1 - y0), lim } : null;
+}
+function msgCentreY(y, band) { const py = H * y; return band && py > band.y0 ? band.y0 + (py - band.y0) * band.k : py; }
 function drawMsgs() {
+  const band = msgBand(); msgDrawn = [];
   for (const m of msgs) {
-    const a = m.t < 0.15 ? m.t / 0.15 : m.t > m.dur - 0.4 ? (m.dur - m.t) / 0.4 : 1;
-    text(m.text, W / 2, H * m.y - U * m.size / 2, U * m.size, m.color, 'center', clamp(a, 0, 1));
+    const a = m.t < 0.15 ? m.t / 0.15 : m.t > m.dur - 0.4 ? (m.dur - m.t) / 0.4 : 1, sz = U * m.size, top = msgCentreY(m.y, band) - sz / 2;
+    text(m.text, W / 2, top, sz, m.color, 'center', clamp(a, 0, 1));
+    msgDrawn.push({ text: m.text, top, bottom: top + sz, size: sz });
   }
 }
 function drawGameScene() {
@@ -3241,6 +3257,8 @@ function touchLayout() {
   // small square buttons, right-aligned: [fullscreen] [mute] [pause]
   const bar = [E.pause, E.mute, E.fs, E.auto].filter(el => getComputedStyle(el).display !== 'none');
   bar.forEach((el, i) => place(el, barX - (i + 1) * sq - i * 8, barY, sq, sq));
+  // day 22: portrait MODE button shares the row with the square bar; on 320-px phones (iPhone SE 1st gen) it ran under AUTO
+  if (!land && bar.length) { const bl = barX - bar.length * sq - (bar.length - 1) * 8; place(E.mode, sa.l + 12, ctrlTop + 4, clamp(bl - 8 - (sa.l + 12), 96, 150), 32); }
   // initials letter pad along the bottom
   const cols = land ? 17 : 9, rows = Math.ceil(E.keys.children.length / cols);
   const kw = Math.min(54, (iw - sa.l - sa.r - 20) / cols), kh = clamp(kw * 0.95, 36, 50);
@@ -3387,6 +3405,7 @@ window.VORTEX = {
   zapWarn: () => ({ cues: zapWarnCues, pulsing, pulseAmt, armed: zapWarnArmed, chargeCues: zapCharge.cues, lead: zapCharge.lead.slice(), prog: zapCharge.prog, safe: zapCharge.safe, label: zapCharge.label, drawn: zapCharge.drawn, period: LP && LP.pulsePeriod, chargeFrac: PULSE_CHARGE }),
   addEShot(lane, z) { eshots.push({ lane, z, pz: z, spin: 0 }); },
   messages: () => msgs.map(m => m.text),
+  msgLayout: () => ({ band: msgBand(), drawn: msgDrawn.slice(), W, H, DPR, ctrlTop: touch.ctrlTop, touch: touch.on }),
   // touch-test helpers (CSS px)
   selectIdx: () => select.idx,
   selectBoxes: () => selRects.map(r => ({ x: (r[0] + r[2] / 2) / DPR, y: (r[1] + r[3] / 2) / DPR, idx: r[4] })),
