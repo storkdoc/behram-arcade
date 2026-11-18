@@ -844,3 +844,94 @@ Money 40/45 s, Lab values sheet) changed how people play.
   echo/dots/rps/tug harder so they measure learning, and evaluate tug with more than 4 duels.
 - VORTEX: grabs are the #1 bot killer again. Check whether the kill cam's GRABBED BY label clashes with ZAP TO BREAK FREE on small
   landscape phones in real play (it is clamped on screen in tests).
+
+## 2026-11-18 (day 22): VORTEX portrait message band + honest warm-up labels + green test suites
+
+Fresh worktree `/workspace/arcade-daily-2026-11-18` from `a297b9b`, headless Chrome 156 (SwiftShader), desktop 1440×900 +
+iPhone sizes. Time-boxed; each change was pushed as soon as its tests passed and this entry was written before the optional
+extra checks. Note: the shared `_tools` symlink chain used by earlier daily worktrees now points at a deleted directory
+(`arcade-daily-2026-11-14/_tools`); today used a local `_tools/node_modules` linked to the box's pnpm playwright-core 1.63
+(1.59 cannot open iPhone contexts in Chrome 156).
+Skipped as in active development elsewhere: **GLOW MUNCH** (new maze chase, 2 commits Nov 17), Cubertron, Me & My Placenta,
+Jukebox, and the `cosmic-odyssey-wip` branch.
+
+### Player feedback (Nov 17 + everything since the Nov 17 entry; `read-feedback.mjs --hours 30` and `--date 2026-11-17`): **0 real submissions**
+The store is reachable (textdb Nov 17 / Nov 18 docs return 200, both empty). There are no ratings and no suggestions to
+cluster. Five days of silence now (the last real notes, Nov 13, were all acted on).
+
+### Findings
+- **Smoke, 29 pages × desktop + iPhone (58 loads, GLOW MUNCH included as a read-only check):** no page errors, no local 4xx.
+- **Congressional OB GYN → Dr. Behram's Office / Clinic Day** (257 questions): answer-length 65, bank-cues, core 15, labs 20,
+  page 22, access 15, hub 51, feud access/engine/page 10/14/38, surgery cases 590 + vitals 942, triage cases + ctg all pass.
+  Access: PIN only as a salted SHA-256 hash, 0/3000 random codes accepted, garbage rejected, NY-midnight boundary right. Copy is
+  generic ("Student name"), no faces. **Manual audit of 30 seeded items (seed 1118): no factual errors.** Checked: ASCCP HPV+
+  ASC-US → colposcopy, Cu-IUD EC on day 4, RSVpreF 32–36 wk Sep–Jan, mifepristone 200 mg + misoprostol 800 mcg 24 h later,
+  penicillin desensitization for syphilis in pregnancy, CDC 2021 ceftriaxone 500 mg + doxycycline, magnesium toxicity →
+  calcium gluconate 1 g, early GDM screening (BMI ≥25/≥23 + risk factor), TOLAC rupture 0.5–0.9%, Amsel criteria, ABM mastitis.
+  Triage page and surgery page tests failed today **only under load** (load average 30–43 from Neuro Arena + 3 browsers): fixed
+  6 s / wall-clock waits timed out. They are re-run below.
+- **Star Raider:** sim (campaign Novice 100%, Pilot 67% sloppy / 100% sharp, Warrior 0/50%, Commander 0/17%; unchanged) and
+  war pass. Page test: the backlog flake (keys held for a fixed 450 ms of wall time under a slow SwiftShader sim) is fixed;
+  see Changes.
+- **MELTDOWN:** sim 47/47, restart passes, page test passes all Chromium cases and now exits 0 (WebKit skipped when missing).
+- **VORTEX baseline bot** (8 games, sharp + average, from L8, BF=1, before today's change): death level sharp 9/13/12/13,
+  average 14/14/14/12. Lives lost by tip count: **shot 13**, grab 9, zap 8, fuseball 8, spike 4, mine 1 (Nov 17: grab 14,
+  fuse 13, zap 11, shot 8). Grabs dropped from #1 to #2 for the first time since Nov 13; small sample, so not a trend yet.
+  **Real-phone layout bug found:** on every portrait phone the touch deck (MODE, AUTO/fullscreen/sound/pause bar, ZAP, knob)
+  starts at ~67% of the height, but centre messages sit at 58–81%: WAVE: <name> + tip, TAP ZAP TO BREAK FREE!, USES YOUR LAST
+  ZAP, POWER-UPS LOST were drawn over the buttons. On 320-px phones the MODE button also ran under AUTO.
+- **Sky Shield (iPhone 13):** "← ARCADE" and the feedback sticker covered BEHRAM ARCADE PRESENTS and the S of SKY on the title.
+- **Star Invaders, Astro Shatter title screens (iPhone 13):** clean.
+
+### Changes
+1. `42da267` **VORTEX: messages clear of the touch controls (portrait)** (today's Tempest change). On touch portrait screens
+   the message band from 35% down is squeezed so the lowest slot ends 1.5 U above the control deck; order, spacing ratios and
+   text size kept; desktop and landscape unchanged. The MODE button now ends 8 px before the square bar. Hook
+   `VORTEX.msgLayout()`. New tests/vortex-msgband.test.js ALL PASSED (44 checks: desktop, iPhone SE 320 + 375, iPhone 14,
+   iPhone 14 landscape). Regression ALL PASS: killcam 84, breakfree 57, runreport 50, jump 36, modebtn 28, powerups 26,
+   tips 14, root vortex-rim 25, vortex-touch 130. Live: https://storkdoc.github.io/behram-arcade/games/tube-shooter/ (Pages
+   served it at 06:47).
+2. `2058c15` **Neuro Arena: warm-up contests labelled honestly.** Echo (8 puzzles), Count the dots (6), RPS (3), Pattern (10)
+   have no curriculum and reach 100% in rounds 1–4 of every run. Their carousel cards now start with `warm-up · N puzzles`,
+   and the tooltip + selection toast say a memorized lookup table can score 100%, which is not evidence of understanding.
+   No simulation change. tests/warmup.test.cjs ALL PASSED (desktop + iPhone 13). Today's ablations back the label: with
+   **all learned units removed**, echo/dots/rps/tug/pattern still score 100%. Live:
+   https://storkdoc.github.io/behram-arcade/games/neuro-arena/ (served at 06:51).
+3. `cc8b47a` **Sky Shield: title clear of the back link and sticker** on portrait phones ≥600 px tall (title block starts
+   64 px lower; iPhone SE and desktop unchanged). Checked by layout probe + screenshots (iPhone 13, Pixel 5, SE). The
+   Sky Shield page test's desktop intro → play / fire checks failed under load (8 s wall-clock waits; the CSS rule cannot
+   apply at 1440 px). https://storkdoc.github.io/behram-arcade/games/sky-shield/
+4. `984c98f` **MELTDOWN page test:** the WebKit case is skipped with a note when WebKit is not installed, so the suite exits 0
+   on a Chromium-only box (backlog item from Nov 17).
+5. Star Raider page test (commit below): steering / Shift+Up hold for game time (`holdGame`), not 450 ms of wall time; longer
+   waits for Shift+Down, docking, chart, and warp; Shift+Down waits for `thrustDir` to clear after release. Backlog item.
+
+### Neuro Arena (seed 1118; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5). Compared with Nov 17 (seed 1117)
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | champ changes | ablate all units (full) | Nov 17 |
+|---|---|---|---|---|---|---|---|
+| divisor | 8% | 24→86→66% (lv 3) | 61% vs 66% | −0.05 | 4 | 65% | 51% vs 66% |
+| simon | 25% | 51→73% | 35% vs 26% | +0.09 | 1 | 38% (= intact) | 48% vs 26% |
+| text | 8% | 24→40% flat from r4 | 12% vs 25% (new/fam 14/34%) | −0.13 | 3 | 4% | 14% vs 25% |
+| add | 5% | 33→94→72% (lv 2) | 10% vs 10% | 0 | 1 | 15% | 4% vs 10% |
+| sub | 10% | 58→92→77% (lv 3) | 22% vs 18% | +0.04 | 0 | 20% | 18% vs 18% |
+| big | 50% | 66→83→80% | probe 71% vs prior 78% | +0.02 | 2 | 81% | 91% |
+| pattern | 13% | 55→100% (r3) | probe 100% vs 50% | +0.50 | 2 | 100% | 100% (r4) |
+| pong | – | 40% flat all 10 rounds | hit 40% vs open-side 60% | −0.05 | 1 | 24% | 48%, flat from r5 |
+| echo / dots / rps / tug | 13/17/33/50% | 100% by r1–2 | – | – | 1–2 | 100% | saturated |
+- Honest read: the champion's duel accuracy rises in 7 of 12 contests. On the **full task** only **simon** (35% vs 26%) and
+  weakly **sub** (22% vs 18%) beat their priors. For both, ablating all learned units gives the same or a better score, so this
+  run again does **not** show the gain coming from learned units. **Divisor is below the frequency prior for the 4th straight
+  run** (61% vs 66%; ablating all units gives 65%). **Text is below the position baseline for the 7th straight run** and flat
+  for 7 rounds; its familiar-vs-new gap (34% vs 14%) is the one memorization sign. **Pong regressed** to a flat 40% (below
+  the 60% open-side prior), although learned units matter there (ablating all of them gives 24%). Add peaked at 94% and then
+  fell after its level-up, which is the expected harder-level dip, not forgetting. Pattern and the four warm-ups are solved
+  without learned units, which is why they are now labelled warm-up.
+
+### For tomorrow
+- Re-read feedback first.
+- Neuro Arena: text / divisor / pong need a design change (bigger `matchSec`, a curriculum for text, a pong reward that
+  beats the open-side prior), not more runs.
+- VORTEX: shots are #1 in the bot tally again. Check whether the JUMP / shot-warning cues are readable in the newly squeezed
+  portrait band on real devices.
+- Daily runs: do not run 3 Neuro Arena contests × 4 workers alongside browser tests (load 40 on 8 cores made the triage /
+  surgery / Sky Shield page tests time out). Run NA after the page tests, or with `-P2`.
