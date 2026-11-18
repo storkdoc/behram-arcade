@@ -17,6 +17,9 @@ let pass = 0, fail = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { fail++; fails.push(m); } console.log((c ? 'ok   ' : 'FAIL ') + m); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 async function until(page, fn, ms = 12000, arg) { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await page.evaluate(fn, arg)) return true; } catch (e) {} await wait(120); } return false; }
+// hold for `sec` of GAME time (not wall time): under a software GPU (SwiftShader on a busy box) the sim can run at ~0.3x,
+// so a fixed 450 ms hold saw no frames and the steering / thrust checks failed although the game was fine (2026-11-18)
+async function holdGame(page, sec, ms = 20000, thrStop = 99) { const t0 = await page.evaluate(() => SR.sess.G.t); return until(page, a => SR.sess.G.t >= a.t0 + a.sec || SR.sess.me.thr >= a.thrStop, ms, { t0, sec, thrStop }); }
 // decode a screenshot in the page and count 8x8 grid cells that are (nearly) pure black
 async function blackCells(page) {
   const b64 = (await page.screenshot()).toString('base64');
@@ -63,20 +66,20 @@ async function runCase(browserType, eng, dev) {
   if (!touch) {
     // throttle, steering, fire, shields, computer, views
     await wait(1500); await page.keyboard.press('Digit4'); ok(await until(page, () => SR.sess.me.thr === 4, 4000), `${tag}: 4 sets throttle`);
-    const q0 = await page.evaluate(() => SR.sess.me.q.slice()); await page.keyboard.down('ArrowLeft'); await wait(450); await page.keyboard.up('ArrowLeft');
+    const q0 = await page.evaluate(() => SR.sess.me.q.slice()); await page.keyboard.down('ArrowLeft'); await holdGame(page, 0.45); await page.keyboard.up('ArrowLeft');
     const q1 = await page.evaluate(() => SR.sess.me.q.slice()); ok(Math.abs(q1[1] - q0[1]) > 0.02, `${tag}: arrows steer (q.y ${q0[1].toFixed(3)} -> ${q1[1].toFixed(3)})`);
     // keyboard thrust: Shift+Up ramps the throttle up without pitching, Shift+Down ramps it down to a stop
     { const qa = await page.evaluate(() => SR.sess.me.q.slice()), s0 = await page.evaluate(() => SR.sess.me.speed);
-      await page.keyboard.down('Shift'); await page.keyboard.down('ArrowUp'); await wait(1300);
+      await page.keyboard.down('Shift'); await page.keyboard.down('ArrowUp'); await holdGame(page, 1.3, 20000, 6);
       const mid = await page.evaluate(() => ({ thr: SR.sess.me.thr, dir: SR.sess.thrustDir }));
       await page.keyboard.up('ArrowUp'); await page.keyboard.up('Shift');
       const qb = await page.evaluate(() => SR.sess.me.q.slice());
       ok(mid.thr >= 6 && mid.dir === 1, `${tag}: Shift+Up ramps throttle 4 -> ${mid.thr}`);
       ok(Math.abs(qb[0] - qa[0]) < 0.01, `${tag}: Shift+Up does not pitch (q.x ${qa[0].toFixed(3)} -> ${qb[0].toFixed(3)})`);
-      ok(await until(page, s => SR.sess.me.speed > s + 5, 3000, s0), `${tag}: ship speeds up`);
+      ok(await until(page, s => SR.sess.me.speed > s + 5, 15000, s0), `${tag}: ship speeds up`);
       await page.keyboard.down('Shift'); await page.keyboard.down('ArrowDown');
-      const z = await until(page, () => SR.sess.me.thr === 0, 5000); await page.keyboard.up('ArrowDown'); await page.keyboard.up('Shift'); await wait(150);
-      ok(z && await page.evaluate(() => SR.sess.thrustDir === 0), `${tag}: Shift+Down ramps throttle to 0`);
+      const z = await until(page, () => SR.sess.me.thr === 0, 30000); await page.keyboard.up('ArrowDown'); await page.keyboard.up('Shift');
+      ok(z && await until(page, () => SR.sess.thrustDir === 0, 10000), `${tag}: Shift+Down ramps throttle to 0 (reached 0: ${z})`);
       await page.keyboard.press('Digit4'); await until(page, () => SR.sess.me.thr === 4, 2000); }
     for (let i = 0; i < 6 && !(await page.evaluate(() => SR.sess.fired >= 2)); i++) { await page.keyboard.press('Space'); await until(page, n => (SR.sess.fired || 0) > n, 1500, i); await wait(500); }
     ok(await until(page, () => SR.sess.fired >= 2, 4000), `${tag}: Space fires alternating torpedoes`);
@@ -88,7 +91,7 @@ async function runCase(browserType, eng, dev) {
     // dock: Enter auto-approaches the starbase in the start sector
     await page.keyboard.press('Digit0'); await page.evaluate(() => { SR.sess.me.energy = 5000; SR.sess.me.dmg.S = 1; });
     await page.keyboard.press('Enter');
-    ok(await until(page, () => SR.sess.me.dock && SR.sess.me.dock.phase === 'done', 100000), `${tag}: Enter auto-approach -> orbit -> drone -> docked`);
+    ok(await until(page, () => SR.sess.me.dock && SR.sess.me.dock.phase === 'done', 300000), `${tag}: Enter auto-approach -> orbit -> drone -> docked`);
     ok(await page.evaluate(() => SR.sess.me.energy > 9000 && SR.sess.me.dmg.S === 0), `${tag}: docking refuels and repairs`);
     // combat: bring a fleet here, aim and fire
     await page.keyboard.press('Digit3');
@@ -98,13 +101,13 @@ async function runCase(browserType, eng, dev) {
     for (let i = 0; i < 70 && kills === k0; i++) { await page.evaluate(AIM); await page.keyboard.press('Space'); await wait(220); kills = await page.evaluate(() => SR.sess.me.kills); }
     ok(kills > k0, `${tag}: torpedo kill (kills ${k0} -> ${kills})`);
     // chart + warp
-    await page.keyboard.press('KeyG'); await wait(200); ok(await page.evaluate(() => SR.sess.me.view === 'chart'), `${tag}: G galactic chart`);
+    await page.keyboard.press('KeyG'); ok(await until(page, () => SR.sess.me.view === 'chart', 5000), `${tag}: G galactic chart`);
     const from = await page.evaluate(() => [SR.sess.me.sx, SR.sess.me.sy]);
     await page.keyboard.press(from[0] > 4 ? 'ArrowLeft' : 'ArrowRight'); await page.keyboard.press(from[0] > 4 ? 'ArrowLeft' : 'ArrowRight'); await wait(100);
     await page.evaluate(() => { SR.sess.me.energy = 9000; for (const s of SR.sess.G.ships) s.gone = true; SR.sess.G.ships.length = 0; });
     await page.keyboard.press('KeyH');
-    ok(await until(page, () => !!SR.sess.me.warp, 3000), `${tag}: H hyperwarp starts`);
-    ok(await until(page, () => !SR.sess.me.warp, 20000) && await page.evaluate(f => SR.sess.me.sx !== f[0] || SR.sess.me.sy !== f[1], from), `${tag}: warp arrives in a new sector`);
+    ok(await until(page, () => !!SR.sess.me.warp, 15000), `${tag}: H hyperwarp starts`);
+    ok(await until(page, () => !SR.sess.me.warp, 90000) && await page.evaluate(f => SR.sess.me.sx !== f[0] || SR.sess.me.sy !== f[1], from), `${tag}: warp arrives in a new sector`);
     await page.keyboard.press('KeyP'); ok(await until(page, () => SR.app.screen === 'pause', 3000), `${tag}: P pauses`);
     const t0 = await page.evaluate(() => SR.sess.G.t); await wait(400); ok(await page.evaluate(t0 => SR.sess.G.t === t0, t0), `${tag}: paused sim frozen`);
     await page.keyboard.press('Escape'); ok(await until(page, () => SR.app.screen === 'play', 3000), `${tag}: resume`);
@@ -144,7 +147,7 @@ async function runCase(browserType, eng, dev) {
     const cell = await page.evaluate(f => { const r = SR.hud.chartRect(), tx = f[0] > 4 ? f[0] - 2 : f[0] + 2; return { x: r.x + (tx + 0.5) * r.cw, y: r.y + (f[1] + 0.5) * r.cw, tx }; }, from);
     if (eng === 'chromium') await page.touchscreen.tap(cell.x, cell.y); else await page.evaluate(c => document.getElementById('gl').dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, pointerType: 'touch', clientX: c.x, clientY: c.y, bubbles: true })), cell);
     await wait(150); ok(await page.evaluate(c => SR.sess.cursor[0] === c.tx, cell), `${tag}: tap a chart sector moves the cursor`);
-    await tapB('warp'); ok(await until(page, () => !!SR.sess.me.warp, 3000), `${tag}: WARP button`);
+    await tapB('warp'); ok(await until(page, () => !!SR.sess.me.warp, 15000), `${tag}: WARP button`);
     ok(await until(page, () => !SR.sess.me.warp, 20000), `${tag}: warp completes`);
     if (eng === 'chromium') await page.tap('#bpause'); else await page.evaluate(() => document.getElementById('bpause').click());
     ok(await until(page, () => SR.app.screen === 'pause', 3000), `${tag}: pause button`);
