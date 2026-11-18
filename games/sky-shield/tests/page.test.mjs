@@ -50,17 +50,17 @@ async function runCase(browserType, eng, dev) {
   await click('[data-act=solo]'); ok(await until(page, () => SS.app.screen === 'select'), `${tag}: wave select`);
   await click('#waves [data-w="3"]'); await click('[data-act=start]');
   ok(await until(page, () => SS.app.screen === 'play' && SS.g && SS.g.wave === 3), `${tag}: game starts at wave 3`);
-  ok(await until(page, () => SS.g.phase === 'play', 8000), `${tag}: intro -> play`);
+  ok(await until(page, () => SS.g.phase === 'play', 20000), `${tag}: intro -> play`);
   const meta = await page.evaluate(() => { const m = document.querySelector('meta[name=viewport]').content; return { m, ta: getComputedStyle(document.body).touchAction, ob: getComputedStyle(document.documentElement).overscrollBehavior || getComputedStyle(document.body).overscrollBehavior }; });
   if (touch) ok(/user-scalable=no/.test(meta.m) && /viewport-fit=cover/.test(meta.m) && meta.ta === 'none', `${tag}: no zoom / no bounce / safe areas (${meta.ta}, ${meta.ob})`);
   if (!touch) {
     const f0 = await page.evaluate(() => SS.g.stats.fired);
     await page.mouse.move(640, 300); await page.mouse.move(700, 250, { steps: 5 });
-    await page.keyboard.press('Space'); await wait(150); await page.keyboard.press('KeyA'); await wait(150); await page.keyboard.press('KeyD'); await wait(150); await page.keyboard.press('KeyX'); await wait(250);
+    await page.keyboard.press('Space'); await wait(150); await page.keyboard.press('KeyA'); await wait(150); await page.keyboard.press('KeyD'); await wait(150); await page.keyboard.press('KeyX'); await until(page, f0 => SS.g.stats.fired - f0 >= 4, 6000, f0);
     const r = await page.evaluate(() => ({ f: SS.g.stats.fired, a: SS.g.bases.map(b => b.ammo) }));
     ok(r.f - f0 === 4 && r.a[0] < 10 && r.a[2] < 10 && r.a[1] < 10, `${tag}: Space + A/D/X fire (${r.f - f0} shots, ammo ${r.a})`);
-    const e0 = await page.evaluate(() => SS.g.emp); await page.keyboard.press('Enter'); await wait(200);
-    ok(await page.evaluate(e0 => SS.g.emp === e0 - 1, e0), `${tag}: Enter fires EMP`);
+    const e0 = await page.evaluate(() => SS.g.emp); await page.keyboard.press('Enter');
+    ok(await until(page, e0 => SS.g.emp === e0 - 1, 6000, e0), `${tag}: Enter fires EMP`);   // wait for a sim frame, not a fixed 200 ms (slow software GPU)
     const c0 = await page.evaluate(() => [SS.cross.x, SS.cross.y]); await page.keyboard.down('ArrowLeft'); await wait(400); await page.keyboard.up('ArrowLeft');
     const c1 = await page.evaluate(() => [SS.cross.x, SS.cross.y]); ok(c1[0] < c0[0] - 3, `${tag}: arrow keys roll the crosshair (${c0[0].toFixed(1)} -> ${c1[0].toFixed(1)})`);
     await page.keyboard.press('KeyP'); ok(await until(page, () => SS.app.screen === 'pause', 3000), `${tag}: P pauses`);

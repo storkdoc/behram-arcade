@@ -935,3 +935,12 @@ cluster. Five days of silence now (the last real notes, Nov 13, were all acted o
   portrait band on real devices.
 - Daily runs: do not run 3 Neuro Arena contests × 4 workers alongside browser tests (load 40 on 8 cores made the triage /
   surgery / Sky Shield page tests time out). Run NA after the page tests, or with `-P2`.
+
+### Addendum (after the entry above; load back down to ~10)
+- `625e2d5` Star Raider page test (change 5): Chromium desktop / iPhone / landscape / iPad **101 passed, 0 failed**, first
+  green run on the box since Nov 16.
+- Sky Shield page test: intro / fire / EMP checks wait for a sim frame (`until`) instead of fixed 200–250 ms and 8 s; Chromium
+  **62 ok, 0 FAIL** with today's title change (commit below).
+- Re-runs at lower load: triage page **147 PASS, ALL PASSED**. Surgery page had 0 FAIL in every case it reached (breech, tah, …),
+  but was cut off by the 600 s `timeout` while still playing the remaining cases (it is slow under SwiftShader). Today's
+  breech failures were load, not a game bug.
