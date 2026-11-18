@@ -1,7 +1,7 @@
 /* NEURO ARENA: UI controller. Evolution state lives here; spiking brains run in Web Workers. */
 import { Evolution, quantW, dequantW, BENCH_N, PROBE_P, pongPrior } from './evo.js';
 import { lexJob, lexSummary, LEX } from './lexicon.js';
-import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt, uPrep } from './contests.js';
+import { CONTESTS, CONTEST, benchSet as benchSet_, chanceAt, levelName, trialOf, baseAt, uPrep, lookupNote } from './contests.js';
 import { cLayout } from './cbrain.js';
 import { Stage } from './stage.js';
 import * as LAB from './lab.js';
@@ -695,14 +695,14 @@ $('fImport').onchange = async e => {
 function renderCarousel() {
   const tr = $('cTrack'); if (!tr) return;
   if (tr.children.length !== VISIBLE.length) {
-    tr.innerHTML = VISIBLE.map(c => `<button class="cc" data-id="${c.id}" title="${c.blurb.replace(/"/g, '&quot;')}"><span class="ci">${c.icon}</span><span><span class="cn">${c.name}</span><span class="cs"></span></span></button>`).join('');
+    tr.innerHTML = VISIBLE.map(c => `<button class="cc" data-id="${c.id}" title="${(c.blurb + (c.lookupN ? ' ' + lookupNote(c) : '')).replace(/"/g, '&quot;')}"><span class="ci">${c.icon}</span><span><span class="cn">${c.name}</span><span class="cs"></span></span></button>`).join('');
     tr.querySelectorAll('.cc').forEach(b => b.addEventListener('click', () => { if (ui.swiped) return; selectContest(b.dataset.id); }));
   }
   const idx = VISIBLE.findIndex(c => c.id === C.id);
   [...tr.children].forEach((b, i) => {
     const c = VISIBLE[i], sm = c.id === C.id ? { gen: evo.gen, acc: champAcc(evo), size: evo.opts.size, level: evo.level || 0 } : meta.sum[c.id];
     b.classList.toggle('on', i === idx);
-    b.querySelector('.cs').textContent = sm && sm.gen ? `gen ${sm.gen}${c.levels ? ' · L' + ((sm.level || 0) + 1) : ''} · ${pct(sm.acc || 0)} · chance ${pct(chanceOf(c))}` : `chance ${pct(chanceOf(c))} · new`;
+    b.querySelector('.cs').textContent = sm && sm.gen ? `${c.lookupN ? 'warm-up · ' : ''}gen ${sm.gen}${c.levels ? ' · L' + ((sm.level || 0) + 1) : ''} · ${pct(sm.acc || 0)} · chance ${pct(chanceOf(c))}` : c.lookupN ? `warm-up · ${c.lookupN} puzzles · chance ${pct(chanceOf(c))}` : `chance ${pct(chanceOf(c))} · new`;   // 'warm-up' first: the line is ellipsized on phones
   });
   const view = $('cView'), cw = tr.children[0] ? tr.children[0].offsetWidth + 8 : 168;
   tr.style.transform = `translateX(${Math.round(view.clientWidth / 2 - cw * idx - (cw - 8) / 2)}px)`;
@@ -720,7 +720,7 @@ function selectContest(id) {
   const wasTurbo = ui.mode === 'turbo';
   ui.started = false; setMode(ui.mode);
   syncControls(); chartLegend(); drawChart(); renderLog(); renderGenome(); updateStatus(); updateNames(); drawMaps(); renderCarousel();
-  if (!wasTurbo) toast(`${C.icon} ${C.name}: ${C.blurb}`);
+  if (!wasTurbo) toast(`${C.icon} ${C.name}: ${C.blurb}${C.lookupN ? ' ' + lookupNote(C) : ''}`, C.lookupN ? 7000 : undefined);
 }
 $('cPrev').onclick = () => stepContest(-1); $('cNext').onclick = () => stepContest(1);
 { // swipe on the carousel

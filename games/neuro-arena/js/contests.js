@@ -179,7 +179,13 @@ const UXDEF = {
 };
 for (const [id, d] of Object.entries(UXDEF)) { const C = CONTEST[id]; if (!C) continue; const { keep, pool, probe, ...rest } = d; Object.assign(C, rest);
   if (d.probeName) C.probe = wrongProbe(C, keep || (() => true), 40, pool ? () => pool(C) : null); }
-for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = c.chanceOf ? c.chanceOf(c.all_) : 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; c.ctx_ = ctxSyms(c); }
+export const LOOKUP_MAX = 12;
+export const lookupNote = c => c && c.lookupN ? `Warm-up: only ${c.lookupN} different puzzles, so a memorized lookup table can score 100%. A high score here is not evidence of understanding.` : '';
+for (const c of CONTESTS) if (c.kind === 'choice') { c.K = c.labels.length; c.all_ = c.all(); c.items = c.all_; c.chance = c.chanceOf ? c.chanceOf(c.all_) : 1 / c.K; c.nLevels = c.levels ? c.levels.length : 1; c.ctx_ = ctxSyms(c);
+  /* honest labelling (2026-11-18): a contest with only a handful of distinct puzzles and no curriculum can be aced by a
+     learned lookup table (Echo 8, Count the dots 6, RPS 3, Pattern 10, Tug 2): it saturates in 1-4 rounds of every
+     daily run, so a 100% there shows a warm-up was memorized, not that a rule was understood */
+  c.lookupN = !c.levels && c.all_.length <= LOOKUP_MAX ? c.all_.length : 0; }
 /* the reflex's guess for an item: the most common (valid) answer given the reflex slot's symbol alone (Word
    completion: the gap position -> S, R, A, E, E). Used for the beyond-reflex metric. */
 export function priorOf(C) {

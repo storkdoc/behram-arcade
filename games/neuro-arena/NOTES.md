@@ -422,3 +422,14 @@ Next: repeat on 3+ seeds before trusting the effect; add the like-for-like Limit
 Day-10 (seed 1106) full-task text stayed below the position-frequency prior (11% vs 25%) even at 900 ms. Bumped
 integration to **1100 ms** so the next evolution pass has more time for the association → answer readout before ACCEPT.
 Lab / stage pick it up via `trialOf(C)`.
+
+## 2026-11-18: warm-up contests labelled honestly
+- Every daily run since late October: Echo, Count the dots, Rock paper scissors (and Tug) reach 100% in rounds 1-2, and
+  Pattern by round 4. Each has 3-10 distinct puzzles and no curriculum, so a memorized lookup table scores 100%. The
+  arena showed those 100% scores next to the real contests with no caveat.
+- Now any choice contest with no curriculum and at most `LOOKUP_MAX` = 12 distinct puzzles gets `lookupN` (contests.js).
+  Its carousel card starts with `warm-up · N puzzles`, and its tooltip and selection toast say: "Warm-up: only N different
+  puzzles, so a memorized lookup table can score 100%. A high score here is not evidence of understanding." Curriculum
+  contests (Addition, Subtraction, Word completion, Smallest divisor, Simon) and Bigger number (100 puzzles) are not marked.
+  No simulation change.
+- Test: tests/warmup.test.cjs (desktop + iPhone 13).
