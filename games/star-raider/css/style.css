@@ -99,3 +99,5 @@ body.port #tbtns { right: calc(10px + var(--sr)); }
 /* galactic chart open on touch: the chart is tapped directly, so the stick, throttle and FIRE step aside */
 body.chartv #tstick, body.chartv #tthr, body.chartv #tfire { visibility: hidden; }
 .vlab { font-size: 11px; letter-spacing: .12em; opacity: .8; min-width: 38px; text-align: right; }
+/* 2026-11-19: phones in portrait: start the title below the "← ARCADE" link and the feedback sticker (top-left on phones); they covered BEHRAM ARCADE PRESENTS and the first letter of the title (same fix as Sky Shield, 2026-11-18) */
+@media (max-width: 600px) and (orientation: portrait) and (min-height: 600px) { .tblock { margin-top: 64px; } }

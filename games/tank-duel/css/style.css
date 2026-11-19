@@ -102,3 +102,5 @@ body.portrait #hud .mid { min-width: 0; flex: 0 1 auto; } body.portrait #glabel 
 body[data-screen=select] #home, body[data-screen=how] #home, body[data-screen=online] #home, body[data-screen=join] #home { display: none; }
 #fatal { position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 999; background: #2a0d0d; border: 1px solid #ff6a5a; color: #ffe2dc; font: 13px/1.45 ui-monospace, Menlo, monospace; padding: 12px 14px; border-radius: 10px; white-space: pre-wrap; }
 #fatal button { margin-top: 8px; font: inherit; font-weight: 800; padding: 8px 14px; border-radius: 8px; border: 1px solid #ff6a5a; background: #000; color: #fff; }
+/* 2026-11-19: phones in portrait: start the title below the "← ARCADE" link and the feedback sticker (top-left on phones); they covered BEHRAM ARCADE PRESENTS and the first letter of the title (same fix as Sky Shield, 2026-11-18) */
+@media (max-width: 600px) and (orientation: portrait) and (min-height: 600px) { .tblock { margin-top: 64px; } }

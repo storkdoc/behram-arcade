@@ -191,3 +191,5 @@ body.portrait #title { background: linear-gradient(180deg, rgba(3,5,8,.75) 0%, r
 body.portrait #toasts { top: calc(72px + var(--st)); bottom: auto; }
 body.portrait #drillbar { left: 6px; right: 6px; transform: none; justify-content: center; } #drillbar .cb { white-space: nowrap; }
 body.portrait #drillbar .cb { font-size: 10px; padding: 9px 7px; flex: 0 1 auto; }
+/* 2026-11-19: phones in portrait: start the title below the "← ARCADE" link and the feedback sticker (top-left on phones); they covered BEHRAM ARCADE PRESENTS and the first letter of the title (same fix as Sky Shield, 2026-11-18) */
+@media (max-width: 600px) and (orientation: portrait) and (min-height: 600px) { #title { padding-top: calc(104px + var(--st, 0px)); } }
