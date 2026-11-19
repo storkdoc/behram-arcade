@@ -51,7 +51,7 @@ const START = async (pg, touch) => {
     check(L.final === 'FINAL LIFE: HIT BY AN ENEMY SHOT', `${dev}: report names what took the final life`, L.final);
     check(/^LEVEL 1 → 3 +SCORE \d+$/.test(L.levels), `${dev}: levels covered and score`, L.levels);
     check(/SHOT 2/.test(L.lost) && /GRAB 1/.test(L.lost) && L.lost.indexOf('SHOT') < L.lost.indexOf('GRAB'), `${dev}: lives lost by cause, worst first`, L.lost);
-    check(L.topLabel === 'TOP KILLER: SHOT' && /SHOOT IT OR STEP ASIDE/.test(L.tip), `${dev}: top killer + its counter-play tip`, [L.topLabel, L.tip]);
+    check(L.topLabel === 'TOP KILLER: SHOT' && /SHOOT THE SHOT DOWN OR STEP ASIDE/.test(L.tip), `${dev}: top killer + its counter-play tip`, [L.topLabel, L.tip]);
     check(/KILLS 2/.test(L.extra) && d3.r.newBest, `${dev}: kills + NEW BEST LEVEL`, [L.extra, d3.r.newBest]);
     // drawn for real: render a few frames unfrozen and look at the screen
     await pg.evaluate(() => { VORTEX.step(1.0); VORTEX.freeze(false); }); await sleep(500);

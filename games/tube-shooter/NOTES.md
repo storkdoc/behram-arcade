@@ -327,3 +327,19 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-msgband.test.js (desktop, iPhone SE 320 + 375, iPhone 14, iPhone 14 landscape): level intro and a
   grab with BREAK FREE; every message ends above the deck in portrait, no two messages overlap, no band on desktop /
   landscape, MODE does not overlap the bar, no console errors. Regression: killcam passes.
+
+## Day 23 (2026-11-19): SHOT-STOPPER
+- Why: enemy shots were the #1 or #2 killer in most daily bot evals (13 of 43 on Nov 18), and shooting one down, the main
+  answer, gave nothing but a tiny white puff, so nothing taught it. The shot death tip said "SHOOT IT OR STEP ASIDE", which
+  reads as "shoot the enemy". Bot eval today before the change (8 games from L8, BF=1): fuseball 15, grab 11, zap 10,
+  shot 6, spike 3, spark 1; death level sharp 14/15/15/13, average 11/14/16/14.
+- What: an enemy shot destroyed by your fire pays `STOP.pts` (25) with a pink/white shard burst and a glassy `stop` tick.
+  Stopping one that is already in your lane inside the red warning zone (`z < SHOT_WARN_Z`) is a **BLOCK**: `STOP.closePts`
+  (100), a bigger cyan/pink burst, a bright `parry` chord, a `parry` haptic tick and a `BLOCKED!  +100` pop (throttled to
+  one per 0.5 s). The first stop of a game shows `SHOT STOPPED! SHOOT THEIR SHOTS DOWN` once. AI DROID shots still stop
+  bullets but score nothing. RUN REPORT lists `SHOTS STOPPED n`. Death tip now reads `SHOOT THE SHOT DOWN OR STEP ASIDE`.
+  Collision rules, timing and inputs are unchanged.
+- Hook: `VORTEX.shotStop()` -> {n, close, droid, pts, tip, pts/closePts/warnZ constants}.
+- Test: tests/vortex-shotstop.test.js (desktop keyboard + mouse + gamepad A, iPhone 14 + landscape touch FIRE): far stop
+  +25 and tip, BLOCK +100 and pop for each input, an unstopped shot still kills, RUN REPORT line, points add up, no console
+  errors. vortex-tips / vortex-runreport updated for the new tip text.

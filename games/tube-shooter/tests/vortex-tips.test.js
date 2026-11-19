@@ -33,7 +33,7 @@ async function suite(browser, label, ctxOpts) {
       const kind = VORTEX.deathKind(); VORTEX.step(6, () => VORTEX.state.state !== 'dying');
       return { kind, m: VORTEX.messages(), lives: VORTEX.state.lives };
     });
-    check(r.kind === 'shot' && r.m.includes('HIT BY AN ENEMY SHOT') && r.m.some(t => /SHOOT IT OR STEP ASIDE/.test(t)), `death ${k}: cause + tip shown (${r.kind}; ${r.m.join(' / ')})`);
+    check(r.kind === 'shot' && r.m.includes('HIT BY AN ENEMY SHOT') && r.m.some(t => /SHOOT THE SHOT DOWN OR STEP ASIDE/.test(t)), `death ${k}: cause + tip shown (${r.kind}; ${r.m.join(' / ')})`);
     await page.evaluate(() => VORTEX.step(4, () => VORTEX.state.state === 'play'));
   }
   check(errs.length === 0, 'no console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));

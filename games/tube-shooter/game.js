@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -389,6 +389,8 @@ const Sound = {
       case 'hit': this.noise(0.42, 0.38, 3200, 160, 0.8); this.tone('triangle', 340, 50, 0.3, 0.16); break;
       case 'tanker': this.noise(0.5, 0.42, 1800, 90, 0.7); this.tone('sawtooth', 220, 40, 0.4, 0.12); break;
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
+      case 'stop': this.tone('triangle', 2200, 3300, 0.05, 0.05); this.noise(0.04, 0.05, 9000, 4000, 2, 'highpass'); break;   // enemy shot shot down: glassy tick
+      case 'parry': this.tone('triangle', 1568, 1568, 0.12, 0.07); this.tone('triangle', 2349, 2349, 0.14, 0.06, 0.03); this.tone('sine', 3136, 4186, 0.16, 0.05, 0.06); this.noise(0.08, 0.08, 9000, 3000, 2, 'highpass'); break;   // BLOCK: bright chord
       case 'fuselock': this.tone('sine', 1250, 2500, 0.07, 0.06); this.tone('triangle', 2500, 2500, 0.04, 0.03, 0.07); break;   // fuseball crossing a lane near you: shootable now
       case 'flip': this.tone('triangle', 520, 880, 0.05, 0.05); break;
       case 'eshot': this.tone('sawtooth', 260, 900, 0.09, 0.035); break;
@@ -670,6 +672,35 @@ function jumpDodge(kind) {
   jump.dodged++;
   if (T - jump.lastDodge > 0.4) { jump.lastDodge = T; Sound.play('dodge'); addScore(50); msg(kind === 'shot' ? 'DODGED!' : 'JUMPED IT!', 0.9, 0.3, '#3dff8a', 2.6); }
 }
+/* Day 23 (2026-11-19): SHOT-STOPPER. Enemy shots have been the #1 or #2 killer in most daily bot evals, and shooting one
+   down used to give nothing but a tiny white puff, so players never learned it is the main answer (the death tip even said
+   "SHOOT IT", which reads as the enemy). Now every enemy shot your own fire destroys pays STOP.pts with a pink/cyan shard
+   burst and a crisp glassy 'stop' tick. Stopping a shot that is already in YOUR lane inside the red warning zone
+   (z < SHOT_WARN_Z) is a BLOCK: STOP.closePts, a bigger burst + shock ring, a bright 'parry' chord, a pad/phone tick and
+   a 'BLOCKED! +100' pop. The first stop of a game also shows 'SHOOT THEIR SHOTS DOWN' once. AI DROID shots stop bullets
+   but score nothing (no free points). The RUN REPORT lists SHOTS STOPPED. Rules, timing and inputs are otherwise unchanged,
+   so it works the same for keyboard, mouse, touch and gamepad. */
+const STOP = { pts: 25, closePts: 100 };
+let stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 };
+function shotStopped(es, s) {
+  const c = laneMid(es.lane), zw = es.z * LL;
+  if (s.droid) { stopStats.droid++; fx.push({ x: c[0], y: c[1], zw, t: 0, dur: 0.3, size: 0.2, rays: 8, colors: ['#fff'], seed: 0 }); return; }
+  const close = player.alive && es.lane === player.lane && es.z < SHOT_WARN_Z;
+  stopStats.n++; run.stops = (run.stops || 0) + 1;
+  const pts = close ? STOP.closePts : STOP.pts; addScore(pts); stopStats.pts += pts;
+  if (close) {
+    stopStats.close++;
+    fx.push({ x: c[0], y: c[1], zw, t: 0, dur: 0.45, size: 0.42, rays: 12, colors: ['#36e6ff', '#ffffff', '#ff6af0'], seed: stopStats.n });
+    shardBurst(c, zw, ['#36e6ff', '#ff6af0', '#ffffff'], 12, 0.9);
+    Sound.play('parry');
+    if (T - stopStats.lastPop > 0.5) { stopStats.lastPop = T; msg('BLOCKED!  +' + STOP.closePts, 0.9, 0.3, '#36e6ff', 2.6); }
+  } else {
+    fx.push({ x: c[0], y: c[1], zw, t: 0, dur: 0.32, size: 0.26, rays: 10, colors: ['#ff6af0', '#ffffff'], seed: stopStats.n });
+    shardBurst(c, zw, ['#ff6af0', '#ffffff'], 5, 0.5);
+    Sound.play('stop');
+  }
+  if (!stopStats.tip) { stopStats.tip = true; msg('SHOT STOPPED! SHOOT THEIR SHOTS DOWN', 2.2, 0.38, '#ff6af0', 1.6); }
+}
 /* Day 6 (2026-11-02): WARP TOKENS + BONUS WARP, after Tempest 2000's bonus round. Earn a WARP TOKEN by clearing a level
    (from level 3) without losing a life ("EXCELLENT!"), or from every green crystal after the AI DROID. Tokens are kept when
    you die. With 3 tokens, the next level clear opens a BONUS WARP before the flight: BONUS.gates glowing gates race up the tube
@@ -820,7 +851,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 function startGame() {
   fireLock = true;
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
-  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
@@ -976,7 +1007,7 @@ function drawKillCam() {
 }
 // Day 2 eval: most bot deaths were enemy shots, and nothing told the player what killed them. One-line cause + tip.
 const DEATH_TIPS = {
-  shot: ['HIT BY AN ENEMY SHOT', 'ENEMY GLOWS, THEN FIRES. SHOOT IT OR STEP ASIDE'],
+  shot: ['HIT BY AN ENEMY SHOT', 'ENEMY GLOWS, THEN FIRES. SHOOT THE SHOT DOWN OR STEP ASIDE'],
   capture: ['GRABBED AT THE RIM', 'ORANGE RIM FLASH = GRAB. SHOOT/JUMP, OR ZAP TO BREAK FREE'],
   spike: ['HIT A SPIKE IN THE WARP', 'SHOOT SPIKES DOWN BEFORE YOU CLEAR THE LEVEL'],
   zap: ['PULSAR ZAP', 'WHITE LANE + RISING BUZZ = ZAP COMING. STEP ASIDE OR JUMP'],
@@ -998,9 +1029,9 @@ function runReport() {
   const ks = Object.keys(run.deaths), total = ks.reduce((a, k) => a + run.deaths[k], 0);
   let top = null; for (const k of run.order) if (!top || run.deaths[k] >= run.deaths[top]) top = k;   // ties: the most recent
   const lost = ks.sort((a, b) => run.deaths[b] - run.deaths[a]).map(k => (DEATH_SHORT[k] || k.toUpperCase()) + ' ' + run.deaths[k]).join('   ');
-  const extra = ['KILLS ' + run.kills]; if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
+  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
   const bf = breakFreeStats.used - run.bf0; if (bf > 0) extra.push('BREAK-FREES ' + bf);
-  return { total, last: run.last, top, from: run.from, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
+  return { total, last: run.last, top, from: run.from, stops: run.stops || 0, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
     lines: { final: run.last && DEATH_TIPS[run.last] ? 'FINAL LIFE: ' + DEATH_TIPS[run.last][0] : '', levels: 'LEVEL ' + run.from + (level > run.from ? ' → ' + level : '') + '   SCORE ' + score,
       lost: total ? 'LIVES LOST:   ' + lost : '', topLabel: top ? (total > 1 ? 'TOP KILLER: ' + (DEATH_SHORT[top] || top.toUpperCase()) : 'HOW TO SURVIVE IT') : '',
       tip: top && DEATH_TIPS[top] ? DEATH_TIPS[top][1] : '', extra: extra.join('   ') } };
@@ -1645,7 +1676,7 @@ function checkShotHits() {
   for (const s of pshots) {
     if (s.dead) continue;
     const z0 = Math.min(s.pz, s.z) - 0.03, z1 = Math.max(s.pz, s.z) + 0.03;
-    for (const es of eshots) if (!es.dead && es.lane === s.lane && es.z >= z0 - 0.02 && es.z <= z1 + 0.02) { es.dead = true; if (!s.laser) s.dead = true; fx.push({ x: laneMid(es.lane)[0], y: laneMid(es.lane)[1], zw: es.z * LL, t: 0, dur: 0.3, size: 0.2, rays: 8, colors: ['#fff'], seed: 0 }); break; }
+    for (const es of eshots) if (!es.dead && es.lane === s.lane && es.z >= z0 - 0.02 && es.z <= z1 + 0.02) { es.dead = true; if (!s.laser) s.dead = true; shotStopped(es, s); break; }
     if (s.dead) continue;
     for (const e of enemies) {
       if (e.dead || e.spawnT < 0.5) continue;
@@ -3360,6 +3391,7 @@ window.VORTEX = {
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
+  shotStop: () => Object.assign({ pts: STOP.pts, closePts: STOP.closePts, warnZ: SHOT_WARN_Z }, stopStats),
   jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
   doJump: () => doJump(),
   bonus: () => { const b = warp && warp.bonus; return { tokens, clean: cleanLevel, active: !!(state === 'warp' && b), stats: JSON.parse(JSON.stringify(bonusStats)),
