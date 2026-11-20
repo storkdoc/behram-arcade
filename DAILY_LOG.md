@@ -944,3 +944,46 @@ cluster. Five days of silence now (the last real notes, Nov 13, were all acted o
 - Re-runs at lower load: triage page **147 PASS, ALL PASSED**. Surgery page had 0 FAIL in every case it reached (breech, tah, …),
   but was cut off by the 600 s `timeout` while still playing the remaining cases (it is slow under SwiftShader). Today's
   breech failures were load, not a game bug.
+
+## 2026-11-20 (day 24): VORTEX SHORT-CIRCUIT + eval (time-boxed run)
+Note: the 2026-11-19 run pushed `1292234` (VORTEX SHOT-STOPPER) and `32fa6a8` (Star Raider / Tank Duel / MELTDOWN portrait
+titles) but was interrupted before writing a log entry. Its Neuro Arena run (seed 1119) finished; its numbers are used below
+as the comparison point.
+
+### Player feedback
+- `node tools/read-feedback.mjs --json --no-sync`: **0 submissions for 2026-11-19** (also 0 with `--include-test`, 0 in the
+  last 72 h). The reader worked: textdb.dev returned HTTP 200 for the 11-19 and 11-20 keys. No ratings or suggestions to act on.
+
+### Evaluation
+- **Smoke, all 28 games + home, desktop 1280x800 + iPhone 390x844 touch:** 58/58 loads with no page errors, no console errors,
+  no failed local requests.
+- **Congressional OB GYN (Dr. Behram's Office):** access test (test PIN accepted, 5 wrong PINs rejected, only a salted SHA-256
+  hash stored, future-dated / 248 tampered / 3000 random student codes rejected), core, bank-cues, labs, office page,
+  answer-length, hub, feud access / engine / page, surgery cases 590 + vitals 942, triage cases + CTG: all pass. Copy stays
+  generic ("Student name"), no faces. **Manual audit of 30 seeded items (seed 1120, 257 items in 26 encounters): no factual
+  errors.** Checked: bisphosphonate ONJ / atypical femur fracture + drug holiday, biopsy of a suspicious mass despite negative
+  imaging, Amsel criteria, 7-day topical azole in pregnancy, hCG first in pelvic pain, POP 48 h backup (US SPR), syphilis
+  two-step serology + Jarisch–Herxheimer, uterine rupture in TOLAC, APS repeat at 12 weeks, mirabegron over oxybutynin in
+  older adults (Beers), stable previa → cesarean 36 0/7–37 6/7, Cu-IUD as most effective EC on day 4, short cervix ≤20 mm →
+  vaginal progesterone, magnesium toxicity → calcium gluconate 1 g, Wernicke thiamine before dextrose, clobetasol for lichen
+  sclerosus. Triage page test: 139 PASS, then the last iPad case (drop) hit a fixed 6 s wait under load 20 (same load flake as
+  Nov 18). Surgery page: no FAIL before the 600 s timeout (slow under SwiftShader).
+- **Star Raider:** sim unchanged (campaign Novice 100%, Pilot 67% sloppy / 100% sharp, Warrior 0/50%, Commander 0/17%; sloppy
+  Warrior runs still end in 2.7 min). Sloppy-player Warrior is still the weakest balance spot.
+- **MELTDOWN:** page test and restart test pass (Chromium; WebKit skipped). My first run passed the wrong URL (harness bug, not
+  a game bug), so it was re-run.
+- **VORTEX bot** (8 games from L8, BF=1, before today's change): lives lost by tip count **zap (pulsar) 15**, capture 14,
+  shot 7, spike 7, fuseball 5 (Nov 19: fuseball 15, grab 11, zap 10, shot 6). Death level sharp 17/17/12/16, average
+  13/9/13/13; 0 console errors. Shots dropped from 13 (Nov 18) to 7 after SHOT-STOPPER, but the sample is too small to call
+  that a trend. Caveat: the eval bot does not dodge pulsars, so pulsar deaths are inflated for it.
+
+### Changes
+1. `9f73b59` **VORTEX: SHORT-CIRCUIT** (today's Tempest change). If your own shot kills a pulsar while it is charging or zapping
+   in your lane (z < 0.8), you get +300 on top of the 200 kill. You also get an electric burst, a crackle + chord with a
+   rumble, a `SHORT-CIRCUIT!  +300` pop, a one-time tip (`PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS`) and a PULSARS SHORTED
+   line in the run report. Superzapper and AI DROID kills earn no bonus, and the rules are unchanged. Before this, every
+   pulsar cue taught only "step aside". New tests/vortex-shortcircuit.test.js ALL PASSED (30 checks: keyboard, mouse,
+   gamepad A, touch FIRE; desktop, iPhone 14, iPhone 14 landscape). Regression: shotstop 39, runreport 50, tips 14,
+   zapcharge 54, killcam 84 all pass. vortex-charge passed every check, but its exit code failed: a page.screenshot
+   timed out under load 17.
+   https://storkdoc.github.io/behram-arcade/games/tube-shooter/
