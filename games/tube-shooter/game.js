@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6], shortout: [90, 0.45, 0.6]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -391,6 +391,7 @@ const Sound = {
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
       case 'stop': this.tone('triangle', 2200, 3300, 0.05, 0.05); this.noise(0.04, 0.05, 9000, 4000, 2, 'highpass'); break;   // enemy shot shot down: glassy tick
       case 'parry': this.tone('triangle', 1568, 1568, 0.12, 0.07); this.tone('triangle', 2349, 2349, 0.14, 0.06, 0.03); this.tone('sine', 3136, 4186, 0.16, 0.05, 0.06); this.noise(0.08, 0.08, 9000, 3000, 2, 'highpass'); break;   // BLOCK: bright chord
+      case 'shortout': this.tone('sawtooth', 2400, 90, 0.32, 0.07); this.noise(0.3, 0.12, 6000, 400, 2.5, 'bandpass'); this.tone('triangle', 1318, 1318, 0.1, 0.06, 0.02); this.tone('triangle', 1976, 1976, 0.14, 0.05, 0.06); break;   // SHORT-CIRCUIT: crackle + falling arc + chord
       case 'fuselock': this.tone('sine', 1250, 2500, 0.07, 0.06); this.tone('triangle', 2500, 2500, 0.04, 0.03, 0.07); break;   // fuseball crossing a lane near you: shootable now
       case 'flip': this.tone('triangle', 520, 880, 0.05, 0.05); break;
       case 'eshot': this.tone('sawtooth', 260, 900, 0.09, 0.035); break;
@@ -851,7 +852,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 function startGame() {
   fireLock = true;
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
-  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
@@ -1029,7 +1030,7 @@ function runReport() {
   const ks = Object.keys(run.deaths), total = ks.reduce((a, k) => a + run.deaths[k], 0);
   let top = null; for (const k of run.order) if (!top || run.deaths[k] >= run.deaths[top]) top = k;   // ties: the most recent
   const lost = ks.sort((a, b) => run.deaths[b] - run.deaths[a]).map(k => (DEATH_SHORT[k] || k.toUpperCase()) + ' ' + run.deaths[k]).join('   ');
-  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
+  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (run.shorts) extra.push('PULSARS SHORTED ' + run.shorts); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
   const bf = breakFreeStats.used - run.bf0; if (bf > 0) extra.push('BREAK-FREES ' + bf);
   return { total, last: run.last, top, from: run.from, stops: run.stops || 0, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
     lines: { final: run.last && DEATH_TIPS[run.last] ? 'FINAL LIFE: ' + DEATH_TIPS[run.last][0] : '', levels: 'LEVEL ' + run.from + (level > run.from ? ' → ' + level : '') + '   SCORE ' + score,
@@ -1361,9 +1362,30 @@ function centerOf(e) {
   const [A, B] = spanOf(e); return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, e.z * LL];
 }
 function enemyColor(e) { return e.type === 'fuseball' ? '#fff' : NEWE[e.type] ? NEWE[e.type].col : pal[e.type] || '#fff'; }
+/* Day 24 (2026-11-20): SHORT-CIRCUIT. Pulsar zaps were the #1 bot death cause today (15 of 48) and #2-3 on most days.
+   Every cue so far (charge whine, rim charge bar, STEP ASIDE arrow, buzz) teaches only stepping away. The other answer, shooting
+   the pulsar before its charge lands, gave the same 200 as any pulsar kill. Now a pulsar YOUR shot destroys while it is
+   charging or zapping in YOUR lane (within the lethal depth, z < 0.8) is a SHORT-CIRCUIT: +SHORT.pts on top of the kill,
+   a yellow/cyan electric burst, a crackle + falling-arc + chord ('shortout') with a pad/phone rumble, and a
+   'SHORT-CIRCUIT! +300' pop. The first one in a game shows 'PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS' once. The RUN REPORT
+   lists PULSARS SHORTED. Superzapper and AI DROID kills do not count. Rules, timing and inputs are unchanged, so it works
+   the same with keyboard, mouse, touch and gamepad. */
+const SHORT = { pts: 300, maxZ: 0.8 };
+let shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 };
+function pulsarShorted(e, c) {
+  shortStats.n++; run.shorts = (run.shorts || 0) + 1; if (pulsing) shortStats.zapping++; else shortStats.charging++;
+  addScore(SHORT.pts); shortStats.pts += SHORT.pts;
+  fx.push({ x: c[0], y: c[1], zw: c[2], t: 0, dur: 0.6, size: 0.55, rays: 14, colors: ['#fff7b0', '#7df9ff', '#ffffff'], seed: shortStats.n });
+  shardBurst(c, c[2], ['#ffe81a', '#7df9ff', '#ffffff'], 16, 1.05);
+  Sound.play('shortout');
+  if (T - shortStats.lastPop > 0.5) { shortStats.lastPop = T; msg('SHORT-CIRCUIT!  +' + SHORT.pts, 0.9, 0.3, '#ffe81a', 2.6); }
+  if (!shortStats.tip) { shortStats.tip = true; msg('PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS', 2.2, 0.38, '#ffe81a', 1.6); }
+}
 function killEnemy(e, byShot) {
   if (e.dead) return; e.dead = true; run.kills++;
   const c = centerOf(e);
+  const shorted = e.type === 'pulsar' && byShot === true && !(zap.active || zap.kill) && player.alive && state === 'play'
+    && !e.flipping && e.lane === player.lane && e.z < SHORT.maxZ && pulseAmt > 0;
   let pts = 0;
   switch (e.type) {
     case 'flipper': pts = 150; break;
@@ -1380,6 +1402,7 @@ function killEnemy(e, byShot) {
   shardBurst(c, c[2], [enemyColor(e), '#ffffff', zapped ? '#7df9ff' : enemyColor(e)], zapped ? 22 : 7, zapped ? 1.25 : 0.7);
   if (zapped) boltTo(c);
   if (byShot && !zapped) maybeDropPup(e, c);
+  if (shorted) pulsarShorted(e, c);
   if (e.pack) packKill(e, zapped);
   if (e.type === 'tanker' && byShot) { splitTanker(e); Sound.play('tanker'); } else Sound.play(zapped ? 'zkill' : 'hit');
 }
@@ -1689,7 +1712,7 @@ function checkShotHits() {
         shardBurst(c, c[2] - 0.035 * LL, [NEWE.warden.shield, '#ffffff'], e.shield ? 4 : 14, e.shield ? 0.4 : 0.9);
         Sound.play(e.shield ? 'ping' : 'wbreak'); break;
       }
-      if (e.z >= z0 && e.z <= z1) { killEnemy(e, true); if (s.droid) pupStats.droidKills++; if (s.pierce > 0) s.pierce--; else s.dead = true; break; }
+      if (e.z >= z0 && e.z <= z1) { killEnemy(e, s.droid ? 'droid' : true); if (s.droid) pupStats.droidKills++; if (s.pierce > 0) s.pierce--; else s.dead = true; break; }
     }
     if (s.dead) continue;
     for (const m of mines) if (!m.armed && !m.dead && m.lane === s.lane && m.z >= z0 && m.z <= z1) {
@@ -3391,6 +3414,7 @@ window.VORTEX = {
   emptyField() { pool = []; enemies = []; eshots = []; pshots = []; mines = []; pups = []; spikes.fill(0); },
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
+  shortCircuit: () => Object.assign({ pts: SHORT.pts, maxZ: SHORT.maxZ }, shortStats),
   shotStop: () => Object.assign({ pts: STOP.pts, closePts: STOP.closePts, warnZ: SHOT_WARN_Z }, stopStats),
   jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
   doJump: () => doJump(),

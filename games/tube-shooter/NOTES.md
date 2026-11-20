@@ -343,3 +343,21 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-shotstop.test.js (desktop keyboard + mouse + gamepad A, iPhone 14 + landscape touch FIRE): far stop
   +25 and tip, BLOCK +100 and pop for each input, an unstopped shot still kills, RUN REPORT line, points add up, no console
   errors. vortex-tips / vortex-runreport updated for the new tip text.
+
+## Day 24 (2026-11-20): SHORT-CIRCUIT
+- Why: bot eval today (8 games from L8, BF=1, before the change): lives lost by tip count **zap 15**, capture 14, shot 7,
+  spike 7, fuseball 5; death level sharp 17/17/12/16, average 13/9/13/13. Pulsar zaps were #1. (Caveat: the eval bot does
+  not dodge pulsars at all, so this overstates them for a human; it is still the #2-3 cause on most days.) Every pulsar cue
+  so far (charge whine, rim charge bar, STEP ASIDE / JUMP label, buzz, tip) teaches only stepping away. Shooting the
+  pulsar first, the other real answer, paid the same 200 as any pulsar kill and gave no feedback.
+- What: a pulsar destroyed by YOUR shot while it is charging or zapping in YOUR lane (z < 0.8, pulseAmt > 0, not flipping)
+  is a SHORT-CIRCUIT: +300 on top of the 200 kill, a yellow/cyan electric burst, a 'shortout' crackle + falling arc +
+  chord with a pad/phone rumble, and a 'SHORT-CIRCUIT!  +300' pop (throttled 0.5 s). The first one in a game shows
+  'PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS' once. The RUN REPORT lists PULSARS SHORTED. Superzapper and AI DROID kills
+  do not count. Rules, timing and inputs are unchanged (keyboard, mouse, touch and gamepad all fire the same bullets).
+  Bullet kills from the AI DROID now pass `'droid'` instead of `true` to `killEnemy` (still truthy, so power-up drops
+  are unchanged).
+- Hook: `VORTEX.shortCircuit()` -> {n, charging, zapping, pts, tip, maxZ}.
+- Test: tests/vortex-shortcircuit.test.js (desktop keyboard + mouse + gamepad A, iPhone 14 + landscape touch FIRE): bonus
+  +500 total and pop for each input, first-time tip, no bonus for another lane / idle pulsar / superzapper, an unshot
+  charging pulsar still zaps, RUN REPORT line, no console errors.
