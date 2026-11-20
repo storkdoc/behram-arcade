@@ -31,7 +31,7 @@ async function playCase(pg, id, smart, shot) {
   await pg.waitForSelector('#select:not(.hidden)'); await press(pg, `.case[data-id="${id}"]`);
   await pg.waitForFunction(() => OBT.screen === 'desk'); await pg.waitForTimeout(700);
   if (shot) await pg.screenshot({ path: shot + '-reveal.png' });
-  await pg.waitForFunction(() => OBT.reveal == null, null, { timeout: 6000 }); await pg.waitForTimeout(400);
+  await pg.waitForFunction(() => OBT.reveal == null, null, { timeout: 40000 });   // the 2.4 s reveal advances <= 0.1 s per frame: at ~1 fps (SwiftShader under load) it takes ~24 s await pg.waitForTimeout(400);
   const L = await pg.evaluate(() => { const m = document.querySelector('#monitor').getBoundingClientRect(), d = document.querySelector('#desk').getBoundingClientRect(), s = document.querySelector('#strip').getBoundingClientRect();
     return { mw: m.width, vw: innerWidth, frac: m.height / d.height, sh: s.height, n: document.querySelectorAll('#choices .opt').length, keys: [...document.querySelectorAll('#choices .opt')].map(b => +b.dataset.i) }; });
   ok(L.mw >= L.vw - 2 && L.frac > 0.42 && L.frac < 0.6 && L.sh > 150, `${pg.dev} ${id}: strip spans the full width and about the top half (${Math.round(L.frac * 100)}%, ${Math.round(L.sh)}px tall)`);

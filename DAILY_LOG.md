@@ -987,3 +987,59 @@ as the comparison point.
    zapcharge 54, killcam 84 all pass. vortex-charge passed every check, but its exit code failed: a page.screenshot
    timed out under load 17.
    https://storkdoc.github.io/behram-arcade/games/tube-shooter/
+2. `91a7471` **MoodSticker: ASK bubble.** Player feedback has been 0 on most days since Oct 31, and the sticker is easy to
+   miss. A game over or a win now shows a small "How was it? Tap me" bubble next to the sticker for 7 s ("Click me ( ` )"
+   on desktop). It only appears after 40 s on the page, once per page load, at most once per game per day, and never if
+   this browser rated the game in the last 3 days. It is purely visual (`pointer-events: none`): it never takes a key,
+   click or touch from the game, and the card opens only when the player taps the sticker. New
+   tests/mood-sticker-ask.test.js ALL PASS (desktop + iPhone: Star Invaders, VORTEX, MELTDOWN; on screen, click-through,
+   once per page / day, rated-recently, 40 s default, backquote still opens the card). Regression: mood-sticker.test.js
+   (NO_REMOTE=1) and mood-sticker-dodge ALL PASS. Applies to every page (home + all games).
+3. (commit below) **Triage page test:** the wait for the 2.4 s strip reveal went from 6 s to 40 s. Diagnosis: the game was not
+   paused or stuck (`paused:false`, `reveal` 0.72 after 6.7 s). Under load the page runs at about 1 fps, and the reveal
+   advances at most 0.1 s per frame, so the reveal takes about 24 s. With the new wait the test gave **147 PASS, exit 0**.
+   Before, it failed at a different case each run.
+
+### Live deploy
+- VORTEX `game.js` with SHORT-CIRCUIT was served by Pages at 07:04 (about 1 min after the push).
+- `assets/js/mood-sticker.js` with the ask bubble was served at 07:11.
+
+### Neuro Arena (seed 1120; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5; the 4 saturated warm-ups were skipped)
+Compared with Nov 19 (seed 1119; that run finished but was never logged).
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | champ changes | ablate all units (full) | Nov 19 full |
+|---|---|---|---|---|---|---|---|
+| divisor | 8% | 29→86→74% (lv 1) | 52% vs 66% | −0.14 | 1 | 61% (intact 58%) | 62% |
+| simon | 25% | 41→83→68% (lv 1) | 38% vs 26% | +0.11 | 1 | 44% (intact 40%) | 44% |
+| text | 8% | 24→40%, flat r2–r7, 48% at end | 13% vs 25% (new/fam 18/26%) | −0.12 | 0 | 2% | 10% |
+| add | 5% | 33→89% | 6% vs 10% | −0.04 | 3 | 12% | 9% |
+| sub | 10% | 67→95% (lv 1) | 24% vs 18% | +0.05 | 2 | 20% (= intact) | 16% |
+| big | 50% | 60→97% | probe 86% vs prior 78% | +0.19 | 1 | probe 79%, full 90% (intact 86/97%) | probe 86% |
+| pattern | 13% | 45→100% (r3) | probe 80% vs 50% | +0.50 | 3 | probe 100% | probe 100% |
+| pong | – | 38→48%, flat from r4 | hit 48% vs open-side 65% | +0.05 | 0 | 26% | 38% |
+- Honest read: the champion's duel accuracy rose in all 8 contests. On the full task only **simon** (38% vs 26%) and
+  **sub** (24% vs 18%) beat their priors. For both, ablating all learned units gives the same or a better score, so the
+  gain still does not come from learned units. **Divisor has been below its frequency prior for the 6th straight run.**
+  **Text has been below the position baseline for the 8th straight run** and is flat for 5 rounds. Its familiar-vs-new gap
+  (26% vs 18%) is the one memorization sign. Ablation shows text and pong do use their units (2% and 26% without them),
+  but both stay below the simple prior. **Big** is the only contest where removing all units hurt (full 97% → 90%,
+  probe 86% → 79%). The probe has 14 items, so that probe drop is one item. Not significant. Duel accuracy (8 rising
+  curves) is not task understanding. Stagnation: text and pong plateaued, and pong's champion never changed.
+
+### Findings (worst first)
+1. **No player feedback again.** The loop has been almost silent since Nov 13. The ask bubble (change 2) is the attempt to fix
+   discoverability. Check tomorrow whether records arrive.
+2. **Neuro Arena text / divisor / pong** are stuck below simple priors for 6–8 runs. They need a design change (see Nov 18),
+   not more runs.
+3. **VORTEX:** pulsars topped the bot tally today. SHORT-CIRCUIT adds the "shoot it first" answer. The bot itself never
+   dodges pulsars, so tomorrow's tally should be compared with that in mind.
+4. **Star Raider:** a sloppy player still wins 0% of Warrior campaigns (unchanged for weeks). It is a design choice
+   (sharp: 50%), but it is the steepest step in the ladder.
+5. **Test load flakes:** Star Raider page test 99 ok / 2 FAIL ("warp completes" on iPhone and iPad, wall-clock waits) and
+   the surgery page test hit its 600 s timeout with 0 FAIL, both under load 17–20. vortex-charge passed every check, but a
+   screenshot timed out. None of these are game bugs.
+
+### For tomorrow
+- Re-read feedback, and look for the first records sent after the ask bubble.
+- VORTEX: add pulsar dodging to the eval bot (`_eval/vbot.js` only steers toward targets) so the zap count reflects human
+  play. Watch SHORT-CIRCUIT counts in the run report.
+- Star Raider page test: make "warp completes" wait on game time like the steering fix.
