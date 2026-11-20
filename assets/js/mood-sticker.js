@@ -34,6 +34,7 @@
     // Optional generic endpoint: each record is POSTed as JSON text (e.g. your own form backend).
     endpoint: null,
     maxText: 500,
+    askAfterMs: 40000,      // ASK bubble: only after this much time on the page (0 = never ask)
     corner: null            // 'bl' | 'br' | 'tl' | 'tr' (default per page, user can drag it)
   };
   var ext = window.MOOD_STICKER_CONFIG;
@@ -130,6 +131,27 @@
     var r = REACT[type] || ['wiggle', 900];
     if (ui && ui.isOpen() && type !== 'love') return;
     setMood(r[0], reduced ? Math.min(r[1], 1500) : r[1]);
+    if (type === 'win' || type === 'lose') maybeAsk(type);
+  };
+  /* ASK BUBBLE (2026-11-20). Player feedback has been 0 on most days since Oct 31: the sticker is easy to miss. After a
+     game over or a win (the natural pause), once per page and at most once per game per day, a small 'How was it? Tap me'
+     bubble appears next to the sticker for 7 s. It is purely visual (pointer-events: none): it never takes a key, click
+     or touch from the game, and nothing opens unless the player taps the sticker as before. Skipped if the player
+     already rated this game in the last 3 days, if the card is open, or before CONFIG.askAfterMs on the page. */
+  var askState = { shown: 0, skipped: '', at: 0 };
+  var askDay = function () { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  var maybeAsk = function (why) {
+    var skip = function (r) { askState.skipped = r; return false; };
+    if (!CONFIG.askAfterMs) return skip('off');
+    if (askState.shown) return skip('once per page');
+    if (now() - T0 < CONFIG.askAfterMs) return skip('too early');
+    if (!ui || ui.isOpen()) return skip('open');
+    if (LS.get('moodSticker.ask.' + gameName, '') === askDay()) return skip('asked today');
+    var recent = readLog().some(function (x) { return x.rec && x.rec.game === gameName && now() - (x.at || 0) < 3 * 864e5; });
+    if (recent) return skip('rated recently');
+    askState.shown++; askState.at = now(); askState.why = why; LS.set('moodSticker.ask.' + gameName, askDay());
+    setTimeout(function () { if (ui && !ui.isOpen()) ui.ask(lastInputKind === 'touch' || (lastInputKind === 'unknown' && deviceClass() !== 'desktop')); }, 1200);
+    return true;
   };
   setInterval(function () {
     if (moodUntil && now() < moodUntil) return;
@@ -441,6 +463,11 @@
     '.bl .pop{left:0;bottom:calc(var(--sz,46px) + 10px);--ox:12%;--oy:100%}.br .pop{right:0;bottom:calc(var(--sz,46px) + 10px);--ox:88%;--oy:100%}',
     '.tl .pop{left:0;top:calc(var(--sz,46px) + 10px);--ox:12%;--oy:0}.tr .pop{right:0;top:calc(var(--sz,46px) + 10px);--ox:88%;--oy:0}',
     '.pop[hidden]{display:none}',
+    '.ask{position:absolute;top:50%;white-space:nowrap;pointer-events:none;background:#fff;color:#1d2233;font:700 13px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:8px 11px;border-radius:13px;transform:translateY(-50%) scale(.7);opacity:0;transition:opacity .25s,transform .35s cubic-bezier(.3,1.6,.5,1);box-shadow:0 6px 18px rgba(0,0,0,.4),0 0 0 2px #ffcf3a}',
+    '.bl .ask,.tl .ask{left:calc(var(--sz,46px) + 9px)}.br .ask,.tr .ask{right:calc(var(--sz,46px) + 9px)}',
+    '.ask.on{opacity:1;transform:translateY(-50%) scale(1)}.open .ask{display:none}',
+    '.ask:before{content:"";position:absolute;top:50%;width:10px;height:10px;background:#fff;transform:translateY(-50%) rotate(45deg)}',
+    '.bl .ask:before,.tl .ask:before{left:-4px}.br .ask:before,.tr .ask:before{right:-4px}',
     '@keyframes popin{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}',
     '.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 8px}',
     '.hd b{font-size:14.5px;font-weight:700;letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -506,6 +533,7 @@
     root.innerHTML = '<style>' + CSS + '</style>' +
       '<div class="wrap ' + corner + '" style="--sz:' + (small ? 38 : 46) + 'px">' +
       '<button class="stk idle m-happy" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Rate this game (optional)" title="How\'s the game? Tap to rate ( ` )">' + SVG + '</button>' +
+      '<div class="ask" aria-hidden="true"></div>' +
       '<div class="pop" role="dialog" aria-label="Rate this game" hidden>' +
       '<div class="body"><div class="hd"><b class="ttl"></b><button class="x" type="button" aria-label="Close">×</button></div>' +
       '<div class="row" role="group" aria-label="Rating">' +
@@ -519,7 +547,7 @@
     var $ = function (s) { return root.querySelector(s); };
     var wrap = $('.wrap'), stk = $('.stk'), pop = $('.pop'), ta = $('textarea'), send = $('.send'), hint = $('.hint');
     var mouth = $('.mouth'), eyes = root.querySelectorAll('.eye');
-    var open = false, prevFocus = null, closeTimer = 0, rendered = '';
+    var open = false, prevFocus = null, closeTimer = 0, rendered = '', askTimer = 0;
 
     var render = function (m, kick) {
       if (m === rendered && !kick) return; rendered = m;
@@ -561,6 +589,7 @@
     };
     var doOpen = function (how) {
       if (open) return; open = true; clearTimeout(closeTimer);
+      clearTimeout(askTimer); $('.ask').classList.remove('on');
       prevFocus = document.activeElement && document.activeElement !== host ? document.activeElement : null;
       $('.ttl').textContent = 'How\u2019s ' + gameTitle() + '?';
       $('.body').hidden = false; $('.done').hidden = true; pop.hidden = false;
@@ -687,6 +716,15 @@
     ui = {
       host: host, isOpen: function () { return open; }, open: doOpen, close: doClose, render: render, look: look,
       panelKey: panelKey, move: move, activate: activate, submit: doSubmit,
+      ask: function (touch) {
+        var a = $('.ask'); if (!a) return; clearTimeout(askTimer);
+        a.textContent = touch ? 'How was it? Tap me' : 'How was it? Click me ( ` )';
+        a.classList.add('on'); setMood('perky', 2200);
+        askTimer = setTimeout(function () { a.classList.remove('on'); }, 7000);
+      },
+      askOn: function () { var a = $('.ask'); return !!(a && a.classList.contains('on')); },
+      askText: function () { var a = $('.ask'); return a ? a.textContent : null; },
+      askRect: function () { var a = $('.ask'); return a ? a.getBoundingClientRect().toJSON() : null; },
       corner: function (c) { if (/^(t|b)(l|r)$/.test(c)) { wrap.className = 'wrap ' + c + (open ? ' open' : ''); LS.set(cornerKey, c); } return wrap.className.split(' ')[1]; }
     };
     render(mood);
@@ -713,7 +751,8 @@
     // test helpers (used by tests/mood-sticker.test.js)
     _submit: function (rating, text) { return submit(rating, text); },
     _record: function (rating, text) { return buildRecord(rating, text); },
-    _sniff: function (s) { sniff(s); }
+    _sniff: function (s) { sniff(s); },
+    _ask: function () { return { shown: askState.shown, skipped: askState.skipped, why: askState.why || null, on: !!(ui && ui.askOn()), text: ui ? ui.askText() : null }; }
   };
   if (document.body) build(); else document.addEventListener('DOMContentLoaded', build);
 })();

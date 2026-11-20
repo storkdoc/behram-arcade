@@ -24,6 +24,13 @@ there is one. **Send note** sends the note with no rating. Esc, ✕, or a tap ou
 it without sending. Nothing is required. Inside the card, arrow keys, Tab, 1/2/3 and gamepad
 D-pad/A/B all work.
 
+**Ask bubble (2026-11-20):** after a game over or a win, a small "How was it? Tap me" bubble (or
+"Click me ( ` )" on desktop) shows next to the sticker for 7 s. It appears only after 40 s on the page
+(`askAfterMs`, 0 = never), once per page load, at most once per game per day, and never if this
+browser rated the game in the last 3 days. It is purely visual (`pointer-events: none`), so it never
+takes a key, click or touch from the game, and nothing opens unless the player taps the sticker. Hook:
+`MoodSticker._ask()`. Test: `tests/mood-sticker-ask.test.js`.
+
 **Not getting in the way:**
 - While the card is closed, the sticker never takes Space, Enter, arrow keys or clicks from the
   game. Only the backquote key is reserved.
