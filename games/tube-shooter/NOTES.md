@@ -361,3 +361,26 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-shortcircuit.test.js (desktop keyboard + mouse + gamepad A, iPhone 14 + landscape touch FIRE): bonus
   +500 total and pop for each input, first-time tip, no bonus for another lane / idle pulsar / superzapper, an unshot
   charging pulsar still zaps, RUN REPORT line, no console errors.
+
+## Day 25 (2026-11-21): ANNOUNCER (Tempest 2000-style voice callouts)
+- Why: 24 days of VORTEX work were all telegraphs, warnings and scoring rules. The eval bot (now with pulsar dodging, PD=1)
+  spreads its deaths across capture 12 / fuseball 11 / shot 11 / zap 7 / spike 3 (8 games from L8), so no single cause
+  stands out any more. The game had no voice at all, while the Tempest 2000 announcer ("Superzapper recharge",
+  "Excellent!", "Yes! Yes! Yes!") is one of the best-loved parts of that game's audio.
+- What: `Voice` (after `Sound`) speaks short callouts through the browser's speechSynthesis (no audio files): "Level N. Go!"
+  at the start, "Superzapper recharge" on each new level, "Avoid spikes", "Excellent!" (clean level and good bonus warp),
+  "Bonus warp!", "Yes! Yes! Yes!" (perfect warp), power-up names, "Extra life", "Short circuit!", "Broke free!",
+  "Game over" / "Game over. New high score!". The deepest / most robotic English voice installed is used (Zarvox,
+  Trinoids, Fred, Ralph, Daniel, Google UK English Male, ...), pitched down for normal voices. The music bus ducks to
+  0.38 while it talks. One line at a time: a higher-priority line cuts a lower one, a same-or-lower one is dropped (never
+  queued), and the same line is not repeated within 4 s. Mute (M) silences it. iOS: the first user gesture speaks one
+  silent blank so later lines are allowed.
+- Toggle (stored as `voice`, default ON): **V** key, gamepad **R3** (right-stick click, button 11), touch: **hold the
+  sound button 0.6 s and release** (judged on the events' own timestamps, so a slow frame cannot turn a tap into a hold;
+  the tap's mute toggle is undone on a hold). The CONTROLS screen lists V / SOUND HOLD with the current state.
+- Rules, timing, scoring and inputs are unchanged.
+- Hooks: `VORTEX.voice()` -> {on, ok, name, said, dropped, log, speaking}; `VORTEX.voiceToggle()`.
+- Test: tests/vortex-voice.test.js (stubbed speechSynthesis for desktop keyboard/mouse/gamepad and iPhone 14 touch, plus
+  one run with the browser's real speechSynthesis): default ON, iOS unlock blank, voice choice (never a non-English
+  voice), level / recharge / power-up / game-over lines, no pile-up, mute silences, V / R3 / hold toggles, tap still
+  mutes, no console errors.

@@ -292,7 +292,7 @@ const Sound = {
   // iOS / Android only start Web Audio inside a user gesture (touchend / pointerup / click / keydown):
   // resume the context there and play one silent sample so later sounds are allowed
   unlock() {
-    this.init(); const ac = this.ac; if (!ac) return;
+    this.init(); const ac = this.ac; if (!ac) return; Voice.unlock();
     if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} }
     if (!this.unlocked) { try { const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); this.unlocked = true; } catch (e) {} }
   },
@@ -569,7 +569,7 @@ const Music = {
 const keys = {};
 const touch = { on: false, fire: false, fireBtn: false, fireZone: false, pend: 0, auto: store.get('touchAuto', true) };   // touch controls: FIRE held, smart auto-fire
 const mouse = { fire: false, used: false };
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace', 'KeyJ', 'ShiftLeft', 'ShiftRight']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyX', 'ControlLeft', 'ControlRight', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM', 'KeyF', 'Escape', 'Backspace', 'KeyJ', 'ShiftLeft', 'ShiftRight', 'KeyV']);
 addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code) || (state === 'initials' && /^Key[A-Z]$/.test(e.code))) e.preventDefault();
   Sound.init();
@@ -606,6 +606,57 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && inG
 addEventListener('mousemove', () => { if (inGame() && !paused) return; document.body.classList.add('showcursor'); clearTimeout(window.__ct); window.__ct = setTimeout(() => document.body.classList.remove('showcursor'), 1500); });
 addEventListener('pointerdown', () => Sound.init());
 for (const ev of ['pointerup', 'touchend', 'click']) addEventListener(ev, () => Sound.unlock(), true);
+/* Day 25 (2026-11-21): ANNOUNCER (Tempest 2000 style). A deep synthetic voice calls out the big moments: "SUPERZAPPER
+   RECHARGE" on each new level, "EXCELLENT!" for a clean level, "BONUS WARP", "YES! YES! YES!" for a perfect warp, the
+   power-up names, "SHORT CIRCUIT!", "BROKE FREE!", "EXTRA LIFE", "AVOID SPIKES", "GAME OVER" and "NEW HIGH SCORE".
+   It uses the browser's speechSynthesis (no files to download); the deepest/most robotic English voice installed is
+   picked (Zarvox / Fred / Daniel / Google UK English Male...), pitched down, and the music ducks while it talks.
+   One line at a time: a higher-priority line cuts a lower one, a line of the same key is not repeated within 4 s, and
+   nothing queues up behind a line still speaking. Muted sound (M) silences it too. Toggle: V key, pad R3 (right stick
+   click), or HOLD the touch mute button for 0.6 s and release. Stored as 'voice' (default ON). Hook: VORTEX.voice(). */
+const Voice = {
+  on: store.get('voice', true) !== false, ok: typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined',
+  v: null, picked: false, cur: null, last: {}, log: [], said: 0, dropped: 0, unlocked: false,
+  pick() {
+    if (!this.ok) return null;
+    let vs = []; try { vs = speechSynthesis.getVoices() || []; } catch (e) {}
+    if (!vs.length) return null;
+    this.picked = true;
+    const en = vs.filter(v => /^en/i.test(v.lang || ''));
+    const pref = [/zarvox/i, /trinoids/i, /fred/i, /ralph/i, /daniel/i, /google uk english male/i, /\bmale\b/i, /alex/i, /aaron/i, /arthur/i];
+    for (const re of pref) { const v = en.find(v => re.test(v.name)); if (v) return (this.v = v); }
+    return (this.v = en.find(v => v.localService) || en[0] || vs[0]);
+  },
+  // iOS only lets speech start inside a user gesture: say one silent blank there once
+  unlock() {
+    if (!this.ok || this.unlocked) return; this.unlocked = true;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+  },
+  toggle() { this.on = !this.on; store.set('voice', this.on); if (!this.on && this.ok) { try { speechSynthesis.cancel(); } catch (e) {} this.duck(false); } return this.on; },
+  duck(d) { if (Sound.out && Sound.ac && !Sound.muted) Sound.out.gain.setTargetAtTime(d ? 0.38 : 0.6, Sound.ac.currentTime, d ? 0.05 : 0.25); },
+  // prio: 1 = flavour, 2 = event, 3 = must-hear (game over / high score)
+  say(key, text, prio = 2) {
+    if (!this.on || Sound.muted || !this.ok) return false;
+    const now = performance.now();
+    if (this.last[key] && now - this.last[key] < 4000) return false;
+    let busy = false; try { busy = speechSynthesis.speaking || speechSynthesis.pending; } catch (e) {}
+    if (busy && this.cur) { if (prio <= this.cur.prio) { this.dropped++; return false; } try { speechSynthesis.cancel(); } catch (e) {} }
+    if (!this.picked) this.pick();
+    let u; try { u = new SpeechSynthesisUtterance(text); } catch (e) { return false; }
+    if (this.v) { u.voice = this.v; u.lang = this.v.lang; } else u.lang = 'en-US';
+    const robo = this.v && /zarvox|trinoids|fred|ralph/i.test(this.v.name);
+    u.pitch = robo ? 0.9 : 0.35; u.rate = robo ? 1.0 : 1.05; u.volume = 1;
+    const me = this.cur = { key, prio, text };
+    u.onstart = () => this.duck(true);
+    u.onend = u.onerror = () => { if (this.cur === me) { this.cur = null; this.duck(false); } };
+    this.last[key] = now; this.said++;
+    if (this.log.length > 40) this.log.shift(); this.log.push({ key, text, prio, level });
+    try { speechSynthesis.speak(u); } catch (e) { this.cur = null; return false; }
+    setTimeout(() => { if (this.cur === me) { this.cur = null; this.duck(false); } }, 3500);   // some engines never fire onend
+    return true;
+  },
+};
+if (Voice.ok) { try { speechSynthesis.addEventListener('voiceschanged', () => { Voice.picked = false; Voice.pick(); }); } catch (e) {} }
 const pad = { prev: {}, ax: 0, lastAx: 0 };
 function pollPad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : []; const g = gps && [...gps].find(x => x);
@@ -616,7 +667,7 @@ function pollPad() {
   // in game the left stick is analog (speed proportional to deflection, 0.2 dead zone); in menus it acts like the d-pad
   const dz = 0.2, m = Math.abs(ax) > dz ? sgn(ax) * Math.pow((Math.abs(ax) - dz) / (1 - dz), 1.5) : 0;
   pad.ax = steer ? m : 0; if (m) pad.lastAx = m;
-  const map = { ArrowLeft: (!steer && ax < -0.5) || b(14), ArrowRight: (!steer && ax > 0.5) || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), Space: b(0) || b(7), Enter: b(1) || b(2) || b(6) || b(9), KeyP: b(8), KeyJ: b(3) || b(4) || b(5) };
+  const map = { ArrowLeft: (!steer && ax < -0.5) || b(14), ArrowRight: (!steer && ax > 0.5) || b(15), ArrowUp: (g.axes[1] || 0) < -0.5 || b(12), ArrowDown: (g.axes[1] || 0) > 0.5 || b(13), Space: b(0) || b(7), Enter: b(1) || b(2) || b(6) || b(9), KeyP: b(8), KeyJ: b(3) || b(4) || b(5), KeyV: b(11) };
   for (const k in map) { const v = !!map[k]; if (v !== !!pad.prev[k]) { keys[k] = v; if (v) { Sound.init(); onPress(k); } } pad.prev[k] = v; }
 }
 
@@ -749,8 +800,8 @@ function updBonus(b, dt) {
   if (!b.done && b.t >= b.end) {
     b.done = true; const N = b.gates.length;
     let line;
-    if (b.passed === N) { addScore(BONUS.perfectPts); if (lives < 6) lives++; line = 'PERFECT! +' + BONUS.perfectPts + ' + EXTRA LIFE'; Sound.play('life'); }
-    else if (b.passed >= Math.ceil(N * BONUS.goodFrac)) { addScore(BONUS.goodPts); line = 'EXCELLENT! +' + BONUS.goodPts; }
+    if (b.passed === N) { addScore(BONUS.perfectPts); if (lives < 6) lives++; line = 'PERFECT! +' + BONUS.perfectPts + ' + EXTRA LIFE'; Sound.play('life'); Voice.say('perfect', 'Yes! Yes! Yes!', 3); }
+    else if (b.passed >= Math.ceil(N * BONUS.goodFrac)) { addScore(BONUS.goodPts); line = 'EXCELLENT! +' + BONUS.goodPts; Voice.say('bexcellent', 'Excellent!', 3); }
     else line = 'KEEP CLOSER TO THE GATES';
     msg('BONUS WARP ' + b.passed + '/' + N + '  +' + b.pts, 2.6, 0.42, '#7dffcf', 4.4);
     msg(line, 2.6, 0.5, '#ffffff', 3);
@@ -844,7 +895,7 @@ function makeEnemy(type, lane, z, cargo) {
 }
 function addScore(v) {
   score += v;
-  while (score >= nextLife) { nextLife += 20000; if (lives < 6) { lives++; Sound.play('life'); msg('BONUS LIFE', 1.6, 0.36, pal.claw); } }
+  while (score >= nextLife) { nextLife += 20000; if (lives < 6) { lives++; Sound.play('life'); msg('BONUS LIFE', 1.6, 0.36, pal.claw); Voice.say('life', 'Extra life', 2); } }
 }
 function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter(m => m.y !== y); msgs.push({ t: 0, text: t, dur, y, color, size }); }
 
@@ -870,7 +921,8 @@ function beginLevel(L) {
   if (L > bestLevel) { bestLevel = L; store.set('bestLevel', L); }
   beginZoom(-18, 1.5, true);
   msg('LEVEL ' + L, 2.2, 0.5, '#fff', 5.5);
-  if (L > startLevel) msg('SUPERZAPPER RECHARGE', 2.2, 0.6, pal.claw, 3);
+  if (L > startLevel) { msg('SUPERZAPPER RECHARGE', 2.2, 0.6, pal.claw, 3); Voice.say('recharge', 'Superzapper recharge', 1); }
+  else Voice.say('level', 'Level ' + L + '. Go!', 2);
   waveReset(waveKind(L));
   if (wave.kind !== 'stream') { const W = WAVES[wave.kind]; msg('WAVE: ' + W.name, 2.6, 0.67, W.col, 2.8); if (!seenWaves.has(wave.kind)) { seenWaves.add(wave.kind); msg(W.tip, 2.8, 0.72, '#ffffff', 1.4); } }
 }
@@ -882,12 +934,12 @@ function startWarp() {
   state = 'warp'; warp = { t: 0 }; eshots = []; player.z = 0; window.MoodSticker && window.MoodSticker.event('big'); window.MoodSticker && window.MoodSticker.screen('warp');
   Sound.play('warp');
   if (bonusPending > 0) { addScore(bonusPending); msg('BONUS ' + bonusPending, 2.4, 0.42, '#fff', 4.5); Sound.play('bonus'); bonusPending = 0; }
-  if (spikes.some(s => s > 0.02)) msg('AVOID SPIKES', 2.0, 0.58, pal.spike, 4);
+  if (spikes.some(s => s > 0.02)) { msg('AVOID SPIKES', 2.0, 0.58, pal.spike, 4); Voice.say('spikes', 'Avoid spikes', 1); }
   while (pups.length) { pups.shift(); collectPup(); }   // a crystal still in the tube is yours when the level clears
-  if (cleanLevel && level >= 3 && !window.__noTokens) { msg('EXCELLENT! NO LIVES LOST', 2.0, 0.22, '#ffffff', 3.4); giveToken(true); }
+  if (cleanLevel && level >= 3 && !window.__noTokens) { msg('EXCELLENT! NO LIVES LOST', 2.0, 0.22, '#ffffff', 3.4); giveToken(true); Voice.say('excellent', 'Excellent!', 2); }
   if (tokens >= BONUS.need && !window.__noBonus) {
     tokens = 0; warp.bonus = makeBonus(); Sound.play('bonusin');
-    msg('BONUS WARP', 2.4, 0.36, '#7dffcf', 6); msg('STEER INTO EVERY GATE', 2.4, 0.5, '#ffffff', 2.6);
+    msg('BONUS WARP', 2.4, 0.36, '#7dffcf', 6); msg('STEER INTO EVERY GATE', 2.4, 0.5, '#ffffff', 2.6); Voice.say('bonuswarp', 'Bonus warp!', 3);
     window.MoodSticker && window.MoodSticker.screen('bonus');
   }
 }
@@ -930,7 +982,7 @@ function breakFree() {
   enemies = enemies.filter(e => !e.dead);
   if (death.savedPower) power = death.savedPower;
   player.alive = true; state = 'play'; death = null; graceT = BREAK_FREE_GRACE; shake = Math.max(shake, 0.25);
-  msg('BROKE FREE!', 1.4, 0.62, '#ff47e6', 4); window.MoodSticker && window.MoodSticker.event('big');
+  msg('BROKE FREE!', 1.4, 0.62, '#ff47e6', 4); Voice.say('brokefree', 'Broke free!', 3); window.MoodSticker && window.MoodSticker.event('big');
   return true;
 }
 function explodePlayer() {
@@ -1063,7 +1115,7 @@ function deathTip(kind) {
 function finishDeath() {
   lives--;
   if (death) { const k = death.kind; run.deaths[k] = (run.deaths[k] || 0) + 1; run.order = run.order.filter(x => x !== k).concat(k); run.last = k; }
-  if (lives <= 0) { state = 'gameover'; gameOverT = 0; cont.level = level; Sound.hum(0); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
+  if (lives <= 0) { state = 'gameover'; gameOverT = 0; cont.level = level; Sound.hum(0); Voice.say(qualifies(score) ? 'hiscore' : 'gameover', qualifies(score) ? 'Game over. New high score!' : 'Game over', 3); window.MoodSticker && window.MoodSticker.event('lose'); window.MoodSticker && window.MoodSticker.screen('gameover'); return; }
   if (death) deathTip(death.kind);
   if (death.inWarp) { beginLevel(level + 1); return; }
   // remaining enemies return to the far end
@@ -1075,9 +1127,15 @@ function finishDeath() {
 function qualifies(s) { return s > 0 && (hiscores.length < 10 || s > hiscores[hiscores.length - 1][1]); }
 
 /* ============================== key events ============================== */
+function voiceToggle() {
+  const on = Voice.toggle();
+  msg(on ? 'ANNOUNCER ON' : 'ANNOUNCER OFF', 1.2, 0.68, '#9ff', 2.6); Sound.play('tick');
+  if (on) Voice.say('voiceon', 'Announcer on', 3);
+}
 const INITIAL_SET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ .-'.split('');
 function onPress(k) {
   if (k === 'KeyM') { Sound.toggle(); return; }
+  if (k === 'KeyV') { voiceToggle(); return; }
   if (k === 'KeyH') { const on = Haptics.toggle(); if (inGame()) msg(on ? 'RUMBLE ON' : 'RUMBLE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
   if (k === 'KeyF' && inGame()) { autofire = !autofire; store.set('autofire2', autofire); msg(autofire ? 'AUTOFIRE ON' : 'AUTOFIRE OFF', 1.2, 0.68, '#9ff', 2.6); return; }
   const confirm = k === 'Enter' || k === 'NumpadEnter';
@@ -1378,7 +1436,7 @@ function pulsarShorted(e, c) {
   fx.push({ x: c[0], y: c[1], zw: c[2], t: 0, dur: 0.6, size: 0.55, rays: 14, colors: ['#fff7b0', '#7df9ff', '#ffffff'], seed: shortStats.n });
   shardBurst(c, c[2], ['#ffe81a', '#7df9ff', '#ffffff'], 16, 1.05);
   Sound.play('shortout');
-  if (T - shortStats.lastPop > 0.5) { shortStats.lastPop = T; msg('SHORT-CIRCUIT!  +' + SHORT.pts, 0.9, 0.3, '#ffe81a', 2.6); }
+  if (T - shortStats.lastPop > 0.5) { shortStats.lastPop = T; msg('SHORT-CIRCUIT!  +' + SHORT.pts, 0.9, 0.3, '#ffe81a', 2.6); Voice.say('short', 'Short circuit!', 2); }
   if (!shortStats.tip) { shortStats.tip = true; msg('PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS', 2.2, 0.38, '#ffe81a', 1.6); }
 }
 function killEnemy(e, byShot) {
@@ -1799,6 +1857,7 @@ function collectPup() {
   else if (!power.droid) { power.droid = { pos: player.pos + web.n / 2, cd: 0.4, until: state === 'warp' ? level + 1 : level, lane: -1, life: PUP.droidLife }; name = 'AI DROID'; tip = 'IT GUARDS THE RIM FOR ' + PUP.droidLife + ' SECONDS'; }
   else { addScore(1000); name = 'WARP TOKEN +1000'; giveToken(true); }
   msg(name, 2.2, 0.36, '#3dff8a', 4.2);
+  Voice.say('pup', name === 'AI DROID' ? 'A.I. droid' : name === 'JUMP' ? 'Jump enabled' : name.startsWith('WARP') ? 'Warp token' : 'Particle laser', 2);
   if (tip && !seenPup.has(name)) { seenPup.add(name); msg(tip, 2.8, 0.43, '#ffffff', 1.4); }
   Sound.play('pup'); flash = Math.max(flash, 0.12); flashColor = '#3dff8a';
   const cw = clawWorld(); shardBurst([cw[0], cw[1]], cw[2], ['#3dff8a', '#ffffff', '#b6ffd2'], 16, 0.9);
@@ -2889,7 +2948,7 @@ function drawAttract() {
   drawTitleLogo(H * 0.12, size);
   text('A VECTOR TUBE SHOOTER', W / 2, H * 0.12 + size * 1.25, U * 1.9, '#ffe81a', 'center');
   if (attract.mode === 0) {
-    const rows = touch.on ? [['RIM', 'DRAG ALONG THE TUBE RIM'], ['KNOB', 'DRAG OR CIRCLE TO SPIN'], ['FIRE', 'HOLD THE FIRE PAD'], ['AUTO', 'SMART AUTO-FIRE ' + (touch.auto ? '(ON)' : '(OFF)')], ['ZAP', 'SUPERZAPPER'], ['MODE', 'SPINNER OR ARROWS']] : [['MOUSE', 'POINT AT THE RIM, CLICK FIRE'], ['← →', 'MOVE CLAW  (HOLD = FASTER)'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER  (RIGHT CLICK)'], ['PAD', 'STICK = ANALOG SPIN, A FIRE'], ['F', 'SMART AUTOFIRE  ' + (autofire ? '(ON)' : '(OFF)')], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF'], ['H', 'PAD RUMBLE  ' + (Haptics.on ? '(ON)' : '(OFF)')]];
+    const rows = touch.on ? [['RIM', 'DRAG ALONG THE TUBE RIM'], ['KNOB', 'DRAG OR CIRCLE TO SPIN'], ['FIRE', 'HOLD THE FIRE PAD'], ['AUTO', 'SMART AUTO-FIRE ' + (touch.auto ? '(ON)' : '(OFF)')], ['ZAP', 'SUPERZAPPER'], ['MODE', 'SPINNER OR ARROWS'], ['SOUND', 'HOLD = ANNOUNCER ' + (Voice.on ? '(ON)' : '(OFF)')]] : [['MOUSE', 'POINT AT THE RIM, CLICK FIRE'], ['← →', 'MOVE CLAW  (HOLD = FASTER)'], ['SPACE', 'FIRE  (HOLD FOR RAPID FIRE)'], ['ENTER', 'SUPERZAPPER  (RIGHT CLICK)'], ['PAD', 'STICK = ANALOG SPIN, A FIRE'], ['F', 'SMART AUTOFIRE  ' + (autofire ? '(ON)' : '(OFF)')], ['P', 'PAUSE'], ['M', 'SOUND + MUSIC ON / OFF'], ['H', 'PAD RUMBLE  ' + (Haptics.on ? '(ON)' : '(OFF)')], ['V', 'ANNOUNCER  ' + (Voice.on ? '(ON)' : '(OFF)')]];
     const top = H * 0.44, lh = U * 3.6, cs = U * 1.9;
     text('CONTROLS', W / 2, top - lh * 1.4, U * 2.4, '#36e6ff', 'center');
     rows.forEach(([k, d], i) => { text(k, W / 2 - U * 2, top + i * lh, cs, '#ffe81a', 'right'); text(d, W / 2 + U * 2, top + i * lh, cs, '#ffffff', 'left'); });
@@ -3206,7 +3265,13 @@ function touchBuild() {
   hold(E.jump, () => doJump());
   hold(E.start, null, () => { if (state === 'select') onPress('Enter'); });
   hold(E.pause, () => onPress('KeyP'));
-  hold(E.mute, () => { Sound.unlock(); onPress('KeyM'); });
+  // tap = sound on/off (instant, as before); HOLD 0.6 s = announcer on/off (the sound state is put back)
+  // (judged on the events' own timestamps at release, so a slow frame can never turn a tap into a hold)
+  let muteDownTs = -1;
+  hold(E.mute, e => { Sound.unlock(); onPress('KeyM'); muteDownTs = e.timeStamp; }, e => {
+    if (muteDownTs >= 0 && e.type === 'pointerup' && e.timeStamp - muteDownTs >= 600) { onPress('KeyM'); voiceToggle(); }
+    muteDownTs = -1;
+  });
   // fullscreen needs a real activation: touchend for fingers, pointerup for mouse / pen
   hold(E.fs, null, e => { if (e.pointerType !== 'touch') fsToggle(); });
   E.fs.addEventListener('touchend', e => { e.preventDefault(); fsToggle(); });
@@ -3476,6 +3541,8 @@ window.VORTEX = {
   score: () => score,
   playerLane: () => player.lane,
   webInfo: () => ({ n: web.n, closed: web.closed }),
+  voice: () => ({ on: Voice.on, ok: Voice.ok, name: Voice.v ? Voice.v.name : null, said: Voice.said, dropped: Voice.dropped, log: Voice.log.slice(), speaking: !!Voice.cur }),
+  voiceToggle: () => voiceToggle(),
   gotoLevel(L) { startLevel = L; bonusPending = 0; beginLevel(L); touchSync(); },
 };
 })();
