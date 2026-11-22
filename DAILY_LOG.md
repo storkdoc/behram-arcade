@@ -1127,7 +1127,7 @@ bot eval finished, and their numbers are used below as the comparison point.
   and that is still not task understanding.
 
 ### Findings (worst first)
-1. **No player feedback for 9 days running** (last real records Nov 13). The ask bubble has not changed that so far.
+1. **No player feedback for 9 days running.** The last real records in the local archive are from the evening of Nov 12 ET (01:17–02:27 UTC on Nov 13). The ask bubble has not changed that so far.
 2. **Neuro Arena text / pong** are stuck below simple baselines (text 9 runs, pong's champion unchanged). Divisor's first
    above-prior result does not depend on its learned units. These need design changes, not more generations.
 3. **Star Raider war mode:** a sharp commander beats a sloppy one only ~63% (N=30), and the N=6 test flakes on that.
