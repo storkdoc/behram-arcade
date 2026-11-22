@@ -363,7 +363,7 @@ COB_BANK.push(
       'Abruption is the leading obstetric cause of DIC. A fibrinogen below 200 mg/dL predicts severe postpartum hemorrhage. Send a CBC, coagulation tests, fibrinogen and a type and crossmatch, and prepare blood products.'],
     ['Management', 'The fetal heart tracing now shows recurrent late decelerations with minimal variability. She is stable. What is the best next step?',
       ['Expedited delivery by cesarean', 'Tocolysis to stop the contractions', 'Expectant management with steroids for 48 hours', 'Amnioinfusion for the decelerations', 'Repeat the ultrasound in 24 hours'],
-      'Abruption with a non-reassuring fetal status at 34 weeks calls for prompt delivery. Tocolysis is contraindicated with a significant abruption. A vaginal delivery is appropriate if the fetus has died or the mother is stable and delivery is imminent. A vaginal birth is reasonable only if it is imminent.']
+      'Abruption with a non-reassuring fetal status at 34 weeks calls for prompt delivery. Tocolysis is contraindicated with a significant abruption. A vaginal delivery is reasonable if the fetus has died, or if the mother is stable and delivery is imminent.']
     ]}
   ]},
 { id: 'postdates', t: 'Term & Postdates', cat: 'OB', tier: 3, icon: 'calendar', preg: 1,
@@ -1059,7 +1059,7 @@ COB_BANK.push(
       'The Bartholin glands lie at about 4 and 8 o\u2019clock at the vestibule. Duct obstruction causes a cyst, and infection causes an abscess (usually polymicrobial, sometimes STI organisms).'],
     ['Management', 'What is the best management?',
       ['Word catheter (or marsupialization)', 'Simple incision and drainage alone', 'Antibiotics alone without drainage', 'Excision of the gland as first-line', 'Observation with sitz baths'],
-      'Simple I&D has high recurrence rates. A Word catheter left in place for 4\u20136 weeks allows a new duct to form. Marsupialization works for recurrences. Add antibiotics for cellulitis or MRSA risk. Incise and drain, then place a Word catheter.'],
+      'Simple I&D has high recurrence rates. A Word catheter left in place for 4\u20136 weeks allows a new duct to form. Marsupialization works for recurrences. Add antibiotics for cellulitis or MRSA risk.'],
     ['Workup', 'Test her for which infections at this visit?',
       ['Gonorrhea and chlamydia', 'Hepatitis A antibody', 'Influenza A and B', 'Latent tuberculosis', 'Lyme disease serology testing'],
       'Although most Bartholin abscesses are polymicrobial, N. gonorrhoeae and C. trachomatis can be involved. Testing in sexually active patients is reasonable. Test with a NAAT.'],
