@@ -1043,3 +1043,101 @@ Compared with Nov 19 (seed 1119; that run finished but was never logged).
 - VORTEX: add pulsar dodging to the eval bot (`_eval/vbot.js` only steers toward targets) so the zap count reflects human
   play. Watch SHORT-CIRCUIT counts in the run report.
 - Star Raider page test: make "warp completes" wait on game time like the steering fix.
+
+## 2026-11-22 (day 26): VORTEX RIM SHOT + Clinic Day explanation fix
+Note: the 2026-11-21 run pushed `622d7ce` (VORTEX announcer) but never wrote a log entry. Its Neuro Arena run (seed 1121) and
+bot eval finished, and their numbers are used below as the comparison point.
+
+### Player feedback
+- `node tools/read-feedback.mjs --date 2026-11-21`: **0 submissions** (also 0 with `--include-test`). Archive +0. No ratings or
+  suggestions to act on. This is the second full day of the ask bubble (added Nov 20), and it still brought no records.
+
+### Evaluation
+- **Smoke, all 28 game pages + home, desktop 1440x900 + iPhone 390x844 touch:** 58/58 loads, with no page errors, no console
+  errors and no failed local requests. One harness stall: the first pass hung after planet-guardian desktop under load ~30.
+  Re-running the last 5 pages was clean.
+- **Harness note:** port 18722 was already held by a leftover server serving the 2026-11-20 worktree, so my first test
+  runs hit old code. I re-ran everything on 18822. The Nov 21 runner had passed the wrong URLs to the reactor and Star
+  Raider page tests (those were harness failures, not game bugs). Today both got correct URLs: **MELTDOWN page 48 ok / 0 FAIL,
+  restart 5 ok; Star Raider page 101 passed / 0 failed.**
+- **Congressional OB GYN (Dr. Behram's Office):** office access 15 PASS. The test PIN was accepted, 5 wrong PINs were rejected,
+  only a salted SHA-256 hash is stored, and future-dated, 248 tampered and 3000 random student codes were all rejected. Feud
+  access 10 PASS. Core, bank-cues, labs, office page, answer-length, feud engine/page, surgery cases + vitals, triage cases
+  + CTG + page (146 PASS) all pass. Hub failed once on an 8 s wait under load 25 and passed on re-run. Surgery page: breech
+  timed out at 420 s under load (same as Nov 21). Re-run alone with a longer case budget: **breech 18/18 steps, op note
+  complete, ALL PASSED**. It is slow under SwiftShader, not a game bug. Copy stays generic, with no faces.
+  **Manual audit of 30 seeded items (seed 1122, 257 items in 26 encounters):** I found no factual errors, but two
+  explanations needed cleanup (change 2). Items checked: SUI → PFMT, two-step syphilis serology, desensitization in
+  pregnancy, iron deficiency at Hb 9.6/MCV 74, Bartholin carcinoma biopsy after 40, LEEP → preterm birth, complete mole +
+  46,XX androgenetic, GDM by Carpenter–Coustan + insulin preferred, magnesium for seizure prophylaxis, abruption → expedited
+  cesarean, a normal US not excluding abruption, cervical screening interval, postpartum LARC, obstetric APS LDA + heparin,
+  letrozole midluteal progesterone > 3, ASRM 6-month evaluation at ≥ 35, Tdap + IIV at 28 wk, RED-S energy balance, hCG first
+  in AUB, NICHD Category II, clinical menopause diagnosis, fezolinetant, HG hypochloremic alkalosis, previa + prior
+  cesareans, mastitis (ABM 2022), ARRIVE.
+- **Star Raider:** sim 8/8 ok (unchanged ladder). The war test failed once: "the better commander usually wins" was 3/6.
+  It is not seeded (re-runs gave 5/6, 5/6), and at **N=30 sharp beat sloppy only 19/30 (63%)** against a 60% bar with N=6.
+  So it is a flaky test and a thin skill edge in war mode. Not changed today.
+- **MELTDOWN:** page + restart + sim pass (above).
+- **VORTEX bot** (8 games from L8, pulsar dodging PD=1, break-free BF=1). On Nov 21, before RIM SHOT, lives lost by tip were
+  **grab 12, fuseball 11, shot 11, zap 7, spike 3**. Today, with RIM SHOT: fuseball 13, zap 12, shot 10, grab 10, spike 1.
+  The bot made 16 rim shots (1 clutch). Its policy is fixed, so it does not respond to the new reward and the death mix is
+  noise at this sample size. Max level per game was sharp 13/9/10/13 and average 14/13/16/17. 0 console errors.
+
+### Changes
+1. `1e3b39f` **VORTEX: RIM SHOT** (today's Tempest change). Grabs were the #1 bot death cause on Nov 21. The grab already
+   had four telegraphs, but the skill they teach (shoot the grabber in the short window after it settles in your lane) paid
+   the same 150 as any kill. Now your shot killing a grabber settled on the rim in your lane pays **+250 (RIM SHOT)**, or
+   **+500 (CLUTCH)** once the grab countdown is past 40% (the rim is already flashing white). Each one gets a snare-style rim
+   crack (the clutch one adds a sting + rumble + small shake), an orange/white burst + rim flash, a pop, and the announcer
+   says "Clutch!". The first one shows a tip ('RIM SHOT! HIT GRABBERS THE MOMENT THEY LAND'), and the RUN REPORT gets a RIM
+   SHOTS line. Superzapper, droid and other-lane kills earn nothing, and the rules are unchanged. New
+   tests/vortex-rimshot.test.js **ALL PASSED** (keyboard, mouse, gamepad A on desktop 1280x800; touch FIRE on iPhone 14
+   portrait + landscape). Regression passed: shortcircuit, shotstop, runreport, tips, grabwarn, grabimminent, killcam,
+   voice, waves, powerups. breakfree timed out under load 30 and passed on re-run.
+   https://storkdoc.github.io/behram-arcade/games/tube-shooter/
+2. `bd2e5b1` **Clinic Day explanations.** The abruption item said "vaginal delivery is appropriate if the fetus has died…" and
+   then "reasonable only if it is imminent". The two sentences contradicted each other, so they are merged into one: a
+   vaginal delivery is reasonable after fetal death, or when the mother is stable and delivery is imminent. A repeated
+   closing sentence was removed from the Bartholin item. Office core, bank-cues and answer-length pass.
+   https://storkdoc.github.io/behram-arcade/games/dr-behrams-office/
+
+### Live deploy
+- Pushed at about 07:07 EST. Both changes were served by Pages at **07:08:27** (VORTEX `game.js` contains CLUTCH RIM SHOT,
+  and `bank.js` has the new abruption text).
+
+### Neuro Arena (seed 1122; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5; the 4 saturated warm-ups were skipped)
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | reaps | ablate all units (full) | Nov 21 full (seed 1121) |
+|---|---|---|---|---|---|---|---|
+| divisor | 8% | 35→93 (r6)→72% (lv 3) | **72% vs 66%** | +0.06 | 3 | 71% (intact 72%) | 42% |
+| simon | 25% | 56→89→74% (lv 1) | 48% vs 26% | +0.22 | 1 | 49% (intact 48%) | 32% |
+| text | 8% | 36→44%, flat | 16% vs 25% (new/fam 27/28%) | −0.09 | 2 | 6% (intact 17%) | 10% |
+| add | 5% | 39→100 (r9)→59% (lv 1) | 8% vs 10% | −0.02 | 3 | 12% | 6% |
+| sub | 10% | 58→95% (lv 1) | 24% vs 18% | +0.05 | 2 | 15% (intact 24%) | 25% |
+| big | 50% | 67→96% | probe 86% vs prior 78% | +0.18 | 2 | probe 86%, full 94% (intact 96%) | probe 71% |
+| pattern | 13% | 65→100% (r3) | probe 100% vs 50% | +0.50 | 2 | probe 100%, full 95% | probe 100% |
+| pong | – | 32→46% | hit 46% vs open-side 88% | +0.22 | 0 | 28% | hit 46% |
+- Honest read: **divisor beat its frequency prior on the full task for the first time in 7 runs (72% vs 66%).** But ablating
+  every learned unit leaves 71%, so the gain does not come from learned units. It is most likely the evolved
+  preprocessing/reflex wiring, and it does not show the units understand the task. **Simon** (48% vs 26%) also does not drop
+  under ablation. **Sub** is the one contest where the units clearly carry weight: 24% intact vs 15% ablated, against an 18%
+  prior. Text uses its units (17% → 6% when ablated) but is below the position baseline for the **9th straight run**, and its
+  curve is flat. New vs familiar words is 27% vs 28%, so there is no memorization gap today. Pong's champion never changed
+  (0 reaps), and it stays far below the open-side baseline (46% vs 88%). Add stays below prior. Its duel curve hit 100% at
+  r9, then fell to 59% after the level-up, which is the expected benchmark restart. Duel accuracy rose in all 8 contests,
+  and that is still not task understanding.
+
+### Findings (worst first)
+1. **No player feedback for 9 days running** (last real records Nov 13). The ask bubble has not changed that so far.
+2. **Neuro Arena text / pong** are stuck below simple baselines (text 9 runs, pong's champion unchanged). Divisor's first
+   above-prior result does not depend on its learned units. These need design changes, not more generations.
+3. **Star Raider war mode:** a sharp commander beats a sloppy one only ~63% (N=30), and the N=6 test flakes on that.
+4. **Test harness:** stale servers on shared ports and wall-clock waits (hub, surgery breech, breakfree, smoke stall) cause
+   false failures under load 25–35. None were game bugs today.
+
+### For tomorrow
+- Re-read feedback. If it is still 0, consider whether the ask bubble needs to appear sooner (it waits 40 s on the page).
+- VORTEX: the bot could take RIM SHOTs deliberately (wait for settle, then fire) to measure whether the window is fair at
+  high levels (grabDelay floor 0.18 s).
+- Star Raider war test: seed it, or raise N, so "better commander usually wins" stops flaking. Consider widening the
+  sharp-vs-sloppy edge.
+- Use a unique port per daily run (for example 188DD) and check `ss -ltnp` first.
