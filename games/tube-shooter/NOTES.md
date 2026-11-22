@@ -384,3 +384,23 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
   one run with the browser's real speechSynthesis): default ON, iOS unlock blank, voice choice (never a non-English
   voice), level / recharge / power-up / game-over lines, no pile-up, mute silences, V / R3 / hold toggles, tap still
   mutes, no console errors.
+
+## Day 26 (2026-11-22): RIM SHOT
+- Why: the Nov 21 bot run (pulsar dodging on) lost lives to rim GRABS most often (12 of 44: grabs 12, fuseballs 11, shots
+  11, zaps 7, spikes 3), and grabs were #1 or #2 in most runs since day 10. The grab already has four telegraphs (chevrons,
+  burning rim countdown, wup-wup + 'bwaah' cues, haptics). But the counter-play they teach, shooting the grabber in the
+  short window after it settles in your lane, paid the same 150 as a mid-tube kill, so nothing marked that window as the skill.
+- What: YOUR shot killing a grabber (flipper, pulsar, phaser, warden, climbing layer) that has settled on the rim in YOUR
+  lane is a **RIM SHOT**: +250 on top of the kill. Inside the last 60 % of the grab countdown (k = landT / grabDelay >= 0.4,
+  when the rim already flashes white) it is a **CLUTCH RIM SHOT**: +500. Each one gets:
+  - a snare-style rim crack ('rimshot' / 'rimclutch'), and the clutch one adds a rising sting, rumble and a small shake
+  - an orange/white ring burst and a 0.35 s flash on the rim segment
+  - a 'RIM SHOT!  +250' or 'CLUTCH RIM SHOT!  +500' pop. The announcer says "Clutch!" on clutch shots.
+  - On the first one in a game, a one-time tip: 'RIM SHOT! HIT GRABBERS THE MOMENT THEY LAND'
+  - a RIM SHOTS line in the RUN REPORT
+  Superzapper and AI DROID kills earn no bonus, and neither does a grabber in another lane. Rules, timing, grab delay and
+  inputs are unchanged.
+- Hooks: `VORTEX.rimShot()` -> {n, clutch, pts, lastK, flash, ...}.
+- Test: tests/vortex-rimshot.test.js covers keyboard, mouse and gamepad A on desktop 1280x800, and touch FIRE on iPhone 14
+  portrait and landscape. It checks early and clutch payouts, pops, the tip, the rim flash, no bonus for mid-tube /
+  superzapper / other-lane kills, that an unshot grabber still grabs, the run report line, and no console errors.

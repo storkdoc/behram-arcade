@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6], shortout: [90, 0.45, 0.6]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6], shortout: [90, 0.45, 0.6], rimshot: [45, 0.5, 0.3], rimclutch: [110, 0.8, 0.5]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -391,6 +391,8 @@ const Sound = {
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
       case 'stop': this.tone('triangle', 2200, 3300, 0.05, 0.05); this.noise(0.04, 0.05, 9000, 4000, 2, 'highpass'); break;   // enemy shot shot down: glassy tick
       case 'parry': this.tone('triangle', 1568, 1568, 0.12, 0.07); this.tone('triangle', 2349, 2349, 0.14, 0.06, 0.03); this.tone('sine', 3136, 4186, 0.16, 0.05, 0.06); this.noise(0.08, 0.08, 9000, 3000, 2, 'highpass'); break;   // BLOCK: bright chord
+      case 'rimshot': this.noise(0.09, 0.2, 3800, 2200, 1.4, 'bandpass'); this.tone('triangle', 1760, 1240, 0.05, 0.09); this.tone('sine', 210, 120, 0.12, 0.12); break;   // RIM SHOT: snare-style rim crack (stick on rim) + body thump
+      case 'rimclutch': this.noise(0.12, 0.24, 4200, 2000, 1.4, 'bandpass'); this.tone('triangle', 1976, 1320, 0.06, 0.1); this.tone('sine', 180, 90, 0.18, 0.15); [988, 1319, 1976].forEach((f, i) => this.tone('square', f, f, 0.06, 0.045, 0.06 + i * 0.045)); break;   // CLUTCH RIM SHOT: harder crack + rising sting
       case 'shortout': this.tone('sawtooth', 2400, 90, 0.32, 0.07); this.noise(0.3, 0.12, 6000, 400, 2.5, 'bandpass'); this.tone('triangle', 1318, 1318, 0.1, 0.06, 0.02); this.tone('triangle', 1976, 1976, 0.14, 0.05, 0.06); break;   // SHORT-CIRCUIT: crackle + falling arc + chord
       case 'fuselock': this.tone('sine', 1250, 2500, 0.07, 0.06); this.tone('triangle', 2500, 2500, 0.04, 0.03, 0.07); break;   // fuseball crossing a lane near you: shootable now
       case 'flip': this.tone('triangle', 520, 880, 0.05, 0.05); break;
@@ -903,7 +905,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 function startGame() {
   fireLock = true;
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
-  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 }; rimStats = { n: 0, clutch: 0, tip: false, lastPop: -9, pts: 0 }; rimFlash = null; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
@@ -1082,7 +1084,7 @@ function runReport() {
   const ks = Object.keys(run.deaths), total = ks.reduce((a, k) => a + run.deaths[k], 0);
   let top = null; for (const k of run.order) if (!top || run.deaths[k] >= run.deaths[top]) top = k;   // ties: the most recent
   const lost = ks.sort((a, b) => run.deaths[b] - run.deaths[a]).map(k => (DEATH_SHORT[k] || k.toUpperCase()) + ' ' + run.deaths[k]).join('   ');
-  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (run.shorts) extra.push('PULSARS SHORTED ' + run.shorts); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
+  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (run.shorts) extra.push('PULSARS SHORTED ' + run.shorts); if (run.rims) extra.push('RIM SHOTS ' + run.rims); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
   const bf = breakFreeStats.used - run.bf0; if (bf > 0) extra.push('BREAK-FREES ' + bf);
   return { total, last: run.last, top, from: run.from, stops: run.stops || 0, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
     lines: { final: run.last && DEATH_TIPS[run.last] ? 'FINAL LIFE: ' + DEATH_TIPS[run.last][0] : '', levels: 'LEVEL ' + run.from + (level > run.from ? ' → ' + level : '') + '   SCORE ' + score,
@@ -1439,11 +1441,51 @@ function pulsarShorted(e, c) {
   if (T - shortStats.lastPop > 0.5) { shortStats.lastPop = T; msg('SHORT-CIRCUIT!  +' + SHORT.pts, 0.9, 0.3, '#ffe81a', 2.6); Voice.say('short', 'Short circuit!', 2); }
   if (!shortStats.tip) { shortStats.tip = true; msg('PULSAR SHORTED! SHOOT IT BEFORE IT ZAPS', 2.2, 0.38, '#ffe81a', 1.6); }
 }
+/* Day 26 (2026-11-22): RIM SHOT. Bot eval with pulsar dodging (Nov 21): rim GRABS were the #1 way lives were lost
+   (12 of 44), ahead of fuseballs 11, shots 11, zaps 7. The grab already has four telegraphs (chevrons, burning rim
+   countdown, wup-wup + 'bwaah' cues, haptics), but the counter-play they teach (shoot the grabber in the short window
+   after it settles in your lane) paid the same as any mid-tube kill, so nothing told the player that this window was
+   the skill. Now YOUR shot killing a grabber that has settled on the rim in YOUR lane is a RIM SHOT: +RIM.pts on top
+   of the kill; inside the last part of the countdown (the rim already flashing white, k >= RIM.clutchK) it is a
+   CLUTCH RIM SHOT: +RIM.clutchPts. It plays a snare-style rim shot crack (+ rumble), an orange/white ring burst on the
+   rim, a 'RIM SHOT! +250' / 'CLUTCH! +500' pop, the announcer says 'Clutch!' on clutch ones, the first one in a game
+   shows 'RIM SHOT! HIT GRABBERS THE MOMENT THEY LAND' once, and the RUN REPORT lists RIM SHOTS. Superzapper and AI DROID
+   kills do not count. Rules, timing and inputs are unchanged (keyboard, mouse, touch and gamepad all fire the same shot). */
+const RIM = { pts: 250, clutchPts: 500, clutchK: 0.4 };
+let rimStats = { n: 0, clutch: 0, tip: false, lastPop: -9, pts: 0 };
+function isRimShot(e, byShot) {
+  return byShot === true && !(zap.active || zap.kill) && player.alive && state === 'play' && GRABBERS.has(e.type)
+    && e.z <= 0 && !e.flipping && !e.ph && e.lane === player.lane && e.spawnT >= 1;
+}
+function rimShot(e, c) {
+  const k = clamp((e.landT || 0) / Math.max(0.01, LP.grabDelay), 0, 1), clutch = k >= RIM.clutchK, pts = clutch ? RIM.clutchPts : RIM.pts;
+  rimStats.n++; if (clutch) rimStats.clutch++; rimStats.pts += pts; rimStats.lastK = k; run.rims = (run.rims || 0) + 1;
+  addScore(pts);
+  const a = rail(e.lane), b = rail(e.lane + 1);
+  fx.push({ x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, zw: 0, t: 0, dur: clutch ? 0.7 : 0.5, size: clutch ? 0.7 : 0.5, rays: clutch ? 18 : 12, colors: clutch ? ['#ffffff', '#ff5a1a', '#fff2c0'] : ['#ff8a1a', '#ffffff', '#ffd27a'], seed: rimStats.n * 7 });
+  shardBurst(c, 0, clutch ? ['#ffffff', '#ff5a1a', '#ffe81a'] : ['#ff8a1a', '#ffffff'], clutch ? 18 : 10, clutch ? 1.1 : 0.8);
+  rimFlash = { lane: e.lane, t: 0, clutch };
+  Sound.play(clutch ? 'rimclutch' : 'rimshot');
+  if (clutch) shake = Math.max(shake, 0.18);
+  if (T - rimStats.lastPop > 0.5) { rimStats.lastPop = T; msg(clutch ? 'CLUTCH RIM SHOT!  +' + pts : 'RIM SHOT!  +' + pts, 0.9, 0.3, clutch ? '#ffffff' : '#ff9a3a', 2.6); if (clutch) Voice.say('clutch', 'Clutch!', 2); }
+  if (!rimStats.tip) { rimStats.tip = true; msg('RIM SHOT! HIT GRABBERS THE MOMENT THEY LAND', 2.2, 0.38, '#ff9a3a', 1.6); }
+}
+let rimFlash = null;
+function drawRimFlash() {
+  if (!rimFlash) return;
+  const f = rimFlash, a = rail(f.lane), b = rail(f.lane + 1), k = 1 - f.t / 0.35;
+  if (k <= 0) { rimFlash = null; return; }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  ctx.globalAlpha = k; ctx.strokeStyle = f.clutch ? '#ffffff' : '#ffb060'; ctx.shadowColor = f.clutch ? '#ff3a00' : '#ff8a1a'; ctx.shadowBlur = 22 * DPR;
+  ctx.lineWidth = LW(3 + 5 * k); ctx.beginPath(); seg3(a[0], a[1], 0, b[0], b[1], 0); ctx.stroke();
+  ctx.restore();
+}
 function killEnemy(e, byShot) {
   if (e.dead) return; e.dead = true; run.kills++;
   const c = centerOf(e);
   const shorted = e.type === 'pulsar' && byShot === true && !(zap.active || zap.kill) && player.alive && state === 'play'
     && !e.flipping && e.lane === player.lane && e.z < SHORT.maxZ && pulseAmt > 0;
+  const rimHit = isRimShot(e, byShot);
   let pts = 0;
   switch (e.type) {
     case 'flipper': pts = 150; break;
@@ -1461,6 +1503,7 @@ function killEnemy(e, byShot) {
   if (zapped) boltTo(c);
   if (byShot && !zapped) maybeDropPup(e, c);
   if (shorted) pulsarShorted(e, c);
+  if (rimHit) rimShot(e, c);
   if (e.pack) packKill(e, zapped);
   if (e.type === 'tanker' && byShot) { splitTanker(e); Sound.play('tanker'); } else Sound.play(zapped ? 'zkill' : 'hit');
 }
@@ -2038,6 +2081,7 @@ function update(dt) {
   }
   // effects
   for (const f of fx) f.t += dt;
+  if (rimFlash) rimFlash.t += dt;
   fx = fx.filter(f => f.t < f.dur);
   for (const m of msgs) m.t += dt;
   msgs = msgs.filter(m => m.t < m.dur);
@@ -2907,6 +2951,7 @@ function drawGameScene() {
   drawZapCharge();
   drawShotWarn();
   drawGrabWarn();
+  drawRimFlash();
   drawFuseWarn();
   drawBonusGates();
   drawSpikes();
@@ -3480,6 +3525,7 @@ window.VORTEX = {
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
   shortCircuit: () => Object.assign({ pts: SHORT.pts, maxZ: SHORT.maxZ }, shortStats),
+  rimShot: () => Object.assign({ pts: RIM.pts, clutchPts: RIM.clutchPts, clutchK: RIM.clutchK, flash: !!rimFlash }, rimStats),
   shotStop: () => Object.assign({ pts: STOP.pts, closePts: STOP.closePts, warnZ: SHOT_WARN_Z }, stopStats),
   jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
   doJump: () => doJump(),
