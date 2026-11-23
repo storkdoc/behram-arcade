@@ -486,7 +486,7 @@ COB_BANK.push(
       'ACOG and AAP endorse LARC as first-line for adolescents and nulliparous patients. The small PID risk is limited to the first ~20 days after insertion; screening can be done the same day without delaying placement. IUDs prevent fertilization. Current IUDs are MRI-safe or MR-conditional.'],
     ['Counseling', 'Months later, after a condom breaks, she asks about emergency contraception. Her BMI is 34. Which statement is most accurate?',
       ['Ulipristal or a copper IUD works better at her BMI', 'Any method works only within 24 hours of sex', 'Emergency contraception requires a prescription at any age', 'Ulipristal is avoided because it is an abortifacient', 'It is contraindicated with an LNG IUD in place'],
-      'Levonorgestrel EC appears less effective with obesity. Ulipristal (prescription) is more effective than LNG for 3\u20135 days after intercourse, and an IUD is the most effective. EC delays ovulation and does not disrupt an established pregnancy. (If she had her IUD, she would not need EC.) Oral levonorgestrel may be less effective at a higher BMI.']
+      'Levonorgestrel EC appears less effective with obesity. Ulipristal (prescription) is more effective than LNG for 3\u20135 days after intercourse, and an IUD is the most effective. EC delays ovulation and does not disrupt an established pregnancy. (If she had her IUD, she would not need EC.)']
     ]}
   ]},
 { id: 'well', t: 'Annual Well-Woman', cat: 'GYN', tier: 0, icon: 'clipboard', preg: 0,
@@ -581,7 +581,7 @@ COB_BANK.push(
       'Amsel criteria (3 of 4): thin homogeneous discharge, pH above 4.5, positive whiff test, and clue cells. BV is a shift from lactobacilli to anaerobes (Gardnerella and others). It is not inflammatory, so it causes little itching and few WBCs.'],
     ['Management', 'What is the recommended treatment?',
       ['Metronidazole 500 mg twice daily for 7 days', 'Fluconazole 150 mg orally, repeated in 3 days', 'Metronidazole 2 g orally once', 'Doxycycline 100 mg twice daily for 7 days', 'Ceftriaxone 500 mg IM once'],
-      'CDC 2021: metronidazole 500 mg twice daily for 7 days, metronidazole gel 0.75% for 5 days, or clindamycin cream 2% for 7 days. A single 2-g metronidazole dose is less effective for BV. Avoid alcohol only if the patient has a reaction.'],
+      'CDC 2021: metronidazole 500 mg twice daily for 7 days, metronidazole gel 0.75% for 5 days, or clindamycin cream 2% for 7 days. A single 2-g metronidazole dose is less effective for BV. CDC 2021 no longer advises avoiding alcohol during metronidazole treatment.'],
     ['Counseling', 'Bacterial vaginosis is associated with which outcome?',
       ['More STIs (including HIV) and preterm birth', 'Cervical cancer, independent of HPV infection', 'Infertility in anyone with recurrent episodes', 'Endometriosis from bacteria ascending into the pelvis', 'Functional ovarian cysts from altered vaginal flora'],
       'BV is associated with higher acquisition of HIV and other STIs, post-procedure infections, PID, and preterm birth. Routine screening of ASYMPTOMATIC low-risk pregnant patients is not recommended, but symptomatic BV should be treated.'],
