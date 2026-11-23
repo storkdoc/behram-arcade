@@ -5,7 +5,7 @@ const N = +process.argv[2] || 6; let fails = 0;
 const ok = (c, m) => { console.log((c ? 'ok ' : 'FAIL ') + m); if (!c) fails++; };
 function play(o, styles, skills) {
   const G = S.newGame(Object.assign({ mode: 'war' }, o)); S.addPlayer(G, 0); S.addPlayer(G, 1);
-  const bots = [A.makeWar(skills[0], styles[0]), A.makeWar(skills[1], styles[1])];
+  const bots = [A.makeWar(skills[0], styles[0], o.seed * 3 + 1), A.makeWar(skills[1], styles[1], o.seed * 3 + 2)];   // seeded: reproducible (2026-11-23)
   const dt = 1 / 20, acts = [0, 0], meets = { n: 0 }, leaks = [];
   let duel = 0;
   while (!G.over && G.t < 1500) {
@@ -33,6 +33,7 @@ for (const [name, o, styles, skills] of [
   ['crossfire short, rush vs balanced', { layout: 'crossfire', length: 'short' }, ['rush', 'balanced'], [1, 1]],
   ['nebula long, equal', { layout: 'nebula', length: 'long' }, ['balanced', 'hunter'], [1, 1]],
   ['classic short, sharp vs sloppy', { layout: 'classic', length: 'short' }, ['balanced', 'balanced'], [1, 0.3]],
+  ['classic short, sharp vs PILOT CPU', { layout: 'classic', length: 'short' }, ['balanced', 'balanced'], [1, 0.55]],
 ]) {
   const res = []; for (let i = 0; i < N; i++) res.push(play(Object.assign({ seed: 100 + i * 7 }, o), styles, skills));
   const w0 = res.filter(r => r.G.over && r.G.over.winner === 0).length;
@@ -45,5 +46,6 @@ for (const [name, o, styles, skills] of [
 }
 console.table(rows);
 ok(wins['classic short, sharp vs sloppy'] >= N * 0.6, 'the better commander usually wins');
+ok(wins['classic short, sharp vs sloppy'] >= wins['classic short, sharp vs PILOT CPU'] && wins['classic short, sharp vs PILOT CPU'] >= N * 0.5, 'CPU skill ladder: the NOVICE CPU (0.3) loses at least as often as the PILOT CPU (0.55), which still loses to a sharp commander');
 ok(wins['classic short, equal'] > 0 && wins['classic short, equal'] < N, 'equal bots split classic games');
 process.exit(fails ? 1 : 0);

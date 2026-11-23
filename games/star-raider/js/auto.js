@@ -66,8 +66,12 @@
     return auto;
   }
   /* WAR strategist: reads only viewFor(G, team), exactly what a human sees on the chart */
-  function makeWar(skill = 1, style = 'balanced') {
-    const pilot = make(skill), st = { t: 2, n: 0 };
+  // seed (optional) makes the flagship pilot's hand wobble reproducible for headless balance tests
+  function makeWar(skill = 1, style = 'balanced', seed) {
+    const pilot = make(skill, seed), st = { t: 2, n: 0, split: {} }, rand = seed != null ? S.rng((seed >>> 0) + 7919) : Math.random;
+    // 2026-11-23: skill now shapes STRATEGY too, not just the flagship's hands. Before, the NOVICE CPU (0.3) was no easier
+    // than the PILOT one (sharp vs 0.3 / 0.55 / 0.8 / 1 won 70 / 87 / 53 / 53 %, N=30). A weaker commander now notices a
+    // besieged base late, splits its strike force across targets, and saves up longer before building a squadron.
     return function (G, p, dt) {
       const inp = pilot(G, p, dt);
       if (!p) return inp;
@@ -79,20 +83,25 @@
       const known = theirs.length ? theirs : guess.filter(g => !v.bases.some(b => !b.own && !b.alive && b.x === g[0] && b.y === g[1])).map(([x, y]) => ({ x, y }));
       const near = (a, list) => list.slice().sort((u, w) => Math.hypot(u.x - a[0], u.y - a[1]) - Math.hypot(w.x - a[0], w.y - a[1]))[0];
       const home = myBases[0] ? [myBases[0].x, myBases[0].y] : [p.sx, p.sy];
-      const target = near(home, known);
+      const target = near(home, known), far = known.length > 1 ? known.filter(k => k !== target) : null;
       const act = [];
-      // defend a besieged base first
-      const hurt = myBases.find(b => b.siege);
+      // defend a besieged base first (a sloppy commander may not notice yet)
+      const sieged = myBases.find(b => b.siege), hurt = sieged && (st.saw === sieged.id || rand() < 0.25 + 0.75 * skill) ? sieged : null;
+      st.saw = hurt ? hurt.id : null;
       const defenders = Math.max(1, Math.round(mine.length * (style === 'rush' ? 0.2 : 0.4)));
       mine.sort((a, b) => a.id - b.id).forEach((f, i) => {
         let goal;
         if (hurt && i < defenders + 1) goal = [hurt.x, hurt.y];
         else if (i < defenders) { const b = myBases[i % Math.max(1, myBases.length)]; goal = b ? [b.x, b.y] : home; }
-        else if (target) goal = [target.x, target.y];
+        else if (target) {
+          // a sloppy commander sends some squadrons at a different base instead of massing them (decided once per squadron)
+          if (!(f.id in st.split)) { const o = far && rand() < (1 - skill) * 0.6 ? far[Math.floor(rand() * far.length)] : null; st.split[f.id] = o ? [o.x, o.y] : null; }
+          const sp = st.split[f.id], t2 = sp && known.some(k => k.x === sp[0] && k.y === sp[1]) ? { x: sp[0], y: sp[1] } : target; goal = [t2.x, t2.y];
+        }
         if (goal && (!f.order || f.order[0] !== goal[0] || f.order[1] !== goal[1]) && (f.x !== goal[0] || f.y !== goal[1])) act.push({ a: 'order', f: f.id, x: goal[0], y: goal[1] });
       });
       if (v.jam && v.res > 400) act.push({ a: 'eccm' });
-      else if (v.res > S.WAR.cost.build + 200 && mine.length < 7) act.push({ a: 'build', b: (myBases.find(b => b.home) || myBases[0] || {}).id });
+      else if (v.res > S.WAR.cost.build + 200 + (1 - skill) * 600 && mine.length < 7) act.push({ a: 'build', b: (myBases.find(b => b.home) || myBases[0] || {}).id });
       else if (target && target.hp === undefined && v.res > 500 && st.n % 3 === 0) act.push({ a: 'probe', x: target.x, y: target.y });
       else if (v.res > 900 && st.n % 5 === 2 && !v.jamming) act.push({ a: 'jam' });
       else if (v.res > 700 && st.n % 6 === 4 && target) act.push({ a: 'decoy', x: target.x, y: (target.y + 3) % S.H });

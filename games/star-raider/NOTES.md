@@ -121,3 +121,19 @@ Daily sim: sloppy bot (sk 0.35) was winning Pilot only ~17% (assert ≥30%) whil
 (aimErr / fireMul / plasmaV / move / siege) left alone — those also dropped sharp below 90% when eased earlier today.
 Instead: hitE 100→88, bareKill 0.15→0.1, leakE 600→480 so a messy pilot survives the hits they take. Warrior /
 Commander / WAR-pinned Pilot combat values unchanged.
+
+## 2026-11-23: WAR CPU difficulty now changes strategy, not just hands
+- Why: the WAR computer opponent's skill (NOVICE 0.3 / PILOT 0.55 / WARRIOR 0.8 / COMMANDER 1, `warSkill`) only changed the flagship
+  pilot's hands and how often the strategist re-planned. Measured head to head against a sharp (skill 1) commander,
+  N=30 classic short games (seeds 100+7i): sharp won 70 / 87 / 53 / 53 % against skill 0.3 / 0.55 / 0.8 / 1. The easiest
+  CPU was no easier than the second one, and about 23 of 30 games ended on time with sectors tied. The N=6 war test
+  "better commander usually wins" flaked (3/6 to 5/6) because the war bots' pilots used Math.random.
+- What (js/auto.js makeWar): a weaker commander (1) notices a besieged base late (chance 0.25 + 0.75 x skill per plan,
+  then keeps defending it), (2) sends some squadrons at a different enemy base instead of massing them (chance
+  (1 - skill) x 0.6, decided once per squadron), and (3) saves (1 - skill) x 600 more before building a squadron.
+  Skill 1 plays exactly as before. `makeWar(skill, style, seed)` takes an optional seed for its pilot and its choices,
+  so tests are reproducible. The live game still passes no seed (random).
+- Measured after (sharp vs 0.3 / 0.55 / 0.8 / 1, N=30): seeds 100+7i 97 / 77 / 60 / 53 %; holdout seeds 5000+7i
+  100 / 70 / 63 / 60 %.
+- war.test.js: bots are seeded, and a new check asserts the ladder (sharp beats NOVICE at least as often as it beats the
+  PILOT CPU, and beats PILOT at least half the time). Default N=6 and N=12 pass.
