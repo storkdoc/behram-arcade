@@ -404,3 +404,29 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
 - Test: tests/vortex-rimshot.test.js covers keyboard, mouse and gamepad A on desktop 1280x800, and touch FIRE on iPhone 14
   portrait and landscape. It checks early and clutch payouts, pops, the tip, the rim flash, no bonus for mid-tube /
   superzapper / other-lane kills, that an unshot grabber still grabs, the run report line, and no console errors.
+
+## Day 27 (2026-11-23): ONE HOP, THEN DROP (arcade fuseball rule)
+- Why: the Nov 23 bot run from level 1 (8 games, pulsar dodging + break-free on) lost 14 of 44 lives to fuseballs, the #1
+  cause again (shots 10, zaps 8, grabs 6, spikes 5, spark 1). 6 of those were rim CHASES: here a rim fuseball hopped rail
+  to rail after the claw for its whole 3-5 s rim stay, at any point in a level. The 1981 coin-op does not do that: per
+  Eric Clayberg's Tempest tips (vectorlist, 2000), fuseballs "only cross one space at a time before dropping back down
+  (until the end of the round when they start chasing you)".
+- What: outside the end-of-round hunt, a rim fuseball makes `FUSE_HOP.hops` (1) hop along the rim toward the claw,
+  lingers `FUSE_HOP.linger` (0.3 s), then drops back into the tube, where the mid-jump lock-on window can kill it again.
+  `fuseHunt()` = the spawn pool is empty and only fuseballs are left: then rim fuseballs hunt as before, and the first
+  time it starts in a level a one-time 'LAST FUSEBALLS HUNT YOU!  KEEP MOVING' callout plays with the fusewarn chirp. A
+  fuseball already lingering when the hunt starts stays up and hunts. Landing (arrival), rim-contact and mid-hop kills,
+  warnings, scoring and inputs are unchanged.
+- Hooks: `VORTEX.fuseHop()` -> {hops, linger, drops, hunts, told, hunting}.
+- Test: tests/vortex-fusehop.test.js (desktop 1280x800 keyboard; iPhone 14 portrait + landscape touch SPIN knob): one hop
+  then drop mid-round, standing beside it survives, the end-of-round hunt still chases and kills a claw standing still,
+  one callout, steering away with real input survives, no console errors.
+- Shipped 2026-11-24 (the Nov 23 run tested it but never committed it). Re-tested: vortex-fusehop ALL PASSED (desktop
+  keyboard, iPhone 14 portrait + landscape touch); fuselock, killcam, rimshot, runreport, tips, fusewarn pass.
+  vortex-fuseland had two test flakes, also seen on the pre-fusehop base on Nov 23: a random mid-tube reversal or jump
+  inside a step re-armed the landing cue or left the fuseball off the rim. The test now holds `mdir` and stubs
+  `Math.random` for those steps. It passed twice in a row.
+- Bot (8 games from L1, PD=1, BF=1, same seeds as Nov 23): lives lost by tip were fuse 12, zap 8, spike 7, capture 6,
+  shot 5 (38 in total), against fuse 14 of 44 before the change on Nov 23. The rim-chase part fell to 4 (it was 6). That is
+  a small sample, and the bot never steers around fuseballs on purpose, so the honest read is "no worse, likely a little
+  better". The change is mainly arcade-faithful: the 1981 rule is one hop, then drop.

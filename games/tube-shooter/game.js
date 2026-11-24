@@ -1745,6 +1745,16 @@ function startJump(e, d) {
    rising "lock" blip plays once per jump. The window is also a bit wider (10-90% of the hop instead of 15-85%).
    Rim fuseballs stay invulnerable (arcade rule); nothing else changes. */
 const FUSE_OPEN = [0.1, 0.9];
+/* Day 27 (2026-11-23): ONE HOP, THEN DROP (arcade fuseball rule). The Nov 23 bot run from level 1 lost 14 of 44 lives to
+   fuseballs (#1 again, ahead of shots 10 and zaps 8), 6 of them to rim CHASES: a rim fuseball here hopped rail to rail
+   after the claw for 3-5 s at any point of a level. In the 1981 coin-op, fuseballs "only cross one space at a time before
+   dropping back down (until the end of the round when they start chasing you)" (Eric Clayberg's Tempest tips, vectorlist
+   2000). Now a rim fuseball makes FUSE_HOP.hops hop(s) along the rim, lingers FUSE_HOP.linger s, then drops back into the
+   tube and sinks to depth FUSE_HOP.retreat before it may turn and climb again (shootable mid-jump on the way). Once the round's pool is empty and only fuseballs are left (fuseHunt()),
+   they hunt as before, with a one-time 'LAST FUSEBALLS HUNT YOU! KEEP MOVING' callout. Landing, rim-contact and mid-hop
+   kills are unchanged. */
+const FUSE_HOP = { hops: 1, linger: 0.3, retreat: [0.35, 0.6], drops: 0, hunts: 0, toldL: 0 };
+function fuseHunt() { return !pool.length && enemies.every(o => o.dead || o.type === 'fuseball'); }
 const fuseLock = { opens: 0, cues: 0, frames: 0, kills: 0 };
 function fuseOpen(e) { return e.type === 'fuseball' && !e.atRim && e.jumping && e.jt >= FUSE_OPEN[0] && e.jt <= FUSE_OPEN[1]; }
 function fuseOpenLane(e) { return e.jdir > 0 ? e.rail : wrapLane(e.rail - 1); }
@@ -1756,27 +1766,34 @@ function updFuse(e, dt) {
     if (!was && fuseOpen(e)) { fuseLock.opens++; if (player.alive && Math.abs(laneDiff(fuseOpenLane(e), pl)) <= 1) { fuseLock.cues++; Sound.play('fuselock'); } }
     if (e.atRim && player.alive && e.jt > 0.42 && e.jt < 0.58) {
       const lane = e.jdir > 0 ? e.rail : wrapLane(e.rail - 1);
-      if (lane === pl) { fuseDeaths.rimjump++; killPlayer('fuse', null, e); return; }
+      if (lane === pl) { killPlayer('fuse', null, e); if (!player.alive) fuseDeaths.rimjump++; return; }   // count real deaths only (not jump dodges / respawn grace)
     }
-    if (e.jt >= 1) { e.jumping = false; e.rail = wrapRail(e.rail + e.jdir); e.jt = 0; }
+    if (e.jt >= 1) {
+      e.jumping = false; e.rail = wrapRail(e.rail + e.jdir); e.jt = 0;
+      // ONE HOP, THEN DROP: outside the end-of-round hunt a rim fuseball crosses one lane, lingers briefly, then goes back down
+      if (e.atRim) { e.rimHops = (e.rimHops || 0) + 1; if (!fuseHunt() && e.rimHops >= FUSE_HOP.hops) { e.rimTimer = Math.min(e.rimTimer, FUSE_HOP.linger); e.dropping = true; } }
+    }
     return;
   }
   if (!e.atRim) {
     e.z += e.mdir * LP.fuseSpeed * dt;
     if (e.z >= 1) { e.z = 1; e.mdir = -1; }
     if (e.z <= 0) { e.z = 0; e.atRim = true; e.rimAge = 0; e.rimTimer = rand(3, 5); e.pause = LP.fuseRimPause; Sound.play('fuse'); return; }
+    if (e.retreat && (e.z >= e.retreat || fuseHunt())) e.retreat = 0;   // a dropped fuseball really goes back down before it may climb again
     if (Math.random() < 0.9 * dt) startJump(e, Math.random() < 0.5 ? -1 : 1);
-    else if (Math.random() < 0.3 * dt && e.z < 0.85) e.mdir = -e.mdir;
+    else if (Math.random() < 0.3 * dt && e.z < 0.85 && !e.retreat) e.mdir = -e.mdir;
     return;
   }
   // on the rim
   // landing flare: a fuseball that has just reached the rim needs FUSE_LAND_GRACE s to settle before it is lethal
   e.rimAge = (e.rimAge || 0) + dt;
-  if (player.alive && e.rimAge >= FUSE_LAND_GRACE && (e.rail === pl || e.rail === wrapRail(pl + 1))) { fuseDeaths[e.rimAge < FUSE_LAND_GRACE + 0.05 ? 'arrive' : 'chase']++; killPlayer('fuse', null, e); return; }
+  if (player.alive && e.rimAge >= FUSE_LAND_GRACE && (e.rail === pl || e.rail === wrapRail(pl + 1))) { const k = e.rimAge < FUSE_LAND_GRACE + 0.05 ? 'arrive' : 'chase'; killPlayer('fuse', null, e); if (!player.alive) fuseDeaths[k]++; return; }
   e.rimTimer -= dt;
-  if (e.rimTimer <= 0) { e.atRim = false; e.mdir = 1; e.z = 0.01; return; }
+  if (e.rimTimer <= 0) { if (e.dropping) { FUSE_HOP.drops++; e.retreat = rand(FUSE_HOP.retreat[0], FUSE_HOP.retreat[1]); } e.atRim = false; e.mdir = 1; e.z = 0.01; e.rimHops = 0; e.dropping = false; return; }
+  if (e.dropping && fuseHunt()) { e.dropping = false; e.rimTimer = Math.max(e.rimTimer, rand(2, 3.5)); }   // the round just ended: it hunts after all
   e.pause -= dt;
-  if (e.pause <= 0 && player.alive) {
+  if (e.pause <= 0 && player.alive && !e.dropping) {
+    if (fuseHunt() && FUSE_HOP.toldL !== level) { FUSE_HOP.toldL = level; FUSE_HOP.hunts++; msg('LAST FUSEBALLS HUNT YOU!  KEEP MOVING', 2.2, 0.36, '#ffffff', 2.1); Sound.play('fusewarn'); }
     const d1 = laneDiff(e.rail, pl), d2 = laneDiff(e.rail, pl + 1);
     const d = Math.abs(d1) < Math.abs(d2) ? d1 : d2;
     if (d) startJump(e, sgn(d));
@@ -3566,6 +3583,7 @@ window.VORTEX = {
   grabWarn: () => ({ threats: rimThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, landT: t.e.landT, imminent: !!t.e.gimminent })), frames: grabWarnFrames, cues: grabWarnCues, imminent: grabImminentCues }),
   deathTips: () => Object.assign({}, deathTipCount),
   fuseDeaths: () => Object.assign({}, fuseDeaths),
+  fuseHop: () => ({ hops: FUSE_HOP.hops, linger: FUSE_HOP.linger, drops: FUSE_HOP.drops, hunts: FUSE_HOP.hunts, told: FUSE_HOP.toldL === level, hunting: fuseHunt() }),
   fuseLock: () => Object.assign({ window: FUSE_OPEN.slice() }, fuseLock),
   fuseOpen: id => { const e = enemies.find(e => e.id === id); return !!(e && fuseOpen(e)); },
   fuseWarn: () => ({ threats: fuseThreats().map(t => ({ id: t.e.id, type: t.e.type, d: t.d, jump: !!t.jump, landing: !!t.landing, climbing: !!t.climbing })), frames: fuseWarnFrames, cues: fuseWarnCues, landFrames: fuseLandFrames, landCues: fuseLandCues, grace: FUSE_LAND_GRACE, landZ: FUSE_LAND_Z }),

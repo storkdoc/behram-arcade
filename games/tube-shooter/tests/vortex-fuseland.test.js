@@ -39,7 +39,8 @@ async function suite(browser, label, ctxOpts) {
   if (SHOTS) { await page.screenshot({ path: `${SHOTS}/fuseland-${label.replace(/\W+/g, '_')}.png` }); }
   const f1 = await page.evaluate(() => VORTEX.fuseWarn().landFrames);
   check(f1 - f0 >= 2, `the landing streak + ring are drawn (${f1 - f0} frames)`);
-  r = await page.evaluate(() => { for (let i = 0; i < 6; i++) { window.__noJump(); VORTEX.step(0.02); } return VORTEX.fuseWarn().landCues; });
+  r = await page.evaluate(() => { const R = Math.random; Math.random = () => 0.99;   /* no random mid-tube jump inside a step (it re-armed the cue: a test flake) */
+    try { for (let i = 0; i < 6; i++) { window.__noJump(); VORTEX.step(0.02); } } finally { Math.random = R; } return VORTEX.fuseWarn().landCues; });
   check(r === 1, `the chirp does not repeat while it climbs (landCues ${r})`);
   await fresh();
   // 3. a climbing fuseball on a rail 1 away from the claw is not a landing threat
@@ -64,7 +65,7 @@ async function suite(browser, label, ctxOpts) {
     const fd0 = VORTEX.fuseDeaths(), lives0 = VORTEX.state.lives;
     for (let i = 0; i < 6; i++) { window.__noJump(); VORTEX.step(1 / 120); }
     VORTEX.setLane(pl + 3, 0);   // step two lanes away
-    for (let i = 0; i < 120; i++) { VORTEX.setEnemy(id, { pause: 99, jumping: false }); VORTEX.step(1 / 120); }
+    for (let i = 0; i < 120; i++) { VORTEX.setEnemy(id, { pause: 99, jumping: false, mdir: -1 });  /* keep it climbing: a random mid-tube reversal made this flaky */ VORTEX.step(1 / 120); }
     const e = VORTEX.enemyList().find(x => x.id === id);
     const fd1 = VORTEX.fuseDeaths();
     return { died: fd1.arrive + fd1.chase + fd1.rimjump - fd0.arrive - fd0.chase - fd0.rimjump, lives: VORTEX.state.lives - lives0, atRim: e && e.atRim, st: VORTEX.state.state };
