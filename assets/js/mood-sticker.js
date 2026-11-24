@@ -35,6 +35,7 @@
     endpoint: null,
     maxText: 500,
     askAfterMs: 40000,      // ASK bubble: only after this much time on the page (0 = never ask)
+    askPlayMs: 240000,      // ASK bubble also after this much ACTIVE play with no game over / win yet (0 = off), at the first lull
     corner: null            // 'bl' | 'br' | 'tl' | 'tr' (default per page, user can drag it)
   };
   var ext = window.MOOD_STICKER_CONFIG;
@@ -153,6 +154,20 @@
     setTimeout(function () { if (ui && !ui.isOpen()) ui.ask(lastInputKind === 'touch' || (lastInputKind === 'unknown' && deviceClass() !== 'desktop')); }, 1200);
     return true;
   };
+  /* LONG-PLAY ASK (2026-11-24). Feedback has been 0 for 11 days. Many pages never draw a GAME OVER / win that the sniffer
+     sees (Clinic Day, Jukebox, Relax, Living Chess, long Star Raider / AGE OF EMBERS sessions), so the ask bubble could never
+     appear there. Now, after CONFIG.askPlayMs of active play (page visible and some input in the last 30 s), the same
+     bubble may show at the first lull (3-20 s with no input: reading, a menu, a pause). Same rules as above: once per page,
+     once per game per day, never if rated in the last 3 days, purely visual. */
+  var playMs = 0, playTick = now(), lastMove = 0;   // pointer moves count as activity here (mouse-steered games), not as mood input
+  setInterval(function () {
+    var t = now(), d = Math.min(t - playTick, 2000); playTick = t;
+    var act = Math.max(lastInput, lastMove);
+    if (!document.hidden && t - act < 30000) playMs += d;
+    if (!CONFIG.askPlayMs || askState.shown || playMs < CONFIG.askPlayMs || (ui && ui.isOpen())) return;
+    var idle = t - act;
+    if (idle >= 3000 && idle <= 20000 && askState.skipped !== 'asked today' && askState.skipped !== 'rated recently') maybeAsk('play');
+  }, 1000);
   setInterval(function () {
     if (moodUntil && now() < moodUntil) return;
     var b = baseMood();
@@ -351,7 +366,7 @@
     onInput();
     if (ui && ui.isOpen()) ui.close('outside');
   }, true);
-  window.addEventListener('pointermove', function (e) { if (ui) ui.look(e.clientX, e.clientY); }, { passive: true, capture: true });
+  window.addEventListener('pointermove', function (e) { lastMove = now(); if (ui) ui.look(e.clientX, e.clientY); }, { passive: true, capture: true });
   window.addEventListener('wheel', onInput, { passive: true, capture: true });
 
   /* ---------------- gamepad ---------------- */
@@ -752,7 +767,7 @@
     _submit: function (rating, text) { return submit(rating, text); },
     _record: function (rating, text) { return buildRecord(rating, text); },
     _sniff: function (s) { sniff(s); },
-    _ask: function () { return { shown: askState.shown, skipped: askState.skipped, why: askState.why || null, on: !!(ui && ui.askOn()), text: ui ? ui.askText() : null }; }
+    _ask: function () { return { shown: askState.shown, skipped: askState.skipped, why: askState.why || null, playSec: Math.round(playMs / 1000), on: !!(ui && ui.askOn()), text: ui ? ui.askText() : null }; }
   };
   if (document.body) build(); else document.addEventListener('DOMContentLoaded', build);
 })();

@@ -31,6 +31,13 @@ browser rated the game in the last 3 days. It is purely visual (`pointer-events:
 takes a key, click or touch from the game, and nothing opens unless the player taps the sticker. Hook:
 `MoodSticker._ask()`. Test: `tests/mood-sticker-ask.test.js`.
 
+**Long-play ask (2026-11-24):** many pages never draw a GAME OVER or win that the sticker can see (Clinic Day,
+Jukebox, Relax, Living Chess, long Star Raider or AGE OF EMBERS sessions), so the bubble could never appear there. Now
+the same bubble can also appear after `askPlayMs` (default 240 s, 0 = off) of active play: the page is visible and there
+was a key, tap, click, wheel, gamepad or pointer movement in the last 30 s. It shows at the first lull (3–20 s with no
+input), with all the rules above (once per page, once per game per day, never if rated in the last 3 days, purely
+visual). `MoodSticker._ask()` also reports `playSec`, and `why` is `'play'` for this path.
+
 **Not getting in the way:**
 - While the card is closed, the sticker never takes Space, Enter, arrow keys or clicks from the
   game. Only the backquote key is reserved.
