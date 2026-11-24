@@ -1141,3 +1141,107 @@ bot eval finished, and their numbers are used below as the comparison point.
 - Star Raider war test: seed it, or raise N, so "better commander usually wins" stops flaking. Consider widening the
   sharp-vs-sloppy edge.
 - Use a unique port per daily run (for example 188DD) and check `ss -ltnp` first.
+
+## 2026-11-24 (day 28): VORTEX one-hop fuseballs, long-play ask bubble, Star Raider WAR ladder, Clinic Day text
+Note: the 2026-11-23 run committed two changes locally (Star Raider WAR `3c16222` and Clinic Day `e977194`) and had VORTEX
+ONE HOP, THEN DROP tested but uncommitted. It never pushed them and never wrote a log entry. Its worktree had been idle
+since Nov 23 09:46. Today I re-tested all three and shipped them (new hashes below). The Nov 23 bot numbers are the "before" comparison.
+
+### Player feedback
+- `node tools/read-feedback.mjs --json --archive ~/behram-arcade-feedback.jsonl` (Nov 23 ET): **0 submissions**. With
+  `--hours 72 --include-test` there are also 0. The archive gained 0 records, and textdb answered 200. This is the 11th
+  straight day with no real feedback. The last real records are from the evening of Nov 12 ET (Congressional OB GYN lab
+  values, Feud fast-money time, two "Fun" ratings, all acted on earlier). I had no ratings or suggestions to cluster.
+
+### Evaluation (local server :18924, Chromium headless + SwiftShader, load 12–37 from parallel suites)
+- **Smoke, all 28 game pages + home, desktop 1440x900 + iPhone 390x844 touch:** 58/58 loads, with no page errors, no console
+  errors and no failed local requests. On the live site, VORTEX, Dr. Behram's Office, Star Raider and home had 0 console
+  errors after the deploy. Star Raider's `load` event took more than 30 s once on live, while domcontentloaded was fine.
+- **Congressional OB GYN (Dr. Behram's Office):** office access 15 PASS. The test PIN was accepted, 5 wrong PINs were
+  rejected, only a salted SHA-256 hash is stored, codes expire on day 42, and 248 tampered and 0/3000 random codes were
+  accepted (correct). Core, bank-cues, labs, office page, answer-length, feud access/engine/page (38), surgery cases + vitals,
+  triage cases + CTG + page (146) all pass. Hub timed out once at load 37 and passed on re-run (67). Surgery page breech
+  timed out under load, as on Nov 21–22 (see addendum). The copy stays generic and shows no student faces.
+  **Manual audit of 30 seeded items (seed 1124, 257 items in 26 encounters):** I found no factual errors. One explanation
+  had a repeated sentence (severe-range BP said "treat within 30–60 minutes" twice, change 4). Items checked: LDA for
+  chronic HTN, moderate variability excludes acidemia, DXA in RED-S, implant failure rate, mastitis, EFW ≥ 4,500 g with
+  diabetes, NVP ultrasound for twins/mole, atrophy as the top PMB cause, midluteal progesterone > 3, fFN NPV, A1GDM
+  nutrition first, hCG first in pelvic pain, HELLP → aspirin + CV risk, breastfeeding LARC, preop iron, DXA ≥ 65, complete
+  mole 46,XX androgenetic, PCOS endometrial risk, early GDM screen at BMI ≥ 25 + risk, previa ultrasound first, CRL
+  redating > 5 d before 9 wk, TSH before pituitary MRI, hCG first in amenorrhea, no misoprostol in TOLAC, trich NAAT,
+  inflammatory breast cancer punch biopsy, cabergoline for microadenoma, insulin resistance not a Rotterdam criterion,
+  magnesium < 32 wk, severe-range BP treatment. I also checked the Nov 23 BV fix: CDC 2021 does drop the alcohol
+  restriction with metronidazole.
+- **Star Raider:** page test 101 passed / 0 failed. Sim pass. War test (Nov 23 change, seeded) passes, including the CPU skill ladder.
+- **MELTDOWN:** page 48 ok / 0 FAIL (correct URL `/games/reactor/`; the first try today passed the bare base URL, which
+  was a harness error), restart pass, sim 47/0. The iodine-pit drill is winnable.
+- **VORTEX:** fusehop ALL PASSED. fuselock, killcam, rimshot, runreport, tips pass. fusewarn failed once at load ~30 and
+  passed on re-run. fuseland was flaky on base too (Nov 23); de-flaked today. **Bot** (8 games from L1, PD=1 BF=1, same
+  seeds as Nov 23), lives lost by tip: **fuse 12, zap 8, spike 7, capture 6, shot 5 (38)**, against Nov 23 before the change
+  fuse 14, shot 10, zap 8, capture 6, spike 5 (44). Rim chases were 4 (before: 6), arrivals 6, rim-jumps 4. Max level
+  15/12/10/5 sharp and 8/15/13/15 average. One sharp game died twice to spikes on L3. 0 console errors.
+
+### Changes (pushed 07:19 EST; live at 07:20:33 EST)
+1. `90c31b6` **VORTEX: ONE HOP, THEN DROP** (today's Tempest change; built by the Nov 23 run, re-tested and shipped today).
+   The 1981 coin-op rule: outside the end-of-round hunt, a rim fuseball crosses one lane toward the claw, lingers 0.3 s,
+   then drops back into the tube, where it can be shot mid-jump on the way down. When only fuseballs are left, they hunt
+   as before, with a one-time "LAST FUSEBALLS HUNT YOU! KEEP MOVING" callout and chirp. The fuse death counters now count
+   real deaths only. vortex-fuseland's two flakes are fixed in the test (hold `mdir`, stub `Math.random` for the cue
+   check), and it passed twice in a row. Honest effect: on the bot, fuse deaths are 12/38 against 14/44 before, so the
+   share is about the same. Chases fell from 6 to 4. The sample is small, so "no worse, likely a little better".
+   https://storkdoc.github.io/behram-arcade/games/tube-shooter/
+2. `0939795` **MoodSticker LONG-PLAY ASK** (for the 11-day feedback drought). The ask bubble only fired on a sniffed GAME
+   OVER/win, which many pages never draw (Clinic Day, Jukebox, Relax, Chess, long sessions). Now, after 240 s of active
+   play (page visible, input or pointer movement in the last 30 s), the same purely visual bubble shows at the first
+   3–20 s lull. The same once-per-page / once-per-game-per-day / rated-in-3-days rules apply. FEEDBACK.md is updated.
+   mood-sticker-ask ALL PASS (adds desktop Dr. Behram's Office, iPhone Jukebox, and "an idle page never counts") and
+   mood-sticker ALL PASS. The first two runs failed on my own test timing at load 37 (the lull came before the scripted
+   input started), and I fixed the test. Affects every page.
+3. `0af4953` **Star Raider WAR: CPU skill shapes strategy** (Nov 23 work, its numbers): before, a sharp commander beat
+   NOVICE/PILOT/WARRIOR/COMMANDER 70/87/53/53% (N=30). After: 97/77/60/53% (holdout 100/70/63/60%). The war test is
+   seeded, so the "better commander usually wins" flake from Nov 22 is gone. War + sim pass today.
+   https://storkdoc.github.io/behram-arcade/games/star-raider/
+4. `1b9a2ea` + `a69f344` **Clinic Day explanations:** the EC item drops a repeated levonorgestrel/BMI sentence. BV now
+   says CDC 2021 no longer advises avoiding alcohol with metronidazole. Severe-range BP no longer repeats "treat within
+   30–60 minutes"; it now just notes that oral nifedipine means the immediate-release form. Office suites pass.
+   https://storkdoc.github.io/behram-arcade/games/dr-behrams-office/
+
+### Live deploy
+- Polled with cache-busting: at 07:20:33 EST Pages served all four files with today's change (`game.js` with LAST
+  FUSEBALLS HUNT YOU, `mood-sticker.js` with askPlayMs, `auto.js` with the split strategy, `bank.js` with the nifedipine text).
+
+### Neuro Arena (seed 1124; 10 rounds × K=4 = 40 gens, Lamarck, 30 s, size 2800, ABL=5; warm-ups skipped)
+| contest | chance | champ curve (duel acc) | full task vs prior | beyond reflex | reaps | ablate all units (full) | Nov 22 full |
+|---|---|---|---|---|---|---|---|
+| divisor | 8% | 33→86 (r6)→72% (lv 2) | 59% vs 66% | −0.07 | 2 | 65% (intact 64%) | 72% |
+| simon | 25% | 54→82 (r9)→59% (lv 1) | 50% vs 26% | +0.24 | 2 | 39% (intact 44%) | 48% |
+| text | 8% | 26→44→40%, flat | 15% vs 25% (new/fam 16/30%) | −0.10 | 2 | 12% (intact 18%) | 16% |
+| add | 5% | 67→94→70% (lv 2) | 15% vs 10% | +0.05 | 3 | 21% (intact 17%) | 8% |
+| sub | 10% | 92→100 (r7)→90% (lv 3) | 29% vs 18% | +0.11 | 2 | 38% (intact 36%) | 24% |
+| big | 50% | 71→91% | probe 79% vs prior 78% | +0.13 | 1 | probe 86%, full 80% (intact 91%) | probe 86% |
+| pattern | 13% | 75→100% (r6) | probe 100% vs 50% | +0.50 | 2 | probe 100%, full 100% | probe 100% |
+| pong | – | 36→86% | hit 86% vs open-side 76% | +0.11 | 1 | 90% (intact 86%) | hit 46% |
+- Honest read: **pong beat the open-side baseline for the first time (86% vs 76%)**. But ablating every learned unit
+  gives 90%, so the skill sits in the evolved reflex/preprocessing, not in learned units. The same holds for **add**
+  (now above prior, 15% vs 10%) and **sub** (29% vs 18%): ablated ≥ intact, so this is not unit understanding. Sub was the
+  one unit-dependent contest on Nov 22, and today it is not. **Big** is the only contest where the units carry weight on
+  the full task (91% intact vs 80% ablated), with the probe about at prior. **Simon** keeps a modest unit effect
+  (44% → 39%). **Divisor** fell back below its frequency prior (59% vs 66%) after Nov 22's first above-prior result,
+  consistent with that result having been reflex, not learning. **Text is below baseline for the 10th straight run**, and
+  today it shows a **memorization gap** (familiar words 30% vs new 16%). Duel curves rose in all 8, which again is not task
+  understanding.
+
+### Findings (worst first)
+1. **No player feedback for 11 days.** The long-play ask is today's attempt. If it is still 0 in a few days, traffic is
+   probably the limit rather than the prompt.
+2. **Neuro Arena:** text is stuck below baseline (10 runs) and now memorizes. Pong/add/sub gains come from reflex wiring,
+   not learned units. These need design changes (e.g. a held-out word split in selection, ablation-gated fitness), not more generations.
+3. **VORTEX:** fuseballs remain the #1 bot death cause (12/38), and spikes rose to 7 (a sharp game lost 2 lives on L3).
+4. **Process:** the Nov 23 run left tested work unpushed, and harness URL/port mistakes still cost re-runs (reactor bare
+   URL today). Suites at load 30+ give timing flakes (hub, fusewarn, surgery breech).
+
+### For tomorrow
+- Re-read feedback, and check whether any record has `lastScreen` from a long-play ask.
+- VORTEX: look at spike deaths (warp-into-spike telegraph at low levels) and teach the bot to step around landing fuseballs, to measure the hop rule fairly.
+- Neuro Arena: consider making text selection score on held-out words only.
+- Run the reactor page test with `$B/games/reactor/` from the start; keep one port per day (189DD).
