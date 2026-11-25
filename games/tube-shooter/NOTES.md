@@ -430,3 +430,23 @@ rim burn and a soft `grabwarn`, but the soft cue was easy to miss and high-level
   shot 5 (38 in total), against fuse 14 of 44 before the change on Nov 23. The rim-chase part fell to 4 (it was 6). That is
   a small sample, and the bot never steers around fuseballs on purpose, so the honest read is "no worse, likely a little
   better". The change is mainly arcade-faithful: the 1981 rule is one hop, then drop.
+
+## Day 29 (2026-11-25): CLEAN TUBE
+- Why: the Nov 24 log blamed rising spike deaths (7 of 38). Today the eval bot was taught to follow the existing warp
+  spike guide (steer to a green lane, 90% sharp / 60% average). With that, spike deaths were **0 of 43** (8 games from L1),
+  so the rise was a bot artifact: the guide works. The real gap was different. Spikes are the one threat the player builds
+  up all level, but shooting one paid 1 point, so the classic counter-play (cut the spikes down while enemies are still
+  alive) had no reward.
+- What: on a level where spikes were laid (spiker, or `setSpike`), warping out with EVERY spike cut to the root pays
+  **CLEAN TUBE** = 250 + 150 x level (max 3000): bright arpeggio (`cleantube`), rim flash, 'CLEAN TUBE! +N', announcer
+  'Clean tube!', haptic, MoodSticker 'big'. A lane cut to the root snaps (`spikecut`, burst at the rim). The level still
+  ends the instant the last enemy dies, so it is a choice: leave a straggler alive and sweep, or take the kill and dodge in
+  the warp. With the pool empty and <= 3 enemies left, leftover spike tips pulse white-hot and pops count down 'SPIKES LEFT: N'
+  / 'TUBE CLEAN! NOW FINISH THEM'. First time per game: 'CUT EVERY SPIKE BEFORE THE LAST KILL' + 'CLEAN TUBE BONUS +N'.
+  RUN REPORT lists CLEAN TUBES. Spikes left = no bonus and the usual AVOID SPIKES. Rules otherwise unchanged.
+- Tuning: a first draft paid 500 + 250 x level (max 5000); the always-firing bot earned ~10k/game from it (~12% of score,
+  extra lives), so it was cut to 250 + 150 x level. Bot warp-start spikes (base, 99 warps): 47 had spikes, median 1 lane,
+  median total length 0.33 (about 6 shots), max 1.48.
+- Hooks: `VORTEX.cleanTube()` -> {laid, cuts, n, pts, hint, hintShown, last, next, left}; `setSpike` now marks spikes laid.
+- Test: tests/vortex-cleantube.test.js (desktop keyboard / mouse / gamepad, iPhone 14 + landscape touch FIRE: hint, cut by
+  real input, pops, bonus amount, no AVOID SPIKES, spike-left / none-laid negatives, real spiker, run report, no console errors).

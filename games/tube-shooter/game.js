@@ -249,7 +249,7 @@ const HAPTIC = {   // name: [ms, strong, weak]
   die: [460, 1, 0.8], capture: [380, 0.75, 0.5], zap: [720, 0.9, 1], zap2: [260, 0.5, 0.65], zkill: [40, 0.15, 0.45],
   hit: [35, 0, 0.4], tanker: [70, 0.35, 0.45], bump: [70, 0.45, 0], life: [220, 0.2, 0.7], warp: [900, 0.15, 0.45],
   mineboom: [200, 0.6, 0.6], sparkboom: [260, 0.75, 0.6], shotwarn: [90, 0.3, 0.7], pack: [160, 0.3, 0.8], newenemy: [120, 0.2, 0.5], pup: [180, 0.3, 0.8],
-  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6], shortout: [90, 0.45, 0.6], rimshot: [45, 0.5, 0.3], rimclutch: [110, 0.8, 0.5]
+  jump: [90, 0.2, 0.55], land: [50, 0.35, 0.1], dodge: [140, 0.15, 0.7], grabwarn: [110, 0.45, 0.25], grabimminent: [180, 0.7, 0.55], fusewarn: [85, 0.35, 0.55], zapwarn: [130, 0.4, 0.35], zapcharge: [60, 0.15, 0.4], spikewarn: [45, 0.1, 0.35], overheat: [70, 0.25, 0.15], parry: [60, 0.2, 0.6], shortout: [90, 0.45, 0.6], rimshot: [45, 0.5, 0.3], rimclutch: [110, 0.8, 0.5], spikecut: [30, 0.1, 0.4], cleantube: [160, 0.5, 0.6]
 };
 const Haptics = {
   on: store.get('haptics', true), src: 'kbm', pad: null, lastT: {}, log: [],
@@ -391,6 +391,8 @@ const Sound = {
       case 'spike': this.tone('square', 2600, 1900, 0.035, 0.035); break;
       case 'stop': this.tone('triangle', 2200, 3300, 0.05, 0.05); this.noise(0.04, 0.05, 9000, 4000, 2, 'highpass'); break;   // enemy shot shot down: glassy tick
       case 'parry': this.tone('triangle', 1568, 1568, 0.12, 0.07); this.tone('triangle', 2349, 2349, 0.14, 0.06, 0.03); this.tone('sine', 3136, 4186, 0.16, 0.05, 0.06); this.noise(0.08, 0.08, 9000, 3000, 2, 'highpass'); break;   // BLOCK: bright chord
+      case 'spikecut': this.tone('triangle', 2637, 1760, 0.07, 0.07); this.tone('square', 3520, 3520, 0.03, 0.03, 0.03); this.noise(0.05, 0.08, 9000, 5000, 2, 'highpass'); break;   // CLEAN TUBE: a lane's spike snapped off at the root
+      case 'cleantube': [1047, 1319, 1568, 2093].forEach((f, i) => { this.tone('triangle', f, f, 0.16, 0.07, i * 0.06); this.tone('sine', f * 2, f * 2, 0.1, 0.03, i * 0.06 + 0.02); }); this.noise(0.4, 0.06, 12000, 6000, 1.5, 'highpass'); break;   // CLEAN TUBE bonus: bright rising arpeggio + air
       case 'rimshot': this.noise(0.09, 0.2, 3800, 2200, 1.4, 'bandpass'); this.tone('triangle', 1760, 1240, 0.05, 0.09); this.tone('sine', 210, 120, 0.12, 0.12); break;   // RIM SHOT: snare-style rim crack (stick on rim) + body thump
       case 'rimclutch': this.noise(0.12, 0.24, 4200, 2000, 1.4, 'bandpass'); this.tone('triangle', 1976, 1320, 0.06, 0.1); this.tone('sine', 180, 90, 0.18, 0.15); [988, 1319, 1976].forEach((f, i) => this.tone('square', f, f, 0.06, 0.045, 0.06 + i * 0.045)); break;   // CLUTCH RIM SHOT: harder crack + rising sting
       case 'shortout': this.tone('sawtooth', 2400, 90, 0.32, 0.07); this.noise(0.3, 0.12, 6000, 400, 2.5, 'bandpass'); this.tone('triangle', 1318, 1318, 0.1, 0.06, 0.02); this.tone('triangle', 1976, 1976, 0.14, 0.05, 0.06); break;   // SHORT-CIRCUIT: crackle + falling arc + chord
@@ -905,7 +907,7 @@ function msg(t, dur = 2, y = 0.5, color = '#fff', size = 5) { msgs = msgs.filter
 function startGame() {
   fireLock = true;
   deathTipCount = {}; spikeGuide.tipShown = false; fuseWarnFrames = 0; fuseWarnCues = 0; fuseWarnCd = 0; grabImminentCues = 0; zapWarnCues = 0; zapWarnCd = 0; zapWarnArmed = false;
-  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 }; rimStats = { n: 0, clutch: 0, tip: false, lastPop: -9, pts: 0 }; rimFlash = null; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
+  pups = []; power = { laser: false, droid: null, jump: false, n: 0 }; jump = { t: -1, cd: 0, n: 0, dodged: 0, lastDodge: -9 }; stopStats = { n: 0, close: 0, droid: 0, tip: false, lastPop: -9, pts: 0 }; shortStats = { n: 0, tip: false, lastPop: -9, pts: 0, charging: 0, zapping: 0 }; rimStats = { n: 0, clutch: 0, tip: false, lastPop: -9, pts: 0 }; rimFlash = null; tube = { laid: false, cuts: 0, n: 0, pts: 0, hint: false, hintShown: 0, last: null }; pupKills = 0; pupNext = randi(7, 9); seenPup = new Set(); pupStats = { dropped: 0, caught: 0, missed: 0, droidKills: 0 };
   score = 0; lives = 3; nextLife = 20000; tokens = 0; bonusStats = { rounds: 0, best: 0, last: null }; seenTypes = new Set(); seenWaves = new Set(); packClears = 0; startLevel = LADDER[select.idx][0]; bonusPending = LADDER[select.idx][1];
   store.set('lastStart', select.idx); cont.used = 0; heatStats = { overheats: 0, sputter: 0, tip: false };
   Sound.play('start');
@@ -916,7 +918,7 @@ function beginLevel(L) {
   level = L; web = WEBS[(L - 1) % 16]; pal = PALETTES[Math.floor((L - 1) / 16) % PALETTES.length];
   LP = levelParams(L); spikes = new Array(web.n).fill(0); pool = buildPool(L);
   enemies = []; eshots = []; pshots = []; mines = []; shards = []; bolts = []; zfx = null; zapUses = 0; zap.active = false; rot = 0; graceT = 0;
-  jump.t = -1; jump.cd = 0; cleanLevel = true;
+  jump.t = -1; jump.cd = 0; cleanLevel = true; tube.laid = false; tube.hint = false;
   placeClaw(web.start, 0); player.z = 0; player.alive = true; player.heat = 0; player.overheat = false;
   pups = []; if (power.droid && power.droid.until < L) power.droid = null; if (power.droid) power.droid.pos = player.pos + web.n / 2;
   Music.play(L);
@@ -936,6 +938,7 @@ function startWarp() {
   state = 'warp'; warp = { t: 0 }; eshots = []; player.z = 0; window.MoodSticker && window.MoodSticker.event('big'); window.MoodSticker && window.MoodSticker.screen('warp');
   Sound.play('warp');
   if (bonusPending > 0) { addScore(bonusPending); msg('BONUS ' + bonusPending, 2.4, 0.42, '#fff', 4.5); Sound.play('bonus'); bonusPending = 0; }
+  cleanTubeCheck();
   if (spikes.some(s => s > 0.02)) { msg('AVOID SPIKES', 2.0, 0.58, pal.spike, 4); Voice.say('spikes', 'Avoid spikes', 1); }
   while (pups.length) { pups.shift(); collectPup(); }   // a crystal still in the tube is yours when the level clears
   if (cleanLevel && level >= 3 && !window.__noTokens) { msg('EXCELLENT! NO LIVES LOST', 2.0, 0.22, '#ffffff', 3.4); giveToken(true); Voice.say('excellent', 'Excellent!', 2); }
@@ -1077,6 +1080,37 @@ let deathTipCount = {};
    top killer with its counter-play tip (always shown here, even after the in-game tips have stopped), kills / JUMP dodges /
    break-frees, and NEW BEST LEVEL. It stays up to GAMEOVER_SEC (skip with fire / Enter / tap / pad A after 1.2 s). */
 const GAMEOVER_SEC = 8;
+/* Day 29 (2026-11-25): CLEAN TUBE. Spikes are the one threat the player builds up all level and then meets blind at
+   warp speed, and spike deaths rose on the Nov 24 bot eval (7 of 38, two on L3). Shooting a spike only paid 1 point, so
+   nobody bothered; the classic counter-play (cut the spikes down while enemies are still alive) had no reward.
+   Now, on any level where spikers left spikes, warping out with EVERY spike cut to the root pays CLEAN TUBE
+   (250 + 150 x level, max 3000), with a bright arpeggio, rim flash, 'CLEAN TUBE! +N' and announcer 'Clean tube!'.
+   Each lane cut to the root gives a crisp 'snap' and a pop. The level still ends the instant the last enemy dies, so
+   it is a real choice: leave a straggler alive and sweep the spikes, or take the kill and dodge the spikes in the warp.
+   While the pool is empty and 3 or fewer enemies remain, leftover spike tips pulse white-hot; the first time per game a
+   tip says 'CUT EVERY SPIKE BEFORE THE LAST KILL: CLEAN TUBE BONUS'. RUN REPORT lists CLEAN TUBES. Rules otherwise unchanged. */
+let tube = { laid: false, cuts: 0, n: 0, pts: 0, hint: false, hintShown: 0, last: null };
+const cleanTubePts = L => Math.min(3000, 250 + 150 * L);
+function spikeCut(l) {
+  tube.cuts++; Sound.play('spikecut');
+  const m = laneMid(l); fx.push({ x: m[0], y: m[1], zw: LL, t: 0, dur: 0.4, size: 0.3, rays: 10, colors: [pal.spike, '#ffffff'], seed: 0 });
+  if (tube.hint) { const left = spikes.filter(v => v > 0.02).length; msg(left ? 'SPIKES LEFT: ' + left : 'TUBE CLEAN! NOW FINISH THEM', 1.2, 0.8, left ? pal.spike : '#ffffff', 2.4); }
+}
+function cleanTubeCheck() {
+  if (!tube.laid || spikes.some(v => v > 0.02)) { tube.last = tube.laid ? { L: level, clean: false, left: spikes.filter(v => v > 0.02).length } : null; return false; }
+  const pts = cleanTubePts(level); addScore(pts); tube.n++; tube.pts += pts; run.tubes = (run.tubes || 0) + 1; tube.last = { L: level, clean: true, pts };
+  msg('CLEAN TUBE! +' + pts, 2.4, 0.3, '#ffffff', 4); Sound.play('cleantube'); Voice.say('cleantube', 'Clean tube!', 2);
+  rimFlash = { lane: player.lane, t: 0, clutch: true };
+  window.MoodSticker && window.MoodSticker.event('big');
+  return true;
+}
+function cleanTubeHint() {
+  const live = !pool.length && enemies.length > 0 && enemies.length <= 3 && tube.laid && spikes.some(v => v > 0.02);
+  if (live && !tube.hint) {
+    tube.hint = true;
+    if (!tube.hintShown) { tube.hintShown = 1; msg('CUT EVERY SPIKE BEFORE THE LAST KILL', 3, 0.8, pal.spike, 2.2); msg('CLEAN TUBE BONUS +' + cleanTubePts(level), 3, 0.85, '#ffffff', 2.2); }
+  }
+}
 const DEATH_SHORT = { shot: 'SHOT', capture: 'GRAB', spike: 'SPIKE', zap: 'ZAP', spark: 'SPARK', mine: 'MINE', fuse: 'FUSEBALL' };
 let run = { deaths: {}, order: [], kills: 0, from: 1, best0: 1, bf0: 0, last: null };
 function runReset(L) { run = { deaths: {}, order: [], kills: 0, from: L, best0: bestLevel, bf0: breakFreeStats.used, last: null }; }
@@ -1084,7 +1118,7 @@ function runReport() {
   const ks = Object.keys(run.deaths), total = ks.reduce((a, k) => a + run.deaths[k], 0);
   let top = null; for (const k of run.order) if (!top || run.deaths[k] >= run.deaths[top]) top = k;   // ties: the most recent
   const lost = ks.sort((a, b) => run.deaths[b] - run.deaths[a]).map(k => (DEATH_SHORT[k] || k.toUpperCase()) + ' ' + run.deaths[k]).join('   ');
-  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (run.shorts) extra.push('PULSARS SHORTED ' + run.shorts); if (run.rims) extra.push('RIM SHOTS ' + run.rims); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
+  const extra = ['KILLS ' + run.kills]; if (run.stops) extra.push('SHOTS STOPPED ' + run.stops); if (run.shorts) extra.push('PULSARS SHORTED ' + run.shorts); if (run.rims) extra.push('RIM SHOTS ' + run.rims); if (run.tubes) extra.push('CLEAN TUBES ' + run.tubes); if (jump.dodged) extra.push('JUMP DODGES ' + jump.dodged);
   const bf = breakFreeStats.used - run.bf0; if (bf > 0) extra.push('BREAK-FREES ' + bf);
   return { total, last: run.last, top, from: run.from, stops: run.stops || 0, to: level, score, kills: run.kills, newBest: level > run.best0 && run.from < level,
     lines: { final: run.last && DEATH_TIPS[run.last] ? 'FINAL LIFE: ' + DEATH_TIPS[run.last][0] : '', levels: 'LEVEL ' + run.from + (level > run.from ? ' → ' + level : '') + '   SCORE ' + score,
@@ -1722,7 +1756,7 @@ function updTanker(e, dt) {
 function updSpiker(e, dt) {
   if (e.mdir < 0) {
     e.z -= LP.spikerSpeed * dt;
-    spikes[e.lane] = Math.max(spikes[e.lane], 1 - e.z);
+    spikes[e.lane] = Math.max(spikes[e.lane], 1 - e.z); if (spikes[e.lane] > 0.02) tube.laid = true;
     if (e.z <= e.turnZ) e.mdir = 1;
   } else {
     e.z += LP.spikerSpeed * dt;
@@ -1842,7 +1876,7 @@ function checkShotHits() {
     const sp = spikes[s.lane];
     if (sp > 0 && s.z >= 1 - sp) {
       spikes[s.lane] = Math.max(0, sp - 0.055); if (spikes[s.lane] < 0.03) spikes[s.lane] = 0;
-      s.dead = true; addScore(1); Sound.play('spike');
+      s.dead = true; addScore(1); if (spikes[s.lane] === 0) spikeCut(s.lane); else Sound.play('spike');
       fx.push({ x: laneMid(s.lane)[0], y: laneMid(s.lane)[1], zw: (1 - sp) * LL, t: 0, dur: 0.22, size: 0.18, rays: 6, colors: [pal.spike, '#fff'], seed: 0 });
     }
   }
@@ -2064,6 +2098,7 @@ function update(dt) {
         if (zap.t > 0.7) zap.active = false;
       }
       if (!pool.length && !enemies.length && !zap.active && !window.__noWarp) { mines = []; startWarp(); }
+      else cleanTubeHint();
       break;
     case 'warp': {
       if (warp.bonus) { handleMove(dt); updBonus(warp.bonus, dt); Sound.hum(0); break; }
@@ -2490,7 +2525,10 @@ function drawSpikes() {
   }
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  for (const [m, zw] of tips) { const p = proj(m[0], m[1], zw); if (p) { const r = Math.max(1.5 * DPR, scaleAt(zw) * 0.018); ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2); } }
+  const hot = tube.hint && state === 'play', k = hot ? 1 + 0.9 * (0.5 + 0.5 * Math.sin(performance.now() / 95)) : 1;
+  if (hot) { ctx.save(); ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 10 * DPR * k; }
+  for (const [m, zw] of tips) { const p = proj(m[0], m[1], zw); if (p) { const r = Math.max(1.5 * DPR, scaleAt(zw) * 0.018) * k; ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2); } }
+  if (hot) ctx.restore();
 }
 const FLIPPER = [[0, -0.032], [1, 0.032], [1, -0.032], [0, 0.032]];
 const FLIPPER_IN = [[0.2, 0], [0.5, -0.016], [0.8, 0], [0.5, 0.016]];
@@ -3528,7 +3566,7 @@ window.VORTEX = {
   clearLevel() { pool = []; enemies = []; eshots = []; if (state === 'play') startWarp(); },
   spawn(type, lane, z) { const e = makeEnemy(type, lane, z == null ? 1 : z); e.spawnT = 1; enemies.push(e); return e.id; },
   setSpikes(v) { for (let i = 0; i < web.n; i++) spikes[i] = v; },
-  setSpike(l, v) { spikes[wrapLane(l)] = v; },
+  setSpike(l, v) { spikes[wrapLane(l)] = v; if (v > 0.02) tube.laid = true; },   // as if a spiker laid it
   hiscores: () => hiscores.slice(),
   setLives(v) { lives = v; },
   addScore(v) { addScore(v); },
@@ -3542,6 +3580,7 @@ window.VORTEX = {
   pups: () => pups.map(p => ({ lane: p.lane, z: p.z, rimT: p.rimT })),
   dropPup(lane, z) { pups.push({ lane: wrapLane(lane), z: z == null ? 0.5 : z, t: 0, rimT: 0, spin: 0 }); pupStats.dropped++; },
   shortCircuit: () => Object.assign({ pts: SHORT.pts, maxZ: SHORT.maxZ }, shortStats),
+  cleanTube: () => ({ laid: tube.laid, cuts: tube.cuts, n: tube.n, pts: tube.pts, hint: tube.hint, hintShown: tube.hintShown, last: tube.last, next: cleanTubePts(level), left: spikes.filter(v => v > 0.02).length }),
   rimShot: () => Object.assign({ pts: RIM.pts, clutchPts: RIM.clutchPts, clutchK: RIM.clutchK, flash: !!rimFlash }, rimStats),
   shotStop: () => Object.assign({ pts: STOP.pts, closePts: STOP.closePts, warnZ: SHOT_WARN_Z }, stopStats),
   jump: () => ({ has: power.jump, air: airborne(), h: jumpH(), cd: jump.cd, n: jump.n, dodged: jump.dodged }),
