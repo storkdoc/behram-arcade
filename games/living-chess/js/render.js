@@ -201,7 +201,7 @@ export class Board3D {
   setupPost() {
     this.composer = new EffectComposer(this.r); // default targets: HalfFloat, samples 0 (never MSAA offscreen)
     this.composer.addPass(new RenderPass(this.scene, this.cam));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.45, 0.5, 0.9); this.composer.addPass(this.bloom);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.38, 0.45, 0.97); this.composer.addPass(this.bloom);
     this.focusPass = new ShaderPass(FOCUS); this.composer.addPass(this.focusPass);
     this.composer.addPass(new OutputPass());
     this.fxaa = new ShaderPass(FXAA); this.composer.addPass(this.fxaa);

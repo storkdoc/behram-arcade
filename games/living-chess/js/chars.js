@@ -31,10 +31,78 @@ export const PIECE_HEIGHT = { 1: 0.8, 2: 0.9, 3: 1.1, 4: 1.05, 5: 1.25, 6: 1.42 
 
 export function makeMaterials(side) {
   const ivory = side === 0;
-  const body = new THREE.MeshPhysicalMaterial({ color: ivory ? 0xefe2c6 : 0x2a1b14, roughness: ivory ? 0.38 : 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.25, sheen: 0.4, sheenColor: new THREE.Color(ivory ? 0xfff3d8 : 0x8a5a3a) });
-  const trim = new THREE.MeshPhysicalMaterial({ color: ivory ? 0xd9a441 : 0xb07a2a, roughness: 0.28, metalness: 0.85, clearcoat: 0.3 });
-  const felt = new THREE.MeshStandardMaterial({ color: ivory ? 0x2e5d3a : 0x5d2e2e, roughness: 1 });
-  return { body, trim, felt };
+  // Porcelain bone vs deep ebony — old ivory (0xefe2c6) was nearly the light-square marble (0xe9dcc3)
+  // and glossy clearcoat + bloom washed both sides into a haze.
+  const body = new THREE.MeshPhysicalMaterial({
+    color: ivory ? 0xf6f1e6 : 0x12100e,
+    roughness: ivory ? 0.52 : 0.46,
+    metalness: 0,
+    clearcoat: ivory ? 0.2 : 0.26,
+    clearcoatRoughness: 0.48,
+    sheen: ivory ? 0.1 : 0.12,
+    sheenColor: new THREE.Color(ivory ? 0xe4d3b0 : 0x2a2018),
+  });
+  const trim = new THREE.MeshPhysicalMaterial({
+    color: ivory ? 0xb07a16 : 0xe2b34a,
+    roughness: 0.36,
+    metalness: 0.7,
+    clearcoat: 0.18,
+  });
+  const felt = new THREE.MeshStandardMaterial({ color: ivory ? 0x176336 : 0x8a1f1f, roughness: 1 });
+  const outline = makeOutlineMaterial(ivory ? 0x1a120c : 0xf4e4c2, 0.03);
+  return { body, trim, felt, outline };
+}
+
+/** Unlit inverted-hull outline so edges stay crisp under the warm lights and bloom. */
+function makeOutlineMaterial(color, thickness) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      { color: { value: new THREE.Color(color) }, thickness: { value: thickness } },
+    ]),
+    vertexShader: /* glsl */`
+      uniform float thickness;
+      #include <common>
+      #include <fog_pars_vertex>
+      void main() {
+        vec3 transformed = position + normalize(normal) * thickness;
+        vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3 color;
+      #include <common>
+      #include <fog_pars_fragment>
+      void main() {
+        gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+    side: THREE.BackSide,
+    toneMapped: false,
+    fog: true,
+  });
+}
+
+function addOutlines(root, outlineMat, skipMat) {
+  const list = [];
+  root.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.material || o.userData.outline) return;
+    if (o.material.visible === false || o.material === skipMat) return;
+    if (o.material.transparent && o.material.depthWrite === false) return; // face decal, auras
+    list.push(o);
+  });
+  for (const m of list) {
+    const ol = new THREE.Mesh(m.geometry, outlineMat);
+    ol.userData.outline = true;
+    ol.userData.charId = m.userData.charId;
+    ol.castShadow = false;
+    ol.receiveShadow = false;
+    m.add(ol);
+  }
 }
 
 /* ---------- arm ---------- */
@@ -135,6 +203,7 @@ export class Char {
     // pick proxy (invisible cylinder)
     const proxy = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, this.height, 10), new THREE.MeshBasicMaterial({ visible: false })); proxy.position.y = this.height / 2; proxy.userData.charId = this.id; this.root.add(proxy); this.proxy = proxy;
     this.root.traverse(o => { if (o.isMesh && o !== proxy) o.userData.charId = this.id; });
+    addOutlines(this.root, m.outline, m.felt);
   }
   /** swap the body to a new type (promotion) keeping identity, face and arms state */
   retype(type) { this.type = type; const p = this.proxy; this.root.remove(p); this.build(type); }
