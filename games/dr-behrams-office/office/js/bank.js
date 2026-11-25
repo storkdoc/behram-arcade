@@ -631,7 +631,7 @@ COB_BANK.push(
       'CDC lists a bacterial STI in the past 6 months as an indication to discuss PrEP. Doxy-PEP is currently recommended for MSM and transgender women with a recent STI; evidence in cisgender women is insufficient.'],
     ['Management', 'If she were pregnant and had chlamydia alone, what would be the correct treatment?',
       ['Azithromycin 1 g once, plus a test of cure', 'Doxycycline for 7 days, as for nonpregnant patients', 'Levofloxacin 500 mg daily for 7 days', 'No treatment until after delivery, to limit exposure', 'Ceftriaxone 500 mg IM alone, which covers chlamydia'],
-      'In pregnancy, azithromycin is recommended (amoxicillin is an alternative). Doxycycline is avoided in the 2nd and 3rd trimesters. A test of cure plus a 3-month retest prevents neonatal conjunctivitis and pneumonia. Test of cure at 4 weeks in pregnancy, then retest in 3 months.']
+      'In pregnancy, azithromycin is recommended (amoxicillin is an alternative). Doxycycline is avoided in the 2nd and 3rd trimesters. A test of cure about 4 weeks after treatment, then a retest at 3 months, helps prevent neonatal conjunctivitis and pneumonia.']
     ]},
   { n: 'Brooke Allen', a: 26, cc: 'Painless genital sore',
     v: 'A 26-year-old G0 noticed a painless, firm, clean-based ulcer on her labia 10 days ago. She has nontender, firm inguinal lymph nodes on the same side.',
