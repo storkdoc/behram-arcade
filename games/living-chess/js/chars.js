@@ -221,12 +221,14 @@ export class Char {
     const R = this.react;
     if (R) { g = { horror: 'coverEyes', cheer: 'cheer', headshake: 'cross', doubt: 'cross', nod: 'thumbs', brave: 'salute', mourn: 'coverEyes', alarm: 'cower', joy: 'cheer', flinch: 'cower', duel: 'sword', defy: 'fists', watch: g }[R] || g;
       emo = { horror: 'horror', cheer: 'cheer', headshake: 'anxiety', doubt: 'anxiety', nod: 'pride', brave: 'resolve', mourn: 'grief', alarm: 'terror', joy: 'joy', flinch: 'pain', duel: 'resolve', defy: 'resolve', watch: emo }[R] || emo; inten = R === 'watch' ? inten : 0.9; }
+    const C = this.cine; // cinematic override (cine.js): emotion, gesture and body offsets, weight C.k
+    if (C) { if (C.g) g = C.g; if (C.emo) emo = C.emo; inten = C.inten != null ? C.inten : 1; }
     if (this.dying) { emo = 'dead'; g = 'limp'; }
     if (this.type === 3 && (g === 'glance' || (g === 'cower' && !this.pointW))) g = 'pray';
     if (this.type === 2 && g === 'point' && (emo === 'thrill' || emo === 'resolve')) g = 'sword';
     this.face.set(emo, inten);
     // world-space look target -> local directions
-    const look = (R && this.reactLook) || this.pointW || this.lookW || ctx.camPos;
+    const look = (C && C.look) || (R && this.reactLook) || this.pointW || this.lookW || ctx.camPos;
     const root = this.root, wp = root.getWorldPosition(_v1);
     _v2.copy(look).sub(wp); const dist = Math.hypot(_v2.x, _v2.z);
     // body faces the camera (theatre staging); turns partly toward what it points at
@@ -242,7 +244,7 @@ export class Char {
     hYaw = clamp(hYaw, -0.9, 0.9); hPitch = clamp(hPitch, -0.5, 0.6);
     // emotion-driven body motion
     const fear = emo === 'terror' || emo === 'horror' ? 1 : emo === 'anxiety' ? 0.45 : 0;
-    const trem = (fear * inten + (this.alarm > 0 ? 0.6 : 0)) * 0.012 + (this.callout > 0 && fear ? 0.01 : 0);
+    let trem = (fear * inten + (this.alarm > 0 ? 0.6 : 0)) * 0.012 + (this.callout > 0 && fear ? 0.01 : 0);
     const breathe = Math.sin(t * (2 + fear * 4)) * (0.012 + fear * 0.01);
     let sy = 1 + breathe, sxz = 1 - breathe * 0.5, by = 0, leanX = 0, leanZ = 0;
     if (g === 'cower') { sy -= 0.08; leanZ = -0.18; } // shrink and lean back (away from the threat, which it faces)
@@ -258,8 +260,10 @@ export class Char {
     if (g === 'thumbs') { hPitch = Math.sin(t * 8) * 0.25; }
     if (this.hover > 0.01) { by += this.hover * (0.05 + Math.sin(t * 3) * 0.01); }
     if (this.sel > 0.01) { by += this.sel * 0.1; }
+    let grow = 1;
+    if (C) { const k = C.k == null ? 1 : C.k; sy += (C.sy || 0) * k; by += (C.by || 0) * k; leanZ += (C.lean || 0) * k; leanX += (C.side || 0) * k; hPitch += (C.pitch || 0) * k; trem += (C.trem || 0) * k; grow = 1 + ((C.grow || 1) - 1) * k; if (C.yaw) hYaw += C.yaw * k; }
     this.body.position.set((Math.random() - 0.5) * trem, by + this.hopY, (Math.random() - 0.5) * trem);
-    this.body.scale.set(sxz * this.spec.scale, sy * this.spec.scale, sxz * this.spec.scale);
+    this.body.scale.set(sxz * this.spec.scale * grow, sy * this.spec.scale * grow, sxz * this.spec.scale * grow);
     this.lean.x = lerp(this.lean.x, leanZ + (this.moving ? -0.15 * (this.moveLean || 0) : 0), Math.min(1, dt * 6)); this.lean.z = lerp(this.lean.z, leanX, Math.min(1, dt * 6));
     this.body.rotation.x = this.lean.x; this.body.rotation.z = this.lean.z + (this.dying ? this.dieTilt || 0 : 0) + (this.wobble || 0);
     this.headYaw = lerp(this.headYaw, hYaw, Math.min(1, dt * 8)); this.headPitch = lerp(this.headPitch, hPitch, Math.min(1, dt * 8));
@@ -271,7 +275,7 @@ export class Char {
     if (this.sword) this.sword.visible = g === 'sword';
     // face texture refresh (throttled unless active)
     this.face.update(dt); this._fAcc = (this._fAcc || 0) + dt;
-    const rate = this.hover > 0.1 || this.talk > 0 || this.callout > 0 || this.react ? 1 / 30 : (ctx.lowFace ? 1 / 6 : 1 / 12);
+    const rate = this.cine ? 1 / 40 : this.hover > 0.1 || this.talk > 0 || this.callout > 0 || this.react ? 1 / 30 : (ctx.lowFace ? 1 / 6 : 1 / 12);
     if (this._fAcc >= rate) { this._fAcc = 0; this.face.draw(); this.faceTex.needsUpdate = true; }
   }
   poseArms(g, dt, t, emo, inten) {
@@ -302,6 +306,9 @@ export class Char {
       case 'cross': set(L, -1.0, 0, 0.75, -2.0); set(Rr, -1.0, 0, -0.75, -2.0); break;  // arms crossed, head shaking
       case 'thumbs': set(Rr, -1.3, 0, 0.3, -1.6); set(L, 0.05, 0, -0.2, -0.3); break;
       case 'mourn': set(L, -2.3, 0, 0.6, -2.3); set(Rr, 0.1, 0, 0.12, -0.05); break;
+      case 'rise': set(L, -0.25, 0, -2.35 + Math.sin(t * 2.2) * 0.08, -0.15); set(Rr, -0.25, 0, 2.35 - Math.sin(t * 2.2 + 1) * 0.08, -0.15); break; // arms flung up, slow and wide
+      case 'heart': set(L, -1.25, 0, 0.55, -1.75); set(Rr, -0.9, 0, -0.35, -1.5); break; // both hands to the chest
+      case 'kneel': set(L, -0.55, 0, -0.3, -0.25); set(Rr, -0.55, 0, 0.3, -0.25); break; // arms hang forward, spent
       case 'limp': set(L, 0.2, 0, -0.1, 0); set(Rr, 0.2, 0, 0.1, 0); break;
       default: set(L, 0.08 + sway, 0, -0.22 - sway * 0.5, -0.35); set(Rr, 0.08 - sway, 0, 0.22 - sway * 0.5, -0.35);
     }

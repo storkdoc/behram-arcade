@@ -21,10 +21,17 @@ const EXPR = {
   joy:     [0.2,   0.6,   1.0, 1.1,  1.0,  0.6,  1.2,  0,    0,    0.7,  0.5,  1.0],
   cheer:   [0.2,   0.7,   1.0, 1.1,  1.0,  0.9,  1.25, 0,    0,    0.8,  0.6,  1.0],
   dead:    [0,     0,     0.0, 1.0, -0.4,  0.1,  0.8,  0,    0,    0,    0,    0],
+  // cinematic emotions (cine.js)
+  rage:    [-1.0,  -0.35, 0.8, 0.65, -0.65, 0.5, 1.1,  0,    0.35, 0.7,  0,    0.7],
+  triumph: [-0.45, 0.55,  1.0, 1.15, 1.0,  0.8,  1.3,  0,    0,    0.6,  1,    0.6],
+  relief:  [0.45,  0.55,  0.65, 1.0, 0.55, 0.15, 1.0,  0.2,  0.25, 0.25, 0.2,  0.5],
+  hope:    [0.55,  0.65,  1.1, 1.3,  0.45, 0.12, 0.85, 0.12, 0,    0.35, 1,    0],
+  dismay:  [1.0,   1.0,   1.4, 0.55, -0.8, 0.9,  0.85, 0.3,  0.7,  0,    0,    0],
+  despair: [1.0,   0.45,  0.45, 1.0, -1.0, 0.25, 0.9,  1,    0,    0,    0,    0.3],
 };
 const N = 12;
-export const EMO_COLORS = { calm: '#9fb6c8', terror: '#ff3b3b', horror: '#ff2d55', pain: '#ff7a45', anxiety: '#ffb347', pride: '#ffd76a', thrill: '#ffe14a', longing: '#6fe3ff', resolve: '#b78bff', grief: '#6f8dff', joy: '#7dff9a', cheer: '#7dff9a', dead: '#555' };
-export const EMO_LABEL = { calm: 'CALM', terror: 'TERROR', horror: 'HORROR', pain: 'PAIN', anxiety: 'DREAD', pride: 'PRIDE', thrill: 'THRILL', longing: 'LONGING', resolve: 'RESOLVE', grief: 'GRIEF', joy: 'JOY', cheer: 'JOY', dead: 'FALLEN' };
+export const EMO_COLORS = { calm: '#9fb6c8', terror: '#ff3b3b', horror: '#ff2d55', pain: '#ff7a45', anxiety: '#ffb347', pride: '#ffd76a', thrill: '#ffe14a', longing: '#6fe3ff', resolve: '#b78bff', grief: '#6f8dff', joy: '#7dff9a', cheer: '#7dff9a', dead: '#555', rage: '#ff4a1c', triumph: '#ffc83a', relief: '#9fe8c8', hope: '#ffb59a', dismay: '#c8c8d8', despair: '#8a7f9a' };
+export const EMO_LABEL = { calm: 'CALM', terror: 'TERROR', horror: 'HORROR', pain: 'PAIN', anxiety: 'DREAD', pride: 'PRIDE', thrill: 'THRILL', longing: 'LONGING', resolve: 'RESOLVE', grief: 'GRIEF', joy: 'JOY', cheer: 'JOY', dead: 'FALLEN', rage: 'RAGE', triumph: 'TRIUMPH', relief: 'RELIEF', hope: 'HOPE', dismay: 'DISMAY', despair: 'DESPAIR' };
 
 export class Face {
   constructor(size, side, opts = {}) {

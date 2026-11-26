@@ -31,9 +31,31 @@
 - `node games/living-chess/tests/mp.test.js` — 2 pages over a fake PeerJS broker: host text, backup code, mid-game join as Black,
   orientation, privacy (no thought fields in any message), sync both ways, illegal move rejected, resign, rematch swap, disconnect -> AI
 
+## Cinematic emotion scenes (js/cine-detect.js + js/cine.js)
+- Real-time only (no <video>, no media files): director drives the three.js camera, extra spot/rim lights, light beam,
+  colour grade (FOCUS pass uniforms on tier>=2, CSS grade layer otherwise), letterbox, title card, line, particles and
+  synthesized orchestral stingers (audio.js STING table: strings/brass/timpani/taiko/choir/bells/heartbeat/risers).
+- Settings chip CINEMATIC SCENES: FULL / SHORT / OFF (saved in lc-settings.cine). ?cine=full|short|off overrides; ?fast=1 => off.
+  ?cineslow=N slows the scene clock (CI on SwiftShader only).
+- Triggers (cine-detect.js, public board facts only): check -> King FEAR; promotion -> TRIUMPH (ASCENSION); capture -> TRIUMPH
+  for the capturer, Queen lost -> King DISMAY, friend can recapture -> RAGE, else nearest friend SADNESS; pawn on rank 6/7 ->
+  HOPE; newly attacked/forked -> FEAR; newly pinned -> FEAR; escaping check / saving a hanging piece -> RELIEF;
+  checkmate -> DESPAIR on the King then cut to the mating piece TRIUMPH; stalemate/draw -> STALEMATE; resign/time -> VICTORY/DEFEAT.
+- Throttle: min priority 45, +10 for your own pieces, 40 s per piece/emotion cooldown, 14 s per emotion, 7 s gap (11 s in
+  Short or timed games); priority >= 75 (check, promotion, queen lost, mate) bypasses. Any move, tap, key or pad button skips.
+- Scene clock is wall time, but one frame advances it by at most 0.5 s, so a hitch (shader compile, tab switch) cannot swallow
+  a scene; the time held back is logged as `lost` and the test's duration bound adds it.
+- Gameplay first: scenes never touch game state; the machine waits for a scene only in untimed solo/practice; online and timed
+  games cut a scene when the next move arrives. Scenes run locally on each device.
+- Tests: `node tests/cine-detect.test.js` (pure node) and `node tests/cine.test.js chromium|webkit desktop|iphone|ipad`
+  (env SLOW, default 3): forced scenes for all types/sides, skip by key/tap/pad, throttle, 11 real-move triggers, board unchanged,
+  mate/stalemate/resign, Short/Off, no <video>, no console errors.
+
 ## Known weaknesses
 - Voice quality depends on the OS speechSynthesis voices (some Androids/Linux have one robotic voice).
 - Tested only with SwiftShader (Chromium) and Playwright WebKit at iPhone size; no physical iPhone run.
 - JS fallback engine is weak (used only if WASM fails); on phones analysis depth is shallower, so thoughts are less far-sighted.
 - Picking uses the visible meshes: a piece fully hidden behind a taller one needs a tap on its square or a different angle.
 - Online relies on the public PeerJS broker; strict NATs may fail to connect (no TURN server).
+- Cinematic scenes: extra spot/point lights cost ~10% fps in software GL; particles are point sprites; scene timing
+  verified only in SwiftShader at low fps.

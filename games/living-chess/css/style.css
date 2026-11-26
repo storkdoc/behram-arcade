@@ -139,3 +139,29 @@ button { font-family: inherit; }
   :root { --side: 300px; }
   .portrait { width: 84px; height: 68px; } .dtext { font-size: 14px; } .moves { display: none; }
 }
+
+/* ---------- cinematic emotion scenes ---------- */
+#topbar, #side, #bubble, #pv { transition: opacity 0.35s; }
+body.cine-on #topbar, body.cine-on #side, body.cine-on #bubble, body.cine-on #pv { opacity: 0; pointer-events: none; }
+#cine .cword { display: inline-block; }
+#cine { position: fixed; inset: 0; z-index: 16; pointer-events: none; --bar: clamp(34px, 11vh, 110px); --cc: #ffd27a; }
+#cine.short { --bar: clamp(30px, 8.5vh, 84px); }
+#cine.on { pointer-events: auto; cursor: pointer; }
+#cine .cgrade, #cine .cvig { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+#cine .cvig { background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.78) 100%); }
+#cine .cbar { position: absolute; left: 0; right: 0; height: var(--bar); background: #000; transform: scaleY(0); transition: transform 0.4s cubic-bezier(0.2, 0.75, 0.2, 1); display: flex; align-items: center; justify-content: center; }
+#cine .cbar.top { top: 0; transform-origin: 50% 0; }
+#cine .cbar.bot { bottom: 0; transform-origin: 50% 100%; padding-bottom: var(--sab, 0px); }
+#cine.on .cbar { transform: scaleY(1); }
+#cine .cskip { position: absolute; right: calc(14px + var(--sar, 0px)); bottom: 8px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: 0.2em; color: rgba(255,255,255,0.45); }
+#cine .cskip::after { content: 'TAP OR PRESS ANY KEY TO SKIP ▸'; }
+@media (pointer: coarse) { #cine .cskip::after { content: 'TAP TO SKIP ▸'; } }
+#cine .cline { font: italic 400 clamp(13px, 2.3vw, 21px)/1.25 Georgia, 'Times New Roman', serif; color: #f2ead8; opacity: 0; transition: opacity 0.6s; max-width: 86vw; text-align: center; padding: 0 12px; text-shadow: 0 0 12px rgba(0,0,0,0.9); }
+#cine .cline.show { opacity: 1; }
+#cine .ccap { position: absolute; left: 0; right: 0; bottom: calc(var(--bar) + 2.2vh); text-align: center; pointer-events: none; }
+#cine .cwho { font: 600 clamp(10px, 1.5vw, 14px)/1 system-ui, sans-serif; letter-spacing: 0.45em; padding-left: 0.45em; color: rgba(255,255,255,0.8); margin-bottom: 0.6em; opacity: 0; transform: translateY(6px); transition: opacity 0.5s, transform 0.7s; text-shadow: 0 1px 6px #000; }
+#cine .cword { font: 700 clamp(30px, 7.4vw, 82px)/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.32em; padding-left: 0.32em; color: var(--cc); opacity: 0; transform: scale(1.14); filter: blur(7px); transition: opacity 0.55s, transform 1.6s cubic-bezier(0.15, 0.7, 0.2, 1), filter 0.7s;
+  text-shadow: 0 0 24px rgba(0,0,0,0.6), 0 3px 0 rgba(0,0,0,0.8);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--cc) 70%, transparent), 0 0 60px color-mix(in srgb, var(--cc) 35%, transparent), 0 3px 0 rgba(0,0,0,0.8); }
+#cine .cword.show, #cine .cwho.show { opacity: 1; transform: none; filter: none; }
+@media (max-width: 600px) { #cine .cword { letter-spacing: 0.22em; padding-left: 0.22em; } }

@@ -41,15 +41,21 @@ const FXAA = { uniforms: { tDiffuse: { value: null }, res: { value: new THREE.Ve
     vec3 b = a * 0.5 + 0.25 * (texture2D(tDiffuse, vUv + dir * -0.5).rgb + texture2D(tDiffuse, vUv + dir * 0.5).rgb);
     float lb = lu(b); gl_FragColor = vec4((lb < mn || lb > mx) ? a : b, 1.0); }` };
 // focus blur: blur grows with distance from the focus point (screen space); a depth-of-field look for close-ups, plus vignette, flash and tint
-const FOCUS = { uniforms: { tDiffuse: { value: null }, res: { value: new THREE.Vector2(1, 1) }, focus: { value: new THREE.Vector2(0.5, 0.5) }, amt: { value: 0 }, rad: { value: 0.18 }, vig: { value: 0.35 }, flash: { value: 0 }, flashC: { value: new THREE.Color(1, 1, 1) }, tint: { value: new THREE.Color(1, 1, 1) } }, vertexShader: FXAA.vertexShader,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 res, focus; uniform float amt, rad, vig, flash; uniform vec3 flashC, tint; varying vec2 vUv;
+const FOCUS = { uniforms: { tDiffuse: { value: null }, res: { value: new THREE.Vector2(1, 1) }, focus: { value: new THREE.Vector2(0.5, 0.5) }, amt: { value: 0 }, rad: { value: 0.18 }, vig: { value: 0.35 }, flash: { value: 0 }, flashC: { value: new THREE.Color(1, 1, 1) }, tint: { value: new THREE.Color(1, 1, 1) },
+  sat: { value: 1 }, con: { value: 1 }, gain: { value: new THREE.Color(1, 1, 1) }, lift: { value: new THREE.Color(0, 0, 0) }, grain: { value: 0 }, time: { value: 0 } }, vertexShader: FXAA.vertexShader,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 res, focus; uniform float amt, rad, vig, flash, sat, con, grain, time; uniform vec3 flashC, tint, gain, lift; varying vec2 vUv;
   void main(){ vec2 asp = vec2(res.x / res.y, 1.0); float d = length((vUv - focus) * asp); float b = amt * smoothstep(rad, rad + 0.35, d) * 6.0;
     vec3 c = texture2D(tDiffuse, vUv).rgb;
     if (b > 0.05) { vec2 px = b / res; vec3 s = c * 0.2;
       s += 0.1 * (texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb);
       s += 0.1 * (texture2D(tDiffuse, vUv + px * 0.7).rgb + texture2D(tDiffuse, vUv - px * 0.7).rgb + texture2D(tDiffuse, vUv + vec2(px.x, -px.y) * 0.7).rgb + texture2D(tDiffuse, vUv + vec2(-px.x, px.y) * 0.7).rgb);
       c = s; }
-    c *= tint; vec2 v = vUv - 0.5; c *= 1.0 - vig * dot(v, v) * 2.0; c = mix(c, flashC, flash); gl_FragColor = vec4(c, 1.0); }` };
+    c *= tint;
+    if (sat != 1.0 || con != 1.0 || grain > 0.0) { // cinematic grade (linear HDR, before tone mapping): saturation, contrast about mid-grey, lift/gain, film grain
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = max(mix(vec3(l), c, sat), 0.0);
+      c = 0.18 * pow(c / 0.18 + 1e-5, vec3(con)); c = c * gain + lift * (1.0 - smoothstep(0.0, 0.25, l));
+      float n = fract(sin(dot(vUv * res + time * 61.0, vec2(12.9898, 78.233))) * 43758.5453); c *= 1.0 + (n - 0.5) * grain; }
+    vec2 v = vUv - 0.5; c *= 1.0 - vig * dot(v, v) * 2.0; c = mix(c, flashC, flash); gl_FragColor = vec4(c, 1.0); }` };
 
 /* ---------- canvas textures ---------- */
 function canvasTex(w, h, draw, srgb = true) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -70,9 +76,13 @@ class Sparks {
     this.max = max; this.p = []; const g = new THREE.BufferGeometry();
     this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 3); this.size = new Float32Array(max);
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.col, 3)); g.setAttribute('size', new THREE.BufferAttribute(this.size, 1));
+    this.normal = blending === THREE.NormalBlending; // normal blending: fade through alpha (dark ash / soot read correctly)
+    if (this.normal) { this.al = new Float32Array(max); g.setAttribute('alpha', new THREE.BufferAttribute(this.al, 1)); }
     this.mat = new THREE.ShaderMaterial({ uniforms: { map: { value: tex }, scale: { value: 300 } }, transparent: true, depthWrite: false, blending, vertexColors: true,
-      vertexShader: `attribute float size; varying vec3 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform sampler2D map; varying vec3 vC; void main(){ float a = texture2D(map, gl_PointCoord).a; if (a < 0.01) discard; gl_FragColor = vec4(vC * a, a); }` });
+      vertexShader: this.normal ? `attribute float size; attribute float alpha; varying vec3 vC; varying float vA; uniform float scale; void main(){ vC = color; vA = alpha; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`
+        : `attribute float size; varying vec3 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: this.normal ? `uniform sampler2D map; varying vec3 vC; varying float vA; void main(){ float a = texture2D(map, gl_PointCoord).a * vA; if (a < 0.01) discard; gl_FragColor = vec4(vC, a); }`
+        : `uniform sampler2D map; varying vec3 vC; void main(){ float a = texture2D(map, gl_PointCoord).a; if (a < 0.01) discard; gl_FragColor = vec4(vC * a, a); }` });
     this.mesh = new THREE.Points(g, this.mat); this.mesh.frustumCulled = false; this.g = g;
   }
   add(o) { if (this.p.length >= this.max) this.p.shift(); this.p.push(Object.assign({ t: 0, life: 1, g: -3, drag: 1, s: 0.08 }, o)); }
@@ -83,9 +93,11 @@ class Sparks {
       p.vy += p.g * dt; const d = Math.pow(p.drag, dt); p.vx *= d; p.vy *= d; p.vz *= d; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.y < 0.01 && p.g < 0) { p.y = 0.01; p.vy *= -0.3; }
       const k = 1 - p.t / p.life, f = p.fade === 'in' ? Math.sin(Math.PI * p.t / p.life) : k;
       this.pos[n * 3] = p.x; this.pos[n * 3 + 1] = p.y; this.pos[n * 3 + 2] = p.z;
-      this.col[n * 3] = p.r * f; this.col[n * 3 + 1] = p.gC * f; this.col[n * 3 + 2] = p.b * f; this.size[n] = p.s * (p.grow ? 1 + p.t * p.grow : 1); n++;
+      if (this.al) { this.al[n] = f * (p.a == null ? 1 : p.a); this.col[n * 3] = p.r; this.col[n * 3 + 1] = p.gC; this.col[n * 3 + 2] = p.b; }
+      else { this.col[n * 3] = p.r * f; this.col[n * 3 + 1] = p.gC * f; this.col[n * 3 + 2] = p.b * f; }
+      this.size[n] = p.s * (p.grow ? 1 + p.t * p.grow : 1); n++;
     }
-    this.g.setDrawRange(0, n); for (const k of ['position', 'color', 'size']) this.g.attributes[k].needsUpdate = true;
+    this.g.setDrawRange(0, n); for (const k of this.al ? ['position', 'color', 'size', 'alpha'] : ['position', 'color', 'size']) this.g.attributes[k].needsUpdate = true;
   }
 }
 
@@ -125,12 +137,26 @@ export class Board3D {
     this.front = new THREE.DirectionalLight(0xfff2e0, 0.5); this.front.position.set(0, 4, 12); S.add(this.front);
     this.candles = []; for (const [x, z] of [[-6.2, -4.5], [6.3, 4.2]]) { const l = new THREE.PointLight(0xff9a40, 6, 9, 1.8); l.position.set(x, 1.6, z); S.add(l); this.candles.push(l); }
     this.fxLight = new THREE.PointLight(0xffd080, 0, 5, 2); S.add(this.fxLight);
+    // cinematic lights live in the scene from the start (intensity 0) so a scene never forces a shader recompile
+    this.cineSpot = new THREE.SpotLight(0xffffff, 0, 16, 0.38, 0.65, 1.1); this.cineSpot.castShadow = false; S.add(this.cineSpot, this.cineSpot.target);
+    this.cineRim = new THREE.PointLight(0xff3020, 0, 7, 1.6); S.add(this.cineRim);
+    this.baseLights = { hemi: this.hemi.intensity, key: this.key.intensity, rimA: this.rimA.intensity, rimB: this.rimB.intensity, front: this.front.intensity, exp: this.r.toneMappingExposure };
     if (!this.ios) { try { S.environment = this.makeEnv(); } catch (e) { console.warn(e); } }
     p(0.25); await y();
     this.buildBoard(); p(0.55); await y();
     this.glowT = canvasTex(64, 64, (x, w, h) => { const g = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, false);
     this.sparks = new Sparks(1200, this.glowT); S.add(this.sparks.mesh);
     this.dust = new Sparks(220, this.glowT); S.add(this.dust.mesh);
+    this.cineFx = new Sparks(700, this.glowT, THREE.NormalBlending); S.add(this.cineFx.mesh); // dark particles: ash, soot, rain
+    // a soft volumetric beam (additive cone) for spotlight / god-ray moments
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.95, 4.2, 40, 1, true), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { col: { value: new THREE.Color(1, 0.9, 0.6) }, op: { value: 0 }, time: { value: 0 } },
+      vertexShader: `varying vec2 vUv; varying vec3 vN, vV; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 col; uniform float op, time; varying vec2 vUv; varying vec3 vN, vV;
+        void main(){ float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.6); float h = smoothstep(0.0, 0.25, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
+          float rays = 0.75 + 0.25 * sin(vUv.x * 62.8 + time * 0.7) * sin(vUv.x * 25.1 - time * 0.4);
+          gl_FragColor = vec4(col * edge * h * rays * op, 1.0); }` }));
+    this.beam.visible = false; this.beam.renderOrder = 4; this.beam.frustumCulled = false; S.add(this.beam);
     for (let i = 0; i < 160; i++) this.dust.add({ x: rnd(-8, 8), y: rnd(0.2, 6), z: rnd(-8, 8), vx: rnd(-0.03, 0.03), vy: rnd(-0.02, 0.03), vz: rnd(-0.03, 0.03), g: 0, life: 1e9, r: 0.5, gC: 0.4, b: 0.28, s: rnd(0.02, 0.05), drag: 1 });
     // shards for deaths
     this.shardGeo = new THREE.TetrahedronGeometry(0.06, 0);
@@ -404,10 +430,10 @@ export class Board3D {
     if (k) k.doReact('alarm', 2.2);
     this.flash = 0.18; this.flashColor = new THREE.Color(1, 0.2, 0.15); this.shake = 0.08;
   }
-  async mateSeq(kingSq, loser, winnerSide) {
+  async mateSeq(kingSq, loser, winnerSide, o = {}) {
     const k = this.charAt(kingSq); if (!k) return; const p = k.root.position.clone();
-    this.shot(p, { dist: 5, el: 0.5, hold: 99, k: 1.4, orbit: 0.25 });
-    this.sfx('mate', { win: winnerSide });
+    if (!o.noCam) this.shot(p, { dist: 5, el: 0.5, hold: 99, k: 1.4, orbit: 0.25 });
+    if (!o.noSfx) this.sfx('mate', { win: winnerSide });
     k.doReact('alarm', 1.2); await sleep(900);
     k.dying = true; k.face.set('dead', 1);
     await this.tween(1.6, e => { k.dieTilt = ease(e) * 1.45; k.wobble = Math.sin(e * 20) * 0.08 * (1 - e); });
@@ -451,7 +477,7 @@ export class Board3D {
     for (let i = this.shards.length - 1; i >= 0; i--) { const s = this.shards[i]; s.t += dt; if (s.t > s.life) { this.shards.splice(i, 1); continue; } s.vy -= 9 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt; if (s.y < 0.03) { s.y = 0.03; s.vy *= -0.3; s.vx *= 0.6; s.vz *= 0.6; s.wx *= 0.6; } s.rx += s.wx * dt; s.ry += s.wy * dt; }
     for (const s of this.shards) { const m = this.shardMesh[s.side], idx = s.side ? n1++ : n0++; if (idx >= 160) continue; const f = Math.min(1, (s.life - s.t) * 2); q.setFromEuler(e.set(s.rx, s.ry, 0)); sc.setScalar(s.s * f); ps.set(s.x, s.y, s.z); mtx.compose(ps, q, sc); m.setMatrixAt(idx, mtx); }
     this.shardMesh[0].count = Math.min(160, n0); this.shardMesh[1].count = Math.min(160, n1); this.shardMesh[0].instanceMatrix.needsUpdate = this.shardMesh[1].instanceMatrix.needsUpdate = true;
-    this.sparks.update(dt); this.dust.update(dt);
+    this.sparks.update(dt); this.dust.update(dt); this.cineFx.update(dt); if (this.beam.visible) this.beam.material.uniforms.time.value = T;
     for (const c of this.candles) { const f = 0.85 + 0.15 * Math.sin(T * 13 + c.position.x) * Math.sin(T * 7.3); c.intensity = 6 * f; if (c.userData.flame) c.userData.flame.scale.set(1, 1.8 * f, 1); }
     if (this.fxLightT > 0) { this.fxLightT -= dt; this.fxLight.intensity = Math.max(0, this.fxLightI * this.fxLightT * 4); } else this.fxLight.intensity = 0;
     this.hlCheck.material.opacity = this.checkSq != null ? 0.35 + 0.3 * Math.sin(T * 8) : 0;
@@ -460,7 +486,7 @@ export class Board3D {
     for (const gh of this.ghosts) { gh.t += dt; gh.m.position.y = 0.03 + gh.i * 0.004 + Math.sin(T * 3 + gh.i) * 0.004; }
     // post
     this.flash = Math.max(0, this.flash - dt * 1.6);
-    const U = this.focusPass.uniforms; U.flash.value = this.flash * this.flash; if (this.flashColor) U.flashC.value.copy(this.flashColor); U.amt.value = this.focusAmt; U.focus.value.copy(this.focusPt);
+    const U = this.focusPass.uniforms; U.flash.value = this.flash * this.flash; if (this.flashColor) U.flashC.value.copy(this.flashColor); U.amt.value = this.focusAmt; U.focus.value.copy(this.focusPt); U.time.value = T % 100;
     if (this.tier >= 2) this.composer.render(dt); else this.r.render(this.scene, this.cam);
     if (T - this.lastCheck > (this.selfChecks < 2 ? 1.2 : 20) && T > 1) { this.lastCheck = T; this.selfCheck(); }
     this.adapt(dt);

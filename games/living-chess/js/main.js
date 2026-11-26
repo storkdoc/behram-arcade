@@ -7,7 +7,9 @@
    ========================================================================== */
 import { Board3D, sqPos } from './render.js';
 import { Face, EMO_COLORS, EMO_LABEL } from './faces.js';
+import { Cine } from './cine.js';
 
+const CineDetect = window.LCCineDetect;
 const LC = window.LC, Mind = window.LCMind, A = window.LCAudio, V = window.LCVoice, Net = window.Net, LCEngine = window.LCEngine;
 const QS = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
@@ -18,9 +20,13 @@ const isTouchDev = matchMedia('(pointer: coarse)').matches || navigator.maxTouch
 const FAST = QS.has('fast'); // test hook: shallow analysis
 
 /* ---------- settings ---------- */
-const DEF = { vol: { master: 0.9, music: 0.45, sfx: 0.9, voice: 0.9 }, voiceOn: true, muted: false, honest: true, ghost: true, confirm: isTouchDev, level: 2, color: '0', clock: 0 };
+const DEF = { vol: { master: 0.9, music: 0.45, sfx: 0.9, voice: 0.9 }, voiceOn: true, muted: false, honest: true, ghost: true, confirm: isTouchDev, level: 2, color: '0', clock: 0, cine: 'full' };
 let S; try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem('lc-settings') || '{}')); S.vol = Object.assign({}, DEF.vol, S.vol); } catch (e) { S = JSON.parse(JSON.stringify(DEF)); }
 if (QS.has('mute')) { S.muted = true; S.voiceOn = false; }
+const CINE_MODES = ['full', 'short', 'off'];
+// emotion scenes: the saved setting, or ?cine=full|short|off for this visit (test runs with ?fast stay calm unless they ask)
+let cineSet = false; // ?fast=1 (tests) defaults scenes off unless chosen in this session
+const cineMode = () => QS.has('cine') ? (CINE_MODES.includes(QS.get('cine')) ? QS.get('cine') : 'full') : FAST && !cineSet ? 'off' : (CINE_MODES.includes(S.cine) ? S.cine : 'full');
 const save = () => { try { localStorage.setItem('lc-settings', JSON.stringify(S)); } catch (e) { } };
 const CLOCKS = [{ n: 'NONE', b: 0, i: 0 }, { n: '3+2', b: 180, i: 2 }, { n: '5+0', b: 300, i: 0 }, { n: '10+0', b: 600, i: 0 }, { n: '15+10', b: 900, i: 10 }];
 const LEVEL_DESC = ['A nervous squire. Leaves pieces hanging. Your army will feel brave.', 'A young knight. Sees one-move tricks.', 'A seasoned castellan. Punishes loose pieces.', 'A warlord. Plays sharp, practical chess.', 'The machine at full strength. Your pieces will need all their courage.'];
@@ -31,7 +37,7 @@ const G = window.LCG = {
   an: null, thr: null, th: null, gen: 0, busy: false, over: null, sel: null, cursor: 28, hoverId: null, shownId: null, pv: null, confirmUci: null,
   clock: null, clk: [0, 0], lastTick: 0, againMe: false, againThem: false, netLost: false, errors: 0, analysing: false, speakingId: null, events: [],
 };
-let R, engine, portraitFace;
+let R, engine, portraitFace, cine;
 
 /* ---------- boot ---------- */
 async function boot() {
@@ -45,6 +51,13 @@ async function boot() {
   const ok = await engine.init(QS.get('engine') === 'js' ? 8000 : 20000); prog(0.95);
   if (!ok) toast('The engine could not start; analysis is unavailable.');
   portraitFace = new Face(220, 0, { aspect: 0.8 }); const pc = $('portrait'); pc.width = portraitFace.c.width; pc.height = portraitFace.c.height; G.pctx = pc.getContext('2d');
+  cine = G.cine = new Cine(R, A, {
+    root: $('cine'), timeScale: QS.has('cineslow') ? Math.max(1, +QS.get('cineslow') || 1) : 1, // test hook: slow-motion clock for software-rendered CI
+    say: (id, type, text, emo) => sayAs(id, type, text, emo, true),
+    onStart: () => { document.body.classList.add('cine-on'); G.bubble = null; R.setInsets({ top: 0, bottom: 0, left: 0, right: 0 }); G.events.push({ t: 'cine', emo: cine.active && cine.active.spec.emo }); },
+    onEnd: () => { document.body.classList.remove('cine-on'); onResize(); const w = G.afterCine; G.afterCine = []; for (const f of w || []) try { f(); } catch (e) { console.error(e); } },
+  });
+  $('cine').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); A.unlock(); V.unlock(); cine.skip(); });
   applySettings(); buildMenus(); bindInput();
   addEventListener('resize', onResize); onResize();
   prog(1); G.booted = true;
@@ -74,7 +87,7 @@ function onResize() {
   const side = $('side').getBoundingClientRect(), narrow = W <= 760 || W <= H;
   R.setInsets(narrow ? { top: 46, bottom: H - side.top + 4, left: 0, right: 0 } : { top: 44, bottom: 8, left: 8, right: W - side.left + 8 });
 }
-function titleScene() { G.mode = null; G.gen++; G.chess = new LC.Chess(); R.resetReactions(); R.sync(G.chess); R.setLast(null); R.setSel(null); R.setDots([]); R.setGhost(null); R.setOrientation(0, false); R.shot(new THREE_V(0, 0, 0), { dist: 10.5, el: 0.62, hold: 999, k: 0.8, orbit: 0.06, focus: 0 }); idleMoods(); }
+function titleScene() { if (cine && cine.active) cine.cut(true); G.mode = null; G.gen++; G.chess = new LC.Chess(); R.resetReactions(); R.sync(G.chess); R.setLast(null); R.setSel(null); R.setDots([]); R.setGhost(null); R.setOrientation(0, false); R.shot(new THREE_V(0, 0, 0), { dist: 10.5, el: 0.62, hold: 999, k: 0.8, orbit: 0.06, focus: 0 }); idleMoods(); }
 function THREE_V(x, y, z) { return sqPos(0, 0).set(x, y, z); }
 function idleMoods() { // menus: pieces fidget with gentle, believable moods
   const emos = ['calm', 'calm', 'longing', 'pride', 'anxiety', 'joy'];
@@ -101,6 +114,7 @@ function buildMenus() {
   $('bMute').onclick = () => { S.muted = !S.muted; save(); applySettings(); };
   $('bHonest').onclick = toggleHonest; $('bGhost').onclick = () => { S.ghost = !S.ghost; save(); applySettings(); if (!S.ghost) R.setGhost(null); };
   $('bConfirm').onclick = () => { S.confirm = !S.confirm; save(); applySettings(); };
+  $('bCine').onclick = () => { const i = CINE_MODES.indexOf(cineMode()); S.cine = CINE_MODES[(i + 1) % 3]; cineSet = true; if (QS.has('cine')) QS.delete('cine'); save(); applySettings(); };
   $('jcode').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') joinCode(); });
   document.querySelector('[data-j="code"]').onclick = joinCode; document.querySelector('[data-j="scan"]').onclick = () => { Net.joinAny(); };
 }
@@ -111,6 +125,7 @@ function applySettings() {
   $('bHonest').textContent = S.honest ? 'HONEST COUNSEL' : 'RAW EMOTIONS'; $('bHon').textContent = S.honest ? '⚖ HONEST' : '❤ RAW'; $('bHon').classList.toggle('on', S.honest);
   $('bGhost').textContent = 'GHOST PATHS: ' + (S.ghost ? 'ON' : 'OFF'); $('bConfirm').textContent = 'TAP TWICE TO MOVE: ' + (S.confirm ? 'ON' : 'OFF');
   $('bSpeak').textContent = S.voiceOn && !S.muted ? '🔊' : '🔇';
+  if (cine) cine.setMode(cineMode()); $('bCine').textContent = 'CINEMATIC SCENES: ' + cineMode().toUpperCase();
   $('vlist').innerHTML = V.supported ? 'Voices: ' + ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'].map(k => `<b>${k[0].toUpperCase() + k.slice(1)}</b> ${V.voiceName(k)}`).join(' · ') : 'Speech is not available in this browser; captions only.';
 }
 function act(a) {
@@ -129,7 +144,7 @@ function act(a) {
 
 /* ---------- game setup ---------- */
 function newGame(o) {
-  G.gen++; V.stop(); engine && engine.stop();
+  G.gen++; V.stop(); engine && engine.stop(); cine && cine.cut(true); G.afterCine = []; G.cineMemo = {};
   G.mode = o.mode; G.me = o.me; G.level = o.level != null ? o.level : G.level; G.startFen = o.fen || LC.START;
   G.chess = new LC.Chess(G.startFen); G.history = []; G.mem = new Mind.Memory(); G.mem.init(G.chess);
   for (const u of o.moves || []) { const before = G.chess.clone(); const rec = G.chess.play(u); if (!rec) break; G.history.push(rec); G.mem.observe(before, rec); }
@@ -186,6 +201,10 @@ function computeThoughts(callouts) {
   for (const id in G.th.pieces) R.applyThought(+id, G.th.pieces[id]);
   if (G.shownId != null && G.th.pieces[G.shownId]) setDialog(G.th.pieces[G.shownId]);
   if (!callouts) return;
+  if (cine && cine.active) { const g = G.gen; (G.afterCine = G.afterCine || []).push(() => { if (g === G.gen && G.th) callout(); }); return; }
+  callout();
+}
+function callout() {
   // the most desperate / excited pieces call out before you move
   const list = Object.values(G.th.pieces).filter(t => t.urgency >= 0.5).sort((a, b) => b.urgency - a.urgency).slice(0, 2);
   list.forEach((t, i) => { const c = R.chars.get(t.id); if (c) c.callout = 3 + i; });
@@ -206,6 +225,7 @@ async function aiMove(g) {
   if (!uci || !G.chess.parse(uci)) { const ms = G.chess.moves(); if (!ms.length) return; uci = LC.uci(ms[Math.floor(Math.random() * ms.length)]); }
   const wait = (FAST ? 150 : 650) - (performance.now() - t0); if (wait > 0) await sleep(wait);
   if (g !== G.gen) return;
+  if (cine.active && !G.clock && (G.mode === 'solo' || G.mode === 'practice')) { await cine.idle(); if (g !== G.gen) return; await sleep(220); if (g !== G.gen) return; }
   await doMove(uci, 'ai');
 }
 
@@ -220,7 +240,7 @@ function publicBody() {
 async function doMove(uci, src) {
   if (G.busy) return false;
   const before = G.chess.clone(), rec = G.chess.play(uci); if (!rec) return false;
-  G.busy = true; G.gen++;
+  G.busy = true; G.gen++; const gameObj = G.chess; if (cine.active) cine.cut(false);
   const mover = LC.colOf(rec.piece);
   G.history.push(rec); G.mem.observe(before, rec);
   if (G.clock && (G.mode === 'solo' || G.mode === 'host' || G.mode === 'practice')) G.clk[mover] += G.clock.i * 1000;
@@ -235,8 +255,16 @@ async function doMove(uci, src) {
   try { await R.playMove(rec, G.chess, { cinematic: !FAST }); } catch (e) { console.error(e); R.sync(G.chess); }
   afterMoveWords(rec, mover);
   G.busy = false;
+  if (gameObj === G.chess) emotionScene(before, rec); // a new game may have started while this move animated
   nextTurn(); drainNet();
   return true;
+}
+/* ---------- emotion scenes (cine.js): public board facts only, never game logic ---------- */
+function emotionScene(before, rec) {
+  if (!cine || cine.mode === 'off' || G.chess.status().over) return;
+  let cands = []; try { cands = CineDetect.detect(before, rec, G.chess, G.cineMemo || (G.cineMemo = {})); } catch (e) { console.warn(e); return; }
+  const p = cine.consider(cands, { me: G.me, short: !!G.clock });
+  if (p) G.events.push({ t: 'scene', emo: cine.active && cine.active.spec.emo, tag: cine.active && cine.active.spec.tag });
 }
 const LOSS = ['No… not the {v}!', 'The {v} on {sq} is gone. Make it mean something.', 'They took our {v}. I saw it coming.', 'Our {v}… I will remember this.'];
 const KILL = ['For the army!', 'One less {v} in the world.', 'Their {v} falls!', 'That is for our fallen.'];
@@ -382,7 +410,7 @@ function undo() {
   if (!(G.mode === 'solo' || G.mode === 'practice') || G.busy || G.history.length === 0) return;
   let n = G.chess.turn === G.me ? 2 : 1; if (G.over && G.chess.turn !== G.me) n = 1;
   if (G.history.length < n) return toast('Nothing to undo.');
-  G.gen++; engine.stop(); V.stop();
+  G.gen++; engine.stop(); V.stop(); cine.cut(true);
   for (let i = 0; i < n; i++) { G.chess.undo(); G.history.pop(); G.mem.unobserve(); }
   G.over = null; $('over').classList.add('hidden');
   R.resetReactions(); R.sync(G.chess); R.setLast(G.history[G.history.length - 1] || null); clearSelection(); R.clearThoughts(); R.setCounsel(null);
@@ -401,14 +429,20 @@ function gameOver(st) {
   const win = st.winner === G.me, draw = st.winner === -1;
   updateHud();
   const loserK = st.winner >= 0 ? G.chess.kings[1 - st.winner] : -1;
-  if (st.reason === 'checkmate') R.mateSeq(loserK, 1 - st.winner, st.winner); else if (draw) { R.drawSeq(); A.death(); } else { for (const c of R.chars.values()) c.doReact(c.side === st.winner ? 'cheer' : 'mourn', 9999); A.mate(win); }
+  let scene = null; const lastRec = G.history[G.history.length - 1];
+  if (cine && cine.active) cine.cut(true);
+  const cineOn = cine && cine.mode !== 'off', cs = { me: G.me, short: !!G.clock };
+  if (st.reason === 'checkmate') { if (cineOn) scene = cine.play({ emo: 'checkmate', kingSq: loserK, mateSq: lastRec ? lastRec.to : null, winner: st.winner, me: G.me }, cs); if (!scene) R.mateSeq(loserK, 1 - st.winner, st.winner); }
+  else if (draw) { R.drawSeq(); const stm = G.chess.turn; if (cineOn) scene = cine.play({ emo: 'stalemate', sq: G.chess.kings[stm], otherSq: G.chess.kings[1 - stm], tag: st.reason, word: st.reason === 'stalemate' ? 'STALEMATE' : 'DRAW', me: G.me }, cs); if (!scene) A.death(); }
+  else { for (const c of R.chars.values()) c.doReact(c.side === st.winner ? 'cheer' : 'mourn', 9999); if (cineOn) scene = cine.play(win ? { emo: 'triumph', sq: G.chess.kings[G.me], tag: 'win', word: 'VICTORY', me: G.me } : { emo: 'sadness', sq: G.chess.kings[G.me], tag: 'loss', word: 'DEFEAT', me: G.me }, cs); if (!scene) A.mate(win); }
   const kId = G.chess.ids[G.chess.kings[G.me]];
   const last = draw ? 'Peace. We all live to see another game.' : win ? 'Victory! Every one of us who fell, fell for this.' : st.reason === 'checkmate' ? 'It is over. Forgive me… I could not escape.' : 'We lay down our arms.';
-  setTimeout(() => sayAs(kId, 6, last, draw ? 'calm' : win ? 'joy' : 'grief', true), 900);
+  if (!scene) setTimeout(() => { if (G.over === st) sayAs(kId, 6, last, draw ? 'calm' : win ? 'joy' : 'grief', true); }, 900);
   A.setMood(win ? 1 : -1);
   const title = st.reason === 'checkmate' ? (win ? 'CHECKMATE — YOU WIN' : 'CHECKMATE') : draw ? 'DRAW' : win ? 'YOU WIN' : 'DEFEAT';
   const sub = (draw ? `By ${st.reason}.` : st.reason === 'checkmate' ? (win ? 'The enemy King has fallen. Your army is cheering.' : 'Your King falls. The army mourns.') : `By ${st.reason}.`) + ` (${st.result})`;
-  setTimeout(() => { if (G.over !== st) return; $('otitle').textContent = title; $('osub').textContent = sub; $('over').classList.remove('hidden'); $('bAgain').textContent = G.mode === 'host' || G.mode === 'guest' ? 'REMATCH (SWAP SIDES)' : 'PLAY AGAIN'; }, st.reason === 'checkmate' ? 3600 : 1200);
+  const panel = () => { if (G.over !== st) return; $('otitle').textContent = title; $('osub').textContent = sub; $('over').classList.remove('hidden'); $('bAgain').textContent = G.mode === 'host' || G.mode === 'guest' ? 'REMATCH (SWAP SIDES)' : 'PLAY AGAIN'; };
+  if (scene) scene.then(() => setTimeout(panel, 500)); else setTimeout(panel, st.reason === 'checkmate' ? 3600 : 1200);
   setStatus(title); G.events.push({ t: 'over', st: { result: st.result, reason: st.reason, winner: st.winner } });
 }
 function rematch() {
@@ -583,6 +617,7 @@ function onKey(e) {
   if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
   A.unlock(); V.unlock();
   const k = e.key;
+  if (cine && cine.active && !G.screen) { if (e.preventDefault) e.preventDefault(); cine.skip(); return; }
   if (G.promoRes) { const map = { q: LC.Q, r: LC.R, b: LC.B, n: LC.N, '1': LC.Q, '2': LC.R, '3': LC.B, '4': LC.N, Enter: LC.Q }; if (map[k] || map[k.toLowerCase && k.toLowerCase()]) { G.promoRes(map[k] || map[k.toLowerCase()]); e.preventDefault(); } else if (k === 'Escape') G.promoRes(null); return; }
   if (G.screen) { // menus
     if (k === 'Escape') { if (G.screen === 'settings') act('closeSettings'); else if (G.screen !== 'title' && G.screen !== 'loading') act(G.screen === 'online' || G.screen === 'join' ? 'leaveNet' : 'back'); }
@@ -615,6 +650,8 @@ const padPrev = {};
 function gamepadFrame(dt) {
   const pads = navigator.getGamepads ? navigator.getGamepads() : []; const gp = [...pads].find(p => p && p.connected); if (!gp) return;
   const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed), edge = (i, k) => { const v = b(i); const was = padPrev[k]; padPrev[k] = v; return v && !was; };
+  if (cine && cine.active && !G.screen) { let any = false; for (let i = 0; i < gp.buttons.length; i++) if (edge(i, 'c' + i)) any = true; if (any) cine.skip(); return; }
+  else for (let i = 0; i < gp.buttons.length; i++) padPrev['c' + i] = b(i);
   G.padRep = (G.padRep || 0) - dt; const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
   let dx = (b(15) ? 1 : 0) - (b(14) ? 1 : 0) + (ax > 0.6 ? 1 : ax < -0.6 ? -1 : 0), dy = (b(12) ? 1 : 0) - (b(13) ? 1 : 0) + (ay < -0.6 ? 1 : ay > 0.6 ? -1 : 0);
   if ((dx || dy) && G.padRep <= 0) { G.padRep = G.padHeld ? 0.12 : 0.28; G.padHeld = true; if (G.screen) { onKey({ key: dy > 0 ? 'ArrowUp' : 'ArrowDown', target: document.body, preventDefault() { } }); } else if (G.mode) { const f = G.me ? -1 : 1; moveCursor(Math.sign(dx) * f, Math.sign(dy) * f); } }
@@ -630,6 +667,7 @@ function frame(dt) {
   clockFrame(); gamepadFrame(dt); netFrame();
   // speak the hovered piece after a short dwell (so sweeping the mouse doesn't babble)
   if (G.hoverId != null && !G.hoverSpoken && G.mode && performance.now() - ptr.hoverT > 380) { G.hoverSpoken = true; const th = G.th && G.th.pieces[G.hoverId]; if (th && !G.pv) speak(th, true); }
+  if (cine) cine.update(dt);
   R.frame(dt);
   // portrait
   if (G.pctx && !$('hud').classList.contains('hidden')) {
@@ -639,7 +677,7 @@ function frame(dt) {
   }
   // speech bubble above a calling piece
   const bb = $('bubble');
-  if (G.bubble && G.mode) {
+  if (G.bubble && G.mode && !(cine && cine.active)) {
     G.bubble.t -= dt; const c = R.chars.get(G.bubble.id);
     if (G.bubble.t <= 0 || !c || !c.alive) { G.bubble = null; bb.classList.add('hidden'); }
     else { const p = R.project(c.root.position.clone().setY((c.height || 1) * 1.25 + 0.15)); bb.style.left = p.x + 'px'; bb.style.top = p.y + 'px'; if (bb._id !== G.bubble.id || bb._t !== G.bubble.text) { bb._id = G.bubble.id; bb._t = G.bubble.text; bb.innerHTML = `<b>${TNAME[c.type].toUpperCase()}</b>${esc(G.bubble.text)}`; bb.style.setProperty('--emo', EMO_COLORS[G.bubble.emo] || '#e8c27a'); } bb.classList.remove('hidden'); }
@@ -662,6 +700,14 @@ G.api = {
   preview: () => G.pv && { uci: G.pv.uci, verdict: G.pv.verdict, reacts: Object.values(G.pv.pieces).map(p => p.react) },
   speed: k => { R.speed = k; },
   events: () => G.events.slice(-50),
+  cine: () => cine.state(),
+  cineLog: () => cine.log.slice(),
+  cinePlay: (emo, sq, o = {}) => cine.play(Object.assign({ emo, sq: typeof sq === 'string' ? LC.sqIdx(sq) : sq, me: G.me }, o, { threat: o.threat != null ? (typeof o.threat === 'string' ? LC.sqIdx(o.threat) : o.threat) : undefined, goal: o.goal != null ? (typeof o.goal === 'string' ? LC.sqIdx(o.goal) : o.goal) : undefined }), { force: true, me: G.me, short: o.short }) && true,
+  cineSkip: () => cine.skip(),
+  cineReset: () => cine.resetThrottle(),
+  cineConsider: cands => !!cine.consider(cands, { me: G.me }),
+  cineMode: m => { S.cine = m; cineSet = true; QS.delete('cine'); save(); applySettings(); return cine.mode; },
+  cineDetect: (fen, uci) => { const c = new LC.Chess(fen), b = c.clone(), rec = c.play(uci); return rec ? CineDetect.detect(b, rec, c, {}) : null; },
   voice: () => ({ supported: V.supported, on: V.st.on, picks: Object.fromEntries(Object.entries(V.st.pick).map(([k, v]) => [k, v && v.name])) }),
 };
 
