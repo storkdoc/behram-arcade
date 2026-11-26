@@ -5,6 +5,20 @@
    ========================================================================== */
 window.ARCADE_GAMES = [
   {
+    slug: 'rileys-run',
+    title: "RILEY'S RUN",
+    marquee: 'sunset',
+    tagline: 'Riley vs her twin Jaxon. Four tracks, six more rivals, one gold medal.',
+    description: "A 3D track-and-field racing game starring Riley, nine years old and super fast in her magenta star singlet and pink spikes. Her twin brother and biggest rival, Jaxon, trash-talks and races to win, against six more kids who each run differently: Maya starts fast, Leo never tires, Sofia hoards power-ups, Theo drafts, Ava hurdles and Nico kicks late. Time your launch from the blocks for a Rocket Start. Pick your lane: the inside is shorter on the bends. Tuck in behind a runner to charge a slingshot, and spend stamina on turbo or ease off to recover. Grab power-ups from the ? boxes: Golden Cleats, Star Shield, Gust Wave, Spring Magnet and a Mud Splash trap. There are four tracks: Sunny Stadium 400m, the Hurdle Gauntlet (perfect jumps give a burst, clipped hurdles slow you down), the golden-hour Boardwalk Sprint with wind gusts, splash patches and ramps, and a three-lap Night Championship on a banked oval under floodlights. Close finishes go to slow-motion photo finishes. The top three stand on the podium for a gold, silver or bronze medal, with your time, splits and personal best. Medals are kept in a Medal Case on this device. Play as Riley or Jaxon, and the online two-player mode is Riley vs Jaxon head to head, each on their own device. The runners, stadiums, crowd and effects are live 3D, and the music and sound are synthesized.",
+    controls: '← → / A D change lanes (tap = one lane, hold = glide) · ↑ / W jump · SPACE turbo (hold) and launch off the blocks · ↓ / S pace yourself · SHIFT or E use power-up · P/ESC pause · M mute · gamepad: stick/d-pad steer, A jump, RT/X turbo, B/RB power-up, Start pause',
+    touch: '◀ ▶ buttons or swipe to change lanes · swipe up or JUMP to jump · hold TURBO (tap it at GO for a Rocket Start) · ITEM uses your power-up · portrait and landscape on iPhone and iPad · Two-Player Online: one taps Start a Two-Player Race, the other taps Join Two-Player Game in Progress',
+    thumb: 'games/rileys-run/thumb.webp',
+    added: '2026-11-26',
+    genre: 'RACING',
+    year: 'TRACK & FIELD',
+    accent: '#ff2fa0'
+  },
+  {
     slug: 'glow-munch',
     title: 'GLOW MUNCH',
     marquee: 'neon',
