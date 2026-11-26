@@ -31,25 +31,27 @@
 - `node games/living-chess/tests/mp.test.js` — 2 pages over a fake PeerJS broker: host text, backup code, mid-game join as Black,
   orientation, privacy (no thought fields in any message), sync both ways, illegal move rejected, resign, rematch swap, disconnect -> AI
 
-## Cinematic emotion scenes (js/cine-detect.js + js/cine.js)
-- Real-time only (no <video>, no media files): director drives the three.js camera, extra spot/rim lights, light beam,
-  colour grade (FOCUS pass uniforms on tier>=2, CSS grade layer otherwise), letterbox, title card, line, particles and
-  synthesized orchestral stingers (audio.js STING table: strings/brass/timpani/taiko/choir/bells/heartbeat/risers).
-- Settings chip CINEMATIC SCENES: FULL / SHORT / OFF (saved in lc-settings.cine). ?cine=full|short|off overrides; ?fast=1 => off.
-  ?cineslow=N slows the scene clock (CI on SwiftShader only).
-- Triggers (cine-detect.js, public board facts only): check -> King FEAR; promotion -> TRIUMPH (ASCENSION); capture -> TRIUMPH
-  for the capturer, Queen lost -> King DISMAY, friend can recapture -> RAGE, else nearest friend SADNESS; pawn on rank 6/7 ->
-  HOPE; newly attacked/forked -> FEAR; newly pinned -> FEAR; escaping check / saving a hanging piece -> RELIEF;
-  checkmate -> DESPAIR on the King then cut to the mating piece TRIUMPH; stalemate/draw -> STALEMATE; resign/time -> VICTORY/DEFEAT.
-- Throttle: min priority 45, +10 for your own pieces, 40 s per piece/emotion cooldown, 14 s per emotion, 7 s gap (11 s in
-  Short or timed games); priority >= 75 (check, promotion, queen lost, mate) bypasses. Any move, tap, key or pad button skips.
-- Scene clock is wall time, but one frame advances it by at most 0.5 s, so a hitch (shader compile, tab switch) cannot swallow
-  a scene; the time held back is logged as `lost` and the test's duration bound adds it.
-- Gameplay first: scenes never touch game state; the machine waits for a scene only in untimed solo/practice; online and timed
-  games cut a scene when the next move arrives. Scenes run locally on each device.
-- Tests: `node tests/cine-detect.test.js` (pure node) and `node tests/cine.test.js chromium|webkit desktop|iphone|ipad`
-  (env SLOW, default 3): forced scenes for all types/sides, skip by key/tap/pad, throttle, 11 real-move triggers, board unchanged,
-  mate/stalemate/resign, Short/Off, no <video>, no console errors.
+## On-board emotion clips (js/cine-detect.js + js/clips.js, assets in clips/)
+- User asked for "little tiny videos" like his example (a porcelain bishop sobbing and melting), with variants per square colour,
+  pieces that look like ours, playing ON the board. Replaced the live-3D cutaway (old js/cine.js) with AI-generated clips.
+- Pipeline (tools/clips/): ref.js renders a still of each of our pieces (6 types x 2 sides) on our light and dark tile, green
+  surround, fixed camera (distance 3.9 to a point 0.62 above the square, fov 36, 720x720, ?q=1 so no bloom). Each still is the
+  first frame of an image-to-video generation (3 s, 1:1, prompts in jobs.py). convert.py keys the green, spill-suppresses, crops
+  the same 0.78-width square from every clip and packs 15 fps x 224 px frames into a WebP atlas (~100-250 KB). build.py writes
+  clips/manifest.js. Generated mp4s live outside the repo (/workspace/chess-clips-assets/raw).
+- Playback (clips.js, same API as the old director): a camera-facing quad 1.98 squares wide centred 0.62 above the square,
+  frame = atlas offset/repeat, feathered alphaMap, depthTest off. The 3D piece hides once the clip has faded in and returns after,
+  except deaths. No <video> (Tesla in Drive pauses video). Atlases load lazily; a clip that cannot load in 2.5 s is dropped.
+- Captures: render.js captureSeq asks the hook for a demise clip of the victim (random among its variants, never the same twice in
+  a row); if one played, the victim is gone and the capturer steps in; else the old knock-back + shatter. Then cine-detect's
+  capture TRIUMPH gets +30 priority so the capturer celebrates on its destination square after nearly every capture.
+- Deaths: melt, shatter, dust, burn, topple, sand, lightning, freeze, sink (varied across types, 1-2 per piece/side/square).
+  Celebrations: fist pump, dance, gloat, glow, confetti, flex. Fear/sorrow/rage/hope/relief/dismay play where clips exist
+  (clipList / CLIP_FOR fallbacks: sorrow->fear, dismay->fear, hope/relief->triumph); missing ones simply do not play.
+- Setting chip EMOTION CLIPS: FULL / SHORT (1.5x speed, no voice line) / OFF (saved in lc-settings.cine; ?cine= overrides;
+  ?fast=1 => off). Throttle as before (min priority 45, cooldowns, 7/11 s gap). Any tap, key or pad button skips.
+- Test: `node tests/clips.test.js desktop|iphone` (manifest, sizes, variety, forced clips on square, hide/restore, skip,
+  real capture -> demise then triumph, Off -> shatter, no <video>, no console errors).
 
 ## Known weaknesses
 - Voice quality depends on the OS speechSynthesis voices (some Androids/Linux have one robotic voice).
@@ -57,5 +59,7 @@
 - JS fallback engine is weak (used only if WASM fails); on phones analysis depth is shallower, so thoughts are less far-sighted.
 - Picking uses the visible meshes: a piece fully hidden behind a taller one needs a tap on its square or a different angle.
 - Online relies on the public PeerJS broker; strict NATs may fail to connect (no TURN server).
-- Cinematic scenes: extra spot/point lights cost ~10% fps in software GL; particles are point sprites; scene timing
-  verified only in SwiftShader at low fps.
+- Emotion clips: the clip is a flat billboard drawn over the board (depthTest off), generated from a camera at about 35 deg
+  elevation, so at the default ~46 deg view the clip's own tile shows as a slightly lighter, slightly offset square; pieces in
+  front can be drawn over. AI generation drifts at times (knights lose their snout when celebrating, a mitre gains a cross,
+  glow/lightning flashes tint the keyed edge). Not tested in a car or on a physical iPhone.

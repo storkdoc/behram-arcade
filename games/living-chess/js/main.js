@@ -7,7 +7,7 @@
    ========================================================================== */
 import { Board3D, sqPos } from './render.js';
 import { Face, EMO_COLORS, EMO_LABEL } from './faces.js';
-import { Cine } from './cine.js';
+import { Cine } from './clips.js';
 
 const CineDetect = window.LCCineDetect;
 const LC = window.LC, Mind = window.LCMind, A = window.LCAudio, V = window.LCVoice, Net = window.Net, LCEngine = window.LCEngine;
@@ -44,7 +44,7 @@ async function boot() {
   const prog = f => { $('lprog').style.width = Math.round(f * 100) + '%'; };
   R = new Board3D($('gl'), { msaa: QS.has('msaa'), q: QS.get('q'), onFatal: m => window.LCFatal(m), onLost: () => toast('Graphics were reset — restoring…') });
   await R.init(f => prog(f * 0.6));
-  R.hooks({ sfx: sfxHook }); G.R = R; G.Net = Net;
+  R.hooks({ sfx: sfxHook, demise: vic => cine && cine.mode !== 'off' && !FAST ? cine.demise(vic, { me: G.me, short: !!G.clock }) : null }); G.R = R; G.Net = Net;
   G.chess = new LC.Chess(); R.sync(G.chess);
   $('lmsg').textContent = 'THE PIECES ARE STIRRING…';
   engine = LCEngine.browser('');
@@ -54,8 +54,8 @@ async function boot() {
   cine = G.cine = new Cine(R, A, {
     root: $('cine'), timeScale: QS.has('cineslow') ? Math.max(1, +QS.get('cineslow') || 1) : 1, // test hook: slow-motion clock for software-rendered CI
     say: (id, type, text, emo) => sayAs(id, type, text, emo, true),
-    onStart: () => { document.body.classList.add('cine-on'); G.bubble = null; R.setInsets({ top: 0, bottom: 0, left: 0, right: 0 }); G.events.push({ t: 'cine', emo: cine.active && cine.active.spec.emo }); },
-    onEnd: () => { document.body.classList.remove('cine-on'); onResize(); const w = G.afterCine; G.afterCine = []; for (const f of w || []) try { f(); } catch (e) { console.error(e); } },
+    onStart: () => { G.bubble = null; G.events.push({ t: 'cine', emo: cine.active && cine.active.spec.emo }); },
+    onEnd: () => { const w = G.afterCine; G.afterCine = []; for (const f of w || []) try { f(); } catch (e) { console.error(e); } },
   });
   $('cine').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); A.unlock(); V.unlock(); cine.skip(); });
   applySettings(); buildMenus(); bindInput();
@@ -125,7 +125,7 @@ function applySettings() {
   $('bHonest').textContent = S.honest ? 'HONEST COUNSEL' : 'RAW EMOTIONS'; $('bHon').textContent = S.honest ? '⚖ HONEST' : '❤ RAW'; $('bHon').classList.toggle('on', S.honest);
   $('bGhost').textContent = 'GHOST PATHS: ' + (S.ghost ? 'ON' : 'OFF'); $('bConfirm').textContent = 'TAP TWICE TO MOVE: ' + (S.confirm ? 'ON' : 'OFF');
   $('bSpeak').textContent = S.voiceOn && !S.muted ? '🔊' : '🔇';
-  if (cine) cine.setMode(cineMode()); $('bCine').textContent = 'CINEMATIC SCENES: ' + cineMode().toUpperCase();
+  if (cine) cine.setMode(cineMode()); $('bCine').textContent = 'EMOTION CLIPS: ' + cineMode().toUpperCase();
   $('vlist').innerHTML = V.supported ? 'Voices: ' + ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'].map(k => `<b>${k[0].toUpperCase() + k.slice(1)}</b> ${V.voiceName(k)}`).join(' · ') : 'Speech is not available in this browser; captions only.';
 }
 function act(a) {

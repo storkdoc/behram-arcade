@@ -393,7 +393,20 @@ export class Board3D {
       vic.doReact('flinch', 0.4); this.shake = Math.max(this.shake, 0.06);
       await sleep(140 / this.speed);
     }
-    // death: knocked back, shatter, soul wisp
+    // death: an on-board clip of this piece's end (clips.js), or knocked back, shatter, soul wisp
+    const clip = this.h && this.h.demise ? this.h.demise(vic, rec) : null;
+    if (clip) {
+      this.sfx('cry', { type: vic.type, side: vic.side });
+      const r = await clip;
+      if (r && r.shown) {
+        vic.alive = false; vic.root.visible = false;
+        for (const c of this.chars.values()) { if (!c.alive || c === att) continue; const d = c.root.position.distanceTo(vp); if (c.side === vic.side) { if (d < 3.2) c.doReact(d < 1.8 ? 'mourn' : 'horror', 2.6, vp.clone().setY(0.3)); } else if (d < 4) c.doReact('cheer', 1.8); }
+        await this.moveChar(att, rec.to, {});
+        att.doReact('joy', 1.6);
+        this.endShot();
+        return;
+      }
+    }
     this.sfx('cry', { type: vic.type, side: vic.side });
     vic.dying = true; vic.face.set('dead', 1);
     const back = vp.clone().sub(att.root.position).setY(0).normalize();

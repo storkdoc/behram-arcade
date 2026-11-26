@@ -165,3 +165,10 @@ body.cine-on #topbar, body.cine-on #side, body.cine-on #bubble, body.cine-on #pv
   text-shadow: 0 0 22px color-mix(in srgb, var(--cc) 70%, transparent), 0 0 60px color-mix(in srgb, var(--cc) 35%, transparent), 0 3px 0 rgba(0,0,0,0.8); }
 #cine .cword.show, #cine .cwho.show { opacity: 1; transform: none; filter: none; }
 @media (max-width: 600px) { #cine .cword { letter-spacing: 0.22em; padding-left: 0.22em; } }
+
+/* on-board emotion clips (clips.js): no letterbox or grade, a small caption over the board, tap anywhere skips */
+#cine.clip .cbar, #cine.clip .cgrade, #cine.clip .cvig { display: none; }
+#cine.clip .ccap { top: calc(54px + var(--sat, 0px)); bottom: auto; }
+#cine.clip .cword { font-size: clamp(20px, 4.2vw, 40px); letter-spacing: 0.24em; padding-left: 0.24em; filter: none; transform: none; transition: opacity 0.3s; }
+#cine.clip .cwho { font-size: clamp(9px, 1.2vw, 12px); }
+#cine.clip .cline { position: absolute; left: 0; right: 0; margin: 0 auto; top: calc(54px + var(--sat, 0px) + clamp(44px, 7vw, 74px)); font-size: clamp(13px, 1.8vw, 18px); }

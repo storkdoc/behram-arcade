@@ -126,7 +126,7 @@
       <label>EFFECTS <input type="range" min="0" max="1" step="0.05" id="vSfx"></label>
       <label>VOICES <input type="range" min="0" max="1" step="0.05" id="vVoice"></label>
     </div>
-    <div class="chips setchips"><button class="chip" id="bVoice">VOICES: ON</button><button class="chip" id="bMute">SOUND: ON</button><button class="chip" id="bHonest">HONEST COUNSEL</button><button class="chip" id="bGhost">GHOST PATHS: ON</button><button class="chip" id="bConfirm">TAP TWICE TO MOVE: ON</button><button class="chip" id="bCine">CINEMATIC SCENES: FULL</button></div>
+    <div class="chips setchips"><button class="chip" id="bVoice">VOICES: ON</button><button class="chip" id="bMute">SOUND: ON</button><button class="chip" id="bHonest">HONEST COUNSEL</button><button class="chip" id="bGhost">GHOST PATHS: ON</button><button class="chip" id="bConfirm">TAP TWICE TO MOVE: ON</button><button class="chip" id="bCine">EMOTION CLIPS: FULL</button></div>
     <div class="vlist" id="vlist"></div>
   </div>
 </div>
@@ -170,7 +170,7 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<!-- ============ CINEMATIC EMOTION SCENES (rendered live in WebGL; this layer is only bars, grade, captions) ============ -->
+<!-- ============ EMOTION CLIPS (played on the board in WebGL by js/clips.js; this layer is only the caption and the tap-to-skip catcher) ============ -->
 <div id="cine" class="hidden" aria-live="polite">
   <div class="cgrade"></div><div class="cvig"></div>
   <div class="cbar top"><span class="cskip"></span></div><div class="cbar bot"><div class="cline"></div></div>
