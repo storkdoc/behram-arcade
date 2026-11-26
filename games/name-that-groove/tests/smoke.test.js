@@ -32,6 +32,8 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   const D = await open({ viewport: { width: 1280, height: 800 } }, '?yt=mock&seed=7');
   check((await st(D)).screen === 'title', 'title screen shows');
   check(/YouTube/.test(await D.textContent('.honest')) && /ads/.test(await D.textContent('.honest')), 'title says music comes from YouTube, which controls availability and ads');
+  const premiumNote = await D.evaluate(() => ({ honest: document.querySelector('.honest').textContent, href: document.querySelector('.honest a') && document.querySelector('.honest a').getAttribute('href'), watch: document.querySelectorAll('a[href*="youtube.com/watch"], a[href*="youtu.be"]').length }));
+  check(/YouTube Premium/.test(premiumNote.honest) && /YouTube Music Premium/.test(premiumNote.honest) && /same browser/.test(premiumNote.honest) && /cookies for youtube\.com/.test(premiumNote.honest) && premiumNote.href === 'https://support.google.com/youtube/answer/7437519' && premiumNote.watch === 0, 'title explains same-browser YouTube Premium and cookies, with the official help page and no Watch link', premiumNote);
   check(!(await D.textContent('body')).match(/original (track|composition)|synthesi/i), 'no leftover "original tracks / synthesized" copy');
   check(!(await overflow(D)), 'title: no horizontal overflow');
   await D.click('[data-decade="80s"]'); await D.click('[data-diff="easy"]');
@@ -108,6 +110,8 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
   check((await st(D)).screen === 'title', 'Esc backs out');
   await D.click('[data-go="howto"]'); const how = await D.textContent('#s-howto');
   check(/50:50/.test(how) && /availability and any ads are controlled by YouTube/.test(how) && /instrumental/i.test(how) && /HEAR ORIGINAL/.test(how), 'how to play explains instrumental guessing, HEAR ORIGINAL and the YouTube note');
+  const howHelp = await D.evaluate(() => { const a = document.querySelector('#s-howto a'); return { text: document.getElementById('s-howto').textContent, href: a && a.getAttribute('href') }; });
+  check(/YouTube Premium/.test(howHelp.text) && /cookies for youtube\.com/.test(howHelp.text) && /same browser/.test(howHelp.text) && howHelp.href === 'https://support.google.com/youtube/answer/7437519' && !/ad-free|without ads/i.test(howHelp.text), 'how to play names the same-browser Premium and cookie limit without promising ad-free playback', howHelp);
   check(D.errs.length === 0, 'desktop: no console errors', D.errs);
 
   console.log('== YouTube failure paths (test player)');
@@ -186,7 +190,8 @@ const warn = (msg, extra) => { warns++; console.log('  WARN', msg, extra === und
     const status = await R.evaluate(() => NTG.yt.status);
     if (status !== 'ready') warn('TEST ENVIRONMENT: YouTube IFrame API did not load here, real playback not checked', status);
     else {
-      check(await R.evaluate(() => !!document.querySelector('#ytBox iframe[src^="https://www.youtube.com/embed/"]')), 'official YouTube embed iframe is on the page');
+      const frame = await R.evaluate(() => { const f = document.querySelector('#ytBox iframe'); if (!f) return null; let host = '', path = ''; try { const u = new URL(f.src); host = u.host; path = u.pathname; } catch (e) { } return { host, path, src: f.src.slice(0, 120), sandbox: f.getAttribute('sandbox'), credentialless: f.hasAttribute('credentialless'), referrer: f.referrerPolicy, nocookie: /youtube-nocookie/.test(f.src) }; });
+      check(frame && frame.host === 'www.youtube.com' && frame.path.indexOf('/embed') === 0 && !frame.nocookie && !frame.credentialless && frame.sandbox == null, 'official player iframe is www.youtube.com/embed, not nocookie, and is not credentialless or sandboxed', frame);
       await R.click('[data-decade="all"]'); await R.click('[data-diff="normal"]'); await R.click('#btnStart');
       let ok = false, x;
       for (let i = 0; i < 25 && !ok; i++) { await R.waitForTimeout(1000); x = await R.evaluate(() => ({ media: NTG.S.media, st: NTG.yt.state(), ct: NTG.yt.time(), t: NTG.S.t, swaps: NTG.S.swaps, song: NTG.S.round.questions[0].answer, vid: (NTG.yt.player.getVideoData() || {}).video_id, iyt: NTG_Catalog.byId(NTG.S.round.questions[0].answer).iyt })); ok = x.media === 'playing' && x.t > 2; }
